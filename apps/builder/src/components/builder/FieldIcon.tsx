@@ -85,11 +85,6 @@ const TILE: Record<FieldType, string> = {
   hidden: 'bg-[#e3e2e0] text-[#787774]',
 };
 
-export function FieldIcon({ type, className }: { type: FieldType; className?: string }) {
-  const Icon = ICONS[type];
-  return <Icon className={className ?? 'size-4'} />;
-}
-
 export function FieldTile({ type }: { type: FieldType }) {
   const Icon = ICONS[type];
   return (

@@ -16,7 +16,7 @@ export function ThemeSettings({ open, onOpenChange }: { open: boolean; onOpenCha
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Customize</DialogTitle>
-          <DialogDescription>Theme and form settings, matching Tally’s Customize panel.</DialogDescription>
+          <DialogDescription>Theme and form settings.</DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
           <section className="space-y-3">

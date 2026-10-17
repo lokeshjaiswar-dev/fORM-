@@ -28,15 +28,3 @@ export function Textarea({ className, ...props }: ComponentProps<'textarea'>) {
 export function Label({ className, ...props }: ComponentProps<'label'>) {
   return <label className={cn('text-sm font-medium text-zinc-800', className)} {...props} />;
 }
-
-export function Select({ className, ...props }: ComponentProps<'select'>) {
-  return (
-    <select
-      className={cn(
-        'flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10',
-        className,
-      )}
-      {...props}
-    />
-  );
-}

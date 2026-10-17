@@ -15,12 +15,3 @@ export function packRows(blocks: FormBlock[]) {
   }
   return rows;
 }
-
-export function canPairBeside(hostId: string, blocks: FormBlock[]) {
-  const index = blocks.findIndex((b) => b.id === hostId);
-  if (index < 0) return false;
-  const host = blocks[index];
-  if (!isHalf(host)) return false;
-  const next = blocks[index + 1];
-  return !next?.customize?.besidePrevious;
-}

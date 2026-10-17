@@ -1,7 +1,7 @@
 import type { FieldType, FormBlock } from '@/types/form';
 import { uid } from '@/lib/utils';
 
-export interface FieldMeta {
+interface FieldMeta {
   type: FieldType;
   label: string;
   description: string;
@@ -79,8 +79,4 @@ export function isContentBlock(type: FieldType) {
     type === 'page_break' ||
     type === 'thank_you'
   );
-}
-
-export function isInputBlock(type: FieldType) {
-  return !isContentBlock(type) && type !== 'hidden';
 }

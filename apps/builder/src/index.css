@@ -70,28 +70,6 @@ button {
   }
 }
 
-@keyframes success-burst {
-  0% {
-    transform: scale(0.4) rotate(var(--rot, 0deg)) translateY(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) rotate(var(--rot, 0deg)) translateY(-28px);
-    opacity: 0;
-  }
-}
-
 .success-pop {
   animation: success-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.success-burst > span {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px;
-  border-radius: 999px;
-  animation: success-burst 0.7s ease-out forwards;
 }

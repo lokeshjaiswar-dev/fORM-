@@ -16,24 +16,6 @@ export function Dialog({
   return <DialogCtx.Provider value={{ open, onOpenChange }}>{children}</DialogCtx.Provider>;
 }
 
-export function DialogTrigger({ children }: { children: ReactNode }) {
-  const { onOpenChange } = useContext(DialogCtx);
-  return (
-    <span onClick={() => onOpenChange?.(true)} className="contents">
-      {children}
-    </span>
-  );
-}
-
-export function DialogClose({ className, children, ...props }: ComponentProps<'button'>) {
-  const { onOpenChange } = useContext(DialogCtx);
-  return (
-    <button type="button" className={className} onClick={() => onOpenChange?.(false)} {...props}>
-      {children}
-    </button>
-  );
-}
-
 export function DialogContent({ className, children }: { className?: string; children: ReactNode }) {
   const { open, onOpenChange } = useContext(DialogCtx);
   if (!open) return null;
