@@ -4,7 +4,7 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
     "test": { "dependsOn": ["^typecheck"], "outputs": ["coverage/**"] },
-    "e2e": { "dependsOn": ["build"] },
+    "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
     "dev": { "cache": false, "persistent": true }
   }
 }

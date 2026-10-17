@@ -1,0 +1,12 @@
+# Placeholder team handles: replace them with real teams before turning on branch protection.
+# Paths with two teams need two reviewers: one from each team (rulesets on main require 2 approvals).
+
+*                         @form/core-reviewers
+
+/packages/logic/          @form/core-reviewers @form/logic-reviewers
+/packages/db/             @form/core-reviewers @form/data-reviewers
+/packages/crypto/         @form/core-reviewers @form/security-reviewers
+/apps/api/src/authz/      @form/core-reviewers @form/security-reviewers
+
+/.github/                 @form/core-reviewers @form/platform-reviewers
+/.dependency-cruiser.cjs  @form/core-reviewers @form/platform-reviewers

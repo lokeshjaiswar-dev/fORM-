@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "minimumReleaseAge": "14 days",
+  "internalChecksFilter": "strict",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "matchPackageNames": ["vitest", "@vitest/**"],
+      "groupName": "Vitest"
+    },
+    {
+      "matchPackageNames": ["@playwright/test", "playwright", "@axe-core/playwright"],
+      "groupName": "Playwright"
+    },
+    {
+      "matchPackageNames": ["@testing-library/**"],
+      "groupName": "Testing Library"
+    }
+  ]
+}
