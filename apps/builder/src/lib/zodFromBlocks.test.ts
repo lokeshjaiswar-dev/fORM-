@@ -120,7 +120,11 @@ describe('buildZodSchema', () => {
     expect(buildZodSchema(blocks).safeParse(defaultValues(blocks)).success).toBe(false);
   });
 
-  it.fails('B9: an optional text field with min length or pattern accepts an empty answer', () => {
+  it.fails('B9: an optional multiple choice left as null on blur accepts the empty answer', () => {
+    expect(check(field('multiple_choice', {}, { options }), null).success).toBe(true);
+  });
+
+  it.fails('optional text with min length or pattern accepts an empty answer (found in WP-0.02)', () => {
     expect(check(field('text', { min: 3 }), '').success).toBe(true);
     expect(check(field('text', { pattern: '^[0-9]+$' }), '').success).toBe(true);
   });
