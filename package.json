@@ -16,11 +16,13 @@
     "deps": "depcruise apps packages --config .dependency-cruiser.cjs"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "dependency-cruiser": "18.5.0",
-    "oxlint": "^1.81.0",
-    "turbo": "^2.11.0",
+    "oxlint": "~1.86.0",
+    "turbo": "2.11.7",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }
