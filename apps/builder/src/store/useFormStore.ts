@@ -20,12 +20,18 @@ function reindex(blocks: FormBlock[]) {
   return blocks.map((b, i) => ({ ...b, order: i }));
 }
 
-let resumeTimer: ReturnType<typeof setTimeout> | undefined;
-function pauseForTyping() {
-  const temporalApi = useFormStore.temporal.getState();
-  temporalApi.pause();
-  if (resumeTimer) clearTimeout(resumeTimer);
-  resumeTimer = setTimeout(() => useFormStore.temporal.getState().resume(), 600);
+const TYPING_WINDOW_MS = 1000;
+let lastEdit: { key: string; at: number; form: FormSchema } | null = null;
+
+function coalesce(key: string, apply: () => void) {
+  const now = Date.now();
+  const history = useFormStore.temporal.getState();
+  const merge =
+    history.isTracking && lastEdit?.key === key && lastEdit.form === useFormStore.getState().form && now - lastEdit.at < TYPING_WINDOW_MS;
+  if (merge) history.pause();
+  apply();
+  if (merge) history.resume();
+  lastEdit = { key, at: now, form: useFormStore.getState().form };
 }
 
 interface FormStore {
@@ -47,7 +53,7 @@ interface FormStore {
   closeInspector: () => void;
   setTitle: (title: string) => void;
   setDescription: (description: string) => void;
-  addBlock: (type: FieldType, atIndex?: number) => string;
+  addBlock: (type: FieldType, atIndex?: number, patch?: Partial<FormBlock>) => string;
   placeBeside: (hostId: string, payload: { type: FieldType } | { id: string }) => void;
   updateBlock: (id: string, patch: Partial<FormBlock>) => void;
   deleteBlock: (id: string) => void;
@@ -76,32 +82,26 @@ export const useFormStore = create<FormStore>()(
       setActiveBlock: (id) => set({ activeBlockId: id }),
       openInspector: (id) => set({ activeBlockId: id, inspectorOpen: true }),
       closeInspector: () => set({ inspectorOpen: false }),
-      setTitle: (title) => {
-        pauseForTyping();
-        set((s) => ({ form: { ...s.form, title } }));
-      },
-      setDescription: (description) => {
-        pauseForTyping();
-        set((s) => ({ form: { ...s.form, description } }));
-      },
-      addBlock: (type, atIndex) => {
+      setTitle: (title) => coalesce('title', () => set((s) => ({ form: { ...s.form, title } }))),
+      setDescription: (description) => coalesce('description', () => set((s) => ({ form: { ...s.form, description } }))),
+      addBlock: (type, atIndex, patch) => {
         const { form } = get();
         const index = atIndex ?? form.blocks.length;
-        const block = createBlock(type, index);
+        const block = { ...createBlock(type, index), ...patch };
         const blocks = [...form.blocks];
         blocks.splice(index, 0, block);
         set({ form: { ...form, blocks: reindex(blocks) }, activeBlockId: block.id, started: true });
         return block.id;
       },
-      updateBlock: (id, patch) => {
-        pauseForTyping();
-        set((s) => ({
-          form: {
-            ...s.form,
-            blocks: s.form.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
-          },
-        }));
-      },
+      updateBlock: (id, patch) =>
+        coalesce(`block:${id}:${Object.keys(patch).sort().join(',')}`, () =>
+          set((s) => ({
+            form: {
+              ...s.form,
+              blocks: s.form.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
+            },
+          })),
+        ),
       deleteBlock: (id) =>
         set((s) => ({
           form: { ...s.form, blocks: reindex(s.form.blocks.filter((b) => b.id !== id)) },
@@ -133,16 +133,16 @@ export const useFormStore = create<FormStore>()(
           };
           let activeId = s.activeBlockId;
           if ('type' in payload) {
-            const block = createBlock(payload.type, hostIndex + 1);
-            block.customize = { ...block.customize, width: 'half', besidePrevious: true };
+            const created = createBlock(payload.type, hostIndex + 1);
+            const block = { ...created, customize: { ...created.customize, width: 'half' as const, besidePrevious: true } };
             blocks.splice(hostIndex + 1, 0, block);
             activeId = block.id;
           } else if (payload.id !== hostId) {
             const from = blocks.findIndex((b) => b.id === payload.id);
             if (from < 0) return s;
-            const [moved] = blocks.splice(from, 1);
+            const [source] = blocks.splice(from, 1);
             const hostNow = blocks.findIndex((b) => b.id === hostId);
-            moved.customize = { ...moved.customize, width: 'half', besidePrevious: true };
+            const moved = { ...source, customize: { ...source.customize, width: 'half' as const, besidePrevious: true } };
             blocks.splice(hostNow + 1, 0, moved);
             activeId = moved.id;
           }
@@ -152,8 +152,9 @@ export const useFormStore = create<FormStore>()(
         set((s) => {
           const blocks = [...s.form.blocks];
           const follower = blocks[fromIndex + 1];
-          const [moved] = blocks.splice(fromIndex, 1);
-          moved.customize = { ...moved.customize, besidePrevious: false };
+          const [source] = blocks.splice(fromIndex, 1);
+          if (!source) return s;
+          const moved = { ...source, customize: { ...source.customize, besidePrevious: false } };
           if (follower?.customize?.besidePrevious) {
             const fi = blocks.findIndex((b) => b.id === follower.id);
             if (fi >= 0) blocks[fi] = { ...blocks[fi], customize: { ...blocks[fi].customize, besidePrevious: false } };
@@ -172,14 +173,15 @@ export const useFormStore = create<FormStore>()(
           inspectorOpen: false,
           started: true,
         }),
-      updateSettings: (patch) => {
-        pauseForTyping();
-        set((s) => ({ form: { ...s.form, settings: { ...s.form.settings, ...patch } } }));
-      },
+      updateSettings: (patch) =>
+        coalesce(`settings:${Object.keys(patch).sort().join(',')}`, () =>
+          set((s) => ({ form: { ...s.form, settings: { ...s.form.settings, ...patch } } })),
+        ),
     }),
     {
       limit: 50,
       partialize: (state) => ({ form: state.form }) as FormStore,
+      equality: (a, b) => a.form === b.form,
     },
   ),
 );

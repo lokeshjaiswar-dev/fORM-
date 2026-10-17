@@ -6,6 +6,7 @@ import { FormCanvas } from '@/components/builder/FormCanvas';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { FormPreview } from '@/components/preview/FormPreview';
 import { BuilderDnd } from '@/components/builder/BuilderDnd';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFormStore } from '@/store/useFormStore';
 
 export function BuilderPage() {
@@ -27,9 +28,13 @@ export function BuilderPage() {
           <BuilderHeader />
           <div className="flex min-h-0 flex-1">
             {mode === 'edit' ? (
-              <FormCanvas />
+              <ErrorBoundary key="edit" label="canvas">
+                <FormCanvas />
+              </ErrorBoundary>
             ) : (
-              <FormPreview key={form.blocks.map((b) => b.id).join('|')} />
+              <ErrorBoundary key="preview" label="preview">
+                <FormPreview key={form.blocks.map((b) => b.id).join('|')} />
+              </ErrorBoundary>
             )}
             {mode === 'edit' && <BlockInspector />}
           </div>

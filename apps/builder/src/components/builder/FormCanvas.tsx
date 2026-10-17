@@ -11,6 +11,7 @@ import { TemplateModal } from '@/components/builder/TemplateModal';
 import { isHalf, packRows } from '@/lib/layout';
 import type { FieldType, FormBlock } from '@/types/form';
 import { cn } from '@/lib/utils';
+import { escapeHtml } from '@/lib/sanitize';
 import { Tooltip } from '@/components/ui/tooltip';
 
 export function FormCanvas() {
@@ -131,8 +132,7 @@ export function FormCanvas() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && draft && !draft.startsWith('/')) {
                       e.preventDefault();
-                      const id = addBlock('paragraph', form.blocks.length);
-                      useFormStore.getState().updateBlock(id, { label: draft });
+                      addBlock('paragraph', form.blocks.length, { label: escapeHtml(draft) });
                       setDraft('');
                     }
                   }}

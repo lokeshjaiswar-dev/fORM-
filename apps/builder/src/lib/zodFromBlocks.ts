@@ -7,6 +7,18 @@ function emptyToUndef(val: unknown) {
   return val;
 }
 
+function safeRegExp(pattern: string) {
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return null;
+  }
+}
+
+export function patternError(pattern?: string) {
+  return pattern && !safeRegExp(pattern) ? 'Invalid pattern; it is ignored until fixed' : null;
+}
+
 export function buildZodSchema(blocks: FormBlock[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
 
@@ -65,7 +77,8 @@ export function buildZodSchema(blocks: FormBlock[]) {
         if (v.required) s = s.min(1, msg);
         if (v.min !== undefined) s = s.min(v.min, v.errorMessage || `Min ${v.min} characters`);
         if (v.max !== undefined) s = s.max(v.max, v.errorMessage || `Max ${v.max} characters`);
-        if (v.pattern) s = s.regex(new RegExp(v.pattern), v.errorMessage || 'Invalid format');
+        const re = v.pattern ? safeRegExp(v.pattern) : null;
+        if (re) s = s.regex(re, v.errorMessage || 'Invalid format');
         schema = s;
       }
     }

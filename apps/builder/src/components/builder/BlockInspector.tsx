@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { useFormStore } from '@/store/useFormStore';
 import { uid } from '@/lib/utils';
 import { isContentBlock } from '@/lib/fields';
+import { patternError } from '@/lib/zodFromBlocks';
 import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
 import type { LogicOperator } from '@/types/form';
@@ -167,7 +168,7 @@ export function BlockInspector() {
                   </div>
                 )}
                 {(block.type === 'text' || block.type === 'long_text' || block.type === 'email') && (
-                  <Field label="Pattern (regex)">
+                  <Field label="Pattern (regex)" error={patternError(block.validation?.pattern)}>
                     <Input
                       value={block.validation?.pattern ?? ''}
                       onChange={(e) =>
@@ -452,9 +453,13 @@ export function BlockInspector() {
                   <Field label="Max stars">
                     <Input
                       type="number"
+                      min={1}
+                      max={10}
                       value={block.customize?.ratingMax ?? 5}
                       onChange={(e) =>
-                        updateBlock(block.id, { customize: { ...block.customize, ratingMax: Number(e.target.value) || 5 } })
+                        updateBlock(block.id, {
+                          customize: { ...block.customize, ratingMax: Math.min(10, Math.max(1, Math.round(Number(e.target.value)) || 5)) },
+                        })
                       }
                     />
                   </Field>
@@ -618,11 +623,12 @@ export function BlockInspector() {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, error, children }: { label: string; error?: string | null; children: ReactNode }) {
   return (
     <div className="space-y-1">
       <Label className="text-[12px] text-[var(--notion-text-muted)]">{label}</Label>
       {children}
+      {error ? <p className="text-[12px] text-[#eb5757]">{error}</p> : null}
     </div>
   );
 }

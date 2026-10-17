@@ -71,26 +71,38 @@ describe('useFormStore', () => {
     expect(blockIds()).toEqual([id]);
   });
 
-  it('skips history while typing; the next change records the typed state', () => {
+  it('coalesces consecutive typing in one field into one history entry', () => {
     const id = store().addBlock('text');
     history().clear();
     store().updateBlock(id, { label: 'N' });
     store().updateBlock(id, { label: 'Na' });
-    vi.advanceTimersByTime(1000);
-    expect(history().pastStates).toHaveLength(0);
-    store().deleteBlock(id);
+    store().updateBlock(id, { label: 'Nam' });
     expect(history().pastStates).toHaveLength(1);
-    expect(history().pastStates[0].form?.blocks[0].label).toBe('Na');
+    expect(history().pastStates[0].form?.blocks[0].label).toBe('');
+    store().deleteBlock(id);
+    expect(history().pastStates).toHaveLength(2);
+    expect(history().pastStates[1].form?.blocks[0].label).toBe('Nam');
   });
 
-  it.fails('B17: selecting blocks adds no undo history', () => {
+  it('starts a new history entry after a typing pause or in another field', () => {
+    const id = store().addBlock('text');
+    history().clear();
+    store().updateBlock(id, { label: 'N' });
+    vi.advanceTimersByTime(1500);
+    store().updateBlock(id, { label: 'Na' });
+    store().updateBlock(id, { placeholder: 'x' });
+    store().setTitle('T');
+    expect(history().pastStates).toHaveLength(4);
+  });
+
+  it('B17: selecting blocks adds no undo history', () => {
     const id = store().addBlock('text');
     history().clear();
     for (let i = 0; i < 10; i++) store().setActiveBlock(i % 2 ? id : null);
     expect(history().pastStates).toHaveLength(0);
   });
 
-  it.fails('B18: a structural change right after typing can be undone', () => {
+  it('B18: a structural change right after typing can be undone', () => {
     const id = store().addBlock('text');
     store().updateBlock(id, { label: 'Name' });
     store().deleteBlock(id);
@@ -99,7 +111,7 @@ describe('useFormStore', () => {
     expect(blockIds()).toEqual([id]);
   });
 
-  it.fails('B19: reorderBlocks does not mutate the previous state', () => {
+  it('B19: reorderBlocks does not mutate the previous state', () => {
     resetStore([
       block('text', { id: 'a', customize: { width: 'half' } }),
       block('text', { id: 'b', customize: { width: 'half', besidePrevious: true } }),
@@ -108,6 +120,25 @@ describe('useFormStore', () => {
     const before = store().form;
     store().reorderBlocks(1, 2);
     expect(before.blocks[1].customize?.besidePrevious).toBe(true);
+  });
+
+  it('B19: placeBeside does not mutate the previous state', () => {
+    resetStore([block('text', { id: 'a', customize: { width: 'half' } }), block('text', { id: 'b' })]);
+    const before = store().form;
+    store().placeBeside('a', { id: 'b' });
+    expect(before.blocks[1].customize).toBeUndefined();
+    expect(store().form.blocks[1].customize).toMatchObject({ width: 'half', besidePrevious: true });
+  });
+
+  it('B17: UI-only changes add no undo history', () => {
+    store().addBlock('text');
+    history().clear();
+    store().openInspector(store().form.blocks[0].id);
+    store().setMode('preview');
+    store().setSidebarOpen(true);
+    store().setInspectorWidth(500);
+    store().requestInsertFocus();
+    expect(history().pastStates).toHaveLength(0);
   });
 
   it.fails('B21: deleting a logic source leaves no dangling rule', () => {

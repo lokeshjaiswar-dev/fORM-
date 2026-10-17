@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Bold, Italic, Underline, Highlighter, Link, Type } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { LINK_REL, isSafeLink, sanitizeHtml } from '@/lib/sanitize';
 import { Tooltip } from '@/components/ui/tooltip';
 
 const COLORS = ['#111111', '#eb5757', '#d9730d', '#dfab01', '#448361', '#337ea9', '#9065b0', '#c14c8a'];
@@ -37,7 +39,7 @@ export function RichText({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (el.innerHTML !== value) el.innerHTML = value || '';
+    if (el.innerHTML !== value) el.innerHTML = sanitizeHtml(value || '');
   }, [value]);
 
   useEffect(() => {
@@ -72,9 +74,26 @@ export function RichText({
 
   function cmd(command: string, arg?: string) {
     ref.current?.focus();
+    document.execCommand('styleWithCSS', false, String(command === 'foreColor' || command === 'hiliteColor'));
     document.execCommand(command, false, arg);
+    if (command === 'createLink') {
+      ref.current?.querySelectorAll('a').forEach((a) => {
+        a.rel = LINK_REL;
+        a.target = '_blank';
+      });
+    }
     onChange(ref.current?.innerHTML ?? '');
     placeMenu();
+  }
+
+  function addLink() {
+    const url = window.prompt('Link URL', 'https://')?.trim();
+    if (!url) return;
+    if (!isSafeLink(url)) {
+      toast.error('Links must start with https:, http:, mailto: or tel:');
+      return;
+    }
+    cmd('createLink', url);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -155,13 +174,7 @@ export function RichText({
                   />
                 ) : null}
               </div>
-              <Tool
-                onClick={() => {
-                  const url = window.prompt('Link URL', 'https://');
-                  if (url) cmd('createLink', url);
-                }}
-                label="Add link"
-              >
+              <Tool onClick={addLink} label="Add link">
                 <Link className="size-3.5" />
               </Tool>
             </div>,

@@ -80,3 +80,18 @@ export function isContentBlock(type: FieldType) {
     type === 'thank_you'
   );
 }
+
+function clampInt(value: number | undefined, fallback: number, min: number, max: number) {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+export function ratingCount(block: FormBlock) {
+  return clampInt(block.customize?.ratingMax, 5, 1, 10);
+}
+
+export function scaleRange(block: FormBlock): [number, number] {
+  const min = clampInt(block.customize?.scaleMin, 1, -1000, 1000);
+  const max = clampInt(block.customize?.scaleMax, 5, min + 1, min + 9);
+  return [min, max];
+}

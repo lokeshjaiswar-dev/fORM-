@@ -3,6 +3,7 @@ import type { FieldType, FormBlock } from '@/types/form';
 import { useFormStore } from '@/store/useFormStore';
 import { cn } from '@/lib/utils';
 import { inputStyle, labelStyle } from '@/lib/blockStyle';
+import { ratingCount, scaleRange } from '@/lib/fields';
 import { SignaturePad } from '@/components/blocks/SignaturePad';
 import { RichText } from '@/components/builder/RichText';
 
@@ -122,9 +123,8 @@ function FieldPreview({ block }: { block: FormBlock }) {
   );
   const boxStyle = inputStyle(block);
   const options = block.options ?? [];
-  const max = c?.ratingMax ?? 5;
-  const min = c?.scaleMin ?? 1;
-  const scaleMax = c?.scaleMax ?? 5;
+  const max = ratingCount(block);
+  const [min, scaleMax] = scaleRange(block);
 
   switch (block.type) {
     case 'long_text':

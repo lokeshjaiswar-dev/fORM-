@@ -49,7 +49,7 @@ describe('FormPreview', () => {
     expect(await screen.findByText('State')).toBeInTheDocument();
   });
 
-  it.fails('B1: Next validates only the current page', async () => {
+  it('B1: Next validates only the current page', async () => {
     const user = renderPreview([
       block('text', { id: 'a', label: 'First' }),
       block('page_break', { id: 'pb' }),
@@ -59,7 +59,7 @@ describe('FormPreview', () => {
     expect(await screen.findByText('Second')).toBeInTheDocument();
   });
 
-  it.fails('B2: a hidden required field does not block submit', async () => {
+  it('B2: a hidden required field does not block submit', async () => {
     const user = renderPreview([
       block('text', { id: 'country', label: 'Country' }),
       block('text', {
@@ -71,6 +71,89 @@ describe('FormPreview', () => {
     ]);
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     expect(await screen.findByText(thanks)).toBeInTheDocument();
+  });
+
+  it('B1: a 3-page form with a required field on page 3 advances from page 1, then blocks on page 3', async () => {
+    const user = renderPreview([
+      block('text', { id: 'a', label: 'First' }),
+      block('page_break', { id: 'pb1' }),
+      block('text', { id: 'b', label: 'Second' }),
+      block('page_break', { id: 'pb2' }),
+      block('text', { id: 'c', label: 'Third', placeholder: 'Third answer', validation: { required: true } }),
+    ]);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Second')).toBeInTheDocument();
+    expect(screen.queryByText('Required')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Third')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(screen.queryByText(thanks)).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Third answer'), 'Asha');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText(thanks)).toBeInTheDocument();
+  });
+
+  it('B1: Next still blocks on an empty required field on the current page', async () => {
+    const user = renderPreview([
+      block('text', { id: 'a', label: 'First', validation: { required: true } }),
+      block('page_break', { id: 'pb' }),
+      block('text', { id: 'b', label: 'Second' }),
+    ]);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(screen.queryByText('Second')).not.toBeInTheDocument();
+  });
+
+  it('B2: a required field that becomes visible blocks submit', async () => {
+    const user = renderPreview([
+      block('text', { id: 'country', label: 'Country', placeholder: 'Country' }),
+      block('text', {
+        id: 'state',
+        label: 'State',
+        validation: { required: true },
+        logic: { enabled: true, action: 'show', sourceBlockId: 'country', value: 'IN' },
+      }),
+    ]);
+    await user.type(screen.getByPlaceholderText('Country'), 'IN');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(screen.queryByText(thanks)).not.toBeInTheDocument();
+  });
+
+  it('B4: a required empty signature blocks submit', async () => {
+    const user = renderPreview([block('signature', { id: 'sig', label: 'Sign here', validation: { required: true } })]);
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText('Please sign')).toBeInTheDocument();
+    expect(screen.queryByText(thanks)).not.toBeInTheDocument();
+  });
+
+  it('B12: an invalid pattern is ignored instead of crashing', async () => {
+    const user = renderPreview([block('text', { id: 'name', label: 'Name', placeholder: 'Name', validation: { pattern: '[' } })]);
+    await user.type(screen.getByPlaceholderText('Name'), 'Asha');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText(thanks)).toBeInTheDocument();
+  });
+
+  it('S1/S2: labels are sanitised before they are rendered as HTML', () => {
+    renderPreview([
+      block('paragraph', { id: 'p', label: '<b>Bold</b><img src=x onerror=alert(1)><a href="javascript:alert(1)">bad</a>' }),
+      block('text', { id: 't', label: '<span style="color: red; position: fixed">Name</span><script>alert(1)</script>' }),
+    ]);
+    expect(document.querySelector('img, script')).toBeNull();
+    expect(screen.getByText('Bold').tagName).toBe('B');
+    expect(screen.getByText('bad')).not.toHaveAttribute('href');
+    expect(screen.getByText('Name').getAttribute('style')).toBe('color: red;');
+  });
+
+  it('B28: rating and scale point counts are clamped', () => {
+    renderPreview([
+      block('rating', { id: 'r', label: 'Stars', customize: { ratingMax: 10_000_000 } }),
+      block('linear_scale', { id: 's', label: 'Scale', customize: { scaleMin: 1, scaleMax: 1000 } }),
+    ]);
+    expect(screen.getByText('Stars').closest('div')!.querySelectorAll('svg')).toHaveLength(10);
+    expect(screen.getByRole('button', { name: '10' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '11' })).not.toBeInTheDocument();
   });
 
   it.fails('B7: an unanswered NPS shows no score selected', () => {

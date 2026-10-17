@@ -68,3 +68,27 @@ describe('BlockInspector options', () => {
     expect(new Set(values).size).toBe(values.length);
   });
 });
+
+describe('BlockInspector validations', () => {
+  it("B12: an invalid pattern '[' shows an inline error and does not crash", async () => {
+    resetStore([block('text', { id: 'name', label: 'Name' })]);
+    useFormStore.getState().openInspector('name');
+    const user = renderInspector();
+    await user.click(screen.getByRole('button', { name: 'Validations' }));
+    await user.type(screen.getByPlaceholderText('e.g. ^[A-Z].+'), '[[');
+    expect(useFormStore.getState().form.blocks[0].validation?.pattern).toBe('[');
+    expect(screen.getByText(/Invalid pattern/)).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('e.g. ^[A-Z].+'), ']]a');
+    expect(screen.queryByText(/Invalid pattern/)).not.toBeInTheDocument();
+  });
+
+  it('B28: Max stars is clamped to 1-10', async () => {
+    resetStore([block('rating', { id: 'stars', label: 'Stars', customize: { ratingMax: 5 } })]);
+    useFormStore.getState().openInspector('stars');
+    const user = renderInspector();
+    const input = screen.getByDisplayValue('5');
+    await user.clear(input);
+    await user.type(input, '99');
+    expect(useFormStore.getState().form.blocks[0].customize?.ratingMax).toBe(10);
+  });
+});

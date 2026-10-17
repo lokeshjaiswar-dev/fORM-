@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { buildZodSchema, defaultValues } from '@/lib/zodFromBlocks';
+import { buildZodSchema, defaultValues, patternError } from '@/lib/zodFromBlocks';
 import type { BlockValidation, FieldType, FormBlock } from '@/types/form';
 import { block } from '@/test/fixtures';
 
@@ -105,6 +105,14 @@ describe('buildZodSchema', () => {
         expect(buildZodSchema(blocks).safeParse(defaultValues(blocks)).success).toBe(true);
       }),
     );
+  });
+
+  it('B12: an invalid pattern is ignored instead of throwing', () => {
+    expect(() => buildZodSchema([field('text', { pattern: '[' })])).not.toThrow();
+    expect(check(field('text', { pattern: '[' }), 'anything').success).toBe(true);
+    expect(patternError('[')).toMatch(/Invalid pattern/);
+    expect(patternError('^[0-9]+$')).toBeNull();
+    expect(patternError(undefined)).toBeNull();
   });
 
   it.fails('B8: a required ranking fails until the respondent orders it', () => {

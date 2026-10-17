@@ -41,6 +41,7 @@ export function BuilderHeader() {
         undo();
       }
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        if (typing) return;
         e.preventDefault();
         redo();
       }

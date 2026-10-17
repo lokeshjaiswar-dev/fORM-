@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { useForm, type FieldValues, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Monitor, Star, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFormStore } from '@/store/useFormStore';
 import { buildZodSchema, defaultValues } from '@/lib/zodFromBlocks';
-import { isContentBlock } from '@/lib/fields';
+import { isContentBlock, ratingCount, scaleRange } from '@/lib/fields';
 import { isBlockVisible } from '@/lib/logic';
 import { Textarea } from '@/components/ui/input';
 import { NiceSelect } from '@/components/ui/select';
@@ -17,6 +17,7 @@ import { isHalf, packRows } from '@/lib/layout';
 import { Tooltip } from '@/components/ui/tooltip';
 import { DeviceFrame } from '@/components/preview/DeviceFrame';
 import { Confetti } from '@/components/preview/Confetti';
+import { safeRedirectUrl, sanitizeHtml } from '@/lib/sanitize';
 
 function pagesOf(blocks: FormBlock[]) {
   const pages: FormBlock[][] = [[]];
@@ -35,9 +36,10 @@ export function FormPreview() {
   const [unlocked, setUnlocked] = useState(!form.settings.password);
   const [pw, setPw] = useState('');
 
-  const schema = useMemo(() => buildZodSchema(form.blocks), [form.blocks]);
+  const resolver: Resolver<FieldValues> = (values, context, options) =>
+    zodResolver(buildZodSchema(form.blocks.filter((b) => isBlockVisible(b, values, form.blocks))))(values, context, options);
   const rhf = useForm({
-    resolver: zodResolver(schema),
+    resolver,
     defaultValues: defaultValues(form.blocks),
     mode: 'onBlur',
     reValidateMode: 'onBlur',
@@ -48,6 +50,22 @@ export function FormPreview() {
   const s = form.settings;
   const font = s.font === 'Georgia' ? 'Georgia, serif' : s.font === 'Mono' ? 'ui-monospace, monospace' : 'Inter, system-ui, sans-serif';
   const compact = device !== 'desktop';
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    if (page < pages.length - 1) {
+      e.preventDefault();
+      const values = rhf.getValues();
+      const ids = current.filter((b) => isBlockVisible(b, values, form.blocks)).map((b) => b.id);
+      if (!ids.length || (await rhf.trigger(ids, { shouldFocus: true }))) setPage((p) => p + 1);
+      return;
+    }
+    await rhf.handleSubmit(() => {
+      setSubmitted(true);
+      toast.success(s.successMessage);
+      const redirect = safeRedirectUrl(s.redirectUrl);
+      if (redirect) window.location.assign(redirect);
+    })(e);
+  }
 
   let screen: ReactNode;
   if (s.closed) {
@@ -118,15 +136,7 @@ export function FormPreview() {
         ) : null}
         {s.coverUrl ? <div className="h-28 w-full bg-cover bg-center" style={{ backgroundImage: `url(${s.coverUrl})` }} /> : null}
         <form
-          onSubmit={rhf.handleSubmit(() => {
-            if (page < pages.length - 1) {
-              setPage((p) => p + 1);
-              return;
-            }
-            setSubmitted(true);
-            toast.success(s.successMessage);
-            if (s.redirectUrl) window.open(s.redirectUrl, '_blank', 'noopener');
-          })}
+          onSubmit={(e) => void onSubmit(e)}
           className={cn('space-y-5', compact ? 'px-5 py-8' : 'px-10 py-10')}
         >
           {s.logoUrl ? <img src={s.logoUrl} alt="" className="h-10 object-contain" /> : null}
@@ -230,20 +240,20 @@ function PreviewField({
   if (!isBlockVisible(block, values, blocks)) return null;
 
   if (block.type === 'heading')
-    return <h2 className="pt-2 text-left text-[30px] font-bold leading-[1.2]" dangerouslySetInnerHTML={{ __html: block.label }} />;
+    return <h2 className="pt-2 text-left text-[30px] font-bold leading-[1.2]" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
   if (block.type === 'heading_2')
-    return <h3 className="pt-1 text-left text-[24px] font-bold" dangerouslySetInnerHTML={{ __html: block.label }} />;
+    return <h3 className="pt-1 text-left text-[24px] font-bold" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
   if (block.type === 'heading_3')
-    return <h4 className="text-left text-[20px] font-semibold" dangerouslySetInnerHTML={{ __html: block.label }} />;
+    return <h4 className="text-left text-[20px] font-semibold" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
   if (block.type === 'paragraph')
-    return <p className="text-left text-[16px] leading-[1.6]" dangerouslySetInnerHTML={{ __html: block.label }} />;
+    return <p className="text-left text-[16px] leading-[1.6]" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
   if (block.type === 'divider') return <hr className="border-zinc-200" />;
 
   return (
     <div className="space-y-1.5 text-left">
       {!block.customize?.hideLabel && (
         <label className="text-[16px] font-medium" style={labelStyle(block)}>
-          <span dangerouslySetInnerHTML={{ __html: block.label }} />
+          <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />
           {block.validation?.required && <span className="text-black"> *</span>}
         </label>
       )}
@@ -267,9 +277,8 @@ function Control({ block, rhf, accent }: { block: FormBlock; rhf: ReturnType<typ
   const extras = { disabled, autoFocus };
   const opts = [...(block.options ?? [])];
   if (block.customize?.otherOption) opts.push({ id: 'other', label: 'Other', value: 'other' });
-  const max = block.customize?.ratingMax ?? 5;
-  const min = block.customize?.scaleMin ?? 1;
-  const scaleMax = block.customize?.scaleMax ?? 5;
+  const max = ratingCount(block);
+  const [min, scaleMax] = scaleRange(block);
 
   if (isContentBlock(block.type)) return null;
 
