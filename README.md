@@ -9,6 +9,7 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | Path | Package | What it is |
 |---|---|---|
 | `apps/builder` | `@form/builder` | Vite + React form builder |
+| `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 
 More apps and packages (`runtime`, `api`, `worker`, `schema`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
@@ -69,6 +70,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |
+| `pnpm i18n:extract` | Regenerate `packages/i18n/locales/en-IN/*.json` from `defineMessages(…)` calls; `--check` only reports stale catalogues (CI runs it, and a test enforces it too) |
 
 **First e2e run:** download the browser once:
 ```sh

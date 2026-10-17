@@ -1,0 +1,9 @@
+{
+  "extends": "@form/tsconfig/strict.json",
+  "compilerOptions": {
+    "resolveJsonModule": true,
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

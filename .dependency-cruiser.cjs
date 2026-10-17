@@ -59,6 +59,19 @@ module.exports = {
       to: { dependencyTypes: ['core'] },
     },
     {
+      name: 'i18n-core-portable',
+      comment: 'i18n core runs in the browser, the server and the logic engine: no React, no Node built-ins (scripts/ may use Node).',
+      severity: 'error',
+      from: { path: '^packages/i18n/src/' },
+      to: { path: ['(^|/)node_modules/(react|react-dom)/', '^(react|react-dom)(/|$)'] },
+    },
+    {
+      name: 'i18n-core-no-node-builtins',
+      severity: 'error',
+      from: { path: '^packages/i18n/src/' },
+      to: { dependencyTypes: ['core'] },
+    },
+    {
       name: 'no-deep-import',
       comment: 'Import @form/* packages through their exports, never their src/ files.',
       severity: 'error',

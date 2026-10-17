@@ -1,0 +1,26 @@
+{
+  "name": "@form/i18n",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit",
+    "test": "vitest run --coverage",
+    "i18n:extract": "node scripts/extract.ts"
+  },
+  "dependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.20",
+    "intl-messageformat": "12.1.2",
+    "unicode-segmenter": "0.17.3"
+  },
+  "devDependencies": {
+    "@form/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

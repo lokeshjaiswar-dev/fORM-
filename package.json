@@ -13,7 +13,8 @@
     "test": "turbo run test",
     "e2e": "turbo run e2e",
     "lint": "oxlint",
-    "deps": "depcruise apps packages --config .dependency-cruiser.cjs"
+    "deps": "depcruise apps packages --config .dependency-cruiser.cjs",
+    "i18n:extract": "pnpm --filter @form/i18n i18n:extract"
   },
   "devDependencies": {
     "@types/node": "catalog:",
