@@ -1,32 +1,33 @@
-# React + TypeScript + Vite
+# fORM-
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A form platform for multi-tenant SaaS and on-prem deployments, working toward feature parity with JotForm, with SOC 2 and India DPDP compliance built in. The plan, schema, architecture and delivery roadmap are in [`docs/platform/`](docs/platform/README.md).
 
-Currently, two official plugins are available:
+## Workspace
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Path | Package | What it is |
+|---|---|---|
+| `apps/builder` | `@form/builder` | Vite + React form builder |
+| `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 
-## React Compiler
+More apps and packages (`runtime`, `api`, `worker`, `schema`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Prerequisites
 
-## Expanding the Oxlint configuration
+- Node 24 (`.nvmrc`)
+- pnpm 10 through Corepack: `corepack enable` (the exact version is pinned in `package.json` → `packageManager`)
+- On Windows: `git config core.longpaths true`
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Commands
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+Run from the repository root:
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+| Command | What it does |
+|---|---|
+| `pnpm install` | Install all workspace dependencies |
+| `pnpm dev` | Start the builder dev server (http://localhost:5173/builder/demo) |
+| `pnpm build` | Build every app and package (Turborepo) |
+| `pnpm typecheck` | Type-check every project |
+| `pnpm test` | Run unit tests |
+| `pnpm lint` | Lint the repository with oxlint |
+
+Run a task in one package with `pnpm --filter @form/builder <script>`.
