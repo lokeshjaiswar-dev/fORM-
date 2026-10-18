@@ -11,6 +11,10 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `apps/builder` | `@form/builder` | Vite + React form builder |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
+| `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; no dependencies |
+| `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
+| `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
+| `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …) and test helpers; imported by tests only |
 
 More apps and packages (`runtime`, `api`, `worker`, `schema`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
@@ -83,6 +87,11 @@ pnpm --filter @form/builder exec playwright install chromium
 - One test file: `pnpm --filter @form/builder exec vitest run src/lib/logic.test.ts`
 - Ignore the Turborepo cache: add `--force`, e.g. `pnpm test --force`
 - Playwright report after a failure: `pnpm --filter @form/builder exec playwright show-report`
+- Mailer contract against a real Mailpit as well as the in-process SMTP sink (CI does this in the `check` job):
+  ```sh
+  docker run -d --rm --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3
+  FORM_TEST_MAILPIT_SMTP=smtp://localhost:1025 FORM_TEST_MAILPIT_API=http://localhost:8025 pnpm test
+  ```
 
 Tests named after a bug id (for example `B7: …`) that use `it.fails` describe bugs not fixed yet. They count as passing while the bug exists and start failing once it is fixed; then switch them to `it`.
 

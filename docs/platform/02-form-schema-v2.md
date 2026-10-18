@@ -1760,7 +1760,14 @@ export type TemplateLifecycle = 'active' | 'deprecated' | 'archived';
 /** 'rejected' is terminal for that version; the author starts a new draft (version + 1). */
 export type TemplateVersionState = 'draft' | 'in_review' | 'published' | 'rejected' | 'superseded';
 
-/** `field:payment`, `integration:google_sheets`, `capability:appointments`… checked against edition/plan. */
+/**
+ * `field:payment`, `integration:google_sheets`, `capability:appointments`… checked against edition/plan.
+ * Edition-gated ids (@form/config `isEditionFeatureAvailable`): `integration:<provider>`, `field:payment` and
+ * `capability:payments` (a payment provider is configured), `capability:guardian_digilocker`,
+ * `capability:captcha_<provider>` and `capability:analytics_<provider>` (unavailable when air-gapped unless the
+ * provider is first-party, i.e. `captcha_proof_of_work`). Every other id passes the edition check and is left to
+ * plan, licence and org restrictions.
+ */
 export type FeatureId = `${'field' | 'integration' | 'capability' | 'plan'}:${string}`;
 
 /** §17.1 Template variables. Msg = default-locale string; translations under `tplvar:<name>:label|help`. */

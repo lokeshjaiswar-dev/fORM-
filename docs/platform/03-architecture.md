@@ -960,7 +960,7 @@ export interface Storage {
 }
 export type BucketName = 'staging' | 'uploads' | 'assets' | 'exports' | 'audit' | 'packs';
 
-export interface Mailer { send(m: MailMessage): Promise<{ messageId: string }>; verify(senderSecretRef?: string): Promise<{ ok: boolean; error?: string }> }
+export interface Mailer { send(m: MailMessage): Promise<{ messageId: string; refused: MailRefusal[] }>; verify(senderSecretRef?: string): Promise<{ ok: boolean; error?: string }> }
 
 export interface KeyProvider {
   wrap(plaintextKey: Uint8Array, ctx: { orgId: string }): Promise<{ wrapped: Uint8Array; kekRef: string }>;
@@ -984,6 +984,22 @@ export interface CdnPurge { purge(keys: string[]): Promise<void> }
 export interface AuditSink { forward(checkpoint: AuditCheckpoint): Promise<void> }   // syslog / OTLP / SIEM fallback when no WORM
 export interface EgressGuard { assertAllowed(url: URL): Promise<{ pinnedIp: string }> }
 ```
+
+The sketch above is abridged; `packages/ports` holds the exact signatures. Where they differ:
+- Streams are `ByteStream` (`AsyncIterable<Uint8Array>`) and bytes are `Uint8Array`, so ports need neither Node nor DOM types. Node `Readable` and web `ReadableStream` both qualify.
+- `AVScanner` verdicts add `skipped`, which the no-op scanner returns; it never claims `clean`.
+- `GuardianVerifier.start` also returns the `verificationId` that `complete` takes.
+- `AuditSink` has a `kind` and `GeoIP` a `databaseVersion`. `EgressGuard.assertAllowed` takes the URL fields it reads (a `URL` satisfies it).
+- `Queue` is spelled out: `send(name, JobRequest)` signs the request into a `JobEnvelope`, and `JOBS` gives each queue its scope (`org`, `system` or `any`).
+- `SearchIndex` is a minimal Postgres-FTS-shaped port.
+- Expected failures throw `PortError` with a typed code (`not_found`, `invalid_argument`, `unsupported`, `integrity`, `expired`, `rejected`, …).
+- `Mailer.send` returns `{ messageId, refused }`: recipients the server refused while it accepted the message for others, each marked `permanent` (5xx, a hard bounce to suppress) or not (4xx, retry that address). A 5xx to every recipient or to the message itself throws `PortError('rejected')`; outages, sender or auth refusals and 4xx replies throw `unavailable`, so `email.send` retries them.
+- `presignPost` validates `tags` against the S3 tag rules (`isValidObjectTags`) and the store applies them to the upload.
+- `CountryCode` and `IsoInstant` are branded stand-ins until `@form/schema` (WP-0.04) exports them; `toIsoInstant(date)` makes one.
+
+The storage contract also exercises presigned URLs (size range, content type, key binding, tampering, expiry) when the store supplies a client for them, and the mailer contract checks refusals when the server under test can be told to refuse (the testkit SMTP sink can; a stock Mailpit cannot, so those cases skip there).
+
+Contract suites exist so far for the families with dev implementations (storage, mailer, KMS, scanner, guardian verifier). Captcha, GeoIP, egress, queue, audit-sink and search get theirs with their first implementations (WP-0.13, WP-1.03). Adapters export only the package root for now; per-family subpath exports arrive with WP-1.03 together with the matching dependency-cruiser rule.
 
 | Port | SaaS | On-prem (connected) | Air-gapped (`EGRESS_POLICY=none`) |
 |---|---|---|---|

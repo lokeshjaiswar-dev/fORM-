@@ -24,7 +24,11 @@ const ALLOWED = {
   db: ['schema', 'crypto', 'config'],
   adapters: ['ports', 'crypto', 'config'],
   email: ['renderer', 'schema'],
+  testkit: ['ports', 'schema', 'db'],
 };
+
+/** Test files may also use @form/testkit; nothing else may. */
+const TESTS = '\\.test(-d)?\\.tsx?$';
 
 const APPS = {
   builder: ['renderer', 'ui', 'sdk', 'templates-core', ...L1, ...L0],
@@ -103,17 +107,36 @@ module.exports = {
       from: { pathNot: ['^apps/api/src/main\\.ts$', '^apps/worker/src/main\\.ts$', '^apps/cli/', '^packages/adapters/'] },
       to: { path: '^packages/adapters/' },
     },
+    {
+      name: 'ports-zero-deps',
+      comment: 'packages/ports holds interfaces only: no npm packages, no Node built-ins. Workspace packages are left to layer-ports (schema only).',
+      severity: 'error',
+      from: { path: '^packages/ports/src/', pathNot: TESTS },
+      to: { dependencyTypesNot: ['local'], pathNot: ['^packages/', '^@form/schema$'] },
+    },
+    {
+      name: 'testkit-only-from-tests',
+      severity: 'error',
+      from: { pathNot: [TESTS, '^packages/testkit/'] },
+      to: { path: ['^packages/testkit/', '^@form/testkit(/|$)'] },
+    },
     ...Object.entries(ALLOWED).map(([name, allowed]) => ({
       name: `layer-${name}`,
       severity: 'error',
-      from: { path: `^packages/${name}/` },
+      from: { path: `^packages/${name}/`, pathNot: TESTS },
       to: { path: '^packages/', pathNot: only([name, ...allowed]) },
+    })),
+    ...Object.entries(ALLOWED).map(([name, allowed]) => ({
+      name: `layer-${name}-tests`,
+      severity: 'error',
+      from: { path: `^packages/${name}/.*${TESTS}` },
+      to: { path: '^packages/', pathNot: only([name, ...allowed, 'testkit']) },
     })),
     ...Object.entries(APPS).map(([name, allowed]) => ({
       name: `layer-app-${name}`,
       severity: 'error',
       from: { path: `^apps/${name}/` },
-      to: { path: '^packages/', pathNot: only(allowed) },
+      to: { path: '^packages/', pathNot: only([...allowed, 'testkit']) },
     })),
   ],
   options: {

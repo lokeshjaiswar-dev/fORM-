@@ -4,7 +4,7 @@
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
-    "test": { "dependsOn": ["^typecheck"], "outputs": ["coverage/**"] },
+    "test": { "dependsOn": ["^typecheck"], "outputs": ["coverage/**"], "env": ["FORM_TEST_MAILPIT_SMTP", "FORM_TEST_MAILPIT_API"] },
     "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
     "dev": { "cache": false, "persistent": true }
   }

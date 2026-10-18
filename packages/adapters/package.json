@@ -1,0 +1,25 @@
+{
+  "name": "@form/adapters",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@form/ports": "workspace:*",
+    "nodemailer": "10.0.13"
+  },
+  "devDependencies": {
+    "@form/testkit": "workspace:*",
+    "@form/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
