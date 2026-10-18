@@ -320,8 +320,11 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ApplyUpdateRequestSchema>>().toEqualTypeOf<S.ApplyUpdateRequest>();
   expectTypeOf<z.infer<typeof S.FormpackManifestSchema>>().toEqualTypeOf<S.FormpackManifest>();
   expectTypeOf<z.infer<typeof S.FormpackSignatureSchema>>().toEqualTypeOf<S.FormpackSignature>();
+  expectTypeOf<z.infer<typeof S.FormpackAttestationSchema>>().toEqualTypeOf<S.FormpackAttestation>();
   expectTypeOf<z.infer<typeof S.FormpackTemplateFileSchema>>().branded.toEqualTypeOf<S.FormpackTemplateFile>();
   expectTypeOf<z.infer<typeof S.TemplateErrorCodeSchema>>().toEqualTypeOf<S.TemplateErrorCode>();
+  expectTypeOf<z.infer<typeof S.TemplateMigrationIssueSchema>>().toEqualTypeOf<S.TemplateMigrationIssue>();
+  expectTypeOf<z.infer<typeof S.TemplateMigrationResultSchema>>().branded.toEqualTypeOf<S.TemplateMigrationResult>();
   expectTypeOf<z.infer<typeof S.AnyFormDocumentSchema>>().branded.toEqualTypeOf<S.AnyFormDocument>();
   expectTypeOf<z.infer<typeof S.MigrationNoteSchema>>().toEqualTypeOf<S.MigrationNote>();
   expectTypeOf<z.infer<typeof S.V1MigrationResultSchema>>().branded.toEqualTypeOf<S.V1MigrationResult>();
@@ -333,6 +336,7 @@ test('generic types equal their per-type twins', () => {
   expectTypeOf<{ [T in S.ValueFieldType]: z.infer<(typeof S.FIELD_BLOCK_SCHEMAS)[T]> }>().branded.toEqualTypeOf<{ [T in S.ValueFieldType]: S.FieldBlockOf<T> }>();
   expectTypeOf<{ [T in S.ValueFieldType]: z.infer<(typeof S.ANSWER_VALUE_SCHEMAS)[T]> }>().branded.toEqualTypeOf<{ [T in S.ValueFieldType]: S.AnswerOf<T> }>();
   expectTypeOf<z.infer<typeof S.ClientRuleSchema>>().toEqualTypeOf<S.Rule<S.ClientAction>>();
+  expectTypeOf<{ [K in S.TemplateKind]: z.infer<(typeof S.TEMPLATE_PAYLOAD_SCHEMAS)[K]> }>().branded.toEqualTypeOf<{ [K in S.TemplateKind]: Extract<S.TemplateVersionPayload, { kind: K }> }>();
 });
 
 test('every v1 type equals the inferred type of its zod twin', () => {

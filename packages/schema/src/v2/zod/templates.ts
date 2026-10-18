@@ -1,17 +1,19 @@
 import { z } from 'zod';
 import { keyed } from './_util.ts';
 import { TEMPLATE_KINDS } from '../templates.ts';
+import type { TemplateKind, TemplateVersionPayload } from '../templates.ts';
 import { AnswersSchema } from './answers.ts';
 import { BlockSchema } from './blocks.ts';
 import { DataClassificationSchema, PurposeSchema } from './compliance.ts';
 import { FormDefinitionSchema } from './definition.ts';
 import { I18nBundleSchema, TextKeySchema, TranslationEntrySchema } from './i18n.ts';
 import { ConditionGroupSchema, RuleSchema, VariableSchema } from './logic.ts';
+import { MigrationNoteSchema } from './migration.ts';
 import { AccessConfigSchema, EmailDocSchema, FormOpsSchema, PdfLayoutSchema, StatusScreenRoleSchema } from './ops.ts';
 import { EndingActionSchema } from './pages.ts';
 import {
   AssetIdSchema, BlockIdSchema, BrandKitIdSchema, BrandRefSchema, CountryCodeSchema, EmailAddressSchema, FieldKeySchema, FontIdSchema, FormIdSchema,
-  HexColorSchema, IsoInstantSchema, LocaleSchema, LockIdSchema, OptionIdSchema, OrgIdSchema, PageIdSchema, SafeUrlSchema, Sha256HexSchema,
+  HexColorSchema, IsoDateSchema, IsoInstantSchema, LocaleSchema, LockIdSchema, OptionIdSchema, OrgIdSchema, PageIdSchema, SafeUrlSchema, Sha256HexSchema,
   TeamIdSchema, TemplateBindingIdSchema, TemplateCategoryIdSchema, TemplateIdSchema, TemplatePackIdSchema, TemplatePartIdSchema,
   TemplateVariableNameSchema, TemplateVersionIdSchema, UserIdSchema, WorkflowIdSchema, WorkflowStepIdSchema,
 } from './primitives.ts';
@@ -188,6 +190,15 @@ export const TemplateVersionPayloadSchema = z.discriminatedUnion('kind', [
   FormTemplatePayloadSchema, ThemeTemplatePayloadSchema, EmailTemplatePayloadSchema, EndingTemplatePayloadSchema,
   PdfTemplatePayloadSchema, SnippetTemplatePayloadSchema, WorkflowTemplatePayloadSchema,
 ]);
+export const TEMPLATE_PAYLOAD_SCHEMAS = {
+  form: FormTemplatePayloadSchema,
+  theme: ThemeTemplatePayloadSchema,
+  email: EmailTemplatePayloadSchema,
+  ending: EndingTemplatePayloadSchema,
+  pdf: PdfTemplatePayloadSchema,
+  snippet: SnippetTemplatePayloadSchema,
+  workflow: WorkflowTemplatePayloadSchema,
+} as const satisfies { [K in TemplateKind]: z.ZodType<Extract<TemplateVersionPayload, { kind: K }>> };
 
 export const TemplateSchema = z.object({
   id: TemplateIdSchema,
@@ -292,7 +303,7 @@ export const BrandKitSchema = z.object({
 });
 
 export const OrgProfileTextFieldSchema = z.enum([
-  'display_name', 'legal_name', 'registered_address', 'privacy_contact.name', 'privacy_contact.designation', 'privacy_contact.address', 'dpo.name',
+  'display_name', 'legal_name', 'registered_address', 'board_complaint_info', 'privacy_contact.name', 'privacy_contact.designation', 'privacy_contact.address', 'dpo.name',
 ]);
 export const PostalAddressSchema = z.object({
   line1: z.string().max(200),
@@ -316,6 +327,8 @@ export const OrgProfileSchema = z.object({
   supportPhone: z.string().max(32).exactOptional(),
   privacyPolicyUrl: SafeUrlSchema.exactOptional(),
   termsUrl: SafeUrlSchema.exactOptional(),
+  rightsUrl: SafeUrlSchema.exactOptional(),
+  boardComplaintInfo: z.string().max(2000).exactOptional(),
   privacyContact: z.object({
     name: z.string().max(200),
     designation: z.string().max(200).exactOptional(),
@@ -451,9 +464,18 @@ export const FormpackManifestSchema = z.object({
     dependsOn: z.array(z.string()),
   })),
   categories: z.string().min(1),
+  attestations: z.string().min(1).exactOptional(),
   assets: z.array(z.object({ path: z.string().min(1), sha256: Sha256HexSchema, mime: z.string().min(1), bytes: z.number().int().min(0) })),
 });
-export const FormpackSignatureSchema = z.object({ alg: z.literal('ed25519'), keyId: z.string().min(1), sig: z.string().min(1) });
+export const FormpackSignatureSchema = z.object({ alg: z.enum(['ed25519', 'es256']), keyId: z.string().min(1), sig: z.string().min(1) });
+export const FormpackAttestationSchema = z.object({
+  slug,
+  version: z.number().int().min(1),
+  locale: LocaleSchema,
+  reviewer: z.string().min(1).max(200),
+  reviewedAt: IsoDateSchema,
+  scope: z.string().min(1).max(1000),
+});
 export const FormpackTemplateFileSchema = z.object({
   payload: TemplateVersionPayloadSchema,
   localizations: z.array(TemplateLocalizationSchema.omit({ templateVersionId: true })),
@@ -463,4 +485,17 @@ export const FormpackTemplateFileSchema = z.object({
 
 export const TemplateErrorCodeSchema = z.enum([
   'DRAFT_REV_CONFLICT', 'LOCK_VIOLATION', 'TEMPLATE_VARIABLE_UNRESOLVED', 'TEMPLATE_FEATURE_UNAVAILABLE', 'TEMPLATE_UPDATE_REQUIRED', 'TEMPLATE_INVALID',
+]);
+
+export const TemplateMigrationIssueSchema = z.object({
+  code: z.enum([
+    'payload_not_object', 'unknown_kind', 'schema_version_invalid', 'schema_version_newer', 'migration_step_missing',
+    'document_migration_unavailable', 'migration_failed', 'invalid_payload',
+  ]),
+  path: z.string(),
+  message: z.string(),
+});
+export const TemplateMigrationResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), payload: TemplateVersionPayloadSchema, notes: z.array(MigrationNoteSchema) }),
+  z.object({ ok: z.literal(false), issues: z.array(TemplateMigrationIssueSchema) }),
 ]);

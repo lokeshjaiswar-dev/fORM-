@@ -9,6 +9,7 @@ The form schema v2 contract (`docs/platform/02-form-schema-v2.md` §2) and every
 | `src/v1.ts` | The v1 builder types (`V1.*`), their twins and the lenient `parseV1` |
 | `src/validate/structure.ts` | `validateStructure(def, { mode })`: invariants I1, I3, I4, I5/I6, I7, I12, I14 as `PublishIssue[]` |
 | `src/hash.ts` | `canonicalJson` (RFC 8785), `sha256Jcs` and `contentHash = sha256(JCS(x))` |
+| `src/migrate/templates.ts` | `migrateTemplatePayload(payload, { steps?, migrateDocument? })`: the template `migrate()` hooks (payload steps per kind, the form `migrate()` for `document`, inline refs as payloads), then the twin parse |
 
 ## Rules
 
@@ -21,6 +22,7 @@ The form schema v2 contract (`docs/platform/02-form-schema-v2.md` §2) and every
 - **`parseV1` reports every repair**, including each unknown key it drops (`unknown_key`).
 - **Money is a `MinorUnits` string** (decision D1); numbers are `DecimalString`s, never JS floats.
 - `test/types.negative.test-d.ts` holds the five checks that must keep failing to type-check.
+- **Template payloads hold placeholders only.** A literal or member recipient fails to type-check (`test/templates.test-d.ts`) and to parse (`test/templates.test.ts`); every kind round-trips (`test/roundtrip.test.ts`). The system-template harness in `test/templates.test.ts` is skipped until WP-0.05 brings the v1 → v2 `migrate()` and the v1 template fixtures.
 
 ```sh
 pnpm --filter @form/schema typecheck

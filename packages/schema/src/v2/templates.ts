@@ -4,8 +4,9 @@ import type { Block } from './blocks.ts';
 import type { DataClassification, Purpose } from './compliance.ts';
 import type { FormDefinition } from './definition.ts';
 import type { I18nBundle, TextKey, TranslationEntry } from './i18n.ts';
-import type { AssetId, BlockId, BrandKitId, CountryCode, EmailAddress, FieldKey, FontId, FormId, HexColor, IsoInstant, Locale, LockId, OptionId, OrgId, PageId, SafeUrl, Sha256Hex, TeamId, TemplateBindingId, TemplateCategoryId, TemplateId, TemplatePackId, TemplatePartId, TemplateVersionId, UserId, WorkflowId, WorkflowStepId } from './ids.ts';
+import type { AssetId, BlockId, BrandKitId, CountryCode, EmailAddress, FieldKey, FontId, FormId, HexColor, IsoDate, IsoInstant, Locale, LockId, OptionId, OrgId, PageId, SafeUrl, Sha256Hex, TeamId, TemplateBindingId, TemplateCategoryId, TemplateId, TemplatePackId, TemplatePartId, TemplateVersionId, UserId, WorkflowId, WorkflowStepId } from './ids.ts';
 import type { ConditionGroup, Recipient, Rule, Variable } from './logic.ts';
+import type { MigrationNote } from './migration.ts';
 import type { AccessConfig, EmailDoc, FormOps, StatusScreenRole } from './ops.ts';
 import type { EndingAction } from './pages.ts';
 import type { PlainTemplate, RichDoc } from './rich-text.ts';
@@ -239,7 +240,7 @@ export interface BrandKit {
   updatedBy: UserId; updatedAt: IsoInstant; deletedAt?: IsoInstant;
 }
 
-export type OrgProfileTextField = 'display_name' | 'legal_name' | 'registered_address' | 'privacy_contact.name' | 'privacy_contact.designation' | 'privacy_contact.address' | 'dpo.name';
+export type OrgProfileTextField = 'display_name' | 'legal_name' | 'registered_address' | 'board_complaint_info' | 'privacy_contact.name' | 'privacy_contact.designation' | 'privacy_contact.address' | 'dpo.name';
 /** One per org (P1); source of `org.*` variables and DPDP notice data. */
 export interface PostalAddress { line1: string; line2?: string; city: string; state: string; stateCode?: string; postalCode: string; country: CountryCode }
 export interface OrgProfile {
@@ -248,7 +249,8 @@ export interface OrgProfile {
   industry?: string;                 // drives "Recommended" sort
   registeredAddress?: PostalAddress;
   website?: SafeUrl; supportEmail?: EmailAddress; supportPhone?: string;
-  privacyPolicyUrl?: SafeUrl; termsUrl?: SafeUrl;
+  privacyPolicyUrl?: SafeUrl; termsUrl?: SafeUrl; rightsUrl?: SafeUrl;
+  boardComplaintInfo?: string;       // source of `org.board_complaint_info`
   /** s.8(9) contact; source of `org.privacy_contact.*`. */
   privacyContact?: { name: string; designation?: string; email: EmailAddress; phone?: string; address?: PostalAddress };
   dpo?: { name: string; email: EmailAddress; phone?: string };
@@ -336,11 +338,41 @@ export interface FormpackManifest {
   minAppVersion: string; schemaVersion: number;
   templates: Array<{ slug: string; kind: TemplateKind; version: number; path: string; sha256: Sha256Hex; requiredFeatures: FeatureId[]; dependsOn: string[] /* 'slug@ver' */ }>;
   categories: string;                // path to categories.json
+  attestations?: string;             // path to attestations.json
   assets: Array<{ path: string; sha256: Sha256Hex; mime: string; bytes: number }>;
 }
-export interface FormpackSignature { alg: 'ed25519'; keyId: string; sig: string }
+/** Per key id: Ed25519 (app-held, KMS-wrapped) by default, ES256 where only a KMS-native key is allowed. */
+export interface FormpackSignature { alg: 'ed25519' | 'es256'; keyId: string; sig: string }
+/** One entry of attestations.json: a reviewer vouching for one template version in one locale. */
+export interface FormpackAttestation { slug: string; version: number; locale: Locale; reviewer: string; reviewedAt: IsoDate; scope: string }
 export interface FormpackTemplateFile { payload: TemplateVersionPayload; localizations: Array<Omit<TemplateLocalization, 'templateVersionId'>>; categorySlugs: string[]; changelog?: string }
 
 export type TemplateErrorCode =
   | 'DRAFT_REV_CONFLICT' | 'LOCK_VIOLATION' | 'TEMPLATE_VARIABLE_UNRESOLVED' | 'TEMPLATE_FEATURE_UNAVAILABLE'
   | 'TEMPLATE_UPDATE_REQUIRED' | 'TEMPLATE_INVALID';
+
+/**
+ * §18 hooks: template payloads are migrated by the same `migrate()` as forms. Payload steps run in
+ * sequence from the payload's `schemaVersion` to SCHEMA_VERSION; a `form` payload's `document` goes
+ * through `migrateDocument` (the form `migrate()` with its MigrationContext bound), and inline refs
+ * are migrated as payloads of their own. Steps are pure and never mutate their input.
+ */
+export type RawTemplatePayload = { kind: TemplateKind; schemaVersion: number } & Record<string, unknown>;
+export interface TemplatePayloadMigrationStep {
+  from: number; to: number;
+  kinds: readonly TemplateKind[];
+  migrate(payload: RawTemplatePayload): { payload: RawTemplatePayload; notes: MigrationNote[] };
+}
+export interface TemplateMigrationContext {
+  migrateDocument?: (doc: unknown) => { definition: FormDefinition; notes: MigrationNote[] };
+  steps?: readonly TemplatePayloadMigrationStep[];
+}
+export interface TemplateMigrationIssue {
+  code: 'payload_not_object' | 'unknown_kind' | 'schema_version_invalid' | 'schema_version_newer' | 'migration_step_missing'
+    | 'document_migration_unavailable' | 'migration_failed' | 'invalid_payload';
+  path: string;
+  message: string;
+}
+export type TemplateMigrationResult =
+  | { ok: true; payload: TemplateVersionPayload; notes: MigrationNote[] }
+  | { ok: false; issues: TemplateMigrationIssue[] };

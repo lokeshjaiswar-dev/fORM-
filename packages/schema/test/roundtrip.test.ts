@@ -19,6 +19,21 @@ describe('parse(JSON.parse(JSON.stringify(x))) ≡ x', () => {
   it('StoredBlock', () => roundTrips(S.StoredBlockSchema, 100), 120_000);
   it('FormDefinition', () => roundTrips(S.FormDefinitionSchema, 60), 240_000);
   it('TemplateVersionPayload', () => roundTrips(S.TemplateVersionPayloadSchema, 60), 240_000);
+  it.each(S.TEMPLATE_KINDS)('%s template payload', (kind) => {
+    roundTrips<unknown>(S.TEMPLATE_PAYLOAD_SCHEMAS[kind], kind === 'form' || kind === 'snippet' ? 20 : 60);
+  }, 240_000);
+  it('template parts', () => {
+    roundTrips(S.TemplateVariableSchema, 100);
+    roundTrips(S.LockSpecSchema, 100);
+    roundTrips(S.TemplateRefSchema, 50);
+    roundTrips(S.TemplateForkBindingSchema, 100);
+    roundTrips(S.VarNodeSchema, 100);
+    roundTrips(S.OriginSchema, 50);
+    roundTrips(S.FormpackManifestSchema, 100);
+    roundTrips(S.FormpackSignatureSchema, 50);
+    roundTrips(S.FormpackAttestationSchema, 50);
+    roundTrips(S.TemplateMigrationResultSchema, 30);
+  }, 240_000);
   it('Expr, ConditionGroup and Rule', () => {
     roundTrips(S.ExprSchema, 200);
     roundTrips(S.ConditionGroupSchema, 200);

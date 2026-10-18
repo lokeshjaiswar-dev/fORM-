@@ -5,3 +5,4 @@ export { parseV1 } from './v1.ts';
 export { jsonPointer, validateStructure } from './validate/structure.ts';
 export type { StructureOptions } from './validate/structure.ts';
 export { canonicalJson, contentHash, sha256Jcs } from './hash.ts';
+export { TEMPLATE_PAYLOAD_MIGRATIONS, migrateTemplatePayload } from './migrate/templates.ts';
