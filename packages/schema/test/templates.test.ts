@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as S from '../src/index.ts';
 import { definition, id } from './fixtures.ts';
+import { migrationContext } from './fixtures/migration.ts';
+import { REGISTRY_STANDIN } from './fixtures/registry-standin.ts';
+import { V1_TEMPLATES } from './fixtures/v1/index.ts';
 import { PAYLOADS, emailPayload, endingPayload, formPayload, manifest, themePayload, workflowPayload } from './template-fixtures.ts';
-
-declare global {
-  interface ImportMeta { glob<T>(pattern: string, options: { eager: true; import: 'default' }): Record<string, T> }
-}
 
 const ok = (schema: { safeParse(v: unknown): { success: boolean } }, value: unknown) => schema.safeParse(value).success;
 const wire = <T>(x: T): unknown => JSON.parse(JSON.stringify(x));
@@ -191,6 +190,26 @@ describe('migrateTemplatePayload', () => {
     expect(result).toMatchObject({ ok: true, payload: { kind: 'form', document: wire(definition()) }, notes: [note('/document/blocks/0')] });
   });
 
+  it('runs the form payload steps first, then migrates the document they produced (BL-029)', () => {
+    const v1Document = { title: 'Contact', blocks: [] };
+    const { document: _current, ...form } = wire(formPayload()) as Record<string, unknown>;
+    const formStep: S.TemplatePayloadMigrationStep = {
+      from: 1,
+      to: 2,
+      kinds: ['form'],
+      migrate: ({ legacyDocument, ...rest }) => ({ payload: { ...rest, document: legacyDocument }, notes: [note('/document')] }),
+    };
+    const seen: unknown[] = [];
+    const migrateDocument = (doc: unknown) => {
+      seen.push(doc);
+      return { definition: definition(), notes: [note('/blocks/0')] };
+    };
+    const result = S.migrateTemplatePayload({ ...form, schemaVersion: 1, legacyDocument: v1Document }, { steps: [formStep], migrateDocument });
+    expect(seen).toEqual([v1Document]);
+    expect(result).toMatchObject({ ok: true, payload: { kind: 'form', schemaVersion: S.SCHEMA_VERSION, document: wire(definition()) } });
+    expect(result.ok && result.notes).toEqual([note('/document'), note('/document/blocks/0')]);
+  });
+
   it('reports what it cannot migrate', () => {
     const code = (input: unknown, ctx?: S.TemplateMigrationContext) => {
       const result = S.migrateTemplatePayload(input, ctx);
@@ -227,7 +246,19 @@ function varNames(root: unknown): string[] {
   return out;
 }
 
-function formTemplateFromV1(v1: unknown): unknown {
+const RANK: Readonly<Record<S.DataClassification, number>> = { none: 0, personal: 1, sensitive: 2 };
+
+/** The payload's data inventory, read from a migrated document: per purpose, its fields (source ids), highest classification and encryption. */
+function inventoryOf(def: S.FormDefinition): S.DataInventoryEntry[] {
+  return def.privacy.purposes.map((purpose) => {
+    const fields = Object.values(def.blocks).filter((b): b is S.FieldBlock => b !== undefined && 'compliance' in b && b.compliance.purposeIds.includes(purpose.id));
+    const classification = fields.reduce<S.DataClassification>((c, b) => (RANK[b.compliance.classification] > RANK[c] ? b.compliance.classification : c), 'none');
+    return { purposeName: purpose.name, fieldSourceIds: fields.map((b) => b.id), classification, encrypted: fields.some((b) => b.compliance.encrypt) };
+  });
+}
+
+/** A form template around a v1 document; with `migrated`, its i18n bundle and data inventory are the migrated document's. */
+function formTemplateFromV1(v1: unknown, migrated?: S.FormDefinition): unknown {
   return {
     kind: 'form',
     schemaVersion: S.SCHEMA_VERSION,
@@ -235,8 +266,10 @@ function formTemplateFromV1(v1: unknown): unknown {
     variables: [],
     locks: [],
     requiredFeatures: [],
-    i18n: { defaultLocale: 'en-IN', locales: [{ locale: 'en-IN', direction: 'ltr' }], messages: {} },
-    dataInventory: [],
+    i18n: migrated
+      ? { defaultLocale: migrated.i18n.defaultLocale, locales: migrated.i18n.locales, messages: migrated.i18n.messages }
+      : { defaultLocale: 'en-IN', locales: [{ locale: 'en-IN', direction: 'ltr' }], messages: {} },
+    dataInventory: migrated ? inventoryOf(migrated) : [],
     estimatedMinutes: 1,
   };
 }
@@ -250,8 +283,38 @@ function expectValidFormTemplate(input: unknown, ctx: S.TemplateMigrationContext
   const declared = new Set(payload.variables.map((v) => v.name));
   const undeclared = varNames(payload).filter((n) => !declared.has(n as S.TemplateVariableName) && !BUILT_IN_NAMESPACES.some((ns) => n.startsWith(ns)));
   expect(undeclared).toEqual([]);
+  expectInventoryOfDocument(payload);
   return payload;
 }
+
+/**
+ * The data inventory agrees with the document: each entry names a purpose, lists exactly the personal or sensitive
+ * fields collected for it (fields with no personal data may be listed too), and states their highest classification
+ * and whether any is encrypted.
+ */
+function expectInventoryOfDocument(payload: S.FormTemplatePayload): void {
+  const fields = Object.values(payload.document.blocks).filter((b): b is S.FieldBlock => b !== undefined && 'compliance' in b);
+  for (const entry of payload.dataInventory) {
+    const purpose = payload.document.privacy.purposes.find((p) => p.name === entry.purposeName);
+    expect(purpose, entry.purposeName).toBeDefined();
+    const ofPurpose = fields.filter((b) => purpose !== undefined && b.compliance.purposeIds.includes(purpose.id));
+    const listed = ofPurpose.filter((b) => entry.fieldSourceIds.includes(b.id));
+    expect(listed.map((b) => b.id), entry.purposeName).toEqual(entry.fieldSourceIds);
+    expect(ofPurpose.filter((b) => b.compliance.classification !== 'none' && !entry.fieldSourceIds.includes(b.id)).map((b) => b.id), entry.purposeName).toEqual([]);
+    const highest = listed.reduce<S.DataClassification>((c, b) => (RANK[b.compliance.classification] > RANK[c] ? b.compliance.classification : c), 'none');
+    expect(entry.classification, entry.purposeName).toBe(highest);
+    expect(entry.encrypted, entry.purposeName).toBe(listed.some((b) => b.compliance.encrypt));
+  }
+}
+
+/* What each builder template collects once migrated: registry default compliance, the default purpose, nothing encrypted. */
+const TEMPLATE_INVENTORY: Readonly<Record<string, readonly string[]>> = {
+  contact: ['tpl_contact_b3', 'tpl_contact_b4', 'tpl_contact_b5'],
+  event: ['tpl_event_b2', 'tpl_event_b3'],
+  feedback: ['tpl_feedback_b4', 'tpl_feedback_b5'],
+  job: ['tpl_job_b2', 'tpl_job_b3', 'tpl_job_b5', 'tpl_job_b6'],
+  nps: ['tpl_nps_b4', 'tpl_nps_b5'],
+};
 
 describe('system template harness', () => {
   it('accepts a current form template', () => {
@@ -265,20 +328,39 @@ describe('system template harness', () => {
     expect(payload.document.formId).toBe('form_contact');
   });
 
+  it('rejects a data inventory that disagrees with the document', () => {
+    const doc = V1_TEMPLATES[0]?.doc;
+    const migrateDocument = (input: unknown) => S.migrateUnknown(input, migrationContext(REGISTRY_STANDIN));
+    const migrated = migrateDocument(doc).definition;
+    const good = formTemplateFromV1(doc, migrated) as { dataInventory: S.DataInventoryEntry[] };
+    const [entry] = good.dataInventory as [S.DataInventoryEntry];
+    for (const wrong of [
+      { ...entry, fieldSourceIds: entry.fieldSourceIds.slice(1) },
+      { ...entry, classification: 'sensitive' as const },
+      { ...entry, encrypted: true },
+      { ...entry, purposeName: 'Marketing' },
+    ]) {
+      expect(() => expectValidFormTemplate({ ...good, dataInventory: [wrong] }, { migrateDocument })).toThrow();
+    }
+  });
+
   it('rejects an undeclared custom variable', () => {
     const form = formPayload();
     const input = { ...form, variables: form.variables.filter((v) => v.name !== 'custom.event_name') };
     expect(() => expectValidFormTemplate(wire(input))).toThrow();
   });
 
-  /*
-   * WP-0.05 adds the v1 → v2 form migrate() and the v1 fixture corpus (test/fixtures/v1/templates/*.json, the five
-   * apps/builder/src/data/templates.ts forms). Bind migrate() to its MigrationContext as `migrateDocument` here and drop the skip.
-   */
-  const migrateDocument: S.TemplateMigrationContext['migrateDocument'] = undefined as S.TemplateMigrationContext['migrateDocument'];
-  it.skip('the 5 current templates validate (skipped until WP-0.05 lands v1 → v2 migrate() and the v1 template fixtures)', () => {
-    const v1Templates = import.meta.glob<unknown>('./fixtures/v1/templates/*.json', { eager: true, import: 'default' });
-    expect(Object.keys(v1Templates)).toHaveLength(5);
-    for (const v1 of Object.values(v1Templates)) expectValidFormTemplate(formTemplateFromV1(v1), migrateDocument ? { migrateDocument } : {});
+  /* The five apps/builder/src/data/templates.ts forms (test/fixtures/v1/templates), through the WP-0.05 migrate(). */
+  it('the 5 current templates validate', () => {
+    expect(V1_TEMPLATES.map((t) => t.name)).toEqual(['contact', 'event', 'feedback', 'job', 'nps']);
+    for (const { name, doc } of V1_TEMPLATES) {
+      const migrateDocument = (input: unknown) => S.migrateUnknown(input, migrationContext(REGISTRY_STANDIN));
+      const { definition: migrated, notes } = migrateDocument(doc);
+      const result = S.migrateTemplatePayload(formTemplateFromV1(doc, migrated), { migrateDocument });
+      expect(result.ok && result.notes).toEqual(notes.map((n) => ({ ...n, path: `/document${n.path}` })));
+      const payload = expectValidFormTemplate(formTemplateFromV1(doc, migrated), { migrateDocument });
+      expect(payload.document, name).toEqual(migrated);
+      expect(payload.dataInventory, name).toEqual([{ purposeName: 'Respond to this form', fieldSourceIds: TEMPLATE_INVENTORY[name], classification: 'personal', encrypted: false }]);
+    }
   });
 });

@@ -1,0 +1,112 @@
+{
+  "id": "tpl_nps",
+  "title": "How likely are you to recommend us?",
+  "description": "Takes about 30 seconds.",
+  "blocks": [
+    {
+      "id": "tpl_nps_b1",
+      "type": "heading",
+      "label": "Your feedback",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "tpl_nps_b2",
+      "type": "nps",
+      "label": "Score from 0–10",
+      "placeholder": "Enter nps",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "tpl_nps_b3",
+      "type": "page_break",
+      "label": "What is the main reason for your score?",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    },
+    {
+      "id": "tpl_nps_b4",
+      "type": "long_text",
+      "label": "Email (optional)",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3
+    },
+    {
+      "id": "tpl_nps_b5",
+      "type": "email",
+      "label": "",
+      "placeholder": "Enter email",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks — we received your response.",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

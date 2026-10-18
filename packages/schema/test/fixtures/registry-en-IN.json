@@ -1,0 +1,614 @@
+{
+  "date": {
+    "defaultConfig": {
+      "pattern": "DD-MM-YYYY",
+      "picker": "calendar"
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "date"
+    },
+    "operators": {
+      "date": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "before",
+        "after",
+        "on_or_before",
+        "on_or_after",
+        "between"
+      ]
+    }
+  },
+  "email": {
+    "defaultConfig": {},
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "contact",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include",
+      "principalIdentifier": "email"
+    },
+    "paths": {
+      "": "text"
+    },
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ]
+    }
+  },
+  "file_upload": {
+    "defaultConfig": {
+      "maxFiles": 1,
+      "maxFileBytes": 10485760,
+      "accept": {
+        "extensions": [
+          "pdf",
+          "jpg",
+          "jpeg",
+          "png",
+          "doc",
+          "docx"
+        ],
+        "mimeTypes": [
+          "application/pdf",
+          "image/jpeg",
+          "image/png",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ]
+      },
+      "capture": "none",
+      "stripMetadata": true,
+      "scan": "async"
+    },
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "other",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": false,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "file",
+      "count": "number"
+    },
+    "operators": {
+      "file": [
+        "is_answered",
+        "is_not_answered",
+        "count_eq",
+        "count_gte",
+        "count_lte"
+      ],
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between"
+      ]
+    }
+  },
+  "hidden": {
+    "defaultConfig": {
+      "source": {
+        "kind": "url_param"
+      }
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "text"
+    },
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ]
+    }
+  },
+  "linear_scale": {
+    "defaultConfig": {
+      "min": 1,
+      "max": 5
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "number"
+    },
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between"
+      ]
+    }
+  },
+  "long_text": {
+    "defaultConfig": {
+      "rows": 4
+    },
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "free_text",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "text"
+    },
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ]
+    }
+  },
+  "multi_choice": {
+    "defaultConfig": {
+      "display": "checkbox",
+      "options": [
+        {
+          "id": "option_1",
+          "label": "Option 1"
+        },
+        {
+          "id": "option_2",
+          "label": "Option 2"
+        },
+        {
+          "id": "option_3",
+          "label": "Option 3"
+        }
+      ]
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "choices",
+      "other": "text",
+      "count": "number"
+    },
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "includes_any",
+        "includes_all",
+        "includes_none",
+        "count_eq",
+        "count_gte",
+        "count_lte"
+      ],
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ],
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between"
+      ]
+    }
+  },
+  "nps": {
+    "defaultConfig": {},
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "number"
+    },
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between"
+      ]
+    }
+  },
+  "number": {
+    "defaultConfig": {
+      "display": "input"
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "number"
+    },
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between"
+      ]
+    }
+  },
+  "phone": {
+    "defaultConfig": {
+      "defaultCountry": "IN",
+      "showCountrySelect": true
+    },
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "contact",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "text",
+      "e164": "text",
+      "country": "text"
+    },
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ]
+    }
+  },
+  "ranking": {
+    "defaultConfig": {
+      "options": [
+        {
+          "id": "option_1",
+          "label": "Option 1"
+        },
+        {
+          "id": "option_2",
+          "label": "Option 2"
+        },
+        {
+          "id": "option_3",
+          "label": "Option 3"
+        }
+      ]
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "choices"
+    },
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered"
+      ]
+    }
+  },
+  "rating": {
+    "defaultConfig": {
+      "max": 5,
+      "icon": "star"
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "number"
+    },
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between"
+      ]
+    }
+  },
+  "short_text": {
+    "defaultConfig": {},
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "free_text",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "text"
+    },
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+        "matches_preset"
+      ]
+    }
+  },
+  "signature": {
+    "defaultConfig": {
+      "penColor": {
+        "token": "text"
+      },
+      "heightPx": 160,
+      "allowTyped": true
+    },
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "identity",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": false,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "boolean"
+    },
+    "operators": {
+      "boolean": [
+        "is_answered",
+        "is_not_answered"
+      ]
+    }
+  },
+  "single_choice": {
+    "defaultConfig": {
+      "display": "radio",
+      "options": [
+        {
+          "id": "option_1",
+          "label": "Option 1"
+        },
+        {
+          "id": "option_2",
+          "label": "Option 2"
+        },
+        {
+          "id": "option_3",
+          "label": "Option 3"
+        }
+      ]
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "choice",
+      "other": "text"
+    },
+    "operators": {
+      "choice": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "includes_any",
+        "includes_none"
+      ],
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ]
+    }
+  },
+  "time": {
+    "defaultConfig": {
+      "hourCycle": "h12",
+      "minuteStep": 5
+    },
+    "defaultCompliance": {
+      "classification": "none",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "time",
+      "start": "time",
+      "end": "time"
+    },
+    "operators": {
+      "time": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "before",
+        "after",
+        "on_or_before",
+        "on_or_after",
+        "between"
+      ]
+    }
+  },
+  "url": {
+    "defaultConfig": {
+      "schemes": [
+        "https",
+        "http"
+      ]
+    },
+    "defaultCompliance": {
+      "classification": "personal",
+      "category": "free_text",
+      "purposeIds": [],
+      "encrypt": false,
+      "allowPrefill": true,
+      "inNotifications": "include",
+      "inExports": "include"
+    },
+    "paths": {
+      "": "text"
+    },
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with"
+      ]
+    }
+  }
+}

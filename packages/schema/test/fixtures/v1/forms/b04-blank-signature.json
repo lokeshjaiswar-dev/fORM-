@@ -1,0 +1,84 @@
+{
+  "id": "form_b04_blank_signature",
+  "title": "A required signature",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b04_name",
+      "type": "text",
+      "label": "Name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b04_sign",
+      "type": "signature",
+      "label": "Sign here",
+      "placeholder": "Enter signature",
+      "helpText": "",
+      "validation": {
+        "required": true
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b04_witness",
+      "type": "signature",
+      "label": "Witness",
+      "placeholder": "Enter signature",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b04_name",
+        "operator": "answered"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

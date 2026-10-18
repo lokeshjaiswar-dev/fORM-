@@ -111,6 +111,24 @@ describe('evaluate', () => {
     expect(sorted(run(rules, { [bid('name')]: a.text('x'), [bid('colour')]: a.single('red') }, { patch }).required)).toEqual(['name', 'notes']);
   });
 
+  it('B21: a rule reading a deleted block is left out, so its targets keep their initial state (no plan step, no trace row)', () => {
+    const rules = [
+      rule('gone_hide', cond(ans('deleted'), 'is_not_answered'), [hide('notes')]),
+      rule('gone_show', cond(ans('deleted'), 'eq', text('x')), [show('pets')], [hide('pets')]),
+      rule('ok', cond(ans('age'), 'is_answered'), [hide('slot')]),
+    ];
+    const def = form(blocks(), pages(), rules);
+    def.blocks[bid('pets')] = { ...(def.blocks[bid('pets')] as S.FieldBlockOf<'multi_choice'>), initiallyHidden: true };
+    const version = versionOf(def);
+    expect(version.compiled.plan.flatMap((s) => (s.kind === 'rule' ? [s.ruleId] : []))).toEqual(['ok']);
+    for (const answers of [{}, { [bid('age')]: a.number('3') }]) {
+      const state = evaluate(version, answers, META, 'client', { trace: true });
+      expect(state.visible.has(bid('notes'))).toBe(true);
+      expect(state.visible.has(bid('pets'))).toBe(false);
+      expect(state.trace?.flatMap((row) => (row.step.kind === 'rule' ? [row.step.ruleId] : []))).toEqual(['ok']);
+    }
+  });
+
   it('drops answers of unknown blocks and of the wrong shape, with a diagnostic in the trace', () => {
     const def = form(blocks(), pages(), [rule('r', cond(ans('age'), 'gt', num('1')), [hide('notes')])]);
     const answers = { [bid('age')]: a.text('5'), [bid('ghost')]: a.text('x'), [bid('name')]: { type: 'short_text', value: '' } } as S.Answers;

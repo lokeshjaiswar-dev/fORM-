@@ -1,0 +1,83 @@
+{
+  "id": "form_b27_disabled_required",
+  "title": "Disabled and required",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b27_member",
+      "type": "text",
+      "label": "Member id",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": true
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "disabled": true,
+        "defaultValue": "M-001"
+      },
+      "order": 0
+    },
+    {
+      "id": "b27_contact",
+      "type": "email",
+      "label": "Contact",
+      "placeholder": "Enter email",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "disabled": true,
+        "autoFocus": true,
+        "hideLabel": true
+      },
+      "order": 1
+    },
+    {
+      "id": "b27_notes",
+      "type": "text",
+      "label": "Notes",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": true
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

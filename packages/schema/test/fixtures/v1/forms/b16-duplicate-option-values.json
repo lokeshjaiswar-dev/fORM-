@@ -1,0 +1,174 @@
+{
+  "id": "form_b16_duplicate_option_values",
+  "title": "Duplicate option values",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b16_size",
+      "type": "multiple_choice",
+      "label": "Size",
+      "placeholder": "Enter multiple choice",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b16_size_o1",
+          "label": "S",
+          "value": "small"
+        },
+        {
+          "id": "b16_size_o2",
+          "label": "M",
+          "value": "medium"
+        },
+        {
+          "id": "b16_size_o3",
+          "label": "L",
+          "value": "large"
+        },
+        {
+          "id": "b16_size_o4",
+          "label": "XL",
+          "value": "large"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b16_big",
+      "type": "text",
+      "label": "Big-size note",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b16_size",
+        "operator": "equals",
+        "value": "large"
+      }
+    },
+    {
+      "id": "b16_extras",
+      "type": "checkbox",
+      "label": "Extras",
+      "placeholder": "Enter checkboxes",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b16_extras_o1",
+          "label": "Gift box",
+          "value": "gift"
+        },
+        {
+          "id": "b16_extras_o2",
+          "label": "Gift wrap",
+          "value": "gift"
+        },
+        {
+          "id": "b16_extras_o3",
+          "label": "Card",
+          "value": "card"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    },
+    {
+      "id": "b16_gift",
+      "type": "text",
+      "label": "Gift message",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b16_extras",
+        "operator": "equals",
+        "value": "gift"
+      }
+    },
+    {
+      "id": "b16_card",
+      "type": "text",
+      "label": "Card text",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b16_extras",
+        "operator": "not_equals",
+        "value": "gift"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

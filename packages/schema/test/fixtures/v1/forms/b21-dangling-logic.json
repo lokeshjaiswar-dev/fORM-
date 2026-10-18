@@ -1,0 +1,180 @@
+{
+  "id": "form_b21_dangling_logic",
+  "title": "Logic reading deleted blocks",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b21_title",
+      "type": "heading",
+      "label": "Welcome",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b21_name",
+      "type": "text",
+      "label": "Name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b21_gone_show",
+      "type": "text",
+      "label": "Shown by a deleted block",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b21_deleted",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b21_gone_hide",
+      "type": "text",
+      "label": "Hidden by a deleted block",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b21_deleted",
+        "operator": "equals",
+        "value": "x"
+      }
+    },
+    {
+      "id": "b21_from_heading",
+      "type": "text",
+      "label": "Reads a heading",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b21_title",
+        "operator": "not_answered"
+      }
+    },
+    {
+      "id": "b21_invalid",
+      "type": "text",
+      "label": "Reads an invalid id",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 5,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "no such block!",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b21_off",
+      "type": "text",
+      "label": "Logic switched off",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 6,
+      "logic": {
+        "enabled": false,
+        "action": "show",
+        "sourceBlockId": "b21_name",
+        "operator": "answered"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

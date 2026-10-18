@@ -176,6 +176,35 @@ describe('fromHtml: v1 builder HTML', () => {
     expect(S.RichDocSchema.safeParse(d).success).toBe(true);
   });
 
+  it('charges entity-heavy text once per decoded text node, not once per entity (BL-052)', () => {
+    const long = 'a&amp;b&#39;c&lt;'.repeat(5_000);
+    const expected = "a&b'c<".repeat(5_000);
+    const { doc: d, dropped } = S.fromHtml(`<p>${long}</p><p>x &amp; y</p>`);
+    expect(dropped).toEqual([]);
+    expect(d).toEqual(doc(p(text(expected)), p(text('x & y'))));
+    expect(S.htmlToPlain(long)).toBe(expected);
+    expect(S.htmlToInline(`<b>${long}</b>`)).toEqual([text(expected, bold)]);
+    expect(S.htmlToInline('a&amp;<i>b&amp;c</i>&amp;d')).toEqual([text('a&'), text('b&c', italic), text('&d')]);
+  });
+
+  it('charges entity-heavy pre text per chunk, keeping every line under the limit and linear time over it', () => {
+    const lines = 3_000;
+    const { doc: d, dropped } = S.fromHtml(`<pre>${'a&amp;\n'.repeat(lines)}</pre>`);
+    expect(dropped).toEqual([]);
+    expect(S.htmlToPlain(`<pre>${'a&amp;\n'.repeat(lines)}</pre>`).split('\n').filter(Boolean)).toHaveLength(lines);
+    expect(S.measureRichText(d).nodes).toBeLessThanOrEqual(S.RICH_TEXT_LIMITS.maxNodes);
+    const started = Date.now();
+    const big = S.fromHtml(`<div style="white-space:pre">${'a&amp;\n'.repeat(40_000)}</div>`);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(big.dropped).toEqual(['content beyond the node limit']);
+    expect(S.measureRichText(big.doc).nodes).toBeLessThanOrEqual(S.RICH_TEXT_LIMITS.maxNodes);
+  });
+
+  it('counts a CRLF split by an entity as one pre line break', () => {
+    expect(S.fromHtml('<pre>a\r&#10;b</pre>').doc).toEqual(S.fromHtml('<pre>a\r\nb</pre>').doc);
+    expect(S.fromHtml('<pre>a&#13;\nb</pre>').doc).toEqual(S.fromHtml('<pre>a\nb</pre>').doc);
+  });
+
   it('htmlToInline and htmlToPlain implement the MigrationContext helpers', () => {
     expect(S.htmlToInline('<b>Name</b><br>please')).toEqual([text('Name', bold), { type: 'hardBreak' }, text('please')]);
     expect(S.htmlToPlain('<p>a</p><ul><li>b</li></ul>')).toBe('a\n- b');

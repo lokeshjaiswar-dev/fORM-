@@ -1,0 +1,167 @@
+{
+  "id": "form_s07_external_assets",
+  "title": "External logo and cover",
+  "description": "",
+  "blocks": [
+    {
+      "id": "s07_name",
+      "type": "text",
+      "label": "Name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "s07_when",
+      "type": "date",
+      "label": "Preferred date",
+      "placeholder": "Enter date",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "defaultValue": "2026-11-01"
+      },
+      "order": 1
+    },
+    {
+      "id": "s07_time",
+      "type": "time",
+      "label": "Preferred time",
+      "placeholder": "Enter time",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "defaultValue": "09:30"
+      },
+      "order": 2
+    },
+    {
+      "id": "s07_late",
+      "type": "text",
+      "label": "Why so late?",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "s07_time",
+        "operator": "greater_than",
+        "value": "18:00"
+      }
+    },
+    {
+      "id": "s07_early",
+      "type": "text",
+      "label": "Before the event?",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "s07_when",
+        "operator": "less_than",
+        "value": "2026-12-01"
+      }
+    },
+    {
+      "id": "s07_cv",
+      "type": "file_upload",
+      "label": "CV",
+      "placeholder": "Enter file upload",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "allowMultiple": true
+      },
+      "order": 5
+    },
+    {
+      "id": "s07_site",
+      "type": "url",
+      "label": "Website",
+      "placeholder": "Enter link",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 6
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Send it",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#FFF",
+    "textColor": "#111111",
+    "accentColor": "rebeccapurple",
+    "font": "Georgia",
+    "progressBar": true,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "https://cdn.example.com/logo.png",
+    "coverUrl": "data:image/png;base64,AAAA",
+    "successAnimation": true
+  }
+}

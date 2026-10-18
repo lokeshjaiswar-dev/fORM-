@@ -1,6 +1,7 @@
 {
   "extends": "@form/tsconfig/strict.json",
   "compilerOptions": {
+    "resolveJsonModule": true,
     "types": []
   },
   "include": ["src", "test", "vitest.config.ts"]

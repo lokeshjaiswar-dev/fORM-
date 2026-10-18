@@ -1,0 +1,99 @@
+{
+  "id": "form_b06_signature_half_width",
+  "title": "A signature in a half-width row",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b06_first",
+      "type": "text",
+      "label": "First name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "width": "half"
+      },
+      "order": 0
+    },
+    {
+      "id": "b06_last",
+      "type": "text",
+      "label": "Last name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "width": "half",
+        "besidePrevious": true
+      },
+      "order": 1
+    },
+    {
+      "id": "b06_sign",
+      "type": "signature",
+      "label": "Signature",
+      "placeholder": "Enter signature",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "width": "half"
+      },
+      "order": 2
+    },
+    {
+      "id": "b06_rule",
+      "type": "divider",
+      "label": "",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

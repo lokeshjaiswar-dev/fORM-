@@ -15,6 +15,8 @@ export type V1Type = 'text' | 'long_text' | 'email' | 'number' | 'multiple_choic
 export interface V1Option { id: string; label: string; value: string }
 export interface V1Block { id: string; type: V1Type; options?: V1Option[]; logic?: V1Logic; page: number }
 export interface V1Form { name: string; blocks: V1Block[] }
+/** What the oracle reads of a block: any v1 type (content blocks have no value, as in v1). */
+export interface OracleBlock { id: string; type: string; options?: V1Option[]; logic?: V1Logic }
 export type V1Values = Record<string, unknown>;
 
 /** Behaviour changes logic@2 makes on purpose; each one is a separate switch of the oracle. */
@@ -27,15 +29,20 @@ export const FIXES = {
   unanswered_not_zero: true,
   /** A choice value that matches no option disables the rule (migration note `logic_value_unmatched`). */
   unmatched_choice_value: true,
+  /**
+   * A number source compares `equals`/`not_equals` as numbers (schema §4.2.1): v1 compared the trimmed answer and the
+   * value as strings, so '0.0' never equalled '0'. Only the migrated corpus exercises it (its number pool has such answers).
+   */
+  numeric_equality: true,
 } as const;
 export type Fix = keyof typeof FIXES;
 export const FIX_NAMES = Object.keys(FIXES) as Fix[];
 
-const CHOICE_TYPES: ReadonlySet<V1Type> = new Set(['multiple_choice', 'dropdown', 'checkbox', 'multi_select']);
+const CHOICE_TYPES: ReadonlySet<string> = new Set<V1Type>(['multiple_choice', 'dropdown', 'checkbox', 'multi_select']);
 const NUMERIC_OPS: ReadonlySet<V1Operator> = new Set(['greater_than', 'less_than']);
 
 /** v1 `isBlockVisible`, verbatim in behaviour. */
-export function v1IsBlockVisible(block: V1Block, values: V1Values): boolean {
+export function v1IsBlockVisible(block: OracleBlock, values: V1Values): boolean {
   const logic = block.logic;
   if (!logic?.enabled || !logic.sourceBlockId) return true;
   const raw = values[logic.sourceBlockId];
@@ -66,12 +73,12 @@ export function v1IsBlockVisible(block: V1Block, values: V1Values): boolean {
   return showAction ? matched : !matched;
 }
 
-const unmatched = (source: V1Block | undefined, logic: V1Logic): boolean =>
+const unmatched = (source: OracleBlock | undefined, logic: V1Logic): boolean =>
   source !== undefined && CHOICE_TYPES.has(source.type) && logic.value !== undefined && !(source.options ?? []).some((o) => o.value === logic.value)
   && ['equals', 'not_equals'].includes(logic.operator ?? 'equals');
 
 /** v1 visibility of every block, with the chosen fixes applied. */
-export function v1Visibility(f: V1Form, values: V1Values, fixes: ReadonlySet<Fix>): Map<string, boolean> {
+export function v1Visibility(f: { blocks: readonly OracleBlock[] }, values: V1Values, fixes: ReadonlySet<Fix>): Map<string, boolean> {
   const byId = new Map(f.blocks.map((b) => [b.id, b]));
   const out = new Map<string, boolean>();
   const blank = (raw: unknown) => (Array.isArray(raw) ? raw.length === 0 : String(raw ?? '').trim() === '');
@@ -92,7 +99,10 @@ export function v1Visibility(f: V1Form, values: V1Values, fixes: ReadonlySet<Fix
       out.set(block.id, logic.action === 'hide');
       continue;
     }
-    out.set(block.id, v1IsBlockVisible(block, effective));
+    const answer = String(effective[logic.sourceBlockId] ?? '').trim();
+    const numericEqual = fixes.has('numeric_equality') && source?.type === 'number' && ['equals', 'not_equals'].includes(logic.operator ?? 'equals')
+      && answer !== '' && (logic.value ?? '').trim() !== '' && Number(answer) === Number(logic.value);
+    out.set(block.id, v1IsBlockVisible(block, numericEqual ? { ...effective, [logic.sourceBlockId]: logic.value } : effective));
   }
   return out;
 }
@@ -154,12 +164,13 @@ export function toV2(f: V1Form): S.FormDefinition {
     if (logic?.enabled && logic.sourceBlockId !== undefined) {
       const op = OPERATOR[logic.operator ?? 'equals'];
       const needsValue = !['is_answered', 'is_not_answered'].includes(op);
-      const right = source && needsValue ? v2Operand(source, logic.value ?? '') : null;
-      const usable = source !== undefined && (!needsValue || right !== null);
+      const right = needsValue ? (source ? v2Operand(source, logic.value ?? '') : { kind: 'literal' as const, value: { type: 'text' as const, value: logic.value ?? '' } }) : null;
       const action = logic.action === 'hide' ? hide(b.id) : show(b.id);
       const left: S.Operand = { kind: 'ref', ref: { kind: 'answer', blockId: (source?.id ?? logic.sourceBlockId) as S.BlockId } };
       const condition = cond(left, op, right ?? undefined, op === 'eq' || op === 'neq' ? { caseSensitive: true } : {});
-      if (usable) {
+      /* B21: the rule keeps its deleted source, and compile() leaves it out; nothing here starts hidden for it. */
+      if (!source) rules.push(rule(`rule_${b.id}`, all(condition), [action]));
+      else if (!needsValue || right !== null) {
         rules.push(rule(`rule_${b.id}`, all(condition), [action]));
         if (logic.action !== 'hide') block.initiallyHidden = true;
       }

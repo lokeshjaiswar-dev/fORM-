@@ -1,0 +1,104 @@
+{
+  "id": "form_b02_hidden_required",
+  "title": "Required fields behind logic",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b02_student",
+      "type": "multiple_choice",
+      "label": "Are you a student?",
+      "placeholder": "Enter multiple choice",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b02_student_o1",
+          "label": "Yes",
+          "value": "yes"
+        },
+        {
+          "id": "b02_student_o2",
+          "label": "No",
+          "value": "no"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b02_school",
+      "type": "text",
+      "label": "School",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": true
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b02_student",
+        "operator": "equals",
+        "value": "yes"
+      }
+    },
+    {
+      "id": "b02_employer",
+      "type": "text",
+      "label": "Employer",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": true
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b02_student",
+        "operator": "equals",
+        "value": "yes"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

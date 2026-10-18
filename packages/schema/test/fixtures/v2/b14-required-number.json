@@ -1,0 +1,519 @@
+{
+  "definition": {
+    "schemaVersion": 2,
+    "revision": 0,
+    "formId": "form_b14_required_number",
+    "title": "Required numbers with limits",
+    "blocks": {
+      "b14_qty": {
+        "id": "b14_qty",
+        "type": "number",
+        "key": "quantity",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Quantity"
+                }
+              ]
+            }
+          ]
+        },
+        "required": true,
+        "messages": {
+          "required": "Between 1 and 10",
+          "below_min": "Between 1 and 10",
+          "above_max": "Between 1 and 10"
+        },
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "display": "input",
+          "placeholder": "Enter number",
+          "prefix": "Qty",
+          "min": "1",
+          "max": "10",
+          "defaultValue": "2"
+        }
+      },
+      "b14_budget": {
+        "id": "b14_budget",
+        "type": "number",
+        "key": "budget",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Budget"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "display": "input",
+          "placeholder": "Enter number"
+        }
+      },
+      "b14_bulk": {
+        "id": "b14_bulk",
+        "type": "short_text",
+        "key": "bulk_order_note",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Bulk order note"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        },
+        "initiallyHidden": true
+      },
+      "b14_none": {
+        "id": "b14_none",
+        "type": "short_text",
+        "key": "why_none",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Why none?"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        },
+        "initiallyHidden": true
+      }
+    },
+    "pages": [
+      {
+        "id": "m_1",
+        "children": [
+          "b14_qty",
+          "b14_budget",
+          "b14_bulk",
+          "b14_none"
+        ]
+      }
+    ],
+    "endings": [
+      {
+        "id": "m_2",
+        "kind": "message",
+        "name": "Thank you",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Thanks for your response!"
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "kind": "fill_again",
+            "prefill": "none"
+          }
+        ],
+        "confetti": true
+      }
+    ],
+    "defaultEndingId": "m_2",
+    "logic": {
+      "rules": [
+        {
+          "id": "m_6",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_5",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_4",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b14_qty"
+                  }
+                },
+                "op": "gt",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "number",
+                    "value": "5"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "b14_bulk"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "m_9",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_8",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_7",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b14_qty"
+                  }
+                },
+                "op": "eq",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "number",
+                    "value": "0"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "b14_none"
+              ]
+            }
+          ]
+        }
+      ],
+      "ruleGroups": [],
+      "variables": []
+    },
+    "privacy": {
+      "fiduciary": {
+        "legalName": [
+          {
+            "var": {
+              "name": "org.legal_name"
+            }
+          }
+        ],
+        "contactEmail": [
+          {
+            "var": {
+              "name": "org.support_email"
+            }
+          }
+        ],
+        "privacyContact": {
+          "name": [
+            {
+              "var": {
+                "name": "org.privacy_contact.name"
+              }
+            }
+          ],
+          "email": [
+            {
+              "var": {
+                "name": "org.privacy_contact.email"
+              }
+            }
+          ]
+        },
+        "rightsUrl": [
+          {
+            "var": {
+              "name": "org.rights_url"
+            }
+          }
+        ],
+        "boardComplaintInfo": [
+          {
+            "var": {
+              "name": "org.board_complaint_info"
+            }
+          }
+        ]
+      },
+      "purposes": [
+        {
+          "id": "m_3",
+          "name": "Respond to this form",
+          "description": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read and act on what you send in this form."
+                  }
+                ]
+              }
+            ]
+          },
+          "lawfulBasis": {
+            "kind": "legitimate_use",
+            "ground": "s7a_voluntarily_provided_for_specified_purpose",
+            "justification": "The respondent provides these details to have this form handled."
+          },
+          "retention": {
+            "kind": "org_default"
+          }
+        }
+      ],
+      "children": {
+        "mode": "not_applicable"
+      },
+      "encryption": {
+        "mode": "server"
+      },
+      "dropAnswersWithoutConsent": true,
+      "networkSignals": {
+        "ipHash": true,
+        "userAgentHash": true,
+        "ttlDays": 30
+      }
+    },
+    "theme": {
+      "layout": "classic",
+      "tokens": {
+        "colors": {
+          "page": "#ffffff",
+          "text": "#111111",
+          "inputText": "#111111",
+          "accent": "#2383e2"
+        },
+        "typography": {
+          "body": "inter",
+          "baseSizePx": 16
+        },
+        "radius": "md",
+        "density": "comfortable",
+        "formWidth": "normal",
+        "labelAlign": "top",
+        "inputStyle": "outlined",
+        "progress": "none"
+      }
+    },
+    "behavior": {
+      "submit": {
+        "label": "Submit",
+        "align": "left"
+      },
+      "navigation": {
+        "allowBack": true,
+        "showPageTitles": false
+      },
+      "saveAndResume": {
+        "enabled": false,
+        "showButton": false,
+        "delivery": [],
+        "expiryDays": 30
+      },
+      "localAutosave": {
+        "enabled": false,
+        "allowWithSensitive": false
+      },
+      "timeZone": "Asia/Kolkata",
+      "spam": {
+        "honeypot": true,
+        "minFillSeconds": 3,
+        "captcha": "off"
+      },
+      "urlPrefill": false,
+      "showBranding": true,
+      "a11y": {
+        "announceErrors": "polite",
+        "focusFirstError": true
+      },
+      "successAnimation": true
+    },
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "detect": [
+        "url_param"
+      ],
+      "urlParam": "lang",
+      "switcher": "none",
+      "messages": {},
+      "systemMessages": {},
+      "reviewedConsentLocales": []
+    }
+  },
+  "ops": {
+    "access": {
+      "enabled": true,
+      "uniqueSubmission": "off",
+      "embedAllowlist": [],
+      "screens": {
+        "closed": {
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "This form is no longer accepting responses."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retention": {
+      "basis": "submitted_at",
+      "onExpiry": "delete",
+      "files": "with_submission",
+      "draftsDays": 30,
+      "trashDays": 30
+    }
+  },
+  "assetImports": [],
+  "notes": [
+    {
+      "code": "key_generated",
+      "path": "/blocks/b14_qty/key",
+      "detail": "key 'quantity'"
+    },
+    {
+      "code": "clamped",
+      "path": "/blocks/b14_budget/config",
+      "detail": "min 1000 is above max 100; both dropped"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b14_budget/key",
+      "detail": "key 'budget'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b14_bulk/key",
+      "detail": "key 'bulk_order_note'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b14_none/key",
+      "detail": "key 'why_none'"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/b14_bulk/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "logic_operator_changed",
+      "path": "/logic/rules/1",
+      "detail": "'equals' \"0\" now compares numbers (0); v1 compared the answer as text, so '05' did not equal '5'"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/b14_none/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "compliance_defaulted",
+      "path": "/blocks",
+      "detail": "4 field(s) take the registry default compliance and the purpose 'Respond to this form'"
+    },
+    {
+      "code": "default_purpose_added",
+      "path": "/privacy/purposes/0",
+      "detail": "'Respond to this form' (legitimate use, s.7(a)); the notice must be approved before publish (CMP-24)"
+    }
+  ]
+}

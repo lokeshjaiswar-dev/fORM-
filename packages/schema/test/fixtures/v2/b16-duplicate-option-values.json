@@ -1,0 +1,682 @@
+{
+  "definition": {
+    "schemaVersion": 2,
+    "revision": 0,
+    "formId": "form_b16_duplicate_option_values",
+    "title": "Duplicate option values",
+    "blocks": {
+      "b16_size": {
+        "id": "b16_size",
+        "type": "single_choice",
+        "key": "size",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Size"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "display": "radio",
+          "options": [
+            {
+              "id": "b16_size_o1",
+              "label": "S",
+              "code": "small"
+            },
+            {
+              "id": "b16_size_o2",
+              "label": "M",
+              "code": "medium"
+            },
+            {
+              "id": "b16_size_o3",
+              "label": "L",
+              "code": "large"
+            },
+            {
+              "id": "b16_size_o4",
+              "label": "XL",
+              "code": "large"
+            }
+          ]
+        }
+      },
+      "b16_big": {
+        "id": "b16_big",
+        "type": "short_text",
+        "key": "big_size_note",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Big-size note"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        },
+        "initiallyHidden": true
+      },
+      "b16_extras": {
+        "id": "b16_extras",
+        "type": "multi_choice",
+        "key": "extras",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Extras"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "display": "checkbox",
+          "options": [
+            {
+              "id": "b16_extras_o1",
+              "label": "Gift box",
+              "code": "gift"
+            },
+            {
+              "id": "b16_extras_o2",
+              "label": "Gift wrap",
+              "code": "gift"
+            },
+            {
+              "id": "b16_extras_o3",
+              "label": "Card",
+              "code": "card"
+            }
+          ]
+        }
+      },
+      "b16_gift": {
+        "id": "b16_gift",
+        "type": "short_text",
+        "key": "gift_message",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Gift message"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        },
+        "initiallyHidden": true
+      },
+      "b16_card": {
+        "id": "b16_card",
+        "type": "short_text",
+        "key": "card_text",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Card text"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        }
+      }
+    },
+    "pages": [
+      {
+        "id": "m_1",
+        "children": [
+          "b16_size",
+          "b16_big",
+          "b16_extras",
+          "b16_gift",
+          "b16_card"
+        ]
+      }
+    ],
+    "endings": [
+      {
+        "id": "m_2",
+        "kind": "message",
+        "name": "Thank you",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Thanks for your response!"
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "kind": "fill_again",
+            "prefill": "none"
+          }
+        ],
+        "confetti": true
+      }
+    ],
+    "defaultEndingId": "m_2",
+    "logic": {
+      "rules": [
+        {
+          "id": "m_6",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_5",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_4",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b16_size"
+                  }
+                },
+                "op": "includes_any",
+                "right": {
+                  "kind": "options",
+                  "blockId": "b16_size",
+                  "optionIds": [
+                    "b16_size_o3",
+                    "b16_size_o4"
+                  ]
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "b16_big"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "m_10",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_9",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_7",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b16_extras"
+                  }
+                },
+                "op": "includes_any",
+                "right": {
+                  "kind": "options",
+                  "blockId": "b16_extras",
+                  "optionIds": [
+                    "b16_extras_o1",
+                    "b16_extras_o2"
+                  ]
+                }
+              },
+              {
+                "kind": "condition",
+                "id": "m_8",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b16_extras"
+                  }
+                },
+                "op": "count_eq",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "number",
+                    "value": "1"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "b16_gift"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "m_14",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_13",
+            "combinator": "all",
+            "negate": true,
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_11",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b16_extras"
+                  }
+                },
+                "op": "includes_any",
+                "right": {
+                  "kind": "options",
+                  "blockId": "b16_extras",
+                  "optionIds": [
+                    "b16_extras_o1",
+                    "b16_extras_o2"
+                  ]
+                }
+              },
+              {
+                "kind": "condition",
+                "id": "m_12",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b16_extras"
+                  }
+                },
+                "op": "count_eq",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "number",
+                    "value": "1"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "hide",
+              "targets": [
+                "b16_card"
+              ]
+            }
+          ]
+        }
+      ],
+      "ruleGroups": [],
+      "variables": []
+    },
+    "privacy": {
+      "fiduciary": {
+        "legalName": [
+          {
+            "var": {
+              "name": "org.legal_name"
+            }
+          }
+        ],
+        "contactEmail": [
+          {
+            "var": {
+              "name": "org.support_email"
+            }
+          }
+        ],
+        "privacyContact": {
+          "name": [
+            {
+              "var": {
+                "name": "org.privacy_contact.name"
+              }
+            }
+          ],
+          "email": [
+            {
+              "var": {
+                "name": "org.privacy_contact.email"
+              }
+            }
+          ]
+        },
+        "rightsUrl": [
+          {
+            "var": {
+              "name": "org.rights_url"
+            }
+          }
+        ],
+        "boardComplaintInfo": [
+          {
+            "var": {
+              "name": "org.board_complaint_info"
+            }
+          }
+        ]
+      },
+      "purposes": [
+        {
+          "id": "m_3",
+          "name": "Respond to this form",
+          "description": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read and act on what you send in this form."
+                  }
+                ]
+              }
+            ]
+          },
+          "lawfulBasis": {
+            "kind": "legitimate_use",
+            "ground": "s7a_voluntarily_provided_for_specified_purpose",
+            "justification": "The respondent provides these details to have this form handled."
+          },
+          "retention": {
+            "kind": "org_default"
+          }
+        }
+      ],
+      "children": {
+        "mode": "not_applicable"
+      },
+      "encryption": {
+        "mode": "server"
+      },
+      "dropAnswersWithoutConsent": true,
+      "networkSignals": {
+        "ipHash": true,
+        "userAgentHash": true,
+        "ttlDays": 30
+      }
+    },
+    "theme": {
+      "layout": "classic",
+      "tokens": {
+        "colors": {
+          "page": "#ffffff",
+          "text": "#111111",
+          "inputText": "#111111",
+          "accent": "#2383e2"
+        },
+        "typography": {
+          "body": "inter",
+          "baseSizePx": 16
+        },
+        "radius": "md",
+        "density": "comfortable",
+        "formWidth": "normal",
+        "labelAlign": "top",
+        "inputStyle": "outlined",
+        "progress": "none"
+      }
+    },
+    "behavior": {
+      "submit": {
+        "label": "Submit",
+        "align": "left"
+      },
+      "navigation": {
+        "allowBack": true,
+        "showPageTitles": false
+      },
+      "saveAndResume": {
+        "enabled": false,
+        "showButton": false,
+        "delivery": [],
+        "expiryDays": 30
+      },
+      "localAutosave": {
+        "enabled": false,
+        "allowWithSensitive": false
+      },
+      "timeZone": "Asia/Kolkata",
+      "spam": {
+        "honeypot": true,
+        "minFillSeconds": 3,
+        "captcha": "off"
+      },
+      "urlPrefill": false,
+      "showBranding": true,
+      "a11y": {
+        "announceErrors": "polite",
+        "focusFirstError": true
+      },
+      "successAnimation": true
+    },
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "detect": [
+        "url_param"
+      ],
+      "urlParam": "lang",
+      "switcher": "none",
+      "messages": {},
+      "systemMessages": {},
+      "reviewedConsentLocales": []
+    }
+  },
+  "ops": {
+    "access": {
+      "enabled": true,
+      "uniqueSubmission": "off",
+      "embedAllowlist": [],
+      "screens": {
+        "closed": {
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "This form is no longer accepting responses."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retention": {
+      "basis": "submitted_at",
+      "onExpiry": "delete",
+      "files": "with_submission",
+      "draftsDays": 30,
+      "trashDays": 30
+    }
+  },
+  "assetImports": [],
+  "notes": [
+    {
+      "code": "duplicate_option_value",
+      "path": "/blocks/b16_size/config/options",
+      "detail": "2 options share the value \"large\"; their codes keep it"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b16_size/key",
+      "detail": "key 'size'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b16_big/key",
+      "detail": "key 'big_size_note'"
+    },
+    {
+      "code": "duplicate_option_value",
+      "path": "/blocks/b16_extras/config/options",
+      "detail": "2 options share the value \"gift\"; their codes keep it"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b16_extras/key",
+      "detail": "key 'extras'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b16_gift/key",
+      "detail": "key 'gift_message'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b16_card/key",
+      "detail": "key 'card_text'"
+    },
+    {
+      "code": "logic_operator_changed",
+      "path": "/logic/rules/0",
+      "detail": "2 options share the value \"large\"; any of them matches"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/b16_big/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "logic_operator_changed",
+      "path": "/logic/rules/1",
+      "detail": "2 options share the value \"gift\"; exactly one of them must be the selection"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/b16_gift/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "logic_operator_changed",
+      "path": "/logic/rules/2",
+      "detail": "2 options share the value \"gift\"; exactly one of them must be the selection"
+    },
+    {
+      "code": "compliance_defaulted",
+      "path": "/blocks",
+      "detail": "5 field(s) take the registry default compliance and the purpose 'Respond to this form'"
+    },
+    {
+      "code": "default_purpose_added",
+      "path": "/privacy/purposes/0",
+      "detail": "'Respond to this form' (legitimate use, s.7(a)); the notice must be approved before publish (CMP-24)"
+    }
+  ]
+}

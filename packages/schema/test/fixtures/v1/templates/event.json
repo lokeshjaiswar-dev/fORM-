@@ -1,0 +1,148 @@
+{
+  "id": "tpl_event",
+  "title": "Event registration",
+  "description": "Reserve your seat.",
+  "blocks": [
+    {
+      "id": "tpl_event_b1",
+      "type": "heading",
+      "label": "Join us",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "tpl_event_b2",
+      "type": "text",
+      "label": "Full name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "tpl_event_b3",
+      "type": "email",
+      "label": "Email",
+      "placeholder": "Enter email",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    },
+    {
+      "id": "tpl_event_b4",
+      "type": "dropdown",
+      "label": "Ticket type",
+      "placeholder": "Enter dropdown",
+      "helpText": "",
+      "options": [
+        {
+          "id": "tpl_event_b4_o1",
+          "label": "Option 1",
+          "value": "option_1"
+        },
+        {
+          "id": "tpl_event_b4_o2",
+          "label": "Option 2",
+          "value": "option_2"
+        },
+        {
+          "id": "tpl_event_b4_o3",
+          "label": "Option 3",
+          "value": "option_3"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3
+    },
+    {
+      "id": "tpl_event_b5",
+      "type": "number",
+      "label": "Number of guests",
+      "placeholder": "Enter number",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4
+    },
+    {
+      "id": "tpl_event_b6",
+      "type": "date",
+      "label": "Preferred date",
+      "placeholder": "Enter date",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 5
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks — we received your response.",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

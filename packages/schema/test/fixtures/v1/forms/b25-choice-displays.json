@@ -1,0 +1,177 @@
+{
+  "id": "form_b25_choice_displays",
+  "title": "Choice displays",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b25_langs",
+      "type": "multi_select",
+      "label": "Languages",
+      "placeholder": "Enter multi-select",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b25_langs_o1",
+          "label": "Hindi",
+          "value": "hi"
+        },
+        {
+          "id": "b25_langs_o2",
+          "label": "Tamil",
+          "value": "ta"
+        },
+        {
+          "id": "b25_langs_o3",
+          "label": "Other",
+          "value": "other"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b25_tools",
+      "type": "checkbox",
+      "label": "Tools",
+      "placeholder": "Enter checkboxes",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b25_tools_o1",
+          "label": "Figma",
+          "value": "figma"
+        },
+        {
+          "id": "b25_tools_o2",
+          "label": "Sheets",
+          "value": "sheets"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b25_how",
+      "type": "multiple_choice",
+      "label": "How did you hear about us?",
+      "placeholder": "Enter multiple choice",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b25_how_o1",
+          "label": "A friend",
+          "value": "friend"
+        },
+        {
+          "id": "b25_how_o2",
+          "label": "An ad",
+          "value": "ad"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "otherOption": true,
+        "randomize": true
+      },
+      "order": 2
+    },
+    {
+      "id": "b25_city",
+      "type": "dropdown",
+      "label": "City",
+      "placeholder": "Pick a city",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b25_city_o1",
+          "label": "Pune",
+          "value": "pune"
+        },
+        {
+          "id": "b25_city_o2",
+          "label": "Delhi",
+          "value": "delhi"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "defaultValue": "pune"
+      },
+      "order": 3
+    },
+    {
+      "id": "b25_other",
+      "type": "text",
+      "label": "Which language?",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b25_langs",
+        "operator": "equals",
+        "value": "other"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

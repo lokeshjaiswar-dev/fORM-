@@ -1,0 +1,111 @@
+{
+  "id": "form_b07_unanswered_scales",
+  "title": "NPS and scales start unanswered",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b07_score",
+      "type": "nps",
+      "label": "How likely are you to recommend us?",
+      "placeholder": "Enter nps",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "defaultValue": "0"
+      },
+      "order": 0
+    },
+    {
+      "id": "b07_ease",
+      "type": "linear_scale",
+      "label": "How easy was it?",
+      "placeholder": "Enter linear scale",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 0,
+        "scaleMax": 10,
+        "scaleMinLabel": "Hard",
+        "scaleMaxLabel": "Easy"
+      },
+      "order": 1
+    },
+    {
+      "id": "b07_detractor",
+      "type": "long_text",
+      "label": "What went wrong?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b07_score",
+        "operator": "less_than",
+        "value": "7"
+      }
+    },
+    {
+      "id": "b07_easy",
+      "type": "long_text",
+      "label": "What made it easy?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b07_ease",
+        "operator": "greater_than",
+        "value": "7"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

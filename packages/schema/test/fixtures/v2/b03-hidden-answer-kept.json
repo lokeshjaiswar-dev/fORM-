@@ -1,0 +1,454 @@
+{
+  "definition": {
+    "schemaVersion": 2,
+    "revision": 0,
+    "formId": "form_b03_hidden_answer_kept",
+    "title": "Hidden fields keep their answers",
+    "blocks": {
+      "b03_has_code": {
+        "id": "b03_has_code",
+        "type": "multi_choice",
+        "key": "i_have_a_code",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "I have a code"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "display": "checkbox",
+          "options": [
+            {
+              "id": "b03_has_code_o1",
+              "label": "Yes",
+              "code": "yes"
+            }
+          ]
+        }
+      },
+      "b03_coupon": {
+        "id": "b03_coupon",
+        "type": "short_text",
+        "key": "coupon",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Coupon"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer",
+          "defaultValue": {
+            "kind": "static",
+            "value": "WELCOME10"
+          }
+        }
+      },
+      "b03_notes": {
+        "id": "b03_notes",
+        "type": "long_text",
+        "key": "notes",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Notes"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "rows": 4,
+          "placeholder": "Enter long answer"
+        }
+      }
+    },
+    "pages": [
+      {
+        "id": "m_1",
+        "children": [
+          "b03_has_code",
+          "b03_coupon",
+          "b03_notes"
+        ]
+      }
+    ],
+    "endings": [
+      {
+        "id": "m_2",
+        "kind": "message",
+        "name": "Thank you",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Thanks for your response!"
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "kind": "fill_again",
+            "prefill": "none"
+          }
+        ],
+        "confetti": true
+      }
+    ],
+    "defaultEndingId": "m_2",
+    "logic": {
+      "rules": [
+        {
+          "id": "m_6",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_5",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_4",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b03_has_code"
+                  }
+                },
+                "op": "is_not_answered"
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "hide",
+              "targets": [
+                "b03_coupon"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "m_9",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_8",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_7",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b03_coupon"
+                  }
+                },
+                "op": "contains",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "text",
+                    "value": "free"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "hide",
+              "targets": [
+                "b03_notes"
+              ]
+            }
+          ]
+        }
+      ],
+      "ruleGroups": [],
+      "variables": []
+    },
+    "privacy": {
+      "fiduciary": {
+        "legalName": [
+          {
+            "var": {
+              "name": "org.legal_name"
+            }
+          }
+        ],
+        "contactEmail": [
+          {
+            "var": {
+              "name": "org.support_email"
+            }
+          }
+        ],
+        "privacyContact": {
+          "name": [
+            {
+              "var": {
+                "name": "org.privacy_contact.name"
+              }
+            }
+          ],
+          "email": [
+            {
+              "var": {
+                "name": "org.privacy_contact.email"
+              }
+            }
+          ]
+        },
+        "rightsUrl": [
+          {
+            "var": {
+              "name": "org.rights_url"
+            }
+          }
+        ],
+        "boardComplaintInfo": [
+          {
+            "var": {
+              "name": "org.board_complaint_info"
+            }
+          }
+        ]
+      },
+      "purposes": [
+        {
+          "id": "m_3",
+          "name": "Respond to this form",
+          "description": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read and act on what you send in this form."
+                  }
+                ]
+              }
+            ]
+          },
+          "lawfulBasis": {
+            "kind": "legitimate_use",
+            "ground": "s7a_voluntarily_provided_for_specified_purpose",
+            "justification": "The respondent provides these details to have this form handled."
+          },
+          "retention": {
+            "kind": "org_default"
+          }
+        }
+      ],
+      "children": {
+        "mode": "not_applicable"
+      },
+      "encryption": {
+        "mode": "server"
+      },
+      "dropAnswersWithoutConsent": true,
+      "networkSignals": {
+        "ipHash": true,
+        "userAgentHash": true,
+        "ttlDays": 30
+      }
+    },
+    "theme": {
+      "layout": "classic",
+      "tokens": {
+        "colors": {
+          "page": "#ffffff",
+          "text": "#111111",
+          "inputText": "#111111",
+          "accent": "#2383e2"
+        },
+        "typography": {
+          "body": "inter",
+          "baseSizePx": 16
+        },
+        "radius": "md",
+        "density": "comfortable",
+        "formWidth": "normal",
+        "labelAlign": "top",
+        "inputStyle": "outlined",
+        "progress": "none"
+      }
+    },
+    "behavior": {
+      "submit": {
+        "label": "Submit",
+        "align": "left"
+      },
+      "navigation": {
+        "allowBack": true,
+        "showPageTitles": false
+      },
+      "saveAndResume": {
+        "enabled": false,
+        "showButton": false,
+        "delivery": [],
+        "expiryDays": 30
+      },
+      "localAutosave": {
+        "enabled": false,
+        "allowWithSensitive": false
+      },
+      "timeZone": "Asia/Kolkata",
+      "spam": {
+        "honeypot": true,
+        "minFillSeconds": 3,
+        "captcha": "off"
+      },
+      "urlPrefill": false,
+      "showBranding": true,
+      "a11y": {
+        "announceErrors": "polite",
+        "focusFirstError": true
+      },
+      "successAnimation": true
+    },
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "detect": [
+        "url_param"
+      ],
+      "urlParam": "lang",
+      "switcher": "none",
+      "messages": {},
+      "systemMessages": {},
+      "reviewedConsentLocales": []
+    }
+  },
+  "ops": {
+    "access": {
+      "enabled": true,
+      "uniqueSubmission": "off",
+      "embedAllowlist": [],
+      "screens": {
+        "closed": {
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "This form is no longer accepting responses."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retention": {
+      "basis": "submitted_at",
+      "onExpiry": "delete",
+      "files": "with_submission",
+      "draftsDays": 30,
+      "trashDays": 30
+    }
+  },
+  "assetImports": [],
+  "notes": [
+    {
+      "code": "key_generated",
+      "path": "/blocks/b03_has_code/key",
+      "detail": "key 'i_have_a_code'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b03_coupon/key",
+      "detail": "key 'coupon'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b03_notes/key",
+      "detail": "key 'notes'"
+    },
+    {
+      "code": "compliance_defaulted",
+      "path": "/blocks",
+      "detail": "3 field(s) take the registry default compliance and the purpose 'Respond to this form'"
+    },
+    {
+      "code": "default_purpose_added",
+      "path": "/privacy/purposes/0",
+      "detail": "'Respond to this form' (legitimate use, s.7(a)); the notice must be approved before publish (CMP-24)"
+    }
+  ]
+}

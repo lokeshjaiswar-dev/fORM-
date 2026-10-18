@@ -1,0 +1,49 @@
+{
+  "id": "form_b05_signature_styles",
+  "title": "Signature with styles",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b05_sign",
+      "type": "signature",
+      "label": "Signature",
+      "placeholder": "Enter signature",
+      "helpText": "Use your finger or a mouse",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "labelColor": "#c00",
+        "labelSize": 60,
+        "inputSize": 8,
+        "labelWeight": "bold",
+        "align": "center",
+        "placeholderColor": "blue",
+        "inputBg": "#ffffffcc"
+      },
+      "order": 0
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

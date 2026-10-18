@@ -1,0 +1,133 @@
+{
+  "id": "form_b09_optional_choice",
+  "title": "An optional choice",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b09_pref",
+      "type": "multiple_choice",
+      "label": "How should we contact you?",
+      "placeholder": "Enter multiple choice",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b09_pref_o1",
+          "label": "Email",
+          "value": "email"
+        },
+        {
+          "id": "b09_pref_o2",
+          "label": "Phone",
+          "value": "phone"
+        },
+        {
+          "id": "b09_pref_o3",
+          "label": "Do not contact me",
+          "value": "none"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b09_email",
+      "type": "email",
+      "label": "Email",
+      "placeholder": "Enter email",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b09_pref",
+        "operator": "equals",
+        "value": "email"
+      }
+    },
+    {
+      "id": "b09_phone",
+      "type": "phone",
+      "label": "Phone",
+      "placeholder": "Enter phone",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b09_pref",
+        "operator": "equals",
+        "value": "phone"
+      }
+    },
+    {
+      "id": "b09_reason",
+      "type": "text",
+      "label": "Anything else?",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b09_pref",
+        "operator": "not_answered"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

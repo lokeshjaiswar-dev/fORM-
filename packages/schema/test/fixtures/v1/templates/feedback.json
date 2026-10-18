@@ -1,0 +1,130 @@
+{
+  "id": "tpl_feedback",
+  "title": "How was your experience?",
+  "description": "Your feedback helps us improve.",
+  "blocks": [
+    {
+      "id": "tpl_feedback_b1",
+      "type": "heading",
+      "label": "Share your feedback",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "tpl_feedback_b2",
+      "type": "rating",
+      "label": "Overall rating",
+      "placeholder": "Enter rating",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "tpl_feedback_b3",
+      "type": "multiple_choice",
+      "label": "Would you recommend us?",
+      "placeholder": "Enter multiple choice",
+      "helpText": "",
+      "options": [
+        {
+          "id": "tpl_feedback_b3_o1",
+          "label": "Option 1",
+          "value": "option_1"
+        },
+        {
+          "id": "tpl_feedback_b3_o2",
+          "label": "Option 2",
+          "value": "option_2"
+        },
+        {
+          "id": "tpl_feedback_b3_o3",
+          "label": "Option 3",
+          "value": "option_3"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    },
+    {
+      "id": "tpl_feedback_b4",
+      "type": "long_text",
+      "label": "What could be better?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3
+    },
+    {
+      "id": "tpl_feedback_b5",
+      "type": "email",
+      "label": "Email (optional)",
+      "placeholder": "Enter email",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks — we received your response.",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

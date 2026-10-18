@@ -1,0 +1,667 @@
+{
+  "definition": {
+    "schemaVersion": 2,
+    "revision": 0,
+    "formId": "form_s07_external_assets",
+    "title": "External logo and cover",
+    "blocks": {
+      "s07_name": {
+        "id": "s07_name",
+        "type": "short_text",
+        "key": "name",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Name"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        }
+      },
+      "s07_when": {
+        "id": "s07_when",
+        "type": "date",
+        "key": "preferred_date",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Preferred date"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "pattern": "DD-MM-YYYY",
+          "picker": "calendar",
+          "defaultValue": {
+            "kind": "fixed",
+            "date": "2026-11-01"
+          }
+        }
+      },
+      "s07_time": {
+        "id": "s07_time",
+        "type": "time",
+        "key": "preferred_time",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Preferred time"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "hourCycle": "h12",
+          "minuteStep": 5,
+          "defaultValue": {
+            "kind": "fixed",
+            "time": "09:30"
+          }
+        }
+      },
+      "s07_late": {
+        "id": "s07_late",
+        "type": "short_text",
+        "key": "why_so_late",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Why so late?"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        },
+        "initiallyHidden": true
+      },
+      "s07_early": {
+        "id": "s07_early",
+        "type": "short_text",
+        "key": "before_the_event",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Before the event?"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        },
+        "initiallyHidden": true
+      },
+      "s07_cv": {
+        "id": "s07_cv",
+        "type": "file_upload",
+        "key": "cv",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "CV"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "other",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": false,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "maxFiles": 20,
+          "maxFileBytes": 10485760,
+          "accept": {
+            "extensions": [
+              "pdf",
+              "jpg",
+              "jpeg",
+              "png",
+              "doc",
+              "docx"
+            ],
+            "mimeTypes": [
+              "application/pdf",
+              "image/jpeg",
+              "image/png",
+              "application/msword",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ]
+          },
+          "capture": "none",
+          "stripMetadata": true,
+          "scan": "async"
+        }
+      },
+      "s07_site": {
+        "id": "s07_site",
+        "type": "url",
+        "key": "website",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Website"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "schemes": [
+            "https",
+            "http"
+          ],
+          "placeholder": "Enter link"
+        }
+      }
+    },
+    "pages": [
+      {
+        "id": "m_1",
+        "children": [
+          "s07_name",
+          "s07_when",
+          "s07_time",
+          "s07_late",
+          "s07_early",
+          "s07_cv",
+          "s07_site"
+        ]
+      }
+    ],
+    "endings": [
+      {
+        "id": "m_2",
+        "kind": "message",
+        "name": "Thank you",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Thanks for your response!"
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "kind": "fill_again",
+            "prefill": "none"
+          }
+        ],
+        "confetti": true
+      }
+    ],
+    "defaultEndingId": "m_2",
+    "logic": {
+      "rules": [
+        {
+          "id": "m_6",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_5",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_4",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "s07_time"
+                  }
+                },
+                "op": "after",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "time",
+                    "value": "18:00"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "s07_late"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "m_9",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_8",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_7",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "s07_when"
+                  }
+                },
+                "op": "before",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "date",
+                    "value": "2026-12-01"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "s07_early"
+              ]
+            }
+          ]
+        }
+      ],
+      "ruleGroups": [],
+      "variables": []
+    },
+    "privacy": {
+      "fiduciary": {
+        "legalName": [
+          {
+            "var": {
+              "name": "org.legal_name"
+            }
+          }
+        ],
+        "contactEmail": [
+          {
+            "var": {
+              "name": "org.support_email"
+            }
+          }
+        ],
+        "privacyContact": {
+          "name": [
+            {
+              "var": {
+                "name": "org.privacy_contact.name"
+              }
+            }
+          ],
+          "email": [
+            {
+              "var": {
+                "name": "org.privacy_contact.email"
+              }
+            }
+          ]
+        },
+        "rightsUrl": [
+          {
+            "var": {
+              "name": "org.rights_url"
+            }
+          }
+        ],
+        "boardComplaintInfo": [
+          {
+            "var": {
+              "name": "org.board_complaint_info"
+            }
+          }
+        ]
+      },
+      "purposes": [
+        {
+          "id": "m_3",
+          "name": "Respond to this form",
+          "description": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read and act on what you send in this form."
+                  }
+                ]
+              }
+            ]
+          },
+          "lawfulBasis": {
+            "kind": "legitimate_use",
+            "ground": "s7a_voluntarily_provided_for_specified_purpose",
+            "justification": "The respondent provides these details to have this form handled."
+          },
+          "retention": {
+            "kind": "org_default"
+          }
+        }
+      ],
+      "children": {
+        "mode": "not_applicable"
+      },
+      "encryption": {
+        "mode": "server"
+      },
+      "dropAnswersWithoutConsent": true,
+      "networkSignals": {
+        "ipHash": true,
+        "userAgentHash": true,
+        "ttlDays": 30
+      }
+    },
+    "theme": {
+      "layout": "classic",
+      "tokens": {
+        "colors": {
+          "page": "#FFFFFF",
+          "text": "#111111",
+          "inputText": "#111111"
+        },
+        "typography": {
+          "body": "georgia",
+          "baseSizePx": 16
+        },
+        "radius": "md",
+        "density": "comfortable",
+        "formWidth": "normal",
+        "labelAlign": "top",
+        "inputStyle": "outlined",
+        "progress": "bar"
+      }
+    },
+    "behavior": {
+      "submit": {
+        "label": "Send it",
+        "align": "left"
+      },
+      "navigation": {
+        "allowBack": true,
+        "showPageTitles": false
+      },
+      "saveAndResume": {
+        "enabled": false,
+        "showButton": false,
+        "delivery": [],
+        "expiryDays": 30
+      },
+      "localAutosave": {
+        "enabled": false,
+        "allowWithSensitive": false
+      },
+      "timeZone": "Asia/Kolkata",
+      "spam": {
+        "honeypot": true,
+        "minFillSeconds": 3,
+        "captcha": "off"
+      },
+      "urlPrefill": false,
+      "showBranding": true,
+      "a11y": {
+        "announceErrors": "polite",
+        "focusFirstError": true
+      },
+      "successAnimation": true
+    },
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "detect": [
+        "url_param"
+      ],
+      "urlParam": "lang",
+      "switcher": "none",
+      "messages": {},
+      "systemMessages": {},
+      "reviewedConsentLocales": []
+    }
+  },
+  "ops": {
+    "access": {
+      "enabled": true,
+      "uniqueSubmission": "off",
+      "embedAllowlist": [],
+      "screens": {
+        "closed": {
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "This form is no longer accepting responses."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retention": {
+      "basis": "submitted_at",
+      "onExpiry": "delete",
+      "files": "with_submission",
+      "draftsDays": 30,
+      "trashDays": 30
+    }
+  },
+  "assetImports": [
+    {
+      "target": "logo",
+      "url": "https://cdn.example.com/logo.png"
+    }
+  ],
+  "notes": [
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_name/key",
+      "detail": "key 'name'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_when/key",
+      "detail": "key 'preferred_date'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_time/key",
+      "detail": "key 'preferred_time'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_late/key",
+      "detail": "key 'why_so_late'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_early/key",
+      "detail": "key 'before_the_event'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_cv/key",
+      "detail": "key 'cv'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/s07_site/key",
+      "detail": "key 'website'"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/s07_late/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/s07_early/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "compliance_defaulted",
+      "path": "/blocks",
+      "detail": "7 field(s) take the registry default compliance and the purpose 'Respond to this form'"
+    },
+    {
+      "code": "default_purpose_added",
+      "path": "/privacy/purposes/0",
+      "detail": "'Respond to this form' (legitimate use, s.7(a)); the notice must be approved before publish (CMP-24)"
+    },
+    {
+      "code": "external_asset_queued",
+      "path": "/settings/logoUrl",
+      "detail": "\"https://cdn.example.com/logo.png\" is imported into the asset store; it is dropped if unreachable"
+    },
+    {
+      "code": "external_asset_queued",
+      "path": "/settings/coverUrl",
+      "detail": "\"data:image/png;base64,AAAA\" is not an http(s) URL; dropped"
+    }
+  ]
+}

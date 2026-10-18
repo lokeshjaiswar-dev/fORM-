@@ -2,3 +2,6 @@
 *.snap text eol=lf
 # Unicode data files are hashed by their generators
 packages/logic/scripts/data/*.txt text eol=lf
+# Migration golden outputs and the registry projection are compared byte-for-byte (toMatchFileSnapshot)
+packages/schema/test/fixtures/v2/*.json text eol=lf
+packages/schema/test/fixtures/registry-en-IN.json text eol=lf

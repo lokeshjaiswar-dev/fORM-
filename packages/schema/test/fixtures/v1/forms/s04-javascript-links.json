@@ -1,0 +1,66 @@
+{
+  "id": "form_s04_javascript_links",
+  "title": "Unsafe links",
+  "description": "",
+  "blocks": [
+    {
+      "id": "s04_help",
+      "type": "paragraph",
+      "label": "<a href=\"javascript:alert(1)\">click</a> or <a href=\"https://example.com/help\">help</a> or <a href=\"mailto:help@example.com\">mail</a>",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "s04_terms",
+      "type": "checkbox",
+      "label": "<a href=\"data:text/html,x\">Terms</a>",
+      "placeholder": "Enter checkboxes",
+      "helpText": "",
+      "options": [
+        {
+          "id": "s04_terms_o1",
+          "label": "I agree",
+          "value": "yes"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

@@ -1,0 +1,223 @@
+{
+  "id": "form_b20_duplicated_blocks",
+  "title": "Duplicated blocks and logic cycles",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b20_source",
+      "type": "text",
+      "label": "Source",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    },
+    {
+      "id": "b20_copy_a",
+      "type": "text",
+      "label": "Shown copy",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b20_source",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b20_copy_b",
+      "type": "text",
+      "label": "Shown copy",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b20_source",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b20_pick",
+      "type": "dropdown",
+      "label": "Pick one",
+      "placeholder": "Enter dropdown",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b20_pick_o1",
+          "label": "A",
+          "value": "a"
+        },
+        {
+          "id": "b20_pick_o2",
+          "label": "B",
+          "value": "b"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b20_pick_copy",
+      "type": "dropdown",
+      "label": "Pick one",
+      "placeholder": "Enter dropdown",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b20_pick_o1",
+          "label": "A",
+          "value": "a"
+        },
+        {
+          "id": "b20_pick_o2",
+          "label": "B",
+          "value": "b"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b20_loop_a",
+      "type": "text",
+      "label": "Loop A",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 5,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b20_loop_b",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b20_loop_b",
+      "type": "text",
+      "label": "Loop B",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 6,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b20_loop_a",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b20_self",
+      "type": "text",
+      "label": "Self",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 7,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b20_self",
+        "operator": "equals",
+        "value": "x"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "id": "form_b13_email_pattern_ignored",
+  "title": "Email pattern and messages",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b13_work",
+      "type": "email",
+      "label": "Work email",
+      "placeholder": "Enter email",
+      "helpText": "",
+      "validation": {
+        "required": true,
+        "pattern": "@acme\\.com$",
+        "errorMessage": "Use your work email"
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b13_team",
+      "type": "text",
+      "label": "Team",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b13_work",
+        "operator": "contains",
+        "value": "acme"
+      }
+    },
+    {
+      "id": "b13_site",
+      "type": "url",
+      "label": "Website",
+      "placeholder": "Enter link",
+      "helpText": "",
+      "validation": {
+        "required": false,
+        "errorMessage": "A full https:// link, please"
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

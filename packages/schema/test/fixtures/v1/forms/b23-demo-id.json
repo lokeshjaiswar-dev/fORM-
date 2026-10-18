@@ -1,0 +1,96 @@
+{
+  "id": "demo",
+  "title": "The demo form",
+  "description": "",
+  "blocks": [
+    {
+      "id": "bad id!",
+      "type": "text",
+      "label": "A block with an invalid id",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b23_needs",
+      "type": "text",
+      "label": "Shown after the first answer",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "bad id!",
+        "operator": "answered"
+      }
+    },
+    {
+      "id": "b23_choice",
+      "type": "dropdown",
+      "label": "Choose",
+      "placeholder": "Enter dropdown",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b23_choice_o1",
+          "label": "X",
+          "value": "x"
+        },
+        {
+          "id": "b23_choice_o2",
+          "label": "Y",
+          "value": "y"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

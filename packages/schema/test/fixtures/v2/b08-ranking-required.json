@@ -1,0 +1,438 @@
+{
+  "definition": {
+    "schemaVersion": 2,
+    "revision": 0,
+    "formId": "form_b08_ranking_required",
+    "title": "A required ranking",
+    "blocks": {
+      "b08_rank": {
+        "id": "b08_rank",
+        "type": "ranking",
+        "key": "rank_these",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Rank these"
+                }
+              ]
+            }
+          ]
+        },
+        "required": true,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "options": [
+            {
+              "id": "b08_rank_o1",
+              "label": "Price",
+              "code": "price"
+            },
+            {
+              "id": "b08_rank_o2",
+              "label": "Quality",
+              "code": "quality"
+            },
+            {
+              "id": "b08_rank_o3",
+              "label": "Speed",
+              "code": "speed"
+            },
+            {
+              "id": "b08_rank_o4",
+              "label": "Support",
+              "code": "support"
+            }
+          ],
+          "shuffle": true
+        }
+      },
+      "b08_confidence": {
+        "id": "b08_confidence",
+        "type": "rating",
+        "key": "how_sure_are_you",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "How sure are you?"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "max": 5,
+          "icon": "star"
+        }
+      },
+      "b08_unsure": {
+        "id": "b08_unsure",
+        "type": "long_text",
+        "key": "why_unsure",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Why unsure?"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "rows": 4,
+          "placeholder": "Enter long answer"
+        },
+        "initiallyHidden": true
+      }
+    },
+    "pages": [
+      {
+        "id": "m_1",
+        "children": [
+          "b08_rank",
+          "b08_confidence",
+          "b08_unsure"
+        ]
+      }
+    ],
+    "endings": [
+      {
+        "id": "m_2",
+        "kind": "message",
+        "name": "Thank you",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Thanks for your response!"
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "kind": "fill_again",
+            "prefill": "none"
+          }
+        ],
+        "confetti": true
+      }
+    ],
+    "defaultEndingId": "m_2",
+    "logic": {
+      "rules": [
+        {
+          "id": "m_6",
+          "enabled": true,
+          "when": {
+            "kind": "group",
+            "id": "m_5",
+            "combinator": "all",
+            "children": [
+              {
+                "kind": "condition",
+                "id": "m_4",
+                "left": {
+                  "kind": "ref",
+                  "ref": {
+                    "kind": "answer",
+                    "blockId": "b08_confidence"
+                  }
+                },
+                "op": "lt",
+                "right": {
+                  "kind": "literal",
+                  "value": {
+                    "type": "number",
+                    "value": "3"
+                  }
+                }
+              }
+            ]
+          },
+          "then": [
+            {
+              "type": "show",
+              "targets": [
+                "b08_unsure"
+              ]
+            }
+          ]
+        }
+      ],
+      "ruleGroups": [],
+      "variables": []
+    },
+    "privacy": {
+      "fiduciary": {
+        "legalName": [
+          {
+            "var": {
+              "name": "org.legal_name"
+            }
+          }
+        ],
+        "contactEmail": [
+          {
+            "var": {
+              "name": "org.support_email"
+            }
+          }
+        ],
+        "privacyContact": {
+          "name": [
+            {
+              "var": {
+                "name": "org.privacy_contact.name"
+              }
+            }
+          ],
+          "email": [
+            {
+              "var": {
+                "name": "org.privacy_contact.email"
+              }
+            }
+          ]
+        },
+        "rightsUrl": [
+          {
+            "var": {
+              "name": "org.rights_url"
+            }
+          }
+        ],
+        "boardComplaintInfo": [
+          {
+            "var": {
+              "name": "org.board_complaint_info"
+            }
+          }
+        ]
+      },
+      "purposes": [
+        {
+          "id": "m_3",
+          "name": "Respond to this form",
+          "description": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read and act on what you send in this form."
+                  }
+                ]
+              }
+            ]
+          },
+          "lawfulBasis": {
+            "kind": "legitimate_use",
+            "ground": "s7a_voluntarily_provided_for_specified_purpose",
+            "justification": "The respondent provides these details to have this form handled."
+          },
+          "retention": {
+            "kind": "org_default"
+          }
+        }
+      ],
+      "children": {
+        "mode": "not_applicable"
+      },
+      "encryption": {
+        "mode": "server"
+      },
+      "dropAnswersWithoutConsent": true,
+      "networkSignals": {
+        "ipHash": true,
+        "userAgentHash": true,
+        "ttlDays": 30
+      }
+    },
+    "theme": {
+      "layout": "classic",
+      "tokens": {
+        "colors": {
+          "page": "#ffffff",
+          "text": "#111111",
+          "inputText": "#111111",
+          "accent": "#2383e2"
+        },
+        "typography": {
+          "body": "inter",
+          "baseSizePx": 16
+        },
+        "radius": "md",
+        "density": "comfortable",
+        "formWidth": "normal",
+        "labelAlign": "top",
+        "inputStyle": "outlined",
+        "progress": "none"
+      }
+    },
+    "behavior": {
+      "submit": {
+        "label": "Submit",
+        "align": "left"
+      },
+      "navigation": {
+        "allowBack": true,
+        "showPageTitles": false
+      },
+      "saveAndResume": {
+        "enabled": false,
+        "showButton": false,
+        "delivery": [],
+        "expiryDays": 30
+      },
+      "localAutosave": {
+        "enabled": false,
+        "allowWithSensitive": false
+      },
+      "timeZone": "Asia/Kolkata",
+      "spam": {
+        "honeypot": true,
+        "minFillSeconds": 3,
+        "captcha": "off"
+      },
+      "urlPrefill": false,
+      "showBranding": true,
+      "a11y": {
+        "announceErrors": "polite",
+        "focusFirstError": true
+      },
+      "successAnimation": true
+    },
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "detect": [
+        "url_param"
+      ],
+      "urlParam": "lang",
+      "switcher": "none",
+      "messages": {},
+      "systemMessages": {},
+      "reviewedConsentLocales": []
+    }
+  },
+  "ops": {
+    "access": {
+      "enabled": true,
+      "uniqueSubmission": "off",
+      "embedAllowlist": [],
+      "screens": {
+        "closed": {
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "This form is no longer accepting responses."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retention": {
+      "basis": "submitted_at",
+      "onExpiry": "delete",
+      "files": "with_submission",
+      "draftsDays": 30,
+      "trashDays": 30
+    }
+  },
+  "assetImports": [],
+  "notes": [
+    {
+      "code": "key_generated",
+      "path": "/blocks/b08_rank/key",
+      "detail": "key 'rank_these'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b08_confidence/key",
+      "detail": "key 'how_sure_are_you'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/b08_unsure/key",
+      "detail": "key 'why_unsure'"
+    },
+    {
+      "code": "initially_hidden_set",
+      "path": "/blocks/b08_unsure/initiallyHidden",
+      "detail": "hidden until the rule shows it, as in v1"
+    },
+    {
+      "code": "compliance_defaulted",
+      "path": "/blocks",
+      "detail": "3 field(s) take the registry default compliance and the purpose 'Respond to this form'"
+    },
+    {
+      "code": "default_purpose_added",
+      "path": "/privacy/purposes/0",
+      "detail": "'Respond to this form' (legitimate use, s.7(a)); the notice must be approved before publish (CMP-24)"
+    }
+  ]
+}

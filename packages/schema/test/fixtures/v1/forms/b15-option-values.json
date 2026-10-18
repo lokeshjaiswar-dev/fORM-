@@ -1,0 +1,134 @@
+{
+  "id": "form_b15_option_values",
+  "title": "Option values and labels",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b15_plan",
+      "type": "dropdown",
+      "label": "Plan",
+      "placeholder": "Enter dropdown",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b15_plan_o1",
+          "label": "Basic",
+          "value": "basic"
+        },
+        {
+          "id": "b15_plan_o2",
+          "label": "Pro plan",
+          "value": "pro_plan"
+        },
+        {
+          "id": "b15_plan_o3",
+          "label": "Team",
+          "value": "team"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b15_seats",
+      "type": "number",
+      "label": "Seats",
+      "placeholder": "Enter number",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b15_plan",
+        "operator": "equals",
+        "value": "Team"
+      }
+    },
+    {
+      "id": "b15_upgrade",
+      "type": "text",
+      "label": "Upgrade reason",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b15_plan",
+        "operator": "equals",
+        "value": "pro"
+      }
+    },
+    {
+      "id": "b15_basic",
+      "type": "text",
+      "label": "Basic feedback",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b15_plan",
+        "operator": "not_equals",
+        "value": "basic"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

@@ -1,0 +1,529 @@
+{
+  "definition": {
+    "schemaVersion": 2,
+    "revision": 0,
+    "formId": "tpl_job",
+    "title": "Apply to join the team",
+    "description": {
+      "type": "doc",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "We review every application."
+            }
+          ]
+        }
+      ]
+    },
+    "blocks": {
+      "tpl_job_b1": {
+        "id": "tpl_job_b1",
+        "type": "heading",
+        "config": {
+          "level": 1,
+          "text": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Job application"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "tpl_job_b2": {
+        "id": "tpl_job_b2",
+        "type": "short_text",
+        "key": "full_name",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Full name"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "placeholder": "Enter short answer"
+        }
+      },
+      "tpl_job_b3": {
+        "id": "tpl_job_b3",
+        "type": "email",
+        "key": "email",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Email"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "contact",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include",
+          "principalIdentifier": "email"
+        },
+        "config": {
+          "placeholder": "Enter email"
+        }
+      },
+      "tpl_job_b4": {
+        "id": "tpl_job_b4",
+        "type": "single_choice",
+        "key": "role",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Role"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "none",
+          "purposeIds": [],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "display": "dropdown",
+          "options": [
+            {
+              "id": "tpl_job_b4_o1",
+              "label": "Option 1",
+              "code": "option_1"
+            },
+            {
+              "id": "tpl_job_b4_o2",
+              "label": "Option 2",
+              "code": "option_2"
+            },
+            {
+              "id": "tpl_job_b4_o3",
+              "label": "Option 3",
+              "code": "option_3"
+            }
+          ],
+          "placeholder": "Enter dropdown"
+        }
+      },
+      "tpl_job_b5": {
+        "id": "tpl_job_b5",
+        "type": "long_text",
+        "key": "why_you",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Why you?"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "free_text",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": true,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "rows": 4,
+          "placeholder": "Enter long answer"
+        }
+      },
+      "tpl_job_b6": {
+        "id": "tpl_job_b6",
+        "type": "file_upload",
+        "key": "resume",
+        "label": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Resume"
+                }
+              ]
+            }
+          ]
+        },
+        "required": false,
+        "compliance": {
+          "classification": "personal",
+          "category": "other",
+          "purposeIds": [
+            "m_3"
+          ],
+          "encrypt": false,
+          "allowPrefill": false,
+          "inNotifications": "include",
+          "inExports": "include"
+        },
+        "config": {
+          "maxFiles": 1,
+          "maxFileBytes": 10485760,
+          "accept": {
+            "extensions": [
+              "pdf",
+              "jpg",
+              "jpeg",
+              "png",
+              "doc",
+              "docx"
+            ],
+            "mimeTypes": [
+              "application/pdf",
+              "image/jpeg",
+              "image/png",
+              "application/msword",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ]
+          },
+          "capture": "none",
+          "stripMetadata": true,
+          "scan": "async"
+        }
+      }
+    },
+    "pages": [
+      {
+        "id": "m_1",
+        "children": [
+          "tpl_job_b1",
+          "tpl_job_b2",
+          "tpl_job_b3",
+          "tpl_job_b4",
+          "tpl_job_b5",
+          "tpl_job_b6"
+        ]
+      }
+    ],
+    "endings": [
+      {
+        "id": "m_2",
+        "kind": "message",
+        "name": "Thank you",
+        "content": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Thanks — we received your response."
+                }
+              ]
+            }
+          ]
+        },
+        "actions": [
+          {
+            "kind": "fill_again",
+            "prefill": "none"
+          }
+        ],
+        "confetti": true
+      }
+    ],
+    "defaultEndingId": "m_2",
+    "logic": {
+      "rules": [],
+      "ruleGroups": [],
+      "variables": []
+    },
+    "privacy": {
+      "fiduciary": {
+        "legalName": [
+          {
+            "var": {
+              "name": "org.legal_name"
+            }
+          }
+        ],
+        "contactEmail": [
+          {
+            "var": {
+              "name": "org.support_email"
+            }
+          }
+        ],
+        "privacyContact": {
+          "name": [
+            {
+              "var": {
+                "name": "org.privacy_contact.name"
+              }
+            }
+          ],
+          "email": [
+            {
+              "var": {
+                "name": "org.privacy_contact.email"
+              }
+            }
+          ]
+        },
+        "rightsUrl": [
+          {
+            "var": {
+              "name": "org.rights_url"
+            }
+          }
+        ],
+        "boardComplaintInfo": [
+          {
+            "var": {
+              "name": "org.board_complaint_info"
+            }
+          }
+        ]
+      },
+      "purposes": [
+        {
+          "id": "m_3",
+          "name": "Respond to this form",
+          "description": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Read and act on what you send in this form."
+                  }
+                ]
+              }
+            ]
+          },
+          "lawfulBasis": {
+            "kind": "legitimate_use",
+            "ground": "s7a_voluntarily_provided_for_specified_purpose",
+            "justification": "The respondent provides these details to have this form handled."
+          },
+          "retention": {
+            "kind": "org_default"
+          }
+        }
+      ],
+      "children": {
+        "mode": "not_applicable"
+      },
+      "encryption": {
+        "mode": "server"
+      },
+      "dropAnswersWithoutConsent": true,
+      "networkSignals": {
+        "ipHash": true,
+        "userAgentHash": true,
+        "ttlDays": 30
+      }
+    },
+    "theme": {
+      "layout": "classic",
+      "tokens": {
+        "colors": {
+          "page": "#ffffff",
+          "text": "#111111",
+          "inputText": "#111111",
+          "accent": "#2383e2"
+        },
+        "typography": {
+          "body": "inter",
+          "baseSizePx": 16
+        },
+        "radius": "md",
+        "density": "comfortable",
+        "formWidth": "normal",
+        "labelAlign": "top",
+        "inputStyle": "outlined",
+        "progress": "none"
+      }
+    },
+    "behavior": {
+      "submit": {
+        "label": "Submit",
+        "align": "left"
+      },
+      "navigation": {
+        "allowBack": true,
+        "showPageTitles": false
+      },
+      "saveAndResume": {
+        "enabled": false,
+        "showButton": false,
+        "delivery": [],
+        "expiryDays": 30
+      },
+      "localAutosave": {
+        "enabled": false,
+        "allowWithSensitive": false
+      },
+      "timeZone": "Asia/Kolkata",
+      "spam": {
+        "honeypot": true,
+        "minFillSeconds": 3,
+        "captcha": "off"
+      },
+      "urlPrefill": false,
+      "showBranding": true,
+      "a11y": {
+        "announceErrors": "polite",
+        "focusFirstError": true
+      },
+      "successAnimation": true
+    },
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "detect": [
+        "url_param"
+      ],
+      "urlParam": "lang",
+      "switcher": "none",
+      "messages": {},
+      "systemMessages": {},
+      "reviewedConsentLocales": []
+    }
+  },
+  "ops": {
+    "access": {
+      "enabled": true,
+      "uniqueSubmission": "off",
+      "embedAllowlist": [],
+      "screens": {
+        "closed": {
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "This form is no longer accepting responses."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retention": {
+      "basis": "submitted_at",
+      "onExpiry": "delete",
+      "files": "with_submission",
+      "draftsDays": 30,
+      "trashDays": 30
+    }
+  },
+  "assetImports": [],
+  "notes": [
+    {
+      "code": "key_generated",
+      "path": "/blocks/tpl_job_b2/key",
+      "detail": "key 'full_name'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/tpl_job_b3/key",
+      "detail": "key 'email'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/tpl_job_b4/key",
+      "detail": "key 'role'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/tpl_job_b5/key",
+      "detail": "key 'why_you'"
+    },
+    {
+      "code": "key_generated",
+      "path": "/blocks/tpl_job_b6/key",
+      "detail": "key 'resume'"
+    },
+    {
+      "code": "compliance_defaulted",
+      "path": "/blocks",
+      "detail": "5 field(s) take the registry default compliance and the purpose 'Respond to this form'"
+    },
+    {
+      "code": "default_purpose_added",
+      "path": "/privacy/purposes/0",
+      "detail": "'Respond to this form' (legitimate use, s.7(a)); the notice must be approved before publish (CMP-24)"
+    }
+  ]
+}

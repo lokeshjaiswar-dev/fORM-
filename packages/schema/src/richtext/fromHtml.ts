@@ -1,6 +1,6 @@
 import { Parser } from 'htmlparser2';
 import type { SafeHref, TextAlign } from '../v2/ids.ts';
-import type { InlineDoc, InlineNode, Mark, RichDoc } from '../v2/rich-text.ts';
+import type { InlineDoc, InlineNode, Mark, RichDoc, TextNode } from '../v2/rich-text.ts';
 import { RICH_TEXT_LIMITS } from '../v2/zod/_util.ts';
 import { isSafeHref } from '../v2/zod/primitives.ts';
 import { parseCssColor } from './color.ts';
@@ -61,6 +61,8 @@ interface Frame {
 interface Loose { type: string; attrs?: Record<string, unknown>; content: unknown[] }
 type Container = { kind: 'root' | 'list' | 'item' | 'quote'; node: Loose };
 interface Pending { node: InlineNode; pre: boolean }
+/** The text node being read: htmlparser2 reports decoded text in several callbacks (one per entity), all one node. */
+interface TextRun { pending: Pending & { node: TextNode }; cost: number; breaks: number; length: number; cr: boolean }
 
 function parseStyle(style: string | undefined): Map<string, string> {
   const out = new Map<string, string>();
@@ -141,6 +143,13 @@ function collapse(items: Pending[]): InlineNode[] {
 
 const MAX_TEXT = 50_000;
 
+/** Pre text becomes a text node per line with breaks between; long text is split into 50k-character nodes. */
+const textCost = (breaks: number, length: number, pre: boolean) => 1 + 2 * (pre ? breaks : 0) + Math.floor(length / MAX_TEXT);
+
+/** Line breaks in one chunk of a run; a `\r\n` split across two callbacks is one break, counted with the `\r`. */
+const chunkBreaks = (text: string, afterCr: boolean) =>
+  (text.match(/\r\n?|\n/g)?.length ?? 0) - (afterCr && text.startsWith('\n') ? 1 : 0);
+
 const isOrderedMarker = (marker: string) => /^\(?([0-9]{1,4}|[a-z]{1,4})[.)]$/i.test(marker.replace(/[\s ]+/g, ''));
 
 class Reader {
@@ -158,6 +167,7 @@ class Reader {
   /** Budget taken by the pending inline run, its paragraph included; given back if the run turns out to be blank. */
   private reserved = 0;
   private exhausted = false;
+  private run: TextRun | null = null;
 
   /**
    * Every node the AST can end up with counts, including the empty paragraph a list item may get. Once the limit is
@@ -257,6 +267,7 @@ class Reader {
   flush(closing?: Frame) {
     const items = this.inline;
     this.inline = [];
+    this.run = null;
     const marker = this.marker;
     this.marker = '';
     const reserved = this.reserved;
@@ -274,6 +285,7 @@ class Reader {
   }
 
   onopentag = (name: string, attribs: Record<string, string>) => {
+    this.run = null;
     const frame: Frame = { set: [], unset: [], marks: [], skip: false, marker: false, inMarker: false, block: false, container: false, pre: false };
     const own = (key: string): string | undefined => (Object.hasOwn(attribs, key) ? attribs[key] : undefined);
     if (this.skipping > 0 || SKIP.has(name)) {
@@ -362,13 +374,31 @@ class Reader {
       return;
     }
     const pre = top?.pre ?? false;
-    /* Pre text becomes a text node per line with breaks between; long text is split into 50k-character nodes. */
-    const lines = pre ? (text.match(/\r\n?|\n/g)?.length ?? 0) : 0;
-    if (!this.reserve(1 + 2 * lines + Math.floor(text.length / MAX_TEXT))) return;
-    this.inline.push({ node: { type: 'text', text, marks: top?.marks ?? [] }, pre });
+    /*
+     * The budget is charged per text node after decoding (BL-052), not per callback: `a&amp;b` is one node. The run
+     * keeps its break count and length so each callback costs only its own chunk.
+     */
+    const run = this.run;
+    const cr = text.endsWith('\r');
+    if (run) {
+      const breaks = run.breaks + chunkBreaks(text, run.cr);
+      const length = run.length + text.length;
+      const cost = textCost(breaks, length, pre);
+      if (!this.reserve(cost - run.cost)) return;
+      run.pending.node = { ...run.pending.node, text: run.pending.node.text + text };
+      Object.assign(run, { cost, breaks, length, cr });
+      return;
+    }
+    const breaks = chunkBreaks(text, false);
+    const cost = textCost(breaks, text.length, pre);
+    if (!this.reserve(cost)) return;
+    const pending: TextRun['pending'] = { node: { type: 'text', text, marks: top?.marks ?? [] }, pre };
+    this.inline.push(pending);
+    this.run = { pending, cost, breaks, length: text.length, cr };
   };
 
   onclosetag = () => {
+    this.run = null;
     const frame = this.frames.pop();
     if (!frame) return;
     if (frame.skip) {

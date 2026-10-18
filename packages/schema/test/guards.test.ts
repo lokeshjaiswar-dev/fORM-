@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import * as S from '../src/index.ts';
 import { V1 } from '../src/index.ts';
 import { depthGuard, guardOf, ownProtoKey, richTextLimitError } from '../src/v2/zod/_util.ts';
@@ -20,11 +21,12 @@ function exportedSchemas(): Array<[string, unknown]> {
   return out;
 }
 
-interface Findings { unguardedLazy: boolean; records: Set<unknown>; keyedOuts: Set<unknown> }
+/** `loose`: object schemas that keep or strip unknown keys (catchall missing or not `never`), i.e. not `z.strictObject`. */
+interface Findings { unguardedLazy: boolean; records: Set<unknown>; keyedOuts: Set<unknown>; loose: Set<unknown> }
 
 /** Walks a schema's definition graph; a lazy reached before any depth or rich-text guard means hostile nesting can overflow the stack. */
 function inspect(root: unknown): Findings {
-  const found: Findings = { unguardedLazy: false, records: new Set(), keyedOuts: new Set() };
+  const found: Findings = { unguardedLazy: false, records: new Set(), keyedOuts: new Set(), loose: new Set() };
   const seen = new Set<string>();
   const ids = new Map<unknown, number>();
   const stack: Array<[unknown, boolean]> = [[root, false]];
@@ -40,6 +42,7 @@ function inspect(root: unknown): Findings {
     if (check === ownProtoKey) found.keyedOuts.add(def['out']);
     const catchall = def['catchall'];
     if (def['type'] === 'record' || (def['type'] === 'object' && isSchema(catchall) && catchall._zod.def['type'] !== 'never')) found.records.add(schema);
+    if (def['type'] === 'object' && !(isSchema(catchall) && catchall._zod.def['type'] === 'never')) found.loose.add(schema);
     if (def['type'] === 'lazy') {
       if (!below) found.unguardedLazy = true;
       stack.push([(def['getter'] as () => unknown)(), below]);
@@ -149,5 +152,28 @@ describe('record keys are never dropped silently', () => {
     expect(S.ExtensionsSchema.safeParse(JSON.parse('{"x-a":1,"__proto__":{"x-b":2}}')).success).toBe(false);
     expect(S.StoredBlockSchema.safeParse(JSON.parse('{"id":"z1","type":"future","__proto__":{"a":1}}')).success).toBe(false);
     expect(V1.FormBlockSchema.shape.customize.safeParse(JSON.parse('{"__proto__":{"a":1}}')).success).toBe(false);
+  });
+});
+
+describe('twins are strict (ADR-0002 §1, BL-060)', () => {
+  const shapeKeys = (schema: unknown): string[] => (isSchema(schema) ? Object.keys(schema._zod.def['shape'] as Rec).sort() : []);
+  /** The one intended loose object: an unknown block type, kept whole as UnsupportedBlock (`{ id, type, …rest }`). */
+  const isUnknownBlock = (schema: unknown) =>
+    isSchema(schema) && shapeKeys(schema).join() === 'id,type' && (schema._zod.def['catchall'] as { _zod: { def: Rec } })._zod.def['type'] === 'unknown';
+
+  it('every object schema reachable from an export is a z.strictObject, except the unknown-block reader', () => {
+    const loose = new Map<unknown, string>();
+    for (const [name, schema] of exportedSchemas()) for (const found of inspect(schema).loose) if (!loose.has(found)) loose.set(found, name);
+    const unexpected = [...loose].filter(([schema]) => !isUnknownBlock(schema)).map(([schema, name]) => `${name}: { ${shapeKeys(schema).join(', ')} }`);
+    expect(unexpected).toEqual([]);
+    expect([...loose.keys()].filter(isUnknownBlock)).toHaveLength(1);
+  });
+
+  it('the walker finds a loose object under lazy, union, record, array and pipe children', () => {
+    const hidden = z.object({ a: z.string() });
+    const nested = z.lazy(() => z.array(z.union([z.string(), z.record(z.string(), hidden.pipe(z.any()))])));
+    expect([...inspect(z.strictObject({ nested })).loose]).toEqual([hidden]);
+    expect([...inspect(z.strictObject({ a: z.looseObject({ b: z.string() }) })).loose]).toHaveLength(1);
+    expect([...inspect(z.strictObject({ a: z.strictObject({ b: z.string() }) })).loose]).toEqual([]);
   });
 });

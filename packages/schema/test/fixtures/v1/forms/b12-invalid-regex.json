@@ -1,0 +1,86 @@
+{
+  "id": "form_b12_invalid_regex",
+  "title": "Invalid and unsupported patterns",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b12_code",
+      "type": "text",
+      "label": "Code",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": true,
+        "pattern": "[",
+        "errorMessage": "Use the code from your letter"
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b12_pin",
+      "type": "text",
+      "label": "PIN code",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false,
+        "pattern": "^[0-9]{6}$",
+        "min": 6,
+        "max": 6,
+        "errorMessage": "Six digits"
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b12_bio",
+      "type": "long_text",
+      "label": "Bio",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false,
+        "pattern": ".+",
+        "max": 500
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

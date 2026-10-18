@@ -1,0 +1,99 @@
+{
+  "id": "form_b03_hidden_answer_kept",
+  "title": "Hidden fields keep their answers",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b03_has_code",
+      "type": "checkbox",
+      "label": "I have a code",
+      "placeholder": "Enter checkboxes",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b03_has_code_o1",
+          "label": "Yes",
+          "value": "yes"
+        }
+      ],
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    },
+    {
+      "id": "b03_coupon",
+      "type": "text",
+      "label": "Coupon",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "defaultValue": "WELCOME10"
+      },
+      "order": 1,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b03_has_code",
+        "operator": "not_answered"
+      }
+    },
+    {
+      "id": "b03_notes",
+      "type": "long_text",
+      "label": "Notes",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "hide",
+        "sourceBlockId": "b03_coupon",
+        "operator": "contains",
+        "value": "free"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

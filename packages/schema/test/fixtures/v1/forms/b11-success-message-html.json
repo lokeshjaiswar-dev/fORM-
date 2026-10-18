@@ -1,0 +1,42 @@
+{
+  "id": "form_b11_success_message_html",
+  "title": "HTML in the success message",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b11_name",
+      "type": "text",
+      "label": "Name",
+      "placeholder": "Enter short answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 0
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "<b>Thanks!</b> We will reply soon.<script>alert(1)</script>",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": false
+  }
+}

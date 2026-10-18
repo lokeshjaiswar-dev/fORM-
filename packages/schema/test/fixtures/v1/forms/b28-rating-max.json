@@ -1,0 +1,222 @@
+{
+  "id": "form_b28_rating_max",
+  "title": "Unbounded ratings and scales",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b28_stars",
+      "type": "rating",
+      "label": "Stars",
+      "placeholder": "Enter rating",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 10000000,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "defaultValue": "3"
+      },
+      "order": 0
+    },
+    {
+      "id": "b28_tiny",
+      "type": "rating",
+      "label": "Tiny",
+      "placeholder": "Enter rating",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b28_scale",
+      "type": "linear_scale",
+      "label": "Scale",
+      "placeholder": "Enter linear scale",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": -5,
+        "scaleMax": 4,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2
+    },
+    {
+      "id": "b28_wide",
+      "type": "linear_scale",
+      "label": "Wide",
+      "placeholder": "Enter linear scale",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 50,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 3
+    },
+    {
+      "id": "b28_high",
+      "type": "long_text",
+      "label": "Why so high?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 4,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b28_stars",
+        "operator": "greater_than",
+        "value": "8"
+      }
+    },
+    {
+      "id": "b28_beyond",
+      "type": "long_text",
+      "label": "Above twelve stars?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 5,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b28_stars",
+        "operator": "greater_than",
+        "value": "12"
+      }
+    },
+    {
+      "id": "b28_top",
+      "type": "long_text",
+      "label": "Ten or more stars?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 6,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b28_stars",
+        "operator": "greater_than",
+        "value": "9"
+      }
+    },
+    {
+      "id": "b28_negative",
+      "type": "long_text",
+      "label": "Why below zero?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 7,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b28_scale",
+        "operator": "less_than",
+        "value": "0"
+      }
+    },
+    {
+      "id": "b28_low",
+      "type": "long_text",
+      "label": "Why so low?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 8,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b28_scale",
+        "operator": "less_than",
+        "value": "2"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}

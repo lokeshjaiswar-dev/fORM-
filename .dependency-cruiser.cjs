@@ -95,7 +95,7 @@ module.exports = {
     },
     {
       name: 'schema-test-fixtures-only-from-tests',
-      comment: '@form/schema/test-fixtures (XSS corpus, paste samples) is test data: unit tests and e2e specs only.',
+      comment: '@form/schema/test-fixtures (XSS corpus, paste samples) and @form/schema/migration-fixtures (the v1 migration corpus) are test data: unit tests and e2e specs only.',
       severity: 'error',
       from: { pathNot: [TESTS, '^apps/[^/]+/e2e/', '^packages/schema/test/'] },
       to: { path: '^packages/schema/test/' },

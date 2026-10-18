@@ -1,0 +1,108 @@
+{
+  "id": "form_b08_ranking_required",
+  "title": "A required ranking",
+  "description": "",
+  "blocks": [
+    {
+      "id": "b08_rank",
+      "type": "ranking",
+      "label": "Rank these",
+      "placeholder": "Enter ranking",
+      "helpText": "",
+      "options": [
+        {
+          "id": "b08_rank_o1",
+          "label": "Price",
+          "value": "price"
+        },
+        {
+          "id": "b08_rank_o2",
+          "label": "Quality",
+          "value": "quality"
+        },
+        {
+          "id": "b08_rank_o3",
+          "label": "Speed",
+          "value": "speed"
+        },
+        {
+          "id": "b08_rank_o4",
+          "label": "Support",
+          "value": "support"
+        }
+      ],
+      "validation": {
+        "required": true
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High",
+        "randomize": true
+      },
+      "order": 0
+    },
+    {
+      "id": "b08_confidence",
+      "type": "rating",
+      "label": "How sure are you?",
+      "placeholder": "Enter rating",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 1
+    },
+    {
+      "id": "b08_unsure",
+      "type": "long_text",
+      "label": "Why unsure?",
+      "placeholder": "Enter long answer",
+      "helpText": "",
+      "validation": {
+        "required": false
+      },
+      "customize": {
+        "ratingMax": 5,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "scaleMinLabel": "Low",
+        "scaleMaxLabel": "High"
+      },
+      "order": 2,
+      "logic": {
+        "enabled": true,
+        "action": "show",
+        "sourceBlockId": "b08_confidence",
+        "operator": "less_than",
+        "value": "3"
+      }
+    }
+  ],
+  "settings": {
+    "submitButtonText": "Submit",
+    "successMessage": "Thanks for your response!",
+    "themeColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "textColor": "#111111",
+    "accentColor": "#2383e2",
+    "font": "Inter",
+    "progressBar": false,
+    "redirectUrl": "",
+    "closed": false,
+    "closedMessage": "This form is no longer accepting responses.",
+    "password": "",
+    "logoUrl": "",
+    "coverUrl": "",
+    "successAnimation": true
+  }
+}
