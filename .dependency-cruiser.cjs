@@ -27,8 +27,8 @@ const ALLOWED = {
   testkit: ['ports', 'schema', 'db'],
 };
 
-/** Test files may also use @form/testkit; nothing else may. */
-const TESTS = '\\.test(-d)?\\.tsx?$';
+/** Test files, and helpers in a test/ directory (global setup, harnesses), may also use @form/testkit; nothing else may. */
+const TESTS = '(\\.test(-d)?\\.tsx?|/test/.+\\.tsx?)$';
 
 const APPS = {
   builder: ['renderer', 'ui', 'sdk', 'templates-core', ...L1, ...L0],

@@ -2,22 +2,25 @@
 
 A form platform for multi-tenant SaaS and on-prem deployments, working toward feature parity with JotForm, with SOC 2 and India DPDP compliance built in. The plan, schema, architecture and delivery roadmap are in [`docs/platform/`](docs/platform/README.md).
 
-> **Status:** Phase 0 (foundation). Today the repo contains the form builder only. Forms live in memory, so a page refresh starts over; persistence, the API and the public runtime arrive in later work packages.
+> **Status:** Phase 0 (foundation). Today the repo contains the form builder and an API skeleton over Postgres with row-level security. The builder keeps forms in memory, so a page refresh starts over; builder persistence and the public runtime arrive in later work packages.
 
 ## Workspace
 
 | Path | Package | What it is |
 |---|---|---|
 | `apps/builder` | `@form/builder` | Vite + React form builder |
+| `apps/api` | `@form/api` | Fastify 5 API skeleton: `buildApp(config)`, zod type provider, problem+json errors, `/livez` and `/readyz`, OpenAPI, `GET /v1/forms` behind RLS, dev header auth stub |
+| `packages/db` | `@form/db` | Drizzle tables, SQL migrations, roles (`fr_migrator`, `fr_app`, `fr_template_seeder`, `fr_system_agg`), null-safe RLS helpers, `withTenant()`, definer functions, RLS meta-checks |
+| `packages/observability` | `@form/observability` | pino logger with redaction, URL and query scrubbing, NTP clock check, OpenTelemetry (OTLP only when configured) |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
 | `packages/schema` | `@form/schema` | Form schema v2 types, zod twins, v1 reader, structural validation, JCS hashing |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; no dependencies |
 | `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
-| `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …) and test helpers; imported by tests only |
+| `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, `api`, `worker`, `registry`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `worker`, `registry`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
 ## Prerequisites
 
@@ -57,7 +60,17 @@ Do not use `npm install` or `yarn`: the workspace uses pnpm catalogs (`catalog:`
    ```
    Open http://localhost:5173. It redirects to `/builder/demo`. Type `/` on the canvas (or use the field picker) to add fields, then switch to **Preview** to fill in and submit the form.
 
-5. **Production build (optional)**
+5. **API and database (optional; needs Docker)**
+   ```sh
+   docker compose -f deploy/docker/compose.dev.yaml up -d   # Postgres 18, S3 (SeaweedFS), Mailpit, Grafana LGTM
+   pnpm dev:setup     # roles, migrations, demo org; writes apps/api/.env.local
+   pnpm dev:api       # tsx watch on http://127.0.0.1:8080
+   curl -H 'X-FR-Dev-User: 01970000-0000-7000-8000-000000000002' \
+        -H 'X-FR-Org: 01970000-0000-7000-8000-000000000001' http://127.0.0.1:8080/v1/forms
+   ```
+   Add `--profile av` to the compose command for ClamAV. If port 5432 is taken, set `FR_PG_PORT` for compose and `DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:<port>/form` for `pnpm dev:setup`. Until sign-in lands (WP-1.01), the API identifies callers by the `X-FR-Dev-User` header, and only when `AUTH_DEV_HEADERS=true` (refused with `NODE_ENV=production`). The OpenAPI document is at `/v1/openapi.json` and in `apps/api/dist/openapi.json` after a build. Tracing turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (the compose collector listens on `http://127.0.0.1:4318`).
+
+6. **Production build (optional)**
    ```sh
    pnpm build
    pnpm --filter @form/builder preview    # serves apps/builder/dist on http://localhost:4173
@@ -72,6 +85,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 | `pnpm lint` | Lint with oxlint |
 | `pnpm typecheck` | Type-check every project |
 | `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage` |
+| `pnpm test:int` | Integration tests against Postgres 18 in Testcontainers: migrations, RLS isolation for every actor kind, RLS meta-tests, definer functions, the API (CI job `db`). Needs Docker |
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |
@@ -93,6 +107,8 @@ pnpm --filter @form/builder exec playwright install chromium
   docker run -d --rm --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3
   FORM_TEST_MAILPIT_SMTP=smtp://localhost:1025 FORM_TEST_MAILPIT_API=http://localhost:8025 pnpm test
   ```
+
+- Integration tests against an existing server instead of a container: `FORM_TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:5432/postgres pnpm test:int` (superuser; each test file creates its own database). `FORM_TEST_PG_IMAGE=postgres:16` checks the Postgres 16 floor.
 
 Tests named after a bug id (for example `B7: …`) that use `it.fails` describe bugs not fixed yet. They count as passing while the bug exists and start failing once it is fixed; then switch them to `it`.
 

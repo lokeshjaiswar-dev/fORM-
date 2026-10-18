@@ -1,0 +1,58 @@
+# Development stack (architecture §7.2). Apps run on the host: `pnpm dev` (builder), `pnpm dev:api` (api :8080).
+#   docker compose -f deploy/docker/compose.dev.yaml up -d
+#   pnpm dev:setup
+# ClamAV is optional: add `--profile av`. Every port binds to 127.0.0.1. Never use this file in production.
+name: form-dev
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: form
+    ports:
+      - 127.0.0.1:${FR_PG_PORT:-5432}:5432
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql/18/docker.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d form]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # S3 API for development and CI only (architecture §6, D14). MinIO no longer publishes images, so SeaweedFS
+  # (Apache-2.0) stands in; nothing here is bundled on-prem.
+  objectstore:
+    image: chrislusf/seaweedfs:latest@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: server -s3 -dir=/data -master.volumeSizeLimitMB=1024
+    ports:
+      - 127.0.0.1:${FR_S3_PORT:-8333}:8333
+    volumes:
+      - s3data:/data
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+    ports:
+      - 127.0.0.1:${FR_SMTP_PORT:-1025}:1025
+      - 127.0.0.1:${FR_MAILPIT_UI_PORT:-8025}:8025
+
+  clamav:
+    profiles: [av]
+    image: clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb
+    ports:
+      - 127.0.0.1:${FR_CLAMAV_PORT:-3310}:3310
+
+  # Grafana, Loki, Tempo, Prometheus and an OTLP collector in one image. Point the API at it with
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318; Grafana is on :3000.
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.34.0@sha256:b966ea107831d526d9eb8fe4d2d86c9e5731392fad9dce8296bcf2072031f07c
+    ports:
+      - 127.0.0.1:${FR_GRAFANA_PORT:-3000}:3000
+      - 127.0.0.1:${FR_OTLP_GRPC_PORT:-4317}:4317
+      - 127.0.0.1:${FR_OTLP_HTTP_PORT:-4318}:4318
+
+volumes:
+  pgdata:
+  s3data:

@@ -8,9 +8,12 @@
   },
   "scripts": {
     "dev": "turbo run dev --filter=@form/builder",
+    "dev:api": "pnpm --filter @form/api dev",
+    "dev:setup": "pnpm --filter @form/db db:setup --env-out ../../apps/api/.env.local",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:int": "turbo run test:int",
     "e2e": "turbo run e2e",
     "lint": "oxlint",
     "deps": "depcruise apps packages --config .dependency-cruiser.cjs",

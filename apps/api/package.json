@@ -1,0 +1,52 @@
+{
+  "name": "@form/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env.local src/main.ts",
+    "start": "node --env-file-if-exists=.env.local --enable-source-maps dist/main.js",
+    "build": "tsup && tsx scripts/emit-openapi.ts dist/openapi.json",
+    "openapi:emit": "tsx scripts/emit-openapi.ts dist/openapi.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:int": "vitest run -c vitest.int.config.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.0",
+    "@fastify/helmet": "13.1.1",
+    "@fastify/otel": "catalog:",
+    "@fastify/swagger": "9.9.1",
+    "@fastify/under-pressure": "9.2.0",
+    "@form/config": "workspace:*",
+    "@form/db": "workspace:*",
+    "@form/observability": "workspace:*",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/exporter-trace-otlp-http": "catalog:",
+    "@opentelemetry/instrumentation": "catalog:",
+    "@opentelemetry/instrumentation-http": "catalog:",
+    "@opentelemetry/instrumentation-pg": "catalog:",
+    "@opentelemetry/instrumentation-undici": "catalog:",
+    "@opentelemetry/resources": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:",
+    "@opentelemetry/sdk-trace-node": "catalog:",
+    "drizzle-orm": "catalog:",
+    "fastify": "5.12.5",
+    "fastify-type-provider-zod": "7.0.0",
+    "import-in-the-middle": "catalog:",
+    "pg": "catalog:",
+    "pino": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@form/testkit": "workspace:*",
+    "@form/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsup": "8.5.1",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

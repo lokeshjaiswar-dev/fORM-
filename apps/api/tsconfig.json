@@ -1,0 +1,7 @@
+{
+  "extends": "@form/tsconfig/strict.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src", "scripts", "test", "tsup.config.ts", "vitest.config.ts", "vitest.int.config.ts"]
+}

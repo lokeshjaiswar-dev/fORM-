@@ -5,6 +5,12 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
     "test": { "dependsOn": ["^typecheck"], "outputs": ["coverage/**"], "env": ["FORM_TEST_MAILPIT_SMTP", "FORM_TEST_MAILPIT_API"] },
+    "test:int": {
+      "dependsOn": ["^typecheck"],
+      "cache": false,
+      "env": ["FORM_TEST_DATABASE_ADMIN_URL", "FORM_TEST_PG_IMAGE"],
+      "passThroughEnv": ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*"]
+    },
     "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
     "dev": { "cache": false, "persistent": true }
   }
