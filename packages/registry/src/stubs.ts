@@ -1,5 +1,5 @@
 import type { BlockType, ConsentItemId, CurrencyCode, DecimalString, Expr, IsoTime, Locale, MatrixColumnId, MatrixRowId, MinorUnits, RichDoc, TimeZone, Weekday } from '@form/schema';
-import { defineStub, defineStubBlock } from './define.ts';
+import { defineStub, defineStubBlock, isBlank } from './define.ts';
 import { DEFAULT_TEXT, datePatternFor, hourCycleFor, message, regionOf } from './messages.ts';
 
 /* Capabilities for types without a named one use the extension form `x-field:<type>`, like FeatureId `field:<type>`. */
@@ -26,18 +26,26 @@ export const datetime = defineStub('datetime', 'x-field:datetime', (locale) => (
   timeZone: 'respondent',
 }));
 
+/** No answered row: rows that are absent, empty lists or rows of blank cells (BL-062). */
+const noRows = (rows: object): boolean => Object.values(rows).every(isBlank);
+
 export const matrix = defineStub('matrix', 'matrix', (locale) => ({
   mode: 'single',
   rows: [1, 2].map((n) => ({ id: `row_${n}` as MatrixRowId, label: message(locale, DEFAULT_TEXT['defaults.matrix_row'], { n }) })),
   columns: [1, 2, 3].map((n) => ({ id: `column_${n}` as MatrixColumnId, label: message(locale, DEFAULT_TEXT['defaults.matrix_column'], { n }), input: 'choice' as const })),
   requireEach: 'none',
-}));
+}), (value) => noRows(value.rows));
 
 /**
  * Children are blocks of their own, so a new group starts empty and the builder inserts its first child:
  * this default is a draft that `configSchema` rejects (1..30 children), listed in DRAFT_DEFAULT_CONFIG_TYPES.
  */
-export const repeatingGroup = defineStub('repeating_group', 'repeating_groups', () => ({ children: [], minRows: 0, maxRows: 10, layout: 'stacked' }));
+export const repeatingGroup = defineStub(
+  'repeating_group',
+  'repeating_groups',
+  () => ({ children: [], minRows: 0, maxRows: 10, layout: 'stacked' }),
+  (value) => value.rows.length === 0,
+);
 
 /** The only types whose `defaultConfig` fails `configSchema` until the builder completes it; generic callers skip them. */
 export const DRAFT_DEFAULT_CONFIG_TYPES = ['repeating_group'] as const satisfies readonly BlockType[];
@@ -54,7 +62,7 @@ export const consent = defineStub('consent', 'consent_dpdp', (locale) => ({
   }],
   presentation: 'checkboxes',
   noticeVersion: 0,
-}));
+}), (value) => Object.values(value.items).every((granted) => granted === undefined));
 
 export const payment = defineStub('payment', 'payments', (locale) => ({
   gateway: 'razorpay',
@@ -63,7 +71,7 @@ export const payment = defineStub('payment', 'payments', (locale) => ({
   couponsEnabled: false,
   showTotal: true,
   holdUntilPaid: true,
-}));
+}), (value) => (value.items ?? []).length === 0 && value.customAmount === undefined);
 
 export const appointment = defineStub('appointment', 'appointments', (locale) => ({
   timeZone: (isIndia(locale) ? 'Asia/Kolkata' : 'UTC') as TimeZone,

@@ -13,7 +13,7 @@ import type { InlineDoc, PlainTemplate, RichDoc } from './rich-text.ts';
  *   option:<blockId>/<optionId> · mrow:<blockId>/<rowId> · mcol:<blockId>/<colId>
  *   product:<blockId>/<productId>:name|description · purpose:<purposeId>:name|description
  *   consent:<blockId>:notice|withdrawal|item:<itemId> · ending:<endingId>:content|message|url|action:<i>
- *   rule:<ruleId>:<actionIndex> · behavior:submit · tplvar:<name>:label|help   (template payloads only)
+ *   rule:<ruleId>:<actionIndex> (index over `then`, then `else`) · behavior:submit · tplvar:<name>:label|help   (template payloads only)
  */
 export type TextKey = `${'form' | 'welcome' | 'page' | 'block' | 'option' | 'mrow' | 'mcol' | 'product' | 'purpose' | 'consent' | 'ending' | 'rule' | 'behavior' | 'tplvar'}:${string}`;
 

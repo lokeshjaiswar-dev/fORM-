@@ -4,7 +4,7 @@ import {
 } from '@form/schema';
 import {
   AVAILABLE_TYPES, COMPLIANCE_UNDER_REVIEW, DEFAULT_COMPLIANCE, DRAFT_DEFAULT_CONFIG_TYPES, REGISTRY, STUB_AVAILABILITY, UNBOUND_BLOCK_ID, answerScalar, availability,
-  bindScalar, isAvailable, isBlank, valueDefinition,
+  bindScalar, isAvailable, isBlank, valueDefinition, wordCount,
 } from '../src/index.ts';
 import { EN_IN, definition, fieldBlock, file, id, inline, plainBlock } from './fixtures.ts';
 
@@ -100,6 +100,49 @@ describe('stubs', () => {
     expect(def.translatable(block)).toEqual(['block:full_name_1:label']);
     expect(valueDefinition('calculation').kind).toBe('computed');
     expect(REGISTRY.captcha.translatable(plainBlockStub('captcha'))).toEqual([]);
+  });
+
+  it('stub isEmpty agrees with I9: true exactly for the values the twin rejects as unanswered (BL-062)', () => {
+    const notice = { noticeLocale: 'en-IN', noticeVersion: 1 };
+    const samples: Partial<Record<ValueFieldType, { valid: unknown[]; empty: unknown[] }>> = {
+      full_name: { valid: [{ first: 'Asha' }], empty: [{}, { first: '' }] },
+      address: { valid: [{ city: 'Pune' }], empty: [{}, { line1: '', city: '' }] },
+      matrix: {
+        valid: [{ mode: 'single', rows: { r1: 'c1' } }, { mode: 'multi', rows: { r1: ['c1'] } }, { mode: 'grid', rows: { r1: { c1: true } } }],
+        empty: [{ mode: 'single', rows: {} }, { mode: 'multi', rows: { r1: [] } }, { mode: 'grid', rows: { r1: {} } }, { mode: 'grid', rows: { r1: { c1: '' } } }],
+      },
+      repeating_group: { valid: [{ rows: [{ rowId: 'row_1', values: {} }] }], empty: [{ rows: [] }] },
+      consent: { valid: [{ items: { item_1: true }, ...notice }, { items: { item_1: false }, ...notice }], empty: [{ items: {}, ...notice }] },
+      payment: {
+        valid: [{ currency: 'INR', customAmount: '100' }, { currency: 'INR', items: [{ productId: 'p1', quantity: 1 }] }],
+        empty: [{ currency: 'INR' }, { currency: 'INR', items: [] }],
+      },
+      context: { valid: ['https://example.com'], empty: [''] },
+      unique_id: { valid: ['F-000001'], empty: [''] },
+    };
+    for (const [type, { valid, empty }] of Object.entries(samples) as Array<[ValueFieldType, { valid: unknown[]; empty: unknown[] }]>) {
+      const def = valueDefinition(type);
+      const isEmpty = def.isEmpty as (value: unknown) => boolean;
+      const schema = def.answerSchema(fieldBlock(type) as never, { required: false });
+      for (const value of valid) {
+        expect(isEmpty(value), `${type} ${JSON.stringify(value)}`).toBe(false);
+        expect(schema.safeParse(value).success, `${type} ${JSON.stringify(value)}`).toBe(true);
+      }
+      for (const value of empty) {
+        expect(isEmpty(value), `${type} ${JSON.stringify(value)}`).toBe(true);
+        expect(schema.safeParse(value).success, `${type} ${JSON.stringify(value)}`).toBe(false);
+      }
+    }
+  });
+
+  it('counts words with the pinned White_Space set, not the host \\s (BL-047)', () => {
+    const cp = (...points: number[]) => String.fromCharCode(...points);
+    expect(wordCount('')).toBe(0);
+    expect(wordCount(' one  two\tthree\n')).toBe(3);
+    expect(wordCount(`one${cp(0xa0)}two${cp(0x3000)}three${cp(0x2009)}four`)).toBe(4);
+    expect(wordCount(`one${cp(0x180e)}two`)).toBe(1);
+    expect(wordCount(`one${cp(0xfeff)}two`)).toBe(1);
+    expect(wordCount('नमस्ते दुनिया')).toBe(2);
   });
 
   it('isBlank follows I9 for any shape', () => {

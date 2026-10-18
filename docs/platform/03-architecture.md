@@ -72,7 +72,7 @@ fORM-/
 | `schema` | Every wire and storage type, its zod twin, `migrate()`, `SCHEMA_VERSION`, canonical JSON (RFC 8785), `sha256Jcs()` | Behaviour |
 | `registry` | `FieldDefinition` for all 34 `BlockType`s; exhaustiveness checked at compile time | React components (those live in `renderer/fields/*` with their own exhaustive `RendererRegistry`) |
 | `logic` | `compile`, `evaluate`, `EXPR_FUNCTIONS`, decimal.js arithmetic, case fold, pinned grapheme length, taint, the shared diff engine (BLD-10, TPL-18) | Clock, locale, I/O (`EvalMeta` is injected) |
-| `validation` | `validateAnswers(version, answers, evalState, {scope})` → `FieldError[]`; regex through `re2js` on both sides | Network checks (uniqueness, OTP, slot capacity): the API appends those |
+| `validation` | `validateAnswers(version, evalState, answers, { scope, locale, today, messages? })` → `FieldError[]` (delivery plan WP-0.09); `normalizeAnswers` (I9); regex through `re2js` on both sides | Network checks (uniqueness, OTP, slot capacity): the API appends those |
 | `templates-core` | Everything in the templates spec §3–4 that is pure | DB, signatures, asset storage |
 | `templates` | System template content, pack build, CI thumbnails, reviewer attestations | Runtime code |
 | `renderer` | All respondent UI: Classic + Cards, WCAG 2.1 AA, print and email modes, incremental evaluation | Fetching (receives `RuntimeFormVersion`, `uploader`, `onSubmit` as props) |

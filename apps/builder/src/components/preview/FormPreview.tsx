@@ -281,7 +281,9 @@ const fieldClass =
 function Control({ block, rhf, accent }: { block: FormBlock; rhf: ReturnType<typeof useForm>; accent: string }) {
   const style = inputStyle(block);
   const { register, watch, setValue } = rhf;
-  const rating = Number(watch(block.id) || 0);
+  const answered = watch(block.id) as unknown;
+  /* Unanswered is no selection (B7): 0 is a real NPS or scale answer, never the empty state. */
+  const rating = answered === undefined || answered === null || answered === '' ? null : Number(answered);
   const disabled = !!block.customize?.disabled;
   const autoFocus = !!block.customize?.autoFocus;
   const value = String(watch(block.id) ?? '');
@@ -347,7 +349,9 @@ function Control({ block, rhf, accent }: { block: FormBlock; rhf: ReturnType<typ
         </div>
       );
     case 'ranking': {
-      const order = (watch(block.id) as string[]) ?? opts.map((o) => o.value);
+      /* The ranking has no answer until the respondent moves an option (B8); until then the default order is shown. */
+      const ranked = watch(block.id) as string[] | undefined;
+      const order = ranked?.length ? ranked : opts.map((o) => o.value);
       function move(i: number, dir: number) {
         const next = [...order];
         const j = i + dir;
@@ -382,7 +386,7 @@ function Control({ block, rhf, accent }: { block: FormBlock; rhf: ReturnType<typ
             const n = i + 1;
             return (
               <button key={n} type="button" onClick={() => setValue(block.id, n, { shouldValidate: true })}>
-                <Star className={cn('size-6', n <= rating ? 'fill-[#f2c94c] text-[#f2c94c]' : 'text-[rgba(55,53,47,0.25)]')} />
+                <Star className={cn('size-6', n <= (rating ?? 0) ? 'fill-[#f2c94c] text-[#f2c94c]' : 'text-[rgba(55,53,47,0.25)]')} />
               </button>
             );
           })}

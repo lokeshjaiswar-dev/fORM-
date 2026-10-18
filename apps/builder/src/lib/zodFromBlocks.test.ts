@@ -115,32 +115,32 @@ describe('buildZodSchema', () => {
     expect(patternError(undefined)).toBeNull();
   });
 
-  it.fails('B8: a required ranking fails until the respondent orders it', () => {
+  it('B8: a required ranking fails until the respondent orders it', () => {
     const blocks = [field('ranking', { required: true }, { options })];
     expect(buildZodSchema(blocks).safeParse(defaultValues(blocks)).success).toBe(false);
   });
 
-  it.fails('B9: an optional multiple choice left as null on blur accepts the empty answer', () => {
+  it('B9: an optional multiple choice left as null on blur accepts the empty answer', () => {
     expect(check(field('multiple_choice', {}, { options }), null).success).toBe(true);
   });
 
-  it.fails('optional text with min length or pattern accepts an empty answer (found in WP-0.02)', () => {
+  it('optional text with min length or pattern accepts an empty answer (found in WP-0.02)', () => {
     expect(check(field('text', { min: 3 }), '').success).toBe(true);
     expect(check(field('text', { pattern: '^[0-9]+$' }), '').success).toBe(true);
   });
 
-  it.fails('B13: email applies its pattern and custom error message', () => {
+  it('B13: email applies its pattern and custom error message', () => {
     const email = field('email', { required: true, pattern: '@corp\\.com$', errorMessage: 'Use your work email' });
     expect(messages(email, 'a@gmail.com')).toEqual(['Use your work email']);
   });
 
-  it.fails('B14: an empty required number says Required, not NaN', () => {
+  it('B14: an empty required number says Required, not NaN', () => {
     expect(messages(field('number', { required: true }), '')).toEqual(['Required']);
   });
 });
 
 describe('defaultValues', () => {
-  it('uses [] for multi-value types, the option order for ranking, a number for rating types and a string otherwise', () => {
+  it('uses [] for multi-value types, nothing for an unranked ranking, a number for rating types and a string otherwise', () => {
     const blocks = [
       block('heading', { id: 'h' }),
       block('hidden', { id: 'x' }),
@@ -155,7 +155,7 @@ describe('defaultValues', () => {
     expect(defaultValues(blocks)).toEqual({
       c: [],
       m: [],
-      r: ['one', 'two'],
+      r: undefined,
       ra: undefined,
       n: 7,
       t: '',

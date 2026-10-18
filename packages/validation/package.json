@@ -1,0 +1,31 @@
+{
+  "name": "@form/validation",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:determinism": "playwright test"
+  },
+  "dependencies": {
+    "@form/i18n": "workspace:*",
+    "@form/logic": "workspace:*",
+    "@form/registry": "workspace:*",
+    "@form/schema": "workspace:*",
+    "re2js": "2.8.6"
+  },
+  "devDependencies": {
+    "@form/tsconfig": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

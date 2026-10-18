@@ -243,8 +243,15 @@ function stubAnswerSchema<T extends ValueFieldType>(type: T): SchemaLike<AnswerV
 /**
  * A type whose behaviour lands in a later phase: the real config schema and a valid default config, no
  * palette entry, no operators, and a `missing_capability` lint so compile refuses any form using it.
+ * `isEmpty` defaults to `isBlank`; shapes with a non-blank envelope (a matrix `mode`, a payment `currency`)
+ * pass their own so it stays true exactly for the values the twin rejects as unanswered (I9).
  */
-export function defineStub<T extends ValueFieldType>(type: T, capability: Capability, defaultConfig: (locale: Locale) => BlockConfigMap[T]): ValueDefinition<T> {
+export function defineStub<T extends ValueFieldType>(
+  type: T,
+  capability: Capability,
+  defaultConfig: (locale: Locale) => BlockConfigMap[T],
+  isEmpty: (value: AnswerValueMap[T]) => boolean = isBlank,
+): ValueDefinition<T> {
   const answer = stubAnswerSchema(type);
   return {
     type,
@@ -258,7 +265,7 @@ export function defineStub<T extends ValueFieldType>(type: T, capability: Capabi
     paths: {},
     operators: {},
     toScalar: () => ({ t: 'null' }),
-    isEmpty: isBlank,
+    isEmpty,
     translatable: fieldTexts,
     export: {
       columns: (block) => [{ suffix: '', header: headerOf(block) }],

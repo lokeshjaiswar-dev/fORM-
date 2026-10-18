@@ -93,7 +93,8 @@ jobs:
 
   # logic@2 determinism (schema §3.3.13): the corpus EvalState JSON and the pinned grapheme replay in
   # Chromium, Firefox and WebKit, diffed byte-for-byte with Node's; the templates-core corpus (instantiate,
-  # snippets, sanitiser, lock fingerprints) the same way (WP-T0.2). Also the WP-0.07 benchmark, run
+  # snippets, sanitiser, lock fingerprints) and the @form/validation corpus (re2js regex verdicts, presets,
+  # masks, FieldErrors) the same way (WP-T0.2, WP-0.09). Also the WP-0.07 benchmark, run
   # here alone and without coverage so turbo's parallel `test` tasks cannot skew it.
   determinism:
     runs-on: ubuntu-latest
@@ -124,6 +125,8 @@ jobs:
             packages/logic/test-results
             packages/templates-core/playwright-report
             packages/templates-core/test-results
+            packages/validation/playwright-report
+            packages/validation/test-results
           if-no-files-found: ignore
 
   deps:

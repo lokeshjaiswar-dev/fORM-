@@ -169,12 +169,12 @@ describe('FormPreview', () => {
     expect(screen.queryByRole('button', { name: '11' })).not.toBeInTheDocument();
   });
 
-  it.fails('B7: an unanswered NPS shows no score selected', () => {
+  it('B7: an unanswered NPS shows no score selected', () => {
     renderPreview([block('nps', { id: 'nps', label: 'Recommend?' })]);
     expect(screen.getByRole('button', { name: '0' })).not.toHaveAttribute('style');
   });
 
-  it.fails('B7: an unanswered linear scale starting at 0 shows nothing selected', () => {
+  it('B7: an unanswered linear scale starting at 0 shows nothing selected', () => {
     renderPreview([block('linear_scale', { id: 'scale', label: 'Scale', customize: { scaleMin: 0, scaleMax: 5 } })]);
     expect(screen.getByRole('button', { name: '0' })).not.toHaveAttribute('style');
   });

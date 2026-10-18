@@ -89,7 +89,7 @@ export type {
   AnswerCheck, BlockSpec, ConfigCheck, ExportColumn, FieldSpec, PlainBlockType, PlainDefinition, Report, ValueDefinition,
 } from './define.ts';
 export { acceptsFile } from './fields/file_upload.ts';
-export { LONG_TEXT_MAX } from './fields/long_text.ts';
+export { LONG_TEXT_MAX, wordCount } from './fields/long_text.ts';
 export { rankCount } from './fields/ranking.ts';
 export { UNBOUND_BLOCK_ID } from './fields/shared.ts';
 export { SHORT_TEXT_MAX } from './fields/short_text.ts';

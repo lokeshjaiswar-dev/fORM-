@@ -607,7 +607,7 @@ export const TEXT_PRESETS = [
 ] as const;
 export type TextPreset = (typeof TEXT_PRESETS)[number];
 
-/** VAL-04: RE2 subset (no backrefs / lookaround), ≤ 256 chars; re2 on the server. */
+/** VAL-04: RE2 subset (no backrefs / lookaround), ≤ 256 chars and ≤ 1000 compiled RE2 instructions; re2js on client and server, run only while instructions × value length ≤ 250,000. */
 export interface SafePattern { source: string; flags?: '' | 'i' }
 /** PROP-12: '#' digit, '@' letter, '*' either, '[…]' optional tail. Server-enforced. */
 export interface InputMask { pattern: string; storeMasked: boolean }
@@ -1295,7 +1295,7 @@ export interface Behavior {
  *   option:<blockId>/<optionId> · mrow:<blockId>/<rowId> · mcol:<blockId>/<colId>
  *   product:<blockId>/<productId>:name|description · purpose:<purposeId>:name|description
  *   consent:<blockId>:notice|withdrawal|item:<itemId> · ending:<endingId>:content|message|url|action:<i>
- *   rule:<ruleId>:<actionIndex> · behavior:submit · tplvar:<name>:label|help   (template payloads only)
+ *   rule:<ruleId>:<actionIndex> (index over `then`, then `else`) · behavior:submit · tplvar:<name>:label|help   (template payloads only)
  */
 export type TextKey = `${'form' | 'welcome' | 'page' | 'block' | 'option' | 'mrow' | 'mcol' | 'product' | 'purpose' | 'consent' | 'ending' | 'rule' | 'behavior' | 'tplvar'}:${string}`;
 

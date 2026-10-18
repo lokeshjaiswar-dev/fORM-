@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`validation determinism corpus (Node) > matches the pinned digest 1`] = `"8ec1afcd26bd7dbd536bcc1136140b4e6f90f74af1a38b9e1eaaa6b1f413491e"`;
