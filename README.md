@@ -70,7 +70,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |
-| `pnpm i18n:extract` | Regenerate `packages/i18n/locales/en-IN/*.json` from `defineMessages(…)` calls; `--check` only reports stale catalogues (CI runs it, and a test enforces it too) |
+| `pnpm i18n:extract` | Regenerate `packages/i18n/locales/en-IN/*.json` from `defineMessages(…)` calls; `--check` only reports stale catalogues (CI runs it) |
 
 **First e2e run:** download the browser once:
 ```sh

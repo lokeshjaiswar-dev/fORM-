@@ -1,5 +1,5 @@
-import { TYPE, parse, type MessageFormatElement } from '@formatjs/icu-messageformat-parser';
-import { IntlMessageFormat } from 'intl-messageformat';
+import { TYPE, type MessageFormatElement } from '@formatjs/icu-messageformat-parser';
+import { IntlMessageFormat, type Formatters } from 'intl-messageformat';
 import { SOURCE_LOCALE } from './catalogs';
 import {
   EN_DATE_NAMES,
@@ -11,6 +11,7 @@ import {
   type DatePattern,
   type HourCycle,
 } from './date';
+import { parseMessage } from './icu';
 import { splitMessageId, type Catalog, type Catalogs, type MessageId, type Namespace } from './messages';
 import { formatMoney, type MinorUnitsInput, type MoneyFormatOptions } from './money';
 import { defaultGrouping, formatNumber, type NumberFormatOptions, type NumericInput } from './number';
@@ -27,15 +28,16 @@ export interface I18nOptions {
   /** Consulted when a key is missing from `catalogs`, typically the en-IN source catalogues. */
   fallback?: Catalogs;
   /**
-   * An invalid locale tag (formatting then uses en-IN), missing keys, ICU syntax errors and missing
-   * values, reported on every affected call; `createI18n` and `t` never throw.
+   * An invalid or unsupported locale tag (formatting then uses en-IN), missing keys, ICU syntax errors
+   * (including date, time and styled number arguments) and missing or non-numeric values, reported on
+   * every affected call; `createI18n` and `t` never throw.
    */
   onError?: (error: I18nError) => void;
 }
 
 export interface I18n {
   readonly locale: string;
-  /** Locale used for plural rules and number arguments (`en-IN` under `en-XA` or for an invalid tag). */
+  /** Locale used for plural rules (`en-IN` under `en-XA` or for an invalid or unsupported tag). */
   readonly formatLocale: string;
   /** Formats a message; on any problem reports through `onError` and returns the id. */
   t(id: MessageId, values?: MessageValues): string;
@@ -55,7 +57,8 @@ const plainKey = (name: string) => `plain:${name}`;
 
 /**
  * intl-messageformat prints a plain `{n}` with `String(n)`. Points plain arguments at a derived
- * value so numbers get the locale's grouping, while plural and select still see the raw number.
+ * value so numbers go through the same formatter as `#` and `{n, number}`, while plural and select
+ * still see the raw number.
  */
 function redirectPlainArguments(elements: MessageFormatElement[], names: Set<string>): MessageFormatElement[] {
   return elements.map((element): MessageFormatElement => {
@@ -79,19 +82,22 @@ function redirectPlainArguments(elements: MessageFormatElement[], names: Set<str
   });
 }
 
-type Compiled = { format: IntlMessageFormat; plain: readonly string[] } | { error: string };
+type Compiled = { format: IntlMessageFormat; args: readonly string[]; plain: readonly string[] } | { error: string };
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 function validFormatLocale(locale: string, report: (error: I18nError) => void): string {
   if (isPseudoLocale(locale)) return SOURCE_LOCALE;
+  let message: string;
   try {
     Intl.getCanonicalLocales(locale);
-    return locale;
+    if (Intl.PluralRules.supportedLocalesOf(locale).length > 0) return locale;
+    message = `${locale} has no plural rules in this runtime`;
   } catch (error) {
-    report({ kind: 'locale', locale, message: errorMessage(error) });
-    return SOURCE_LOCALE;
+    message = errorMessage(error);
   }
+  report({ kind: 'locale', locale, message });
+  return SOURCE_LOCALE;
 }
 
 function lookup(catalogs: Catalogs | undefined, namespace: Namespace, key: string): string | undefined {
@@ -106,14 +112,36 @@ export function createI18n(locale: string, catalogs: Catalogs, options: I18nOpti
   const grouping = defaultGrouping(locale);
   const compiled = new Map<string, Compiled>();
 
+  /** Every number in a message (`{n}`, `#`, `{n, number}`) goes through this one locale-independent path. */
+  const formatArgument = (value: unknown): string => {
+    const out = typeof value === 'number' || typeof value === 'bigint' || typeof value === 'string' ? formatNumber(value, { grouping }) : '';
+    if (out === '') throw new TypeError(`${String(value)} is not a number`);
+    return out;
+  };
+  const pluralRules = new Map<string, Intl.PluralRules>();
+  const formatters: Formatters = {
+    getNumberFormat: () => ({ format: formatArgument }) as unknown as Intl.NumberFormat,
+    getDateTimeFormat: () => {
+      throw new TypeError('date and time arguments are not supported');
+    },
+    getPluralRules: (_locales, opts) => {
+      const type = opts?.type ?? 'cardinal';
+      let rules = pluralRules.get(type);
+      if (!rules) pluralRules.set(type, (rules = new Intl.PluralRules(formatLocale, { type })));
+      return rules;
+    },
+  };
+
   const compile = (id: string, source: string): Compiled => {
     let result = compiled.get(id);
     if (!result) {
       try {
+        const parsed = parseMessage(source);
         const plain = new Set<string>();
-        let ast = redirectPlainArguments(parse(source, { ignoreTag: true, requiresOtherClause: true }), plain);
+        let ast = redirectPlainArguments(parsed.ast, plain);
         if (pseudo) ast = pseudoLocalizeAst(ast);
-        result = { format: new IntlMessageFormat(ast, formatLocale, undefined, { ignoreTag: true }), plain: [...plain] };
+        const format = new IntlMessageFormat(ast, formatLocale, undefined, { ignoreTag: true, formatters });
+        result = { format, args: parsed.args, plain: [...plain] };
       } catch (error) {
         result = { error: errorMessage(error) };
       }
@@ -139,12 +167,17 @@ export function createI18n(locale: string, catalogs: Catalogs, options: I18nOpti
       report({ kind: 'syntax', locale, id, message: compiledMessage.error });
       return id;
     }
-    const args: Record<string, string | number> = { ...values };
-    for (const name of compiledMessage.plain) {
-      const value = values?.[name];
-      if (value !== undefined) args[plainKey(name)] = typeof value === 'number' ? formatNumber(value, { grouping }) : value;
+    const absent = compiledMessage.args.filter((name) => values?.[name] === undefined);
+    if (absent.length) {
+      report({ kind: 'format', locale, id, message: `Missing value for ${absent.map((name) => `{${name}}`).join(', ')}` });
+      return id;
     }
     try {
+      const args: Record<string, string | number> = { ...values };
+      for (const name of compiledMessage.plain) {
+        const value = values?.[name];
+        if (value !== undefined) args[plainKey(name)] = typeof value === 'number' ? formatArgument(value) : value;
+      }
       const out = compiledMessage.format.format<string>(args);
       return Array.isArray(out) ? out.join('') : String(out);
     } catch (error) {

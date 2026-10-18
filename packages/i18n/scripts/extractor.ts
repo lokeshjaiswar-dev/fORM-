@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse } from '@formatjs/icu-messageformat-parser';
 import ts from 'typescript';
+import { parseMessage } from '../src/icu.ts';
 import { NAMESPACES, isNamespace, type Namespace } from '../src/messages.ts';
 
 export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -55,9 +55,51 @@ function literalText(node: ts.Node | undefined): string | undefined {
   return undefined;
 }
 
-/** Reads `defineMessages('<namespace>', { key: 'message' })` calls; anything non-literal is an error. */
+const DEFINE_MESSAGES = 'defineMessages';
+
+/** Local names bound to `defineMessages` by `import { defineMessages as dm } from '…'`. */
+function importedAliases(source: ts.SourceFile): Set<string> {
+  const names = new Set([DEFINE_MESSAGES]);
+  for (const statement of source.statements) {
+    const bindings = ts.isImportDeclaration(statement) ? statement.importClause?.namedBindings : undefined;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if ((element.propertyName ?? element.name).text === DEFINE_MESSAGES) names.add(element.name.text);
+    }
+  }
+  return names;
+}
+
+/** True for `defineMessages(…)`, an imported alias `dm(…)` and a member call `i18n.defineMessages(…)`. */
+function isDefineMessagesCall(node: ts.CallExpression, aliases: ReadonlySet<string>): boolean {
+  const callee = node.expression;
+  if (ts.isIdentifier(callee)) return aliases.has(callee.text);
+  return ts.isPropertyAccessExpression(callee) && callee.name.text === DEFINE_MESSAGES;
+}
+
+/** A reference that is not a call, e.g. `const dm = defineMessages`, which would hide messages from extraction. */
+function isIndirectReference(node: ts.Identifier, aliases: ReadonlySet<string>): boolean {
+  const parent = node.parent;
+  const named = ts.isPropertyAccessExpression(parent) && parent.name === node ? DEFINE_MESSAGES === node.text : aliases.has(node.text);
+  if (!named) return false;
+  const reference = ts.isPropertyAccessExpression(parent) && parent.name === node ? parent : node;
+  const holder = reference.parent;
+  if (ts.isCallExpression(holder) && holder.expression === reference) return false;
+  return !(
+    ts.isImportSpecifier(parent) ||
+    ts.isExportSpecifier(parent) ||
+    ts.isFunctionDeclaration(parent) ||
+    (ts.isPropertyAccessExpression(parent) && parent.expression === node)
+  );
+}
+
+/**
+ * Reads `defineMessages('<namespace>', { key: 'message' })` calls, including imported aliases and
+ * member calls; anything non-literal, and any other use of `defineMessages`, is an error.
+ */
 export function extractFromSource(fileName: string, text: string): { messages: ExtractedMessage[]; errors: string[] } {
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
+  const aliases = importedAliases(source);
   const messages: ExtractedMessage[] = [];
   const errors: string[] = [];
   const where = (node: ts.Node) => {
@@ -66,7 +108,10 @@ export function extractFromSource(fileName: string, text: string): { messages: E
   };
 
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'defineMessages') {
+    if (ts.isIdentifier(node) && isIndirectReference(node, aliases)) {
+      errors.push(`${where(node)}: call ${node.text} directly so its messages can be extracted`);
+    }
+    if (ts.isCallExpression(node) && isDefineMessagesCall(node, aliases)) {
       const [nsArg, objArg] = node.arguments;
       const namespace = literalText(nsArg);
       if (namespace === undefined || !isNamespace(namespace)) {
@@ -109,7 +154,7 @@ export function buildCatalogs(messages: ExtractedMessage[]): { catalogs: Extract
       continue;
     }
     try {
-      parse(entry.message, { ignoreTag: true, requiresOtherClause: true });
+      parseMessage(entry.message);
     } catch (error) {
       errors.push(`${entry.location}: ${id} is not valid ICU MessageFormat: ${error instanceof Error ? error.message : String(error)}`);
       continue;

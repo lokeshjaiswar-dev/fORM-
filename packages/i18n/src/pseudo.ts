@@ -1,4 +1,5 @@
 import { TYPE, type MessageFormatElement } from '@formatjs/icu-messageformat-parser';
+import { ISO_4217_CODES, currencyExponent } from './money';
 
 export const PSEUDO_LOCALE = 'en-XA';
 export const PSEUDO_OPEN = '⟦';
@@ -64,20 +65,30 @@ export function pseudoLocalizeAst(elements: MessageFormatElement[]): MessageForm
   ];
 }
 
-/** Currency prefixes `formatMoney` puts before the amount: an ISO code and (no-break) space, or `US$`. */
-const CURRENCY_PREFIX = /(?<!\p{L})(?:[A-Z]{3}[  ]|US\$)(?=\d)/gu;
+/** `formatMoney` with a code: an ISO 4217 code, a (no-break) space and an amount with that currency's minor digits. */
+const CODE_AMOUNT = /(?<!\p{L})([A-Z]{3})[  ](?=\d[\d,]*(?:\.(\d+))?(?!\d))/gu;
+const SYMBOL_PREFIX = /(?<!\p{L})US\$(?=\d)/gu;
+
+function stripMoneyPrefixes(text: string): string {
+  return text
+    .replace(SYMBOL_PREFIX, '')
+    .replace(CODE_AMOUNT, (match, code: string, fraction: string | undefined) =>
+      ISO_4217_CODES.has(code) && (fraction?.length ?? 0) === currencyExponent(code) ? '' : match,
+    );
+}
 
 /**
  * Returns the fragments of rendered text that are outside every ⟦ ⟧ pair and contain a letter,
  * i.e. text a component rendered without going through the catalogue. Pass `textContent` of a
- * rendered tree under `en-XA`; digits, punctuation and formatted money (`US$1.00`, `JPY 100`) are allowed.
+ * rendered tree under `en-XA`; digits, punctuation and formatted money (`US$1.00`, `JPY 100`, `CHF 2.50`)
+ * are allowed, but a code needs the currency's exact minor digits, so `TOP 10` or `PIN 4` is reported.
  */
 export function findUnwrappedText(text: string): string[] {
   const fragments: string[] = [];
   let depth = 0;
   let current = '';
   const flush = () => {
-    if (/\p{L}/u.test(current.replace(CURRENCY_PREFIX, ''))) fragments.push(current.trim());
+    if (/\p{L}/u.test(stripMoneyPrefixes(current))) fragments.push(current.trim());
     current = '';
   };
   for (const ch of text) {

@@ -42,6 +42,40 @@ describe('createI18n (en-IN)', () => {
     expect(custom.t('renderer:count', { n: 1234567 })).toBe('12,34,567 responses');
   });
 
+  it('formats {n}, # and {n, number} through one locale-independent path', () => {
+    const source = '{n, plural, one {# item} other {# items}} / {n} / {n, number}';
+    const catalogs = { renderer: { a: source } };
+    expect(createI18n('mr-IN', catalogs).t('renderer:a', { n: 1234567 })).toBe('12,34,567 items / 12,34,567 / 12,34,567');
+    expect(createI18n('bn', catalogs).t('renderer:a', { n: 1 })).toBe('1 item / 1 / 1');
+    expect(createI18n('de-DE', catalogs).t('renderer:a', { n: 1234.5 })).toBe('1,234.5 items / 1,234.5 / 1,234.5');
+    expect(createI18n('ne-NP', catalogs).t('renderer:a', { n: -0.25 })).toBe('-0.25 items / -0.25 / -0.25');
+  });
+
+  it('rejects date, time and styled number arguments as syntax errors', () => {
+    const onError = vi.fn();
+    const strict = createI18n(
+      'en-IN',
+      { renderer: { date: 'Due {d, date, short}', time: 'At {t, time}', pct: '{p, number, percent}', skel: '{p, number, ::percent}' } },
+      { onError },
+    );
+    for (const id of ['renderer:date', 'renderer:time', 'renderer:pct', 'renderer:skel'] as const) {
+      expect(strict.t(id, { d: 0, t: 0, p: 0.5 })).toBe(id);
+    }
+    expect(onError.mock.calls.map(([e]) => [e.kind, e.message])).toEqual([
+      ['syntax', expect.stringContaining('{d, date}: date and time arguments are not supported')],
+      ['syntax', expect.stringContaining('{t, time}: date and time arguments are not supported')],
+      ['syntax', expect.stringContaining('{p, number, …}: number styles and skeletons are not supported')],
+      ['syntax', expect.stringContaining('{p, number, …}: number styles and skeletons are not supported')],
+    ]);
+  });
+
+  it('reports a non-numeric value for a number argument', () => {
+    const onError = vi.fn();
+    const strict = createI18n('en-IN', { renderer: { n: '{n, number} left' } }, { onError });
+    expect(strict.t('renderer:n', { n: 'many' })).toBe('renderer:n');
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ kind: 'format', message: expect.stringContaining('many is not a number') }));
+  });
+
   it('formats numbers, money and dates for the locale', () => {
     expect(i18n.formatNumber(1234567.89)).toBe('12,34,567.89');
     expect(i18n.formatMoney('123456789', 'INR')).toBe('₹12,34,567.89');
@@ -59,6 +93,12 @@ describe('createI18n (en-IN)', () => {
     expect(broken.t('renderer:needs')).toBe('renderer:needs');
     expect(broken.t('renderer:bad')).toBe('renderer:bad');
     expect(onError.mock.calls.map(([e]) => e.kind)).toEqual(['missing', 'syntax', 'format', 'syntax']);
+    expect(onError.mock.calls[2]?.[0]).toEqual({
+      kind: 'format',
+      locale: 'en-IN',
+      id: 'renderer:needs',
+      message: 'Missing value for {name}',
+    });
   });
 
   it('reports an invalid locale tag once and formats it as en-IN', () => {
@@ -69,6 +109,14 @@ describe('createI18n (en-IN)', () => {
     expect(bad.t('system:nav.next')).toBe('Next');
     expect(bad.formatDate('2026-09-05', 'MMMM D, YYYY')).toBe('September 5, 2026');
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a well-formed tag without plural rules in this runtime and formats it as en-IN', () => {
+    const onError = vi.fn();
+    const unknown = createI18n('zz', { renderer: { n: '{n, plural, one {# day} other {# days}}' } }, { onError });
+    expect(onError.mock.calls).toEqual([[{ kind: 'locale', locale: 'zz', message: 'zz has no plural rules in this runtime' }]]);
+    expect(unknown.formatLocale).toBe('en-IN');
+    expect(unknown.t('renderer:n', { n: 1 })).toBe('1 day');
   });
 
   it('falls back to another catalogue set and lists keys missing from its own', () => {
@@ -146,5 +194,14 @@ describe('findUnwrappedText', () => {
     expect(prices).toContain('JPY 1,23,456');
     expect(findUnwrappedText(`⟦Ţóţáļ⟧ ${prices.join(' ')}`)).toEqual([]);
     expect(findUnwrappedText(`${xa.formatMoney('100', 'USD')} USD only`)).toEqual(['US$1.00 USD only']);
+    expect(findUnwrappedText(`⟦Ţóţáļ⟧ ${xa.formatMoney('1000', 'TOP', { display: 'code' })}`)).toEqual([]);
+  });
+
+  it('reports code-like text that is not formatted money', () => {
+    expect(findUnwrappedText('⟦Ţóţáļ⟧ TOP 10 ABC 5')).toEqual(['TOP 10 ABC 5']);
+    expect(findUnwrappedText('⟦Çóďé⟧ OTP 6')).toEqual(['OTP 6']);
+    expect(findUnwrappedText('⟦Çóďé⟧ PIN 4')).toEqual(['PIN 4']);
+    expect(findUnwrappedText('⟦Ţóţáļ⟧ JPY 1.50')).toEqual(['JPY 1.50']);
+    expect(findUnwrappedText('⟦Ţóţáļ⟧ KWD 1.234, CHF 2.50, JPY 100.')).toEqual([]);
   });
 });

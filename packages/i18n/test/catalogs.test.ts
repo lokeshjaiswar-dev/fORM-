@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { extract, extractFromSource, buildCatalogs } from '../scripts/extractor';
 import { EN_DATE_NAMES, EN_IN, SYSTEM_MESSAGES, createI18n } from '../src/index';
 import { SPEC_SYSTEM_MESSAGE_KEYS } from './system-message-keys';
@@ -34,8 +37,44 @@ describe('en-IN system catalogue', () => {
 });
 
 describe('i18n:extract', () => {
-  it('leaves the committed catalogues unchanged', () => {
-    expect(extract({ check: true })).toEqual({ errors: [], stale: [] });
+  const roots: string[] = [];
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+
+  function fixture(files: Record<string, string>): { root: string; catalogDir: string } {
+    const root = mkdtempSync(path.join(tmpdir(), 'i18n-extract-'));
+    roots.push(root);
+    for (const [name, text] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+      writeFileSync(path.join(root, name), text);
+    }
+    const catalogDir = path.join(root, 'catalogs');
+    mkdirSync(catalogDir);
+    return { root, catalogDir };
+  }
+
+  it('writes sorted catalogues from apps and packages sources, then reports them as current', () => {
+    const { root, catalogDir } = fixture({
+      'apps/web/src/a.tsx': `import { defineMessages as dm } from '@form/i18n';\nexport const m = dm('renderer', { b: 'B', a: 'A' });`,
+      'packages/x/src/b.ts': `import * as i18n from '@form/i18n';\nexport const m = i18n.defineMessages('builder', { save: 'Save' });`,
+      'packages/x/src/b.test.ts': `defineMessages('builder', { ignored: 'Ignored' });`,
+      'packages/x/src/plain.ts': `export const x = 1;`,
+    });
+    const read = (ns: string) => JSON.parse(readFileSync(path.join(catalogDir, `${ns}.json`), 'utf8')) as unknown;
+    expect(extract({ root, catalogDir, check: true }).stale).toHaveLength(3);
+    expect(extract({ root, catalogDir }).errors).toEqual([]);
+    expect(Object.entries(read('renderer') as object)).toEqual([['a', 'A'], ['b', 'B']]);
+    expect(read('builder')).toEqual({ save: 'Save' });
+    expect(read('system')).toEqual({});
+    expect(extract({ root, catalogDir, check: true })).toEqual({ errors: [], stale: [] });
+  });
+
+  it('reports errors without writing anything', () => {
+    const { root, catalogDir } = fixture({ 'packages/x/src/a.ts': `defineMessages('builder', { when: '{d, date}' });` });
+    const { errors, stale } = extract({ root, catalogDir });
+    expect(errors).toEqual([expect.stringMatching(/^packages\/x\/src\/a\.ts:1:29: builder:when is not valid ICU/)]);
+    expect(stale).toEqual([]);
   });
 
   it('reads literal defineMessages calls', () => {
@@ -64,6 +103,26 @@ describe('i18n:extract', () => {
     expect(errors[0]).toMatch(/^b\.ts:1:1: the namespace/);
   });
 
+  it('reads imported aliases and member calls, and rejects indirect references', () => {
+    const { messages, errors } = extractFromSource(
+      'c.ts',
+      [
+        `import { defineMessages as dm } from '@form/i18n';`,
+        `import * as i18n from '@form/i18n';`,
+        `export { defineMessages } from '@form/i18n';`,
+        `dm('renderer', { a: 'A' });`,
+        `i18n.defineMessages('builder', { b: 'B' });`,
+        `const hidden = dm;`,
+        `const other = i18n.defineMessages;`,
+      ].join('\n'),
+    );
+    expect(messages.map(({ namespace, key }) => `${namespace}:${key}`)).toEqual(['renderer:a', 'builder:b']);
+    expect(errors).toEqual([
+      'c.ts:6:16: call dm directly so its messages can be extracted',
+      'c.ts:7:20: call defineMessages directly so its messages can be extracted',
+    ]);
+  });
+
   it('rejects conflicting duplicates and invalid ICU', () => {
     const at = (key: string, message: string, location: string) => ({ namespace: 'builder' as const, key, message, location });
     const { catalogs, errors } = buildCatalogs([
@@ -72,10 +131,17 @@ describe('i18n:extract', () => {
       at('save', 'Store', 'c.ts:1:1'),
       at('count', '{n, plural, one {# item}}', 'd.ts:1:1'),
       at('add', 'Add', 'e.ts:1:1'),
+      at('when', 'Due {d, date, short}', 'f.ts:1:1'),
+      at('at', 'At {t, time}', 'g.ts:1:1'),
+      at('pct', '{p, number, percent}', 'h.ts:1:1'),
+      at('total', 'Total {n, number}', 'i.ts:1:1'),
     ]);
-    expect(errors).toHaveLength(2);
+    expect(errors).toHaveLength(5);
     expect(errors[0]).toContain('builder:save is already defined differently at a.ts:1:1');
     expect(errors[1]).toContain('builder:count is not valid ICU MessageFormat');
-    expect(Object.keys(catalogs.builder)).toEqual(['add', 'save']);
+    expect(errors[2]).toContain('{d, date}: date and time arguments are not supported');
+    expect(errors[3]).toContain('{t, time}: date and time arguments are not supported');
+    expect(errors[4]).toContain('{p, number, …}: number styles and skeletons are not supported');
+    expect(Object.keys(catalogs.builder)).toEqual(['add', 'save', 'total']);
   });
 });
