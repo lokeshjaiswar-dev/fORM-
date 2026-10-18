@@ -27,6 +27,9 @@ const ALLOWED = {
   testkit: ['ports', 'schema', 'db'],
 };
 
+/** Packages whose tests may also read a sibling's constants (ADR-0002 §6: i18n checks the schema's SYSTEM_MESSAGE_KEYS). */
+const TEST_ALLOWED = { i18n: ['schema'] };
+
 /** Test files, and helpers in a test/ directory (global setup, harnesses), may also use @form/testkit; nothing else may. */
 const TESTS = '(\\.test(-d)?\\.tsx?|/test/.+\\.tsx?)$';
 
@@ -151,7 +154,7 @@ module.exports = {
       name: `layer-${name}-tests`,
       severity: 'error',
       from: { path: `^packages/${name}/.*${TESTS}` },
-      to: { path: '^packages/', pathNot: only([name, ...allowed, 'testkit']) },
+      to: { path: '^packages/', pathNot: only([name, ...allowed, ...(TEST_ALLOWED[name] ?? []), 'testkit']) },
     })),
     ...Object.entries(APPS).map(([name, allowed]) => ({
       name: `layer-app-${name}`,

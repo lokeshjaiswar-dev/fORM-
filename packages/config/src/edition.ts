@@ -1,26 +1,9 @@
 import { CAPTCHA_PROVIDERS, THIRD_PARTY_CAPTCHA_PROVIDERS, type ThirdPartyCaptchaProvider } from '@form/ports';
+import { INTEGRATION_PROVIDERS, type FeatureId, type IntegrationProvider } from '@form/schema';
 import { z } from 'zod';
 
 export const DEPLOYMENT_MODES = ['saas', 'onprem'] as const;
 export const EGRESS_POLICIES = ['open', 'allowlist', 'none'] as const;
-/** Stand-in for `IntegrationConfig['provider']` from @form/schema until WP-0.04 lands. */
-export const INTEGRATION_PROVIDERS = [
-  'google_sheets',
-  'google_drive',
-  'dropbox',
-  'onedrive',
-  'slack',
-  'teams',
-  'mailchimp',
-  'hubspot',
-  'salesforce',
-  'zoho_crm',
-  'zapier',
-  'make',
-  'n8n',
-  'google_calendar',
-  'outlook_calendar',
-] as const;
 export const PAYMENT_GATEWAYS = ['stripe', 'razorpay'] as const;
 export const GUARDIAN_VERIFIER_DRIVERS = ['existing_account', 'manual_review', 'digilocker'] as const;
 /** `form.analytics` providers (schema §1270); each loads a third-party script and needs egress. */
@@ -28,12 +11,11 @@ export const THIRD_PARTY_ANALYTICS = ['ga4', 'gtm', 'meta_pixel'] as const;
 
 export type DeploymentMode = (typeof DEPLOYMENT_MODES)[number];
 export type EgressPolicy = (typeof EGRESS_POLICIES)[number];
-export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 export type PaymentGateway = (typeof PAYMENT_GATEWAYS)[number];
 export type GuardianVerifierDriver = (typeof GUARDIAN_VERIFIER_DRIVERS)[number];
 export type ThirdPartyAnalytics = (typeof THIRD_PARTY_ANALYTICS)[number];
-/** Stand-in for `FeatureId` from @form/schema: `field:payment`, `integration:google_sheets`, … */
-export type FeatureId = `${'field' | 'integration' | 'capability' | 'plan'}:${string}`;
+export { INTEGRATION_PROVIDERS };
+export type { FeatureId, IntegrationProvider };
 
 const HOST = /^(?=.{1,253}(?::\d{1,5})?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*(?::(\d{1,5}))?$/;
 

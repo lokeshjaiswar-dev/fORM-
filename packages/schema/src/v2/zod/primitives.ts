@@ -81,7 +81,13 @@ export const isDecimalString = (v: string): boolean => {
   return v.replace(/[-.]/g, '').replace(/^0+/, '').length <= 34;
 };
 export const DecimalStringSchema = branded<DecimalString>('DecimalString', isDecimalString);
-export const MinorUnitsSchema = branded<MinorUnits>('MinorUnits', (v) => /^(0|-?[1-9]\d{0,19})$/.test(v));
+/** Integer that fits a Postgres bigint: −9223372036854775808 … 9223372036854775807. */
+export const isMinorUnits = (v: string): boolean => {
+  if (!/^(0|-?[1-9]\d{0,18})$/.test(v)) return false;
+  const digits = v.startsWith('-') ? v.slice(1) : v;
+  return digits.length < 19 || digits <= (v.startsWith('-') ? '9223372036854775808' : '9223372036854775807');
+};
+export const MinorUnitsSchema = branded<MinorUnits>('MinorUnits', isMinorUnits);
 
 const daysInMonth = (y: number, m: number): number => (m === 2 ? ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28) : [4, 6, 9, 11].includes(m) ? 30 : 31);
 const validDate = (v: string): boolean => {
@@ -119,7 +125,7 @@ export const TextAlignSchema = z.enum(['left', 'center', 'right']);
 
 export const ExtensionsSchema = keyed(z.record(z.templateLiteral(['x-', z.string()]), z.unknown())).readonly();
 
-export const AssetRefSchema = z.object({
+export const AssetRefSchema = z.strictObject({
   assetId: AssetIdSchema,
   alt: z.string().max(1000).exactOptional(),
   decorative: z.boolean().exactOptional(),
@@ -136,9 +142,9 @@ export const BRAND_TOKENS = [
   'logo', 'logo_dark', 'logo_square', 'favicon', 'font_heading', 'font_body', 'radius',
 ] as const satisfies readonly BrandToken[];
 export const BrandTokenSchema = z.enum(BRAND_TOKENS);
-export const BrandRefSchema = z.object({ ref: z.templateLiteral(['brand.', BrandTokenSchema]) });
+export const BrandRefSchema = z.strictObject({ ref: z.templateLiteral(['brand.', BrandTokenSchema]) });
 
-export const OriginSchema = z.object({
+export const OriginSchema = z.strictObject({
   bindingId: TemplateBindingIdSchema,
   sourceId: z.string().min(1).max(128),
 });

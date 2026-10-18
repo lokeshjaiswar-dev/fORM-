@@ -22,10 +22,10 @@ services:
       timeout: 3s
       retries: 30
 
-  # S3 API for development and CI only (architecture §6, D14). MinIO no longer publishes images, so SeaweedFS
-  # (Apache-2.0) stands in; nothing here is bundled on-prem.
+  # S3 API for development and CI only (architecture §7.2, ADR-0002 §5): SeaweedFS (Apache-2.0) replaces MinIO.
+  # Nothing here is bundled on-prem; that is decision D14.
   objectstore:
-    image: chrislusf/seaweedfs:latest@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     command: server -s3 -dir=/data -master.volumeSizeLimitMB=1024
     ports:
       - 127.0.0.1:${FR_S3_PORT:-8333}:8333

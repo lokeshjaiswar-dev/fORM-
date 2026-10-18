@@ -10,7 +10,7 @@ import type { BrandKit, FormTemplateBinding, FormTemplatePayload, InsertSnippetR
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §19  PACKAGE ENTRY POINTS (pure unless noted)
- *      Signatures only; implemented in logic, validation, templates-core and schema/migrate.
+ *      Signatures only, as function types (ADR-0002 §1); implemented in logic, validation, templates-core and schema/migrate.
  * ═════════════════════════════════════════════════════════════════════════ */
 
 export interface EvalMeta {

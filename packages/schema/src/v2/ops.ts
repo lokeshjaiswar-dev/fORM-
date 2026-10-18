@@ -74,9 +74,16 @@ export interface WebhookConfig {   // INT-01
   filter?: ConditionGroup;
 }
 
+/** Every one needs egress; @form/config gates them per edition (`integration:<provider>`, INTEGRATIONS_ENABLED). */
+export const INTEGRATION_PROVIDERS = [
+  'google_sheets', 'google_drive', 'dropbox', 'onedrive', 'slack', 'teams', 'mailchimp', 'hubspot', 'salesforce', 'zoho_crm', 'zapier', 'make',
+  'n8n', 'google_calendar', 'outlook_calendar',
+] as const;
+export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
+
 export interface IntegrationBinding {
   id: IntegrationId;
-  provider: 'google_sheets' | 'google_drive' | 'dropbox' | 'onedrive' | 'slack' | 'teams' | 'mailchimp' | 'hubspot' | 'salesforce' | 'zoho_crm' | 'zapier' | 'make' | 'n8n' | 'google_calendar' | 'outlook_calendar';
+  provider: IntegrationProvider;
   connectionId: ConnectionId;
   settings: Readonly<Record<string, unknown>>;   // provider zod schema
   fieldMap: Array<{ from: FieldKey | `variable:${string}` | `meta:${string}`; to: string }>;

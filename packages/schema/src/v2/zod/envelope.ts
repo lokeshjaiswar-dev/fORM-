@@ -5,13 +5,13 @@ import { FieldComplianceSchema } from './compliance.ts';
 import { BlockIdSchema, ExtensionsSchema, FieldKeySchema, OriginSchema } from './primitives.ts';
 import { ColorValueSchema, InlineDocSchema, RichDocSchema } from './rich-text.ts';
 
-export const BlockLayoutSchema = z.object({
+export const BlockLayoutSchema = z.strictObject({
   width: z.enum(['full', 'half', 'third', 'two_thirds']),
   startNewRow: z.boolean().exactOptional(),
   labelAlign: z.enum(['top', 'left', 'right']).exactOptional(),
 });
 
-export const BlockStyleSchema = z.object({
+export const BlockStyleSchema = z.strictObject({
   labelColor: ColorValueSchema.exactOptional(),
   inputTextColor: ColorValueSchema.exactOptional(),
   inputBg: ColorValueSchema.exactOptional(),
@@ -25,8 +25,8 @@ export const BlockStyleSchema = z.object({
 
 export const ValidationErrorCodeSchema = z.enum(VALIDATION_ERROR_CODES);
 export const FieldMessagesSchema = keyed(z.partialRecord(ValidationErrorCodeSchema, z.string().max(1000)));
-export const PrefillConfigSchema = z.object({ urlParam: z.string().min(1).max(64).exactOptional(), lockWhenPrefilled: z.boolean().exactOptional() });
-export const UniqueConstraintSchema = z.object({ normalize: z.enum(['exact', 'trim_lower', 'e164', 'digits']), message: z.string().max(1000).exactOptional() });
+export const PrefillConfigSchema = z.strictObject({ urlParam: z.string().min(1).max(64).exactOptional(), lockWhenPrefilled: z.boolean().exactOptional() });
+export const UniqueConstraintSchema = z.strictObject({ normalize: z.enum(['exact', 'trim_lower', 'e164', 'digits']), message: z.string().max(1000).exactOptional() });
 
 /** Shape of BlockBase<T>. */
 export const blockBase = <T extends string>(type: T) => ({

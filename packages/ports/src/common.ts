@@ -1,14 +1,9 @@
-/**
- * Stand-ins for @form/schema types until WP-0.04 lands; switch these to re-exports from @form/schema then.
- * They are branded as schema v2 brands them, so code written against them keeps compiling after the switch.
- */
-declare const __brand: unique symbol;
-type Brand<T, B extends string> = T & { readonly [__brand]: B };
-/** ISO 3166-1 alpha-2, e.g. 'IN'. */
-export type CountryCode = Brand<string, 'CountryCode'>;
-/** RFC 3339 instant in UTC, e.g. '2027-01-31T10:00:00.000Z'. */
-export type IsoInstant = Brand<string, 'IsoInstant'>;
+import type { IsoInstant } from '@form/schema';
 
+/** The schema v2 brands (ISO 3166-1 alpha-2; RFC 3339 instant in UTC), so port data is schema data. */
+export type { CountryCode, IsoInstant } from '@form/schema';
+
+/** `Date#toISOString` always yields an `IsoInstant`; it lives here because the pure schema package never touches `Date`. */
 export const toIsoInstant = (d: Date): IsoInstant => d.toISOString() as IsoInstant;
 
 /**

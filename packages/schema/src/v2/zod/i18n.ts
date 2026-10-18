@@ -7,7 +7,7 @@ import { InlineDocSchema, PlainTemplateSchema, RichDocSchema } from './rich-text
 const TEXT_KEY_SCOPES = ['form', 'welcome', 'page', 'block', 'option', 'mrow', 'mcol', 'product', 'purpose', 'consent', 'ending', 'rule', 'behavior', 'tplvar'] as const;
 export const TextKeySchema = z.templateLiteral([z.enum(TEXT_KEY_SCOPES), ':', z.string()]);
 
-export const TranslationEntrySchema = z.object({
+export const TranslationEntrySchema = z.strictObject({
   value: z.union([z.string(), InlineDocSchema, RichDocSchema, PlainTemplateSchema]),
   sourceHash: Sha256HexSchema,
   origin: z.enum(['human', 'machine', 'import', 'template']),
@@ -15,9 +15,9 @@ export const TranslationEntrySchema = z.object({
 
 export const SystemMessageKeySchema = z.enum(SYSTEM_MESSAGE_KEYS);
 
-export const I18nBundleSchema = z.object({
+export const I18nBundleSchema = z.strictObject({
   defaultLocale: LocaleSchema,
-  locales: z.array(z.object({ locale: LocaleSchema, direction: z.enum(['ltr', 'rtl']) })).min(1),
+  locales: z.array(z.strictObject({ locale: LocaleSchema, direction: z.enum(['ltr', 'rtl']) })).min(1),
   detect: z.array(z.enum(['url_param', 'browser', 'embed_attr'])),
   urlParam: z.string().min(1).max(32),
   switcher: z.enum(['none', 'dropdown']),

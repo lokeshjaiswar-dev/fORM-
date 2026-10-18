@@ -13,11 +13,11 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/db` | `@form/db` | Drizzle tables, SQL migrations, roles (`fr_migrator`, `fr_app`, `fr_template_seeder`, `fr_system_agg`), null-safe RLS helpers, `withTenant()`, definer functions, RLS meta-checks |
 | `packages/observability` | `@form/observability` | pino logger with redaction, URL and query scrubbing, NTP clock check, OpenTelemetry (OTLP only when configured) |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
-| `packages/registry` | `@form/registry` | Field registry (`REGISTRY: FieldRegistry`): config and answer schemas, operators, paths, compliance defaults, export columns and lint for every block type |
-| `packages/schema` | `@form/schema` | Form schema v2 types, zod twins, v1 reader, structural validation, JCS hashing, rich-text AST tools (`fromHtml` allowlist, `normalize`, `toPlain`) |
+| `packages/schema` | `@form/schema` | Form schema v2 types, strict zod twins, v1 reader, structural validation, JCS hashing, rich-text AST tools (`fromHtml` allowlist, `normalize`, `toPlain`) |
+| `packages/registry` | `@form/registry` | Field registry (`REGISTRY: FieldRegistry`): config and answer schemas, operators, paths, compliance defaults, export columns and lint for every block type; `answerScalar` |
 | `packages/renderer` | `@form/renderer` | React rendering of form content; today `RichTextView` (rich-text AST → React elements) |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
-| `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; no dependencies |
+| `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; depends only on `@form/schema` (its brands) |
 | `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |

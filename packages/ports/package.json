@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage"
   },
+  "dependencies": {
+    "@form/schema": "workspace:*"
+  },
   "devDependencies": {
     "@form/tsconfig": "workspace:*",
     "@vitest/coverage-v8": "catalog:",

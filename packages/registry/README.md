@@ -19,10 +19,10 @@ The field registry (FND-03, `docs/platform/02-form-schema-v2.md` §7): one `Fiel
 - **Answer issues carry a `ValidationErrorCode`** as the zod message and in `params.code`; `@form/validation` maps the twin's own issues. Regex patterns, presets, masks, relative date bounds, age and uniqueness are not checked here (they need re2js, `meta.today` or the server).
 - **Unanswered is absent (I9).** `isEmpty` is true exactly for the values the answer twin rejects as empty; ratings, scales and NPS have no empty value, so 0 is a real NPS answer (B7) and a ranking exists only once ranked (B8).
 - **One answer shape per type** whatever the display (B25). Rating `max` is 1–10 (B28). A required field that starts disabled, or is read-only without a value source, is a lint error (B27).
-- **Option scalars are unbound.** `toScalar(value, path)` has no block, so options carry `blockId: ''`; use `answerScalar(block, value, path)` or `bindScalar`.
+- **`answerScalar(block, value, path)` is the one scalar contract** (ADR-0002 §2): logic, validation and templates read answers through it. The per-type `toScalar(value, path)` behind it has no block, so its option scalars carry `blockId: ''` until `answerScalar` (or `bindScalar`) binds them; nothing else calls it, and it gets no block parameter.
 - **Every `defaultConfig` parses** except the types in `DRAFT_DEFAULT_CONFIG_TYPES` (`repeating_group`: its children are blocks the builder inserts, and the schema needs at least one). Code that builds and validates defaults generically (migration, template checks) skips them.
 - **Lint severities are publish severities.** Callers that validate drafts downgrade them.
-- Stub capabilities without a named `Capability` use `x-field:<type>`.
+- Stub capabilities without a named `Capability` use `x-field:<type>`. The stub conventions (`defineStub` for value types, `defineStubBlock` for plain blocks, `x-field:<type>`, `DRAFT_DEFAULT_CONFIG_TYPES`) are in the schema spec §2.2; WP-0.07's `compile()` treats `missing_capability` as fatal.
 
 ```sh
 pnpm --filter @form/registry typecheck

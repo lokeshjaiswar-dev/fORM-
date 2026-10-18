@@ -51,6 +51,7 @@ describe('parseV1', () => {
       { path: '/blocks/1/type', reason: 'unknown_type' },
       { path: '/blocks/2/id', reason: 'missing_id' },
       { path: '/blocks/3/id', reason: 'duplicate_id' },
+      { path: '/blocks/4/options/0/value', reason: 'defaulted' },
       { path: '/blocks/4/options/1', reason: 'invalid_value' },
       { path: '/blocks/4/validation/min', reason: 'invalid_value' },
       { path: '/blocks/4/logic/operator', reason: 'invalid_value' },
@@ -61,7 +62,7 @@ describe('parseV1', () => {
     expect(V1.V1ParseResultSchema.safeParse(result).success).toBe(true);
   });
 
-  it('reports every unknown key it drops', () => {
+  it('reports every unknown key it drops and every option value it fills in', () => {
     const result = parseV1(JSON.parse(JSON.stringify({
       id: 'f', title: 't', description: '', theme: 'dark',
       blocks: [{
@@ -77,6 +78,7 @@ describe('parseV1', () => {
       { path: '/theme', reason: 'unknown_key' },
       { path: '/blocks/0/a~1b', reason: 'unknown_key' },
       { path: '/blocks/0/options/0/color', reason: 'unknown_key' },
+      { path: '/blocks/0/options/0/value', reason: 'defaulted' },
       { path: '/blocks/0/validation/minLength', reason: 'unknown_key' },
       { path: '/blocks/0/logic/extra', reason: 'unknown_key' },
       { path: '/settings/legacy', reason: 'unknown_key' },

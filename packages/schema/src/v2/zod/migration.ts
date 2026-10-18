@@ -9,7 +9,7 @@ import { HolidayCalendarIdSchema, IsoDateSchema, IsoInstantSchema, LocaleSchema,
 
 export const AnyFormDocumentSchema = z.union([FormDefinitionSchema, V1FormSchemaSchema]);
 
-export const MigrationNoteSchema = z.object({
+export const MigrationNoteSchema = z.strictObject({
   path: z.string(),
   code: z.enum([
     'html_sanitised', 'logic_value_unmatched', 'logic_operator_changed', 'logic_rule_disabled', 'dangling_logic_source',
@@ -20,17 +20,17 @@ export const MigrationNoteSchema = z.object({
   detail: z.string(),
 });
 
-export const V1MigrationResultSchema = z.object({
+export const V1MigrationResultSchema = z.strictObject({
   definition: FormDefinitionSchema,
   ops: FormOpsSchema.pick({ access: true, retention: true }),
   plaintextPasswordToHash: z.string().exactOptional(),
-  assetImports: z.array(z.object({ target: z.enum(['logo', 'cover']), url: z.string() })),
+  assetImports: z.array(z.strictObject({ target: z.enum(['logo', 'cover']), url: z.string() })),
   notes: z.array(MigrationNoteSchema),
 });
 
 /* §19 */
 
-export const EvalMetaSchema = z.object({
+export const EvalMetaSchema = z.strictObject({
   now: IsoInstantSchema,
   timeZone: TimeZoneSchema,
   locale: LocaleSchema,

@@ -17,6 +17,7 @@
     "unicode-segmenter": "0.17.3"
   },
   "devDependencies": {
+    "@form/schema": "workspace:*",
     "@form/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",

@@ -1,10 +1,10 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { SYSTEM_MESSAGE_KEYS } from '@form/schema';
 import { afterEach, describe, expect, it } from 'vitest';
 import { extract, extractFromSource, buildCatalogs } from '../scripts/extractor';
 import { EN_DATE_NAMES, EN_IN, SYSTEM_MESSAGES, createI18n } from '../src/index';
-import { SPEC_SYSTEM_MESSAGE_KEYS } from './system-message-keys';
 
 const DATE_NAME_KEYS = [
   ...EN_DATE_NAMES.monthsShort.map((_, i) => `date.month_short.${i + 1}`),
@@ -17,11 +17,11 @@ describe('en-IN system catalogue', () => {
   const system = EN_IN.system ?? {};
 
   it('has a message for every SYSTEM_MESSAGE_KEYS entry', () => {
-    expect(createI18n('en-IN', EN_IN).missing('system', SPEC_SYSTEM_MESSAGE_KEYS)).toEqual([]);
+    expect(createI18n('en-IN', EN_IN).missing('system', SYSTEM_MESSAGE_KEYS)).toEqual([]);
   });
 
   it('contains only system message keys and date names', () => {
-    const allowed = new Set<string>([...SPEC_SYSTEM_MESSAGE_KEYS, ...DATE_NAME_KEYS]);
+    const allowed = new Set<string>([...SYSTEM_MESSAGE_KEYS, ...DATE_NAME_KEYS]);
     expect(Object.keys(system).filter((key) => !allowed.has(key))).toEqual([]);
   });
 

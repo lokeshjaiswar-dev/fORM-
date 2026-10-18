@@ -16,13 +16,13 @@ const device = z.enum(['desktop', 'tablet', 'mobile']);
 const gateway = z.enum(['stripe', 'razorpay']);
 const storedAnswers = keyed(z.partialRecord(BlockIdSchema, StoredAnswerSchema));
 
-export const SubmissionRequestSchema = z.object({
+export const SubmissionRequestSchema = z.strictObject({
   formVersionId: FormVersionIdSchema,
   idempotencyKey: z.string().min(1).max(64),
   locale: LocaleSchema,
   answers: AnswersSchema,
   pageTrail: z.array(PageIdSchema),
-  client: z.object({
+  client: z.strictObject({
     startedAt: IsoInstantSchema,
     timeZone: TimeZoneSchema.exactOptional(),
     embedOrigin: z.string().max(2048).exactOptional(),
@@ -31,13 +31,13 @@ export const SubmissionRequestSchema = z.object({
     referrer: z.string().max(2048).exactOptional(),
     device: device.exactOptional(),
   }),
-  verification: z.object({
+  verification: z.strictObject({
     honeypot: z.literal(''),
     captchaToken: z.string().exactOptional(),
     powSolution: z.string().exactOptional(),
     emailOtp: keyed(z.partialRecord(BlockIdSchema, z.string())).exactOptional(),
   }),
-  tokens: z.object({
+  tokens: z.strictObject({
     access: z.string().exactOptional(),
     resume: z.string().exactOptional(),
     prefill: z.string().exactOptional(),
@@ -45,7 +45,7 @@ export const SubmissionRequestSchema = z.object({
   }).exactOptional(),
 });
 
-export const DraftSaveRequestSchema = z.object({
+export const DraftSaveRequestSchema = z.strictObject({
   formVersionId: FormVersionIdSchema,
   answers: AnswersSchema,
   currentPageId: PageIdSchema,
@@ -53,7 +53,7 @@ export const DraftSaveRequestSchema = z.object({
   sendLinkTo: EmailAddressSchema.exactOptional(),
 });
 
-export const FieldErrorSchema = z.object({
+export const FieldErrorSchema = z.strictObject({
   blockId: BlockIdSchema.exactOptional(),
   path: AnswerPathSchema.exactOptional(),
   rowId: GroupRowIdSchema.exactOptional(),
@@ -63,7 +63,7 @@ export const FieldErrorSchema = z.object({
 });
 
 export const SubmitResultSchema = z.discriminatedUnion('ok', [
-  z.object({
+  z.strictObject({
     ok: z.literal(true),
     submissionId: SubmissionIdSchema,
     endingId: EndingIdSchema,
@@ -74,18 +74,18 @@ export const SubmitResultSchema = z.discriminatedUnion('ok', [
     held: z.enum(['pending_guardian_consent', 'pending_scan']).exactOptional(),
   }),
   z.discriminatedUnion('kind', [
-    z.object({ ok: z.literal(false), kind: z.literal('invalid'), status: z.literal(422), errors: z.array(FieldErrorSchema) }),
-    z.object({
+    z.strictObject({ ok: z.literal(false), kind: z.literal('invalid'), status: z.literal(422), errors: z.array(FieldErrorSchema) }),
+    z.strictObject({
       ok: z.literal(false),
       kind: z.literal('payment_required'),
       submissionId: SubmissionIdSchema,
-      checkout: z.object({ gateway, clientSecretOrOrderId: z.string(), amount: MinorUnitsSchema, currency: CurrencyCodeSchema }),
+      checkout: z.strictObject({ gateway, clientSecretOrOrderId: z.string(), amount: MinorUnitsSchema, currency: CurrencyCodeSchema }),
     }),
-    z.object({ ok: z.literal(false), kind: z.enum(['closed', 'limit_reached', 'version_superseded', 'rate_limited', 'spam_rejected', 'amount_changed']) }),
+    z.strictObject({ ok: z.literal(false), kind: z.enum(['closed', 'limit_reached', 'version_superseded', 'rate_limited', 'spam_rejected', 'amount_changed']) }),
   ]),
 ]);
 
-export const ConsentRecordSchema = z.object({
+export const ConsentRecordSchema = z.strictObject({
   submissionId: SubmissionIdSchema,
   blockId: BlockIdSchema,
   itemId: ConsentItemIdSchema,
@@ -98,7 +98,7 @@ export const ConsentRecordSchema = z.object({
   at: IsoInstantSchema,
   source: z.enum(['form', 'withdrawal_link', 'owner_ui', 'api', 'dsr', 'import', 'consent_manager']),
   subject: z.enum(['self', 'child', 'person_with_disability']).exactOptional(),
-  vpc: z.object({
+  vpc: z.strictObject({
     method: GuardianVerificationMethodSchema,
     evidenceRef: z.string().min(1),
     verifiedAt: IsoInstantSchema,
@@ -106,10 +106,10 @@ export const ConsentRecordSchema = z.object({
   }).exactOptional(),
 });
 
-export const DisclosureSchema = z.object({
+export const DisclosureSchema = z.strictObject({
   submissionId: SubmissionIdSchema,
   orgId: OrgIdSchema,
-  recipient: z.object({
+  recipient: z.strictObject({
     kind: z.enum(['notification', 'webhook', 'integration', 'export', 'workflow', 'api_key']),
     id: z.string().min(1),
     displayName: z.string(),
@@ -118,13 +118,13 @@ export const DisclosureSchema = z.object({
   at: IsoInstantSchema,
 });
 
-export const PaymentRecordSchema = z.object({
+export const PaymentRecordSchema = z.strictObject({
   gateway,
   reference: z.string().min(1),
   status: z.enum(['pending', 'authorised', 'paid', 'failed', 'refunded', 'partially_refunded']),
   currency: CurrencyCodeSchema,
-  totals: z.object({ subtotal: MinorUnitsSchema, discount: MinorUnitsSchema, tax: MinorUnitsSchema, shipping: MinorUnitsSchema, total: MinorUnitsSchema }),
-  taxBreakdown: z.array(z.object({ kind: z.enum(['CGST', 'SGST', 'IGST', 'VAT', 'TAX']), ratePct: DecimalStringSchema, amount: MinorUnitsSchema })).exactOptional(),
+  totals: z.strictObject({ subtotal: MinorUnitsSchema, discount: MinorUnitsSchema, tax: MinorUnitsSchema, shipping: MinorUnitsSchema, total: MinorUnitsSchema }),
+  taxBreakdown: z.array(z.strictObject({ kind: z.enum(['CGST', 'SGST', 'IGST', 'VAT', 'TAX']), ratePct: DecimalStringSchema, amount: MinorUnitsSchema })).exactOptional(),
   couponCode: z.string().exactOptional(),
   invoiceNumber: z.string().exactOptional(),
   subscriptionRef: z.string().exactOptional(),
@@ -132,7 +132,7 @@ export const PaymentRecordSchema = z.object({
 
 export const SubmissionStatusSchema = z.enum(['complete', 'pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'spam', 'archived', 'trashed']);
 
-export const StoredSubmissionSchema = z.object({
+export const StoredSubmissionSchema = z.strictObject({
   id: SubmissionIdSchema,
   orgId: OrgIdSchema,
   formId: FormIdSchema,
@@ -142,7 +142,7 @@ export const StoredSubmissionSchema = z.object({
   seq: z.number().int().min(1),
   status: SubmissionStatusSchema,
   answers: storedAnswers,
-  computed: z.object({
+  computed: z.strictObject({
     variables: keyed(z.partialRecord(VariableIdSchema, z.union([ScalarValueSchema, EncryptedScalarSchema]))),
     path: z.array(PageIdSchema),
     endingId: EndingIdSchema,
@@ -150,7 +150,7 @@ export const StoredSubmissionSchema = z.object({
   }),
   consents: z.array(ConsentRecordSchema),
   payment: PaymentRecordSchema.exactOptional(),
-  meta: z.object({
+  meta: z.strictObject({
     receivedAt: IsoInstantSchema,
     startedAt: IsoInstantSchema.exactOptional(),
     durationMs: z.number().int().min(0).exactOptional(),
@@ -165,7 +165,7 @@ export const StoredSubmissionSchema = z.object({
     spamScore: z.number().exactOptional(),
     opsRev: z.number().int().min(0),
   }),
-  retention: z.object({
+  retention: z.strictObject({
     deleteAfter: IsoInstantSchema,
     statutoryHoldUntil: IsoInstantSchema.exactOptional(),
     fieldDeleteAfter: keyed(z.partialRecord(BlockIdSchema, IsoInstantSchema)).exactOptional(),
@@ -173,7 +173,7 @@ export const StoredSubmissionSchema = z.object({
   }),
   workflowState: z.string().exactOptional(),
   statusLabel: z.string().exactOptional(),
-  inbox: z.object({
+  inbox: z.strictObject({
     read: z.boolean(),
     starred: z.boolean(),
     tags: z.array(z.string()),
@@ -186,20 +186,20 @@ export const StoredSubmissionSchema = z.object({
   updatedAt: IsoInstantSchema,
 });
 
-export const SubmissionRevisionSchema = z.object({
+export const SubmissionRevisionSchema = z.strictObject({
   submissionId: SubmissionIdSchema,
   revision: z.number().int().min(0),
   by: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('respondent') }),
-    z.object({ kind: z.literal('user'), userId: UserIdSchema }),
-    z.object({ kind: z.literal('system'), job: z.string().min(1) }),
+    z.strictObject({ kind: z.literal('respondent') }),
+    z.strictObject({ kind: z.literal('user'), userId: UserIdSchema }),
+    z.strictObject({ kind: z.literal('system'), job: z.string().min(1) }),
   ]),
   mode: z.enum(['inline_edit_no_side_effects', 'resubmit_with_side_effects']),
-  changed: z.array(z.object({ blockId: BlockIdSchema, before: StoredAnswerSchema.exactOptional(), after: StoredAnswerSchema.exactOptional() })),
+  changed: z.array(z.strictObject({ blockId: BlockIdSchema, before: StoredAnswerSchema.exactOptional(), after: StoredAnswerSchema.exactOptional() })),
   at: IsoInstantSchema,
 });
 
-export const DraftSubmissionSchema = z.object({
+export const DraftSubmissionSchema = z.strictObject({
   id: SubmissionIdSchema,
   orgId: OrgIdSchema,
   formId: FormIdSchema,

@@ -14,8 +14,11 @@ This folder is the plan for turning fORM- (today a front-end-only form builder, 
 | [`04-delivery-plan.md`](04-delivery-plan.md) | Work packages with scope, dependencies, acceptance and size; critical paths; schedule; risks; traceability of all 306 rows; decisions with deadlines | You plan, staff or track the work |
 | [`05-review-log.md`](05-review-log.md) | Every review finding and how it was resolved | You want to know why something is the way it is |
 | [`06-templates.md`](06-templates.md) | The customizable templates spec: kinds, scopes, variables, brand kits, forks, updates, locks, gallery, packs | You work on templates, the gallery, brand kits or compliance snippets |
+| [`backlog.md`](backlog.md) | Open minor reviewer issues from merged work packages (`BL-001`…), each with a suggested fix and an owner WP | You start a WP (pick up its rows) or look for small fixes |
 
-**How to read them.** Start here, then the matrix summary (end of `01`) for scope. Engineers then read the schema §2–3 and architecture §0–2. Planners read the delivery plan §0–1 and §6. Anyone touching consent, retention or DSR should read architecture §8 and the review log §1. IDs are stable across documents: matrix rows (`FND-03`, `TPL-07`, `CMP-13`), work packages (`WP-0.07`, `WP-T1.4`), decisions (`D1`–`D20`), ADRs (`ADR-0001`–`ADR-0018`), review findings (`C-B1`, `F-24`).
+Decisions taken during delivery are ADRs in [`docs/adr/`](../adr/); ADR-0002 records the Phase 0 batch-2 decisions.
+
+**How to read them.** Start here, then the matrix summary (end of `01`) for scope. Engineers then read the schema §2–3 and architecture §0–2. Planners read the delivery plan §0–1 and §6. Anyone touching consent, retention or DSR should read architecture §8 and the review log §1. IDs are stable across documents: matrix rows (`FND-03`, `TPL-07`, `CMP-13`), work packages (`WP-0.07`, `WP-T1.4`), decisions (`D1`–`D20`), ADRs (`ADR-0001`–`ADR-0019`), review findings (`C-B1`, `F-24`), backlog items (`BL-001`).
 
 ---
 
@@ -60,7 +63,7 @@ WP-0.01 monorepo move → WP-0.16 cleanup → WP-0.02 tests and CI → WP-0.03 s
 3. **D15** Processor→Fiduciary breach SLA: preliminary within 24 h of awareness, or stricter (with counsel).
 4. **D18** Offer per-org KMS keys (real crypto-shredding) to top tiers before P3?
 5. **Staffing:** approve 6 → 8 engineers for P2, and the translation vendor and counsel budget in P1 (Hindi notices, 22 languages by P2 W4).
-6. **D14** Bundle an object store on-prem (SeaweedFS / Ceph RGW after licence review) or stay bring-your-own S3.
+6. **D14** Bundle an object store on-prem (SeaweedFS / Ceph RGW after licence review) or stay bring-your-own S3. (Dev and CI already use SeaweedFS instead of MinIO, ADR-0002 §5; that does not decide the bundle.)
 7. **D11** Keep optional template parts.
 8. **D20** Pursue DigiLocker for guardian verification (commercial terms).
 9. **D16 / D17** (with counsel) consent-record retention after erasure; statutory floor default and sectoral minimums.

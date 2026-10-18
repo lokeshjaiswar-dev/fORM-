@@ -31,21 +31,21 @@ export interface FormSchema { id: string; title: string; description: string; bl
 
 export const FieldTypeSchema = z.enum(FIELD_TYPES);
 export const LogicOperatorSchema = z.enum(LOGIC_OPERATORS);
-export const FormBlockSchema = z.object({
+export const FormBlockSchema = z.strictObject({
   id: z.string().min(1),
   type: FieldTypeSchema,
   label: z.string(),
   placeholder: z.string().exactOptional(),
   helpText: z.string().exactOptional(),
-  options: z.array(z.object({ id: z.string(), label: z.string(), value: z.string() })).exactOptional(),
-  validation: z.object({
+  options: z.array(z.strictObject({ id: z.string(), label: z.string(), value: z.string() })).exactOptional(),
+  validation: z.strictObject({
     required: z.boolean().exactOptional(),
     min: z.number().exactOptional(),
     max: z.number().exactOptional(),
     pattern: z.string().exactOptional(),
     errorMessage: z.string().exactOptional(),
   }).exactOptional(),
-  logic: z.object({
+  logic: z.strictObject({
     enabled: z.boolean().exactOptional(),
     action: z.enum(['show', 'hide']).exactOptional(),
     sourceBlockId: z.string().exactOptional(),
@@ -55,12 +55,12 @@ export const FormBlockSchema = z.object({
   customize: keyed(z.record(z.string(), z.unknown())).exactOptional(),
   order: z.number(),
 });
-export const FormSettingsSchema = z.object({
+export const FormSettingsSchema = z.strictObject({
   submitButtonText: z.string(), successMessage: z.string(), themeColor: z.string(), backgroundColor: z.string(), textColor: z.string(),
   accentColor: z.string(), font: z.string(), progressBar: z.boolean(), redirectUrl: z.string(), closed: z.boolean(), closedMessage: z.string(),
   password: z.string(), logoUrl: z.string(), coverUrl: z.string(), successAnimation: z.boolean(),
 });
-export const FormSchemaSchema = z.object({
+export const FormSchemaSchema = z.strictObject({
   id: z.string(),
   title: z.string(),
   description: z.string(),
@@ -92,13 +92,13 @@ export type V1ParseResult =
   | { success: true; data: FormSchema; repairs: V1Repair[] }
   | { success: false; error: string };
 
-export const V1RepairSchema = z.object({
+export const V1RepairSchema = z.strictObject({
   path: z.string(),
   reason: z.enum(['not_an_object', 'missing_id', 'duplicate_id', 'unknown_type', 'unknown_key', 'invalid_value', 'defaulted']),
 });
 export const V1ParseResultSchema = z.discriminatedUnion('success', [
-  z.object({ success: z.literal(true), data: FormSchemaSchema, repairs: z.array(V1RepairSchema) }),
-  z.object({ success: z.literal(false), error: z.string() }),
+  z.strictObject({ success: z.literal(true), data: FormSchemaSchema, repairs: z.array(V1RepairSchema) }),
+  z.strictObject({ success: z.literal(false), error: z.string() }),
 ]);
 
 type Rec = Record<string, unknown>;
@@ -165,6 +165,7 @@ function parseBlock(raw: unknown, index: number, repairs: V1Repair[]): FormBlock
         if (isRec(o) && typeof o['id'] === 'string' && typeof o['label'] === 'string') {
           unknownKeys(o, OPTION_KEYS, `${path}/options/${i}`, repairs);
           const value = typeof o['value'] === 'string' ? o['value'] : o['label'];
+          if (typeof o['value'] !== 'string') repairs.push({ path: `${path}/options/${i}/value`, reason: 'defaulted' });
           options.push({ id: o['id'], label: o['label'], value });
         } else {
           repairs.push({ path: `${path}/options/${i}`, reason: 'invalid_value' });
@@ -242,9 +243,11 @@ function parseSettings(raw: unknown, repairs: V1Repair[]): FormSettings {
 
 /**
  * Lenient reader for v1 documents (local saves, exports, the 5 built-in templates). Unknown
- * keys are dropped (reported as 'unknown_key'; `customize` is free-form and kept whole), wrong-typed optional values are removed, missing settings take the v1
- * defaults, and blocks without a string id or with an unknown type are skipped. Every repair
- * is reported; nothing is guessed silently.
+ * keys are dropped (reported as 'unknown_key'; `customize` is free-form and kept whole),
+ * wrong-typed optional values are removed, missing settings and option values take the v1
+ * defaults (an option's value is its label), and blocks without a string id or with an unknown
+ * type are skipped. Every repair is reported; nothing is guessed silently. This is the only
+ * lenient reader: the V1 and v2 twins reject unknown keys.
  */
 export function parseV1(input: unknown): V1ParseResult {
   if (!isRec(input)) return { success: false, error: 'v1 form must be an object' };

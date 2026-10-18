@@ -22,14 +22,14 @@ const textChrome = {
 };
 
 export const TextPresetSchema = z.enum(TEXT_PRESETS);
-export const SafePatternSchema = z.object({ source: z.string().min(1).max(256), flags: z.enum(['', 'i']).exactOptional() });
-export const InputMaskSchema = z.object({ pattern: z.string().min(1).max(64), storeMasked: z.boolean() });
+export const SafePatternSchema = z.strictObject({ source: z.string().min(1).max(256), flags: z.enum(['', 'i']).exactOptional() });
+export const InputMaskSchema = z.strictObject({ pattern: z.string().min(1).max(64), storeMasked: z.boolean() });
 export const DefaultTextSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('static'), value: z.string().max(10_000) }),
-  z.object({ kind: z.literal('template'), value: PlainTemplateSchema }),
+  z.strictObject({ kind: z.literal('static'), value: z.string().max(10_000) }),
+  z.strictObject({ kind: z.literal('template'), value: PlainTemplateSchema }),
 ]);
 
-export const ShortTextConfigSchema = z.object({
+export const ShortTextConfigSchema = z.strictObject({
   ...textChrome,
   defaultValue: DefaultTextSchema.exactOptional(),
   minLength: count.max(10_000).exactOptional(),
@@ -38,37 +38,37 @@ export const ShortTextConfigSchema = z.object({
   pattern: SafePatternSchema.exactOptional(),
   mask: InputMaskSchema.exactOptional(),
 });
-export const LongTextConfigSchema = z.object({
+export const LongTextConfigSchema = z.strictObject({
   placeholder: z.string().max(200).exactOptional(),
   defaultValue: DefaultTextSchema.exactOptional(),
   rows: z.number().int().min(1).max(50).exactOptional(),
-  limit: z.object({ unit: z.enum(['characters', 'words']), min: count.max(50_000).exactOptional(), max: count.max(50_000).exactOptional() }).exactOptional(),
+  limit: z.strictObject({ unit: z.enum(['characters', 'words']), min: count.max(50_000).exactOptional(), max: count.max(50_000).exactOptional() }).exactOptional(),
   showCounter: z.boolean().exactOptional(),
 });
 
 export const NamePartSchema = z.enum(NAME_PARTS);
-export const FullNameConfigSchema = z.object({
+export const FullNameConfigSchema = z.strictObject({
   parts: z.array(NamePartSchema).min(1),
   requiredParts: z.array(NamePartSchema),
   prefixInput: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('text') }),
-    z.object({ kind: z.literal('list'), options: z.array(label) }),
+    z.strictObject({ kind: z.literal('text') }),
+    z.strictObject({ kind: z.literal('list'), options: z.array(label) }),
   ]).exactOptional(),
   sublabels: keyed(z.partialRecord(NamePartSchema, label)).exactOptional(),
   placeholders: keyed(z.partialRecord(NamePartSchema, label)).exactOptional(),
 });
 
-export const EmailConfigSchema = z.object({
+export const EmailConfigSchema = z.strictObject({
   ...textChrome,
   defaultValue: DefaultTextSchema.exactOptional(),
   confirm: z.boolean().exactOptional(),
   blockFreeProviders: z.boolean().exactOptional(),
   blockDisposable: z.boolean().exactOptional(),
   allowedDomains: z.array(z.string().min(1).max(253)).exactOptional(),
-  verify: z.object({ enabled: z.boolean(), codeLength: z.literal([4, 6]), ttlMinutes: z.number().int().min(1).max(60) }).exactOptional(),
+  verify: z.strictObject({ enabled: z.boolean(), codeLength: z.literal([4, 6]), ttlMinutes: z.number().int().min(1).max(60) }).exactOptional(),
 });
 
-export const PhoneConfigSchema = z.object({
+export const PhoneConfigSchema = z.strictObject({
   placeholder: z.string().max(200).exactOptional(),
   defaultCountry: CountryCodeSchema,
   allowedCountries: z.array(CountryCodeSchema).exactOptional(),
@@ -77,16 +77,16 @@ export const PhoneConfigSchema = z.object({
 });
 
 export const AddressPartSchema = z.enum(ADDRESS_PARTS);
-export const AddressConfigSchema = z.object({
+export const AddressConfigSchema = z.strictObject({
   parts: z.array(AddressPartSchema).min(1),
   requiredParts: z.array(AddressPartSchema),
-  country: z.object({ mode: z.enum(['any', 'fixed', 'list']), default: CountryCodeSchema.exactOptional(), allowed: z.array(CountryCodeSchema).exactOptional() }),
+  country: z.strictObject({ mode: z.enum(['any', 'fixed', 'list']), default: CountryCodeSchema.exactOptional(), allowed: z.array(CountryCodeSchema).exactOptional() }),
   stateInput: z.enum(['auto', 'text']),
   validatePostalCode: z.boolean(),
   sublabels: keyed(z.partialRecord(AddressPartSchema, label)).exactOptional(),
 });
 
-export const NumberConfigSchema = z.object({
+export const NumberConfigSchema = z.strictObject({
   ...textChrome,
   display: z.enum(['input', 'stepper']),
   defaultValue: DecimalStringSchema.exactOptional(),
@@ -98,9 +98,9 @@ export const NumberConfigSchema = z.object({
   format: NumericValueFormatSchema.exactOptional(),
 });
 
-export const UrlConfigSchema = z.object({ ...textChrome, defaultValue: DefaultTextSchema.exactOptional(), schemes: z.array(z.enum(['https', 'http'])).min(1) });
+export const UrlConfigSchema = z.strictObject({ ...textChrome, defaultValue: DefaultTextSchema.exactOptional(), schemes: z.array(z.enum(['https', 'http'])).min(1) });
 
-export const ChoiceOptionSchema = z.object({
+export const ChoiceOptionSchema = z.strictObject({
   id: OptionIdSchema,
   label: LabelTextSchema,
   code: z.string().max(200).exactOptional(),
@@ -110,7 +110,7 @@ export const ChoiceOptionSchema = z.object({
   origin: OriginSchema.exactOptional(),
 });
 export const OptionPresetSchema = z.enum(OPTION_PRESETS);
-export const OtherOptionSchema = z.object({
+export const OtherOptionSchema = z.strictObject({
   enabled: z.boolean(),
   label: label.exactOptional(),
   placeholder: label.exactOptional(),
@@ -121,17 +121,17 @@ const choiceCommon = {
   options: z.array(ChoiceOptionSchema).min(1).max(5000),
   preset: OptionPresetSchema.exactOptional(),
   other: OtherOptionSchema.exactOptional(),
-  shuffle: z.union([z.literal(false), z.object({ keepLast: count })]).exactOptional(),
+  shuffle: z.union([z.literal(false), z.strictObject({ keepLast: count })]).exactOptional(),
   columns: z.literal([1, 2, 3, 4]).exactOptional(),
   searchable: z.boolean().exactOptional(),
   placeholder: label.exactOptional(),
 };
-export const SingleChoiceConfigSchema = z.object({
+export const SingleChoiceConfigSchema = z.strictObject({
   ...choiceCommon,
   display: z.enum(['radio', 'dropdown', 'image']),
   defaultOptionId: OptionIdSchema.exactOptional(),
 });
-export const MultiChoiceConfigSchema = z.object({
+export const MultiChoiceConfigSchema = z.strictObject({
   ...choiceCommon,
   display: z.enum(['checkbox', 'dropdown', 'image']),
   defaultOptionIds: z.array(OptionIdSchema).exactOptional(),
@@ -141,76 +141,76 @@ export const MultiChoiceConfigSchema = z.object({
 });
 
 export const DateBoundSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('absolute'), date: IsoDateSchema }),
-  z.object({ kind: z.literal('relative'), offset: z.number().int(), unit: z.enum(['day', 'week', 'month', 'year']) }),
-  z.object({ kind: z.literal('field'), blockId: BlockIdSchema, offsetDays: z.number().int().exactOptional() }),
+  z.strictObject({ kind: z.literal('absolute'), date: IsoDateSchema }),
+  z.strictObject({ kind: z.literal('relative'), offset: z.number().int(), unit: z.enum(['day', 'week', 'month', 'year']) }),
+  z.strictObject({ kind: z.literal('field'), blockId: BlockIdSchema, offsetDays: z.number().int().exactOptional() }),
 ]);
-const dateRange = z.object({ from: IsoDateSchema, to: IsoDateSchema });
-export const DateLimitsSchema = z.object({
+const dateRange = z.strictObject({ from: IsoDateSchema, to: IsoDateSchema });
+export const DateLimitsSchema = z.strictObject({
   min: DateBoundSchema.exactOptional(),
   max: DateBoundSchema.exactOptional(),
   disallowWeekdays: z.array(WeekdaySchema).exactOptional(),
   disallowDates: z.array(z.union([IsoDateSchema, dateRange])).exactOptional(),
   holidayCalendarId: HolidayCalendarIdSchema.exactOptional(),
-  age: z.object({ min: count.max(150).exactOptional(), max: count.max(150).exactOptional() }).exactOptional(),
+  age: z.strictObject({ min: count.max(150).exactOptional(), max: count.max(150).exactOptional() }).exactOptional(),
 });
 const hourCycle = z.enum(['h12', 'h23']);
 const minuteStep = z.literal([1, 5, 10, 15, 30]);
-export const DateConfigSchema = z.object({
+export const DateConfigSchema = z.strictObject({
   pattern: DatePatternSchema,
   separator: z.enum(['-', '/', '.']).exactOptional(),
   picker: z.enum(['calendar', 'selects', 'native']),
-  defaultValue: z.discriminatedUnion('kind', [z.object({ kind: z.literal('today') }), z.object({ kind: z.literal('fixed'), date: IsoDateSchema })]).exactOptional(),
+  defaultValue: z.discriminatedUnion('kind', [z.strictObject({ kind: z.literal('today') }), z.strictObject({ kind: z.literal('fixed'), date: IsoDateSchema })]).exactOptional(),
   limits: DateLimitsSchema.exactOptional(),
 });
-export const DateTimeConfigSchema = z.object({
+export const DateTimeConfigSchema = z.strictObject({
   pattern: DatePatternSchema,
   hourCycle,
   minuteStep,
   timeZone: z.union([TimeZoneSchema, z.literal('respondent')]),
-  defaultValue: z.object({ kind: z.literal('now') }).exactOptional(),
+  defaultValue: z.strictObject({ kind: z.literal('now') }).exactOptional(),
   limits: DateLimitsSchema.exactOptional(),
 });
-export const TimeConfigSchema = z.object({
+export const TimeConfigSchema = z.strictObject({
   hourCycle,
   minuteStep,
   period: z.enum(['any', 'am_only', 'pm_only']).exactOptional(),
-  window: z.object({ from: IsoTimeSchema.exactOptional(), to: IsoTimeSchema.exactOptional() }).exactOptional(),
-  defaultValue: z.discriminatedUnion('kind', [z.object({ kind: z.literal('now') }), z.object({ kind: z.literal('fixed'), time: IsoTimeSchema })]).exactOptional(),
-  range: z.object({ enabled: z.boolean(), minMinutes: count.exactOptional(), maxMinutes: count.exactOptional() }).exactOptional(),
+  window: z.strictObject({ from: IsoTimeSchema.exactOptional(), to: IsoTimeSchema.exactOptional() }).exactOptional(),
+  defaultValue: z.discriminatedUnion('kind', [z.strictObject({ kind: z.literal('now') }), z.strictObject({ kind: z.literal('fixed'), time: IsoTimeSchema })]).exactOptional(),
+  range: z.strictObject({ enabled: z.boolean(), minMinutes: count.exactOptional(), maxMinutes: count.exactOptional() }).exactOptional(),
 });
 
-export const RatingConfigSchema = z.object({
+export const RatingConfigSchema = z.strictObject({
   max: z.number().int().min(1).max(10),
   icon: z.enum(['star', 'heart', 'thumb', 'smiley', 'number']),
   lowLabel: label.exactOptional(),
   highLabel: label.exactOptional(),
   defaultValue: z.number().int().min(1).max(10).exactOptional(),
 });
-export const LinearScaleConfigSchema = z.object({
+export const LinearScaleConfigSchema = z.strictObject({
   min: z.literal([0, 1]),
   max: z.number().int().min(2).max(10),
   lowLabel: label.exactOptional(),
   midLabel: label.exactOptional(),
   highLabel: label.exactOptional(),
 });
-export const NpsConfigSchema = z.object({ lowLabel: label.exactOptional(), highLabel: label.exactOptional() });
-export const RankingConfigSchema = z.object({
+export const NpsConfigSchema = z.strictObject({ lowLabel: label.exactOptional(), highLabel: label.exactOptional() });
+export const RankingConfigSchema = z.strictObject({
   options: z.array(ChoiceOptionSchema).min(1).max(100),
   shuffle: z.boolean().exactOptional(),
   rankTop: z.number().int().min(1).exactOptional(),
 });
 
-export const MatrixRowSchema = z.object({ id: MatrixRowIdSchema, label: LabelTextSchema });
+export const MatrixRowSchema = z.strictObject({ id: MatrixRowIdSchema, label: LabelTextSchema });
 const column = { id: MatrixColumnIdSchema, label };
 export const MatrixColumnSchema = z.discriminatedUnion('input', [
-  z.object({ ...column, input: z.literal('choice'), score: DecimalStringSchema.exactOptional() }),
-  z.object({ ...column, input: z.literal('checkbox'), score: DecimalStringSchema.exactOptional() }),
-  z.object({ ...column, input: z.literal('text'), maxLength: count.max(10_000).exactOptional() }),
-  z.object({ ...column, input: z.literal('number'), min: DecimalStringSchema.exactOptional(), max: DecimalStringSchema.exactOptional() }),
-  z.object({ ...column, input: z.literal('dropdown'), options: z.array(ChoiceOptionSchema).min(1) }),
+  z.strictObject({ ...column, input: z.literal('choice'), score: DecimalStringSchema.exactOptional() }),
+  z.strictObject({ ...column, input: z.literal('checkbox'), score: DecimalStringSchema.exactOptional() }),
+  z.strictObject({ ...column, input: z.literal('text'), maxLength: count.max(10_000).exactOptional() }),
+  z.strictObject({ ...column, input: z.literal('number'), min: DecimalStringSchema.exactOptional(), max: DecimalStringSchema.exactOptional() }),
+  z.strictObject({ ...column, input: z.literal('dropdown'), options: z.array(ChoiceOptionSchema).min(1) }),
 ]);
-export const MatrixConfigSchema = z.object({
+export const MatrixConfigSchema = z.strictObject({
   mode: z.enum(['single', 'multi', 'grid']),
   rows: z.array(MatrixRowSchema).min(1).max(100),
   columns: z.array(MatrixColumnSchema).min(1).max(20),
@@ -219,7 +219,7 @@ export const MatrixConfigSchema = z.object({
   mobileLayout: z.enum(['table', 'accordion']).exactOptional(),
 });
 
-export const RepeatingGroupConfigSchema = z.object({
+export const RepeatingGroupConfigSchema = z.strictObject({
   children: z.array(BlockIdSchema).min(1).max(30),
   minRows: count.max(200),
   maxRows: z.number().int().min(1).max(200),
@@ -231,41 +231,41 @@ export const RepeatingGroupConfigSchema = z.object({
 });
 
 const GIB = 1024 ** 3;
-export const FileUploadConfigSchema = z.object({
+export const FileUploadConfigSchema = z.strictObject({
   minFiles: count.max(20).exactOptional(),
   maxFiles: z.number().int().min(1).max(20),
   minFileBytes: count.max(GIB).exactOptional(),
   maxFileBytes: z.number().int().min(1).max(GIB),
-  accept: z.object({ extensions: z.array(z.string().regex(/^\.?[A-Za-z0-9]{1,16}$/)), mimeTypes: z.array(z.string().regex(/^[a-z]+\/[a-z0-9.+*-]+$/i)) }),
+  accept: z.strictObject({ extensions: z.array(z.string().regex(/^\.?[A-Za-z0-9]{1,16}$/)), mimeTypes: z.array(z.string().regex(/^[a-z]+\/[a-z0-9.+*-]+$/i)) }),
   capture: z.enum(['none', 'user', 'environment']),
   stripMetadata: z.boolean(),
   scan: z.enum(['off', 'async', 'required']),
 });
 
-export const SignatureConfigSchema = z.object({
+export const SignatureConfigSchema = z.strictObject({
   penColor: ColorValueSchema,
   heightPx: z.number().int().min(80).max(400),
   allowTyped: z.boolean(),
   statement: InlineDocSchema.exactOptional(),
 });
 
-export const HiddenConfigSchema = z.object({
+export const HiddenConfigSchema = z.strictObject({
   source: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('url_param'), name: z.string().min(1).max(64).exactOptional() }),
-    z.object({ kind: z.literal('utm'), param: z.enum(['source', 'medium', 'campaign', 'term', 'content']) }),
-    z.object({ kind: z.literal('static'), value: PlainTemplateSchema }),
-    z.object({ kind: z.literal('expr'), expr: ExprSchema }),
+    z.strictObject({ kind: z.literal('url_param'), name: z.string().min(1).max(64).exactOptional() }),
+    z.strictObject({ kind: z.literal('utm'), param: z.enum(['source', 'medium', 'campaign', 'term', 'content']) }),
+    z.strictObject({ kind: z.literal('static'), value: PlainTemplateSchema }),
+    z.strictObject({ kind: z.literal('expr'), expr: ExprSchema }),
   ]),
 });
 
-export const ConsentItemSchema = z.object({
+export const ConsentItemSchema = z.strictObject({
   id: ConsentItemIdSchema,
   purposeId: PurposeIdSchema.exactOptional(),
   label: InlineDocSchema,
   requiredToSubmit: z.boolean(),
   defaultChecked: z.literal(false),
 });
-export const ConsentConfigSchema = z.object({
+export const ConsentConfigSchema = z.strictObject({
   mode: z.enum(['dpdp', 'terms']),
   notice: RichDocSchema,
   itemiseData: z.boolean(),
@@ -277,26 +277,26 @@ export const ConsentConfigSchema = z.object({
   noticeVersion: count,
 });
 
-export const CaptchaConfigSchema = z.object({
+export const CaptchaConfigSchema = z.strictObject({
   provider: z.enum(['platform_default', 'hcaptcha', 'turnstile', 'recaptcha_v3', 'proof_of_work']),
   invisible: z.boolean().exactOptional(),
 });
 
-export const ProductOptionSchema = z.object({
+export const ProductOptionSchema = z.strictObject({
   id: ProductOptionIdSchema,
   label,
   required: z.boolean(),
-  choices: z.array(z.object({ id: OptionIdSchema, label, priceDelta: MinorUnitsSchema })).min(1),
+  choices: z.array(z.strictObject({ id: OptionIdSchema, label, priceDelta: MinorUnitsSchema })).min(1),
 });
-export const ProductSchema = z.object({
+export const ProductSchema = z.strictObject({
   id: ProductIdSchema,
   name: label,
   description: RichDocSchema.exactOptional(),
   images: z.array(AssetRefSchema),
   sku: z.string().max(64).exactOptional(),
   pricing: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('one_time'), amount: MinorUnitsSchema }),
-    z.object({
+    z.strictObject({ kind: z.literal('one_time'), amount: MinorUnitsSchema }),
+    z.strictObject({
       kind: z.literal('subscription'),
       amount: MinorUnitsSchema,
       interval: z.enum(['day', 'week', 'month', 'year']),
@@ -306,45 +306,45 @@ export const ProductSchema = z.object({
       totalCycles: z.number().int().min(1).exactOptional(),
     }),
   ]),
-  quantity: z.object({ min: count, max: count, default: count }).exactOptional(),
+  quantity: z.strictObject({ min: count, max: count, default: count }).exactOptional(),
   options: z.array(ProductOptionSchema).exactOptional(),
   stockTracked: z.boolean(),
-  tax: z.object({ hsnSac: z.string().max(16).exactOptional(), ratePct: DecimalStringSchema.exactOptional(), inclusive: z.boolean().exactOptional() }).exactOptional(),
-  shipping: z.object({ first: MinorUnitsSchema, additional: MinorUnitsSchema.exactOptional() }).exactOptional(),
+  tax: z.strictObject({ hsnSac: z.string().max(16).exactOptional(), ratePct: DecimalStringSchema.exactOptional(), inclusive: z.boolean().exactOptional() }).exactOptional(),
+  shipping: z.strictObject({ first: MinorUnitsSchema, additional: MinorUnitsSchema.exactOptional() }).exactOptional(),
   origin: OriginSchema.exactOptional(),
 });
 export const PaymentAmountSourceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('products'), selection: z.enum(['single', 'multiple']), products: z.array(ProductSchema).min(1), showImages: z.boolean() }),
-  z.object({ kind: z.literal('donation'), suggested: z.array(MinorUnitsSchema), min: MinorUnitsSchema, max: MinorUnitsSchema.exactOptional(), allowCustom: z.boolean() }),
-  z.object({ kind: z.literal('calculated'), expr: ExprSchema, description: z.string().max(500) }),
+  z.strictObject({ kind: z.literal('products'), selection: z.enum(['single', 'multiple']), products: z.array(ProductSchema).min(1), showImages: z.boolean() }),
+  z.strictObject({ kind: z.literal('donation'), suggested: z.array(MinorUnitsSchema), min: MinorUnitsSchema, max: MinorUnitsSchema.exactOptional(), allowCustom: z.boolean() }),
+  z.strictObject({ kind: z.literal('calculated'), expr: ExprSchema, description: z.string().max(500) }),
 ]);
-export const TaxConfigSchema = z.object({
+export const TaxConfigSchema = z.strictObject({
   mode: z.enum(['none', 'flat', 'gst_in', 'by_location']),
   inclusive: z.boolean(),
   flatRatePct: DecimalStringSchema.exactOptional(),
-  gst: z.object({
+  gst: z.strictObject({
     sellerGstin: PlainTemplateSchema,
     sellerStateCode: z.string().min(1).max(8),
     placeOfSupplyBlockId: BlockIdSchema,
     defaultRatePct: DecimalStringSchema,
   }).exactOptional(),
-  byLocation: z.array(z.object({
+  byLocation: z.array(z.strictObject({
     country: CountryCodeSchema,
     region: z.string().max(64).exactOptional(),
     ratePct: DecimalStringSchema,
     locationBlockId: BlockIdSchema,
   })).exactOptional(),
 });
-export const PaymentConfigSchema = z.object({
+export const PaymentConfigSchema = z.strictObject({
   gateway: z.enum(['stripe', 'razorpay']),
   currency: CurrencyCodeSchema,
   amount: PaymentAmountSourceSchema,
   tax: TaxConfigSchema.exactOptional(),
-  shipping: z.object({ mode: z.enum(['none', 'per_item', 'per_order']), perOrder: MinorUnitsSchema.exactOptional() }).exactOptional(),
+  shipping: z.strictObject({ mode: z.enum(['none', 'per_item', 'per_order']), perOrder: MinorUnitsSchema.exactOptional() }).exactOptional(),
   couponsEnabled: z.boolean(),
   showTotal: z.boolean(),
   methods: z.array(z.enum(['card', 'upi', 'netbanking', 'wallet', 'apple_pay', 'google_pay', 'ach', 'link'])).exactOptional(),
-  billing: z.object({
+  billing: z.strictObject({
     nameBlockId: BlockIdSchema.exactOptional(),
     emailBlockId: BlockIdSchema.exactOptional(),
     phoneBlockId: BlockIdSchema.exactOptional(),
@@ -352,36 +352,36 @@ export const PaymentConfigSchema = z.object({
     gstinBlockId: BlockIdSchema.exactOptional(),
   }).exactOptional(),
   holdUntilPaid: z.literal(true),
-  invoice: z.object({ enabled: z.boolean(), numberPrefix: z.string().max(32) }).exactOptional(),
+  invoice: z.strictObject({ enabled: z.boolean(), numberPrefix: z.string().max(32) }).exactOptional(),
 });
 
-export const AppointmentConfigSchema = z.object({
+export const AppointmentConfigSchema = z.strictObject({
   timeZone: TimeZoneSchema,
   allowRespondentTimeZone: z.boolean(),
   slotMinutes: z.number().int().min(1),
   slotStepMinutes: z.number().int().min(1).exactOptional(),
   bufferMinutes: count,
-  weekly: z.array(z.object({ weekday: WeekdaySchema, from: IsoTimeSchema, to: IsoTimeSchema })),
+  weekly: z.array(z.strictObject({ weekday: WeekdaySchema, from: IsoTimeSchema, to: IsoTimeSchema })),
   blockedDates: z.array(z.union([IsoDateSchema, dateRange])).exactOptional(),
   holidayCalendarId: HolidayCalendarIdSchema.exactOptional(),
   minNoticeMinutes: count,
   rollingDays: z.number().int().min(1),
   maxPerDay: z.number().int().min(1).exactOptional(),
   capacityPerSlot: z.number().int().min(1),
-  reminders: z.array(z.object({ minutesBefore: z.number().int().min(1), emailBlockId: BlockIdSchema })).exactOptional(),
+  reminders: z.array(z.strictObject({ minutesBefore: z.number().int().min(1), emailBlockId: BlockIdSchema })).exactOptional(),
   calendarConnectionId: ConnectionIdSchema.exactOptional(),
   attachIcs: z.boolean(),
 });
 
-export const CalculationConfigSchema = z.object({
+export const CalculationConfigSchema = z.strictObject({
   expr: ExprSchema,
   resultType: ExprTypeSchema,
   format: ValueFormatSchema.exactOptional(),
   display: z.enum(['visible', 'hidden']),
-  declassify: z.object({ reason: z.string().min(1).max(1000) }).exactOptional(),
+  declassify: z.strictObject({ reason: z.string().min(1).max(1000) }).exactOptional(),
 });
-export const ContextConfigSchema = z.object({ source: z.enum(CONTEXT_SOURCES), stripQuery: z.boolean().exactOptional() });
-export const UniqueIdConfigSchema = z.object({
+export const ContextConfigSchema = z.strictObject({ source: z.enum(CONTEXT_SOURCES), stripQuery: z.boolean().exactOptional() });
+export const UniqueIdConfigSchema = z.strictObject({
   prefix: PlainTemplateSchema,
   padTo: count.max(20),
   startAt: count,
@@ -389,25 +389,25 @@ export const UniqueIdConfigSchema = z.object({
   showOnEnding: z.boolean(),
 });
 
-export const HeadingConfigSchema = z.object({
+export const HeadingConfigSchema = z.strictObject({
   level: z.literal([1, 2, 3]),
   text: InlineDocSchema,
   subheading: InlineDocSchema.exactOptional(),
   align: TextAlignSchema.exactOptional(),
 });
-export const ParagraphConfigSchema = z.object({ content: RichDocSchema });
-export const ImageConfigSchema = z.object({
+export const ParagraphConfigSchema = z.strictObject({ content: RichDocSchema });
+export const ImageConfigSchema = z.strictObject({
   image: z.union([AssetRefSchema, BrandRefSchema]),
   widthPct: z.number().min(1).max(100),
   align: TextAlignSchema,
   href: SafeUrlSchema.exactOptional(),
 });
-export const DividerConfigSchema = z.object({
+export const DividerConfigSchema = z.strictObject({
   lineStyle: z.enum(['solid', 'dashed', 'dotted', 'none']),
   color: ColorValueSchema.exactOptional(),
   spacing: z.enum(['sm', 'md', 'lg']),
 });
-export const SectionConfigSchema = z.object({
+export const SectionConfigSchema = z.strictObject({
   title: InlineDocSchema.exactOptional(),
   description: RichDocSchema.exactOptional(),
   children: z.array(BlockIdSchema),
@@ -425,4 +425,4 @@ export const BLOCK_CONFIG_SCHEMAS = {
   calculation: CalculationConfigSchema, context: ContextConfigSchema, unique_id: UniqueIdConfigSchema, captcha: CaptchaConfigSchema,
   heading: HeadingConfigSchema, paragraph: ParagraphConfigSchema, image: ImageConfigSchema, divider: DividerConfigSchema, section: SectionConfigSchema,
 } as const;
-export const BlockConfigMapSchema = z.object(BLOCK_CONFIG_SCHEMAS);
+export const BlockConfigMapSchema = z.strictObject(BLOCK_CONFIG_SCHEMAS);

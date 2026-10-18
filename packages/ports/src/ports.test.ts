@@ -1,3 +1,4 @@
+import { IsoInstantSchema, type CountryCode as SchemaCountryCode, type IsoInstant as SchemaIsoInstant } from '@form/schema';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   CAPTCHA_PROVIDERS,
@@ -8,6 +9,9 @@ import {
   isPortError,
   isValidObjectKey,
   isValidObjectTags,
+  toIsoInstant,
+  type CountryCode,
+  type IsoInstant,
   type JobData,
   type JobName,
   type JobRequest,
@@ -83,6 +87,16 @@ describe('job contracts', () => {
     // @ts-expect-error a cron tick carries no data
     const tick: JobData['retention.sweep'] = { orgId: 'o' };
     expect(tick).toBeDefined();
+  });
+});
+
+describe('schema brands', () => {
+  it('are the @form/schema brands, and toIsoInstant makes a valid one', () => {
+    expectTypeOf<IsoInstant>().toEqualTypeOf<SchemaIsoInstant>();
+    expectTypeOf<CountryCode>().toEqualTypeOf<SchemaCountryCode>();
+    const instant = toIsoInstant(new Date(Date.UTC(2027, 0, 31, 10)));
+    expect(instant).toBe('2027-01-31T10:00:00.000Z');
+    expect(IsoInstantSchema.safeParse(instant).success).toBe(true);
   });
 });
 

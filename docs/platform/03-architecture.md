@@ -115,11 +115,11 @@ L3  apps/builder → renderer,ui,sdk(client),templates-core,L1,L0
 | Lint / format | oxlint, Prettier, dependency-cruiser | |
 | Unit tests | **Vitest 4** projects: `node`, `jsdom` (renderer, builder) | |
 | Determinism | Fixture corpus in Node **and** in Playwright on Chromium, Firefox and WebKit; `EvalState` JSON diffed byte-for-byte | jsdom alone runs in V8 and is not evidence |
-| Integration | Vitest + **Testcontainers**: Postgres 18, MinIO (dev/CI only), Mailpit, ClamAV, Vault dev | RLS suite, migration tests, adapter contract tests |
+| Integration | Vitest + **Testcontainers**: Postgres 18, SeaweedFS for the S3 API (dev/CI only, ADR-0002 §5), Mailpit, ClamAV, Vault dev | RLS suite, migration tests, adapter contract tests |
 | E2E | **Playwright**: builder flows, runtime on 3 viewports, embed on a third-party origin, `@axe-core/playwright`, Hindi + Urdu smoke | |
 | API contract | `@fastify/swagger` + fastify-type-provider-zod → `openapi.json` in `packages/sdk`; **oasdiff** gates breaking changes on public routes | |
 | Migrations lint | **squawk** | |
-| Supply chain | osv-scanner, syft SBOM, grype, cosign signing, **third-party notices and source offers** for GPL/AGPL components shipped in images or bundles (ClamAV; MinIO if ever bundled) | CMP-18 |
+| Supply chain | osv-scanner, syft SBOM, grype, cosign signing, **third-party notices and source offers** for GPL/AGPL components shipped in images or bundles (ClamAV; any bundled object store per D14) | CMP-18 |
 | Release | Calendar versions (`2027.06.0`) | |
 
 ### 1.5 Configuration, editions and licences
@@ -143,7 +143,9 @@ STORAGE_DRIVER=s3  STORAGE_ENDPOINT=  STORAGE_BUCKET_STAGING=  STORAGE_BUCKET_UP
 MAILER_DRIVER=smtp|log  SMTP_URL_FILE=
 KMS_DRIVER=aws|gcp|azure|vault|keyfile  KMS_KEY_ID=  KMS_KEYFILE_PATH=/run/secrets/form-master.key
 AV_DRIVER=clamav|none  CLAMAV_HOST=clamav:3310
-CAPTCHA_DEFAULT=proof_of_work                         # every edition; third-party providers are per-form opt-in
+CAPTCHA_DEFAULT=proof_of_work                         # every edition (ADR-0011); a third-party value is rejected
+CAPTCHA_PROVIDERS=hcaptcha,turnstile,recaptcha_v3     # third-party providers forms may opt in to; default: all when EGRESS_POLICY=open, none otherwise; rejected when none
+INTEGRATIONS_ENABLED=google_sheets,slack              # @form/schema INTEGRATION_PROVIDERS; default: all when open, none otherwise; rejected when none
 PAYMENTS_ENABLED=stripe,razorpay                      # ignored when EGRESS_POLICY=none
 GEOIP_DB_PATH=/opt/form/geoip/dbip-country-lite.mmdb
 GUARDIAN_VERIFIERS=existing_account,manual_review[,digilocker]   # digilocker SaaS only (CMP-22)
@@ -163,6 +165,8 @@ effectiveFeatures(org) =
   ∩ orgAdminRestrictions(org)                        // P3 ENT-09
 ```
 A disabled feature is hidden in the palette and gallery and rejected at publish (`422 TEMPLATE_FEATURE_UNAVAILABLE` / `missing_capability`).
+
+The edition factor (`@form/config` `isEditionFeatureAvailable`) gates these `FeatureId`s (ADR-0002 §4): `integration:<provider>` (`INTEGRATIONS_ENABLED`), `field:payment` and `capability:payments` (a payment gateway is enabled), `capability:guardian_digilocker` (`GUARDIAN_VERIFIERS`), `capability:captcha_<provider>` (`CAPTCHA_PROVIDERS`; `captcha_proof_of_work` always passes) and `capability:analytics_<provider>` (off when air-gapped). Every other id passes the edition check and is left to plan, licence and org restrictions.
 
 **Licence (on-prem):** compact JWS (EdDSA), public keys baked into the image with key ids; claims `{ lid, customer, tier, seats, maxOrgs, features[], nbf, exp, graceDays: 30 }`; verified offline at boot and every 6 h. **On expiry plus grace, authoring is blocked (publish, invite, create), but live forms keep collecting and data stays readable and exportable** (ADR-0010). SaaS has no licence; plans and quotas live in the DB.
 
@@ -995,15 +999,15 @@ The sketch above is abridged; `packages/ports` holds the exact signatures. Where
 - Expected failures throw `PortError` with a typed code (`not_found`, `invalid_argument`, `unsupported`, `integrity`, `expired`, `rejected`, …).
 - `Mailer.send` returns `{ messageId, refused }`: recipients the server refused while it accepted the message for others, each marked `permanent` (5xx, a hard bounce to suppress) or not (4xx, retry that address). A 5xx to every recipient or to the message itself throws `PortError('rejected')`; outages, sender or auth refusals and 4xx replies throw `unavailable`, so `email.send` retries them.
 - `presignPost` validates `tags` against the S3 tag rules (`isValidObjectTags`) and the store applies them to the upload.
-- `CountryCode` and `IsoInstant` are branded stand-ins until `@form/schema` (WP-0.04) exports them; `toIsoInstant(date)` makes one.
+- `CountryCode` and `IsoInstant` are the `@form/schema` brands, re-exported by `@form/ports`; `toIsoInstant(date)` makes one (it stays in ports because the pure schema package never touches `Date`). `@form/config` re-exports `FeatureId` and `INTEGRATION_PROVIDERS` from the schema too.
 
 The storage contract also exercises presigned URLs (size range, content type, key binding, tampering, expiry) when the store supplies a client for them, and the mailer contract checks refusals when the server under test can be told to refuse (the testkit SMTP sink can; a stock Mailpit cannot, so those cases skip there).
 
-Contract suites exist so far for the families with dev implementations (storage, mailer, KMS, scanner, guardian verifier). Captcha, GeoIP, egress, queue, audit-sink and search get theirs with their first implementations (WP-0.13, WP-1.03). Adapters export only the package root for now; per-family subpath exports arrive with WP-1.03 together with the matching dependency-cruiser rule.
+Contract suites exist so far for the families with dev implementations (storage, mailer, KMS, scanner, guardian verifier). Captcha, GeoIP, egress, queue, audit-sink and search get theirs in WP-1.03, with their first production implementations (delivery plan, WP-1.03; ADR-0002 §4). Adapters export only the package root for now; per-family subpath exports arrive with WP-1.03 together with the matching dependency-cruiser rule.
 
 | Port | SaaS | On-prem (connected) | Air-gapped (`EGRESS_POLICY=none`) |
 |---|---|---|---|
-| Storage | AWS S3 (SSE-KMS, Object Lock for `audit`) | **Bring-your-own S3-compatible store** (Ceph RGW, NetApp StorageGRID, Dell ECS, cloud S3, or MinIO the customer licenses). Object Lock checked via `capabilities()` | Same, in-cluster. A bundled store is optional and subject to decision D14 (Apache-2.0 SeaweedFS or Ceph RGW after a licence review); **MinIO is not bundled** (AGPL, community distribution changes) and is used only in dev/CI |
+| Storage | AWS S3 (SSE-KMS, Object Lock for `audit`) | **Bring-your-own S3-compatible store** (Ceph RGW, NetApp StorageGRID, Dell ECS, cloud S3, or MinIO the customer licenses). Object Lock checked via `capabilities()` | Same, in-cluster. A bundled store is optional and subject to decision D14 (Apache-2.0 SeaweedFS or Ceph RGW after a licence review); **MinIO is not bundled** (AGPL, community distribution changes). Dev and CI use SeaweedFS (Apache-2.0, ADR-0002 §5), which is not bundled either |
 | Mailer | SMTP to an India-hosted provider + per-org SMTP | Customer SMTP relay | Customer internal relay; `log` driver for demos. Without SMTP, admins issue one-time codes for invites, resets and DSR identity checks |
 | KeyProvider | AWS KMS / GCP KMS / Azure Key Vault | Vault Transit or keyfile | Vault or keyfile (k8s Secret with etcd encryption at rest or an external secrets store required; Shamir escrow) |
 | Queue | pg-boss | pg-boss | pg-boss |
@@ -1034,7 +1038,7 @@ Contract suites exist so far for the families with dev implementations (storage,
 All non-root, read-only root filesystem, `cap_drop: ALL`, with SBOM, cosign signature and third-party notices.
 
 ### 7.2 Dev stack (`deploy/docker/compose.dev.yaml`)
-Postgres 18, MinIO (dev only), Mailpit, ClamAV, `grafana/otel-lgtm`; apps run on the host (`pnpm dev` → builder :5173, runtime client :5174, api :8080 with `RUNTIME_MODE=embedded`, worker). `pnpm dev:setup` runs migrations, creates roles and definer functions, seeds a demo org and the system pack, creates buckets, writes `.env.local` with a keyfile dev key. `pnpm dev:airgap` reruns the stack on an `internal: true` network to catch hidden outbound calls.
+Postgres 18, SeaweedFS for the S3 API (dev and CI only; MinIO no longer publishes images, ADR-0002 §5), Mailpit, ClamAV (optional `av` profile), `grafana/otel-lgtm`; images are pinned by version and digest; apps run on the host (`pnpm dev` → builder :5173, runtime client :5174, api :8080 with `RUNTIME_MODE=embedded`, worker). `pnpm dev:setup` runs migrations, creates roles and definer functions, seeds a demo org and the system pack, creates buckets, writes `.env.local` with a keyfile dev key. `pnpm dev:airgap` reruns the stack on an `internal: true` network to catch hidden outbound calls.
 
 ### 7.3 Helm chart (`deploy/helm/form`)
 - **Workloads:** `server` (api + embedded runtime; `runtime.standalone=true` splits them; HPA; PDB), `worker` (HPA, optional KEDA on queue depth), `worker-pdf`, `clamav` (freshclam sidecar when connected), `builder`.
@@ -1144,7 +1148,7 @@ The platform is the **Data Processor** for respondent data and the **Data Fiduci
 ## 10. Decisions this document takes (ADRs)
 
 1. **ADR-0001:** Monorepo layout and names (`@form/*`, `packages/registry`, `ports` + `adapters`, source-only internal packages, dependency-cruiser).
-2. **ADR-0002:** One `fr-server` image with several entrypoints; runtime SSR embeddable in the API process.
+2. **ADR-0002** (written): Phase 0 batch-2 decisions: strict zod twins, `answerScalar` as the scalar contract, signed formpack file hashes, `capability:*` feature ids, SeaweedFS for dev/CI S3, i18n test and formatting rules, builder clipboard ([`docs/adr/0002-phase0-batch2-decisions.md`](../adr/0002-phase0-batch2-decisions.md)).
 3. **ADR-0003:** Runtime HTML cacheable by path only; per-visitor state from `POST /session`; version JSON immutable; hash-based CSP.
 4. **ADR-0004:** Submissions range-partitioned monthly in an ungranted `parts` schema, bound to the uuidv7 id; no default data partition; idempotency in a side table; counters updated last.
 5. **ADR-0005:** KMS root → org KEK → purpose DEKs; erasure = deletion + backup expiry ≤ 35 d; crypto-shredding only with per-org root keys (P3).
@@ -1161,5 +1165,6 @@ The platform is the **Data Processor** for respondent data and the **Data Fiduci
 16. **ADR-0016:** Signed job envelope with org re-derivation.
 17. **ADR-0017:** In-house authentication on our own tables (no third-party auth framework), for air-gapped operation, no telemetry and a clean Jackson seam in P3.
 18. **ADR-0018:** Storage is bring-your-own S3 on-prem; no AGPL object store in the bundle.
+19. **ADR-0019:** One `fr-server` image with several entrypoints; runtime SSR embeddable in the API process (planned as ADR-0002, renumbered when ADR-0002 recorded the batch-2 decisions).
 
 **Open questions for review** (also in the README and the delivery plan §9): breach SLA (24 h preliminary from awareness, or stricter); consent-record retention after erasure (purpose retention + 1 year, pseudonymised); per-org KMS keys before P3 for high tiers; Postgres floor 16 for external databases; SaaS user-content domain name; bundled on-prem object store (none vs SeaweedFS / Ceph RGW).

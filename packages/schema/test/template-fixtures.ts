@@ -165,7 +165,7 @@ export const manifest = (): S.FormpackManifest => ({
     requiredFeatures: ['field:short_text'],
     dependsOn: ['core/theme-corporate@1'],
   }],
-  categories: 'categories.json',
-  attestations: 'attestations.json',
+  categories: { path: 'categories.json', sha256: id<S.Sha256Hex>('c'.repeat(64)) },
+  attestations: { path: 'attestations.json', sha256: id<S.Sha256Hex>('d'.repeat(64)) },
   assets: [{ path: 'assets/logo.png', sha256: id<S.Sha256Hex>('b'.repeat(64)), mime: 'image/png', bytes: 48213 }],
 });

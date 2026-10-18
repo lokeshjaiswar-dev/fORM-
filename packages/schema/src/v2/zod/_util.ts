@@ -78,8 +78,8 @@ export function richTextLimitError(doc: unknown): string | null {
 }
 
 /** Builds `{ [K]: { type: K, value: shape[K] } }` for type-tagged unions (answers). */
-export function tagged<S extends Record<string, z.ZodType>>(shape: S): { [K in keyof S & string]: z.ZodObject<{ type: z.ZodLiteral<K>; value: S[K] }, z.core.$strip> } {
-  return Object.fromEntries(Object.entries(shape).map(([type, value]) => [type, z.object({ type: z.literal(type), value })])) as never;
+export function tagged<S extends Record<string, z.ZodType>>(shape: S): { [K in keyof S & string]: z.ZodObject<{ type: z.ZodLiteral<K>; value: S[K] }, z.core.$strict> } {
+  return Object.fromEntries(Object.entries(shape).map(([type, value]) => [type, z.strictObject({ type: z.literal(type), value })])) as never;
 }
 
 /** Non-empty tuple of a record's values, for z.discriminatedUnion. */

@@ -75,6 +75,10 @@ export interface FieldDefinition<T extends BlockType> {
   answerSchema: T extends ValueFieldType ? (block: BlockOf<T>, state: { required: boolean }) => SchemaLike<AnswerValueMap[T]> : null;
   paths: T extends ValueFieldType ? Readonly<Record<string, ComparableKind>> : Readonly<Record<string, never>>;
   operators: Partial<Record<ComparableKind, readonly LogicOperator[]>>;
+  /**
+   * Per-type primitive with no block, so option scalars carry an unbound `blockId: ''`. Never called directly:
+   * `answerScalar(block, value, path)` (@form/registry) is the one scalar contract (ADR-0002 §2).
+   */
   toScalar: T extends ValueFieldType ? (value: AnswerValueMap[T], path?: AnswerPath) => ScalarValue : null;
   isEmpty: T extends ValueFieldType ? (value: AnswerValueMap[T]) => boolean : null;
   translatable(block: BlockOf<T>): TextKey[];

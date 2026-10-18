@@ -246,6 +246,7 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.NotificationVariantSchema>>().toEqualTypeOf<S.NotificationVariant>();
   expectTypeOf<z.infer<typeof S.NotificationConfigSchema>>().toEqualTypeOf<S.NotificationConfig>();
   expectTypeOf<z.infer<typeof S.WebhookConfigSchema>>().toEqualTypeOf<S.WebhookConfig>();
+  expectTypeOf<z.infer<typeof S.IntegrationProviderSchema>>().toEqualTypeOf<S.IntegrationProvider>();
   expectTypeOf<z.infer<typeof S.IntegrationBindingSchema>>().toEqualTypeOf<S.IntegrationBinding>();
   expectTypeOf<z.infer<typeof S.PdfTemplateConfigSchema>>().toEqualTypeOf<S.PdfTemplateConfig>();
   expectTypeOf<z.infer<typeof S.CouponSchema>>().toEqualTypeOf<S.Coupon>();

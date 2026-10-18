@@ -627,7 +627,7 @@ Audit (CMP-02): `template.created`, `template.forked`, `template.version.*`, `te
 - **Completeness** per locale is computed at publish and shown in the gallery ("हिन्दी 100% · தமிழ் 82%"). Gaps fall back to English in the preview, highlighted.
 - **Pipes and variables in translations** are carried as placeholders (`<ph>` in XLIFF); a translation must keep the same placeholder set as the source or it is rejected.
 - **Variables:** org-profile text resolves per locale (`org_profiles.localized`).
-- **Formatting:** FND-12 ICU (en-IN lakh/crore grouping, DD-MM-YYYY), RTL (Urdu), self-hosted Noto (DSN-06).
+- **Formatting:** FND-12 ICU (en-IN lakh/crore grouping, DD-MM-YYYY), RTL (Urdu), self-hosted Noto (DSN-06). Numbers use Latin digits in every locale; native digits are a later per-locale option (ADR-0002 §6).
 - **Consent notices (CMP-04):** DPDP s.5(3) and s.6(3) give the **data principal** the option to read the notice in English or any Eighth Schedule language, so every `dpdp` notice shows a language picker. System content plan:
   - P1: `en-IN` and `hi-IN` for the Consent, guardian and DSR snippets, plus a "request this notice in another language" workflow that reaches the Fiduciary as a CMP-10 intake item;
   - P2 week 4: the Consent notice in all 22 Eighth Schedule languages, with signed reviewer attestations in the pack so customer forms are not blocked by `reviewedConsentLocales`;
@@ -647,8 +647,8 @@ manifest.json         { "format": "fORM-template-bundle", "formatVersion": 1,
                                          "path": "templates/gst-vendor-onboarding.v4.json", "sha256": "…",
                                          "requiredFeatures": ["field:address","field:file_upload"],
                                          "dependsOn": ["india/snippet-bank-account@2","core/theme-corporate@1"] } ],
-                        "categories": "categories.json",
-                        "attestations": "attestations.json",
+                        "categories": { "path": "categories.json", "sha256": "…" },
+                        "attestations": { "path": "attestations.json", "sha256": "…" },
                         "assets": [ { "path": "assets/9f…png", "sha256": "…", "mime": "image/png", "bytes": 48213 } ] }
 templates/*.json      payload + localisations + category slugs + changelog
 categories.json
@@ -656,7 +656,7 @@ attestations.json     per template and locale: reviewer, date, scope ("consent n
 assets/*
 signature.json        { "alg": "ed25519" | "es256", "keyId": "fORM-release-2026", "sig": base64(sign(JCS(manifest.json))) }
 ```
-- The manifest lists the SHA-256 of every file, so one signature covers the bundle. The algorithm is per key id: Ed25519 by default, ES256 where the signing KMS cannot do Ed25519 (for example Azure Key Vault).
+- The manifest lists the SHA-256 of every file, `categories.json` and `attestations.json` included (ADR-0002 §3), so one signature covers the bundle. Import rejects a file whose hash does not match its manifest entry. The algorithm is per key id: Ed25519 by default, ES256 where the signing KMS cannot do Ed25519 (for example Azure Key Vault).
 - **Export** (worker job): one template, a selection or the whole org library, always with dependencies. "Generalise org values" turns baked org values back into `var` nodes. Signed with the org's signing key if configured, else unsigned. Audited.
 - **Import** (worker job):
   1. Size cap 200 MB, at most 2,000 files, zip-slip and absolute-path rejection, decompression-ratio cap, sniffed MIME must match.

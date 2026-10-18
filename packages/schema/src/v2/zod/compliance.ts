@@ -6,7 +6,7 @@ export const DataClassificationSchema = z.enum(['none', 'personal', 'sensitive']
 export const DataCategorySchema = z.enum(['contact', 'identity', 'government_id', 'financial', 'health', 'biometric', 'location', 'child', 'device', 'free_text', 'other']);
 
 const disclosure = z.enum(['include', 'mask', 'omit']);
-export const FieldComplianceSchema = z.object({
+export const FieldComplianceSchema = z.strictObject({
   classification: DataClassificationSchema,
   category: DataCategorySchema.exactOptional(),
   purposeIds: z.array(PurposeIdSchema),
@@ -25,20 +25,20 @@ export const LegitimateUseGroundSchema = z.enum([
   's7f_medical_emergency', 's7g_epidemic_or_public_health', 's7h_disaster_or_public_order', 's7i_employment',
 ]);
 export const LawfulBasisSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('consent') }),
-  z.object({ kind: z.literal('legitimate_use'), ground: LegitimateUseGroundSchema, justification: z.string().min(1).max(2000) }),
+  z.strictObject({ kind: z.literal('consent') }),
+  z.strictObject({ kind: z.literal('legitimate_use'), ground: LegitimateUseGroundSchema, justification: z.string().min(1).max(2000) }),
 ]);
 
 const days = z.number().int().min(1).max(3650);
 export const RetentionRuleSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('days'), days }),
-  z.object({ kind: z.literal('until_purpose_served'), maxDays: days }),
-  z.object({ kind: z.literal('org_default') }),
-  z.object({ kind: z.literal('statutory'), years: z.number().int().min(1).max(100), citation: z.string().min(1).max(500) }),
-  z.object({ kind: z.literal('inactivity'), days, noticeHours: z.literal(48) }),
+  z.strictObject({ kind: z.literal('days'), days }),
+  z.strictObject({ kind: z.literal('until_purpose_served'), maxDays: days }),
+  z.strictObject({ kind: z.literal('org_default') }),
+  z.strictObject({ kind: z.literal('statutory'), years: z.number().int().min(1).max(100), citation: z.string().min(1).max(500) }),
+  z.strictObject({ kind: z.literal('inactivity'), days, noticeHours: z.literal(48) }),
 ]);
 
-export const PurposeSchema = z.object({
+export const PurposeSchema = z.strictObject({
   id: PurposeIdSchema,
   name: z.string().min(1).max(200),
   description: InlineDocSchema,
@@ -49,18 +49,18 @@ export const PurposeSchema = z.object({
   origin: OriginSchema.exactOptional(),
 });
 
-export const FiduciaryInfoSchema = z.object({
+export const FiduciaryInfoSchema = z.strictObject({
   legalName: PlainTemplateSchema,
   contactEmail: PlainTemplateSchema,
-  privacyContact: z.object({ name: PlainTemplateSchema, email: PlainTemplateSchema, phone: PlainTemplateSchema.exactOptional() }),
-  dpo: z.object({ name: PlainTemplateSchema, email: PlainTemplateSchema }).exactOptional(),
+  privacyContact: z.strictObject({ name: PlainTemplateSchema, email: PlainTemplateSchema, phone: PlainTemplateSchema.exactOptional() }),
+  dpo: z.strictObject({ name: PlainTemplateSchema, email: PlainTemplateSchema }).exactOptional(),
   rightsUrl: PlainTemplateSchema,
   boardComplaintInfo: PlainTemplateSchema,
   noticeUrl: PlainTemplateSchema.exactOptional(),
 });
 
 export const GuardianVerificationMethodSchema = z.enum(['existing_verified_adult_account', 'manual_document_review', 'digilocker_token']);
-export const GuardianConsentConfigSchema = z.object({
+export const GuardianConsentConfigSchema = z.strictObject({
   guardianEmailBlockId: BlockIdSchema,
   methods: z.array(GuardianVerificationMethodSchema).min(1),
   expiryHours: z.number().int().min(1),
@@ -68,30 +68,30 @@ export const GuardianConsentConfigSchema = z.object({
   pageId: PageIdSchema.exactOptional(),
 });
 export const ChildrenDataPolicySchema = z.discriminatedUnion('mode', [
-  z.object({ mode: z.literal('not_applicable') }),
-  z.object({
+  z.strictObject({ mode: z.literal('not_applicable') }),
+  z.strictObject({
     mode: z.literal('age_gate'),
     subject: z.enum(['respondent', 'subject_of_form']),
     dobBlockId: BlockIdSchema,
     adultAge: z.number().int().min(1).max(30),
     underAge: z.discriminatedUnion('kind', [
-      z.object({ kind: z.literal('block') }),
-      z.object({ kind: z.literal('parental_consent'), guardian: GuardianConsentConfigSchema }),
+      z.strictObject({ kind: z.literal('block') }),
+      z.strictObject({ kind: z.literal('parental_consent'), guardian: GuardianConsentConfigSchema }),
     ]),
     disableTrackingForMinors: z.literal(true),
   }),
-  z.object({ mode: z.literal('lawful_guardian'), guardian: GuardianConsentConfigSchema, guardianshipEvidenceBlockId: BlockIdSchema, disableTracking: z.literal(true) }),
-  z.object({ mode: z.literal('exempt'), fourthScheduleItem: z.string().min(1).max(200), justification: z.string().min(1).max(2000) }),
+  z.strictObject({ mode: z.literal('lawful_guardian'), guardian: GuardianConsentConfigSchema, guardianshipEvidenceBlockId: BlockIdSchema, disableTracking: z.literal(true) }),
+  z.strictObject({ mode: z.literal('exempt'), fourthScheduleItem: z.string().min(1).max(200), justification: z.string().min(1).max(2000) }),
 ]);
 
-export const PrivacyConfigSchema = z.object({
+export const PrivacyConfigSchema = z.strictObject({
   fiduciary: FiduciaryInfoSchema,
   purposes: z.array(PurposeSchema),
   children: ChildrenDataPolicySchema,
   encryption: z.discriminatedUnion('mode', [
-    z.object({ mode: z.literal('server') }),
-    z.object({ mode: z.literal('e2e'), publicKeyId: z.string().min(1), alg: z.literal('RSA-OAEP-256+A256GCM') }),
+    z.strictObject({ mode: z.literal('server') }),
+    z.strictObject({ mode: z.literal('e2e'), publicKeyId: z.string().min(1), alg: z.literal('RSA-OAEP-256+A256GCM') }),
   ]),
   dropAnswersWithoutConsent: z.literal(true),
-  networkSignals: z.object({ ipHash: z.boolean(), userAgentHash: z.boolean(), ttlDays: z.number().int().min(0).max(3650) }),
+  networkSignals: z.strictObject({ ipHash: z.boolean(), userAgentHash: z.boolean(), ttlDays: z.number().int().min(0).max(3650) }),
 });

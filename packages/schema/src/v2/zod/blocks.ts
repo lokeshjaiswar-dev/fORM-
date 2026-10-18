@@ -7,9 +7,9 @@ import { BLOCK_CONFIG_SCHEMAS } from './config.ts';
 import { blockBase, fieldBase } from './envelope.ts';
 import { BlockIdSchema } from './primitives.ts';
 
-const fieldBlock = <T extends ValueFieldType>(type: T) => z.object({ ...fieldBase(type), config: BLOCK_CONFIG_SCHEMAS[type] });
+const fieldBlock = <T extends ValueFieldType>(type: T) => z.strictObject({ ...fieldBase(type), config: BLOCK_CONFIG_SCHEMAS[type] });
 const plainBlock = <T extends TransientBlockType | ContentBlockType | ContainerBlockType>(type: T) =>
-  z.object({ ...blockBase(type), config: BLOCK_CONFIG_SCHEMAS[type] });
+  z.strictObject({ ...blockBase(type), config: BLOCK_CONFIG_SCHEMAS[type] });
 
 /** Twin of FieldBlockOf<T> per value field type. */
 export const FIELD_BLOCK_SCHEMAS = {
@@ -33,7 +33,7 @@ export const FieldBlockSchema = z.discriminatedUnion('type', options(FIELD_BLOCK
 export const PlainBlockSchema = z.discriminatedUnion('type', options(PLAIN_BLOCK_SCHEMAS));
 export const BlockSchema = z.discriminatedUnion('type', options(BLOCK_SCHEMAS));
 
-export const UnsupportedBlockSchema = z.object({
+export const UnsupportedBlockSchema = z.strictObject({
   id: BlockIdSchema,
   type: z.literal('unsupported'),
   originalType: z.string().min(1).max(64),
@@ -58,7 +58,7 @@ export const PUBLISH_ISSUE_CODES = [
   'notice_incomplete', 'consent_after_consent_fields', 'sensitive_pipe_in_unsafe_context', 'recipient_not_declared',
   'children_policy_incomplete', 'data_route_not_permitted', 'validation_bound_page_order', 'invalid_rich_text',
 ] as const satisfies ReadonlyArray<PublishIssue['code']>;
-export const PublishIssueSchema = z.object({
+export const PublishIssueSchema = z.strictObject({
   severity: z.enum(['error', 'warning']),
   code: z.enum(PUBLISH_ISSUE_CODES),
   path: z.string(),

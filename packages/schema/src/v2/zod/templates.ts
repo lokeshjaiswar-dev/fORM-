@@ -31,7 +31,7 @@ export const TemplateVersionStateSchema = z.enum(['draft', 'in_review', 'publish
 export const FeatureIdSchema = z.templateLiteral([z.enum(['field', 'integration', 'capability', 'plan']), ':', z.string()]);
 
 export const MsgSchema = z.string().max(2000);
-export const TemplateVariableSchema = z.object({
+export const TemplateVariableSchema = z.strictObject({
   name: TemplateVariableNameSchema,
   source: z.enum(['org_profile', 'brand_kit', 'form', 'prompt']),
   type: z.enum(['text', 'rich', 'email', 'phone', 'url', 'image', 'color', 'date', 'number', 'select', 'boolean']),
@@ -39,26 +39,26 @@ export const TemplateVariableSchema = z.object({
   help: MsgSchema.exactOptional(),
   required: z.boolean(),
   default: z.union([z.string(), z.number(), z.boolean()]).exactOptional(),
-  options: z.array(z.object({ value: z.string(), label: MsgSchema })).exactOptional(),
+  options: z.array(z.strictObject({ value: z.string(), label: MsgSchema })).exactOptional(),
   binding: z.enum(['live', 'bake']),
 });
 
 export const LockModeSchema = z.enum(['content', 'structure', 'presence']);
-export const LockSpecSchema = z.object({
+export const LockSpecSchema = z.strictObject({
   id: LockIdSchema,
   target: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('block'), sourceId }),
-    z.object({ kind: z.literal('theme'), tokens: z.array(z.string()) }),
-    z.object({ kind: z.literal('ending'), sourceId }),
-    z.object({ kind: z.literal('email'), sourceId, parts: z.array(z.enum(['subject', 'body', 'footer'])) }),
-    z.object({ kind: z.literal('pdf'), sourceId, parts: z.array(z.enum(['header', 'footer'])) }),
-    z.object({ kind: z.literal('purpose'), sourceId }),
+    z.strictObject({ kind: z.literal('block'), sourceId }),
+    z.strictObject({ kind: z.literal('theme'), tokens: z.array(z.string()) }),
+    z.strictObject({ kind: z.literal('ending'), sourceId }),
+    z.strictObject({ kind: z.literal('email'), sourceId, parts: z.array(z.enum(['subject', 'body', 'footer'])) }),
+    z.strictObject({ kind: z.literal('pdf'), sourceId, parts: z.array(z.enum(['header', 'footer'])) }),
+    z.strictObject({ kind: z.literal('purpose'), sourceId }),
   ]),
   modes: z.array(LockModeSchema).min(1),
   reason: MsgSchema,
 });
 
-export const TemplateRefSchema = z.object({ templateId: TemplateIdSchema, versionId: TemplateVersionIdSchema });
+export const TemplateRefSchema = z.strictObject({ templateId: TemplateIdSchema, versionId: TemplateVersionIdSchema });
 
 const payloadCommon = {
   schemaVersion: z.number().int().min(1),
@@ -68,7 +68,7 @@ const payloadCommon = {
   i18n: I18nBundleSchema.pick({ defaultLocale: true, locales: true, messages: true }),
 };
 
-export const DataInventoryEntrySchema = z.object({
+export const DataInventoryEntrySchema = z.strictObject({
   purposeName: z.string().max(200),
   fieldSourceIds: z.array(sourceId),
   classification: DataClassificationSchema,
@@ -77,11 +77,11 @@ export const DataInventoryEntrySchema = z.object({
 });
 
 const sourceIds = z.array(sourceId).exactOptional();
-export const TemplateOptionalPartSchema = z.object({
+export const TemplateOptionalPartSchema = z.strictObject({
   id: TemplatePartIdSchema,
   label: MsgSchema,
-  when: z.object({ variable: TemplateVariableNameSchema, equals: z.union([z.string(), z.boolean()]) }),
-  includes: z.object({
+  when: z.strictObject({ variable: TemplateVariableNameSchema, equals: z.union([z.string(), z.boolean()]) }),
+  includes: z.strictObject({
     blockSourceIds: sourceIds, pageSourceIds: sourceIds, ruleSourceIds: sourceIds,
     variableSourceIds: sourceIds, endingSourceIds: sourceIds, purposeSourceIds: sourceIds,
   }),
@@ -89,11 +89,11 @@ export const TemplateOptionalPartSchema = z.object({
 
 /** Placeholders only: a literal address or a member is unrepresentable in a template. */
 export const RecipientPlaceholderSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('field'), blockId: BlockIdSchema }),
-  z.object({ kind: z.literal('role'), role }),
+  z.strictObject({ kind: z.literal('field'), blockId: BlockIdSchema }),
+  z.strictObject({ kind: z.literal('role'), role }),
 ]);
 
-export const ThemeTemplatePayloadSchema = z.object({
+export const ThemeTemplatePayloadSchema = z.strictObject({
   ...payloadCommon,
   kind: z.literal('theme'),
   layout: z.enum(['classic', 'cards']),
@@ -105,21 +105,21 @@ export const EmailTemplateRoleSchema = z.enum([
   'notification', 'autoresponder', 'edit_notice', 'invite', 'resume_link', 'otp', 'withdrawal_confirm', 'dsr_response', 'breach_notice',
   'guardian_consent_request',
 ]);
-export const EmailTemplatePayloadSchema = z.object({
+export const EmailTemplatePayloadSchema = z.strictObject({
   ...payloadCommon,
   kind: z.literal('email'),
   role: EmailTemplateRoleSchema,
   subject: PlainTemplateSchema,
   body: EmailDocSchema,
-  headerRef: z.union([BrandRefSchema, z.object({ ref: z.literal('brand.email_header') })]).exactOptional(),
-  footerRef: z.object({ ref: z.enum(['brand.email_footer', 'brand.legal_footer']) }).exactOptional(),
+  headerRef: z.union([BrandRefSchema, z.strictObject({ ref: z.literal('brand.email_header') })]).exactOptional(),
+  footerRef: z.strictObject({ ref: z.enum(['brand.email_footer', 'brand.legal_footer']) }).exactOptional(),
   replyTo: RecipientPlaceholderSchema.exactOptional(),
   defaultRecipients: z.array(RecipientPlaceholderSchema).exactOptional(),
   includeWithdrawalLink: z.boolean().exactOptional(),
 });
 
 export const EndingTemplateRoleSchema = z.union([z.literal('thank_you'), StatusScreenRoleSchema]);
-export const EndingTemplatePayloadSchema = z.object({
+export const EndingTemplatePayloadSchema = z.strictObject({
   ...payloadCommon,
   kind: z.literal('ending'),
   role: EndingTemplateRoleSchema,
@@ -129,9 +129,9 @@ export const EndingTemplatePayloadSchema = z.object({
   confetti: z.boolean().exactOptional(),
 });
 
-export const PdfTemplatePayloadSchema = z.object({ ...payloadCommon, kind: z.literal('pdf'), layout: PdfLayoutSchema });
+export const PdfTemplatePayloadSchema = z.strictObject({ ...payloadCommon, kind: z.literal('pdf'), layout: PdfLayoutSchema });
 
-export const SnippetTemplatePayloadSchema = z.object({
+export const SnippetTemplatePayloadSchema = z.strictObject({
   ...payloadCommon,
   kind: z.literal('snippet'),
   rootId: BlockIdSchema,
@@ -139,26 +139,26 @@ export const SnippetTemplatePayloadSchema = z.object({
   rules: z.array(RuleSchema),
   logicVariables: z.array(VariableSchema),
   purposes: z.array(PurposeSchema),
-  insertHints: z.object({ preferredPosition: z.enum(['start', 'end', 'before_submit']).exactOptional(), oncePerForm: z.boolean() }),
+  insertHints: z.strictObject({ preferredPosition: z.enum(['start', 'end', 'before_submit']).exactOptional(), oncePerForm: z.boolean() }),
 });
 
 const stepBase = { id: WorkflowStepIdSchema, name: z.string().max(200) };
 export const WorkflowStepSchema = z.discriminatedUnion('kind', [
-  z.object({
+  z.strictObject({
     ...stepBase,
     kind: z.literal('approval'),
-    approver: z.union([RecipientPlaceholderSchema, z.object({ kind: z.literal('role'), role })]),
+    approver: z.union([RecipientPlaceholderSchema, z.strictObject({ kind: z.literal('role'), role })]),
     emailTemplate: TemplateRefSchema.exactOptional(),
     onApprove: z.union([WorkflowStepIdSchema, z.literal('end_approved')]),
     onDeny: z.union([WorkflowStepIdSchema, z.literal('end_denied')]),
   }),
-  z.object({
+  z.strictObject({
     ...stepBase,
     kind: z.literal('branch'),
-    branches: z.array(z.object({ when: ConditionGroupSchema, next: WorkflowStepIdSchema })),
+    branches: z.array(z.strictObject({ when: ConditionGroupSchema, next: WorkflowStepIdSchema })),
     otherwise: WorkflowStepIdSchema,
   }),
-  z.object({
+  z.strictObject({
     ...stepBase,
     kind: z.literal('notify'),
     to: z.array(RecipientPlaceholderSchema),
@@ -166,14 +166,14 @@ export const WorkflowStepSchema = z.discriminatedUnion('kind', [
     next: z.union([WorkflowStepIdSchema, z.literal('end')]),
   }),
 ]);
-export const WorkflowDefinitionSchema = z.object({ id: WorkflowIdSchema, name: z.string().max(200), start: WorkflowStepIdSchema, steps: z.array(WorkflowStepSchema).min(1) });
-export const WorkflowTemplatePayloadSchema = z.object({ ...payloadCommon, kind: z.literal('workflow'), workflow: WorkflowDefinitionSchema });
+export const WorkflowDefinitionSchema = z.strictObject({ id: WorkflowIdSchema, name: z.string().max(200), start: WorkflowStepIdSchema, steps: z.array(WorkflowStepSchema).min(1) });
+export const WorkflowTemplatePayloadSchema = z.strictObject({ ...payloadCommon, kind: z.literal('workflow'), workflow: WorkflowDefinitionSchema });
 
-export const FormTemplatePayloadSchema = z.object({
+export const FormTemplatePayloadSchema = z.strictObject({
   ...payloadCommon,
   kind: z.literal('form'),
   document: FormDefinitionSchema,
-  refs: z.object({
+  refs: z.strictObject({
     theme: z.union([TemplateRefSchema, ThemeTemplatePayloadSchema]).exactOptional(),
     endings: z.array(z.union([TemplateRefSchema, EndingTemplatePayloadSchema])).exactOptional(),
     emails: z.array(z.union([TemplateRefSchema, EmailTemplatePayloadSchema])).exactOptional(),
@@ -200,7 +200,7 @@ export const TEMPLATE_PAYLOAD_SCHEMAS = {
   workflow: WorkflowTemplatePayloadSchema,
 } as const satisfies { [K in TemplateKind]: z.ZodType<Extract<TemplateVersionPayload, { kind: K }>> };
 
-export const TemplateSchema = z.object({
+export const TemplateSchema = z.strictObject({
   id: TemplateIdSchema,
   orgId: OrgIdSchema.nullable(),
   teamId: TeamIdSchema.nullable(),
@@ -226,7 +226,7 @@ export const TemplateSchema = z.object({
   deletedAt: IsoInstantSchema.exactOptional(),
 });
 
-export const TemplateVersionSchema = z.object({
+export const TemplateVersionSchema = z.strictObject({
   id: TemplateVersionIdSchema,
   templateId: TemplateIdSchema,
   orgId: OrgIdSchema.nullable(),
@@ -243,20 +243,20 @@ export const TemplateVersionSchema = z.object({
   mandatory: z.boolean(),
   mandatoryDeadline: IsoInstantSchema.exactOptional(),
   thumbnailAssetId: AssetIdSchema.exactOptional(),
-  stats: z.object({ fields: z.number().int().min(0), pages: z.number().int().min(0), estMinutes: z.number().min(0), hasSensitive: z.boolean() }),
-  review: z.object({
+  stats: z.strictObject({ fields: z.number().int().min(0), pages: z.number().int().min(0), estMinutes: z.number().min(0), hasSensitive: z.boolean() }),
+  review: z.strictObject({
     submittedAt: IsoInstantSchema.exactOptional(),
     reviewedBy: UserIdSchema.exactOptional(),
     reviewedAt: IsoInstantSchema.exactOptional(),
     comment: z.string().max(5000).exactOptional(),
   }).exactOptional(),
   publishedAt: IsoInstantSchema.exactOptional(),
-  packSignature: z.object({ keyId: z.string().min(1), sig: z.string().min(1) }).exactOptional(),
+  packSignature: z.strictObject({ keyId: z.string().min(1), sig: z.string().min(1) }).exactOptional(),
   createdBy: UserIdSchema.exactOptional(),
   createdAt: IsoInstantSchema,
 });
 
-export const TemplateLocalizationSchema = z.object({
+export const TemplateLocalizationSchema = z.strictObject({
   templateVersionId: TemplateVersionIdSchema,
   locale: LocaleSchema,
   title: z.string().max(200),
@@ -266,7 +266,7 @@ export const TemplateLocalizationSchema = z.object({
   completeness: z.number().min(0).max(100),
 });
 
-export const TemplateCategorySchema = z.object({
+export const TemplateCategorySchema = z.strictObject({
   id: TemplateCategoryIdSchema,
   orgId: OrgIdSchema.nullable(),
   facet: z.enum(['use_case', 'industry', 'compliance']),
@@ -278,20 +278,20 @@ export const TemplateCategorySchema = z.object({
   sort: z.number(),
 });
 
-export const BrandKitTokensSchema = z.object({
+export const BrandKitTokensSchema = z.strictObject({
   name: z.string().max(200),
-  logos: z.object({ primary: AssetIdSchema, dark: AssetIdSchema.exactOptional(), square: AssetIdSchema.exactOptional(), favicon: AssetIdSchema.exactOptional() }),
-  colors: z.object({
+  logos: z.strictObject({ primary: AssetIdSchema, dark: AssetIdSchema.exactOptional(), square: AssetIdSchema.exactOptional(), favicon: AssetIdSchema.exactOptional() }),
+  colors: z.strictObject({
     primary: HexColorSchema, secondary: HexColorSchema, accent: HexColorSchema, background: HexColorSchema, surface: HexColorSchema,
     text: HexColorSchema, muted: HexColorSchema, error: HexColorSchema, success: HexColorSchema,
   }),
-  typography: z.object({ heading: FontIdSchema, body: FontIdSchema, baseSize: z.number().min(10).max(32) }),
-  shape: z.object({ radius: z.enum(['none', 'sm', 'md', 'lg', 'full']), density: z.enum(['compact', 'comfortable']) }),
-  email: z.object({ header: RichDocSchema.exactOptional(), footer: RichDocSchema }),
-  pdf: z.object({ header: RichDocSchema.exactOptional(), footer: RichDocSchema.exactOptional() }),
+  typography: z.strictObject({ heading: FontIdSchema, body: FontIdSchema, baseSize: z.number().min(10).max(32) }),
+  shape: z.strictObject({ radius: z.enum(['none', 'sm', 'md', 'lg', 'full']), density: z.enum(['compact', 'comfortable']) }),
+  email: z.strictObject({ header: RichDocSchema.exactOptional(), footer: RichDocSchema }),
+  pdf: z.strictObject({ header: RichDocSchema.exactOptional(), footer: RichDocSchema.exactOptional() }),
   legalFooter: RichDocSchema.exactOptional(),
 });
-export const BrandKitSchema = z.object({
+export const BrandKitSchema = z.strictObject({
   id: BrandKitIdSchema,
   orgId: OrgIdSchema,
   teamId: TeamIdSchema.exactOptional(),
@@ -305,7 +305,7 @@ export const BrandKitSchema = z.object({
 export const OrgProfileTextFieldSchema = z.enum([
   'display_name', 'legal_name', 'registered_address', 'board_complaint_info', 'privacy_contact.name', 'privacy_contact.designation', 'privacy_contact.address', 'dpo.name',
 ]);
-export const PostalAddressSchema = z.object({
+export const PostalAddressSchema = z.strictObject({
   line1: z.string().max(200),
   line2: z.string().max(200).exactOptional(),
   city: z.string().max(200),
@@ -314,7 +314,7 @@ export const PostalAddressSchema = z.object({
   postalCode: z.string().max(32),
   country: CountryCodeSchema,
 });
-export const OrgProfileSchema = z.object({
+export const OrgProfileSchema = z.strictObject({
   orgId: OrgIdSchema,
   displayName: z.string().max(200),
   legalName: z.string().max(200).exactOptional(),
@@ -329,22 +329,22 @@ export const OrgProfileSchema = z.object({
   termsUrl: SafeUrlSchema.exactOptional(),
   rightsUrl: SafeUrlSchema.exactOptional(),
   boardComplaintInfo: z.string().max(2000).exactOptional(),
-  privacyContact: z.object({
+  privacyContact: z.strictObject({
     name: z.string().max(200),
     designation: z.string().max(200).exactOptional(),
     email: EmailAddressSchema,
     phone: z.string().max(32).exactOptional(),
     address: PostalAddressSchema.exactOptional(),
   }).exactOptional(),
-  dpo: z.object({ name: z.string().max(200), email: EmailAddressSchema, phone: z.string().max(32).exactOptional() }).exactOptional(),
+  dpo: z.strictObject({ name: z.string().max(200), email: EmailAddressSchema, phone: z.string().max(32).exactOptional() }).exactOptional(),
   localized: keyed(z.partialRecord(LocaleSchema, keyed(z.partialRecord(OrgProfileTextFieldSchema, z.string().max(2000))))),
   updatedAt: IsoInstantSchema,
   updatedBy: UserIdSchema,
 });
 
-export const OrgTemplateSettingsSchema = z.object({
+export const OrgTemplateSettingsSchema = z.strictObject({
   publishPolicy: z.enum(['admins_only', 'members_direct', 'members_with_review']),
-  reviewers: z.object({ roles: z.array(z.enum(['owner', 'admin'])), userIds: z.array(UserIdSchema) }),
+  reviewers: z.strictObject({ roles: z.array(z.enum(['owner', 'admin'])), userIds: z.array(UserIdSchema) }),
   allowPersonal: z.boolean(),
   showSystemGallery: z.boolean(),
   allowedSystemCategories: z.array(TemplateCategoryIdSchema).nullable(),
@@ -353,7 +353,7 @@ export const OrgTemplateSettingsSchema = z.object({
 });
 
 const updateState = z.union([z.enum(['current', 'available', 'required']), z.templateLiteral(['dismissed@', z.number()])]);
-export const FormTemplateBindingSchema = z.object({
+export const FormTemplateBindingSchema = z.strictObject({
   id: TemplateBindingIdSchema,
   orgId: OrgIdSchema,
   formId: FormIdSchema,
@@ -369,7 +369,7 @@ export const FormTemplateBindingSchema = z.object({
   appliedAt: IsoInstantSchema,
 });
 
-export const TemplateForkBindingSchema = z.object({
+export const TemplateForkBindingSchema = z.strictObject({
   id: z.string().min(1).max(64),
   orgId: OrgIdSchema,
   templateId: TemplateIdSchema,
@@ -379,7 +379,7 @@ export const TemplateForkBindingSchema = z.object({
   updateState,
 });
 
-export const InstantiateContextSchema = z.object({
+export const InstantiateContextSchema = z.strictObject({
   newFormId: FormIdSchema,
   idSeed: z.string().min(1),
   bindingIdSeed: z.string().min(1),
@@ -388,17 +388,17 @@ export const InstantiateContextSchema = z.object({
   orgProfile: OrgProfileSchema.nullable(),
   brandKit: BrandKitSchema.nullable(),
   variables: keyed(z.partialRecord(TemplateVariableNameSchema, z.union([z.string(), z.number(), z.boolean()]))),
-  include: z.object({ theme: z.boolean(), emails: z.boolean(), endings: z.boolean(), pdf: z.boolean(), workflow: z.boolean() }),
+  include: z.strictObject({ theme: z.boolean(), emails: z.boolean(), endings: z.boolean(), pdf: z.boolean(), workflow: z.boolean() }),
   now: IsoInstantSchema,
 });
 
-export const TemplateWarningSchema = z.object({
+export const TemplateWarningSchema = z.strictObject({
   code: z.enum(['sensitive_fields', 'variable_missing', 'feature_unavailable', 'part_removed_rule', 'key_renamed', 'locale_incomplete']),
   message: z.string(),
   at: z.string().exactOptional(),
 });
 
-export const InstantiateResultSchema = z.object({
+export const InstantiateResultSchema = z.strictObject({
   definition: FormDefinitionSchema,
   ops: FormOpsSchema.pick({ notifications: true, pdfTemplates: true }).extend({ screens: AccessConfigSchema.shape.screens }),
   bindings: z.array(FormTemplateBindingSchema),
@@ -407,18 +407,18 @@ export const InstantiateResultSchema = z.object({
 });
 
 export const DocumentOpSchema = z.discriminatedUnion('op', [
-  z.object({
+  z.strictObject({
     op: z.literal('add_block'),
     block: BlockSchema,
-    parent: z.union([z.object({ pageId: PageIdSchema }), z.object({ blockId: BlockIdSchema })]),
+    parent: z.union([z.strictObject({ pageId: PageIdSchema }), z.strictObject({ blockId: BlockIdSchema })]),
     index: z.number().int().min(0),
   }),
-  z.object({ op: z.literal('add_rule'), rule: RuleSchema, index: z.number().int().min(0) }),
-  z.object({ op: z.literal('add_variable'), variable: VariableSchema }),
-  z.object({ op: z.literal('add_purpose'), purpose: PurposeSchema }),
-  z.object({ op: z.literal('set_messages'), locale: LocaleSchema, entries: keyed(z.partialRecord(TextKeySchema, TranslationEntrySchema)) }),
+  z.strictObject({ op: z.literal('add_rule'), rule: RuleSchema, index: z.number().int().min(0) }),
+  z.strictObject({ op: z.literal('add_variable'), variable: VariableSchema }),
+  z.strictObject({ op: z.literal('add_purpose'), purpose: PurposeSchema }),
+  z.strictObject({ op: z.literal('set_messages'), locale: LocaleSchema, entries: keyed(z.partialRecord(TextKeySchema, TranslationEntrySchema)) }),
 ]);
-export const InsertSnippetResultSchema = z.object({
+export const InsertSnippetResultSchema = z.strictObject({
   ops: z.array(DocumentOpSchema),
   binding: FormTemplateBindingSchema,
   keyMap: keyed(z.record(z.string(), FieldKeySchema)),
@@ -427,34 +427,35 @@ export const InsertSnippetResultSchema = z.object({
 
 const changeId = z.string().min(1).max(128);
 export const TemplateChangeSchema = z.discriminatedUnion('kind', [
-  z.object({ id: changeId, kind: z.enum(['block.added', 'block.removed', 'block.moved']), sourceId, conflict: z.boolean() }),
-  z.object({ id: changeId, kind: z.literal('prop.changed'), sourceId, path: z.string(), base: z.unknown(), theirs: z.unknown(), ours: z.unknown(), conflict: z.boolean() }),
-  z.object({ id: changeId, kind: z.enum(['option.added', 'option.removed', 'option.relabelled']), sourceId, optionId: OptionIdSchema, conflict: z.boolean() }),
-  z.object({ id: changeId, kind: z.enum(['rule.added', 'rule.removed', 'rule.changed']), sourceId, conflict: z.boolean() }),
-  z.object({ id: changeId, kind: z.literal('theme.token.changed'), token: z.string(), conflict: z.boolean() }),
-  z.object({ id: changeId, kind: z.enum(['ending.changed', 'email.changed', 'pdf.changed', 'purpose.changed']), sourceId, conflict: z.boolean() }),
-  z.object({ id: changeId, kind: z.literal('lock.changed'), lockId: LockIdSchema, conflict: z.literal(false) }),
+  z.strictObject({ id: changeId, kind: z.enum(['block.added', 'block.removed', 'block.moved']), sourceId, conflict: z.boolean() }),
+  z.strictObject({ id: changeId, kind: z.literal('prop.changed'), sourceId, path: z.string(), base: z.unknown(), theirs: z.unknown(), ours: z.unknown(), conflict: z.boolean() }),
+  z.strictObject({ id: changeId, kind: z.enum(['option.added', 'option.removed', 'option.relabelled']), sourceId, optionId: OptionIdSchema, conflict: z.boolean() }),
+  z.strictObject({ id: changeId, kind: z.enum(['rule.added', 'rule.removed', 'rule.changed']), sourceId, conflict: z.boolean() }),
+  z.strictObject({ id: changeId, kind: z.literal('theme.token.changed'), token: z.string(), conflict: z.boolean() }),
+  z.strictObject({ id: changeId, kind: z.enum(['ending.changed', 'email.changed', 'pdf.changed', 'purpose.changed']), sourceId, conflict: z.boolean() }),
+  z.strictObject({ id: changeId, kind: z.literal('lock.changed'), lockId: LockIdSchema, conflict: z.literal(false) }),
 ]);
-export const TemplateDiffSchema = z.object({
+export const TemplateDiffSchema = z.strictObject({
   bindingId: TemplateBindingIdSchema,
   from: z.number().int().min(1),
   to: z.number().int().min(1),
   changelog: z.string(),
   changes: z.array(TemplateChangeSchema),
 });
-export const ApplyUpdateRequestSchema = z.object({
+export const ApplyUpdateRequestSchema = z.strictObject({
   to: z.number().int().min(1),
-  decisions: z.array(z.object({ changeId, choice: z.enum(['theirs', 'ours']) })),
+  decisions: z.array(z.strictObject({ changeId, choice: z.enum(['theirs', 'ours']) })),
   draftRev: z.number().int().min(0),
 });
 
-export const FormpackManifestSchema = z.object({
+const packFile = z.strictObject({ path: z.string().min(1), sha256: Sha256HexSchema });
+export const FormpackManifestSchema = z.strictObject({
   format: z.literal('fORM-template-bundle'),
   formatVersion: z.literal(1),
-  pack: z.object({ publisher: z.string().min(1), name: z.string().min(1), version: z.string().min(1) }),
+  pack: z.strictObject({ publisher: z.string().min(1), name: z.string().min(1), version: z.string().min(1) }),
   minAppVersion: z.string().min(1),
   schemaVersion: z.number().int().min(1),
-  templates: z.array(z.object({
+  templates: z.array(z.strictObject({
     slug,
     kind: TemplateKindSchema,
     version: z.number().int().min(1),
@@ -463,12 +464,12 @@ export const FormpackManifestSchema = z.object({
     requiredFeatures: z.array(FeatureIdSchema),
     dependsOn: z.array(z.string()),
   })),
-  categories: z.string().min(1),
-  attestations: z.string().min(1).exactOptional(),
-  assets: z.array(z.object({ path: z.string().min(1), sha256: Sha256HexSchema, mime: z.string().min(1), bytes: z.number().int().min(0) })),
+  categories: packFile,
+  attestations: packFile.exactOptional(),
+  assets: z.array(z.strictObject({ path: z.string().min(1), sha256: Sha256HexSchema, mime: z.string().min(1), bytes: z.number().int().min(0) })),
 });
-export const FormpackSignatureSchema = z.object({ alg: z.enum(['ed25519', 'es256']), keyId: z.string().min(1), sig: z.string().min(1) });
-export const FormpackAttestationSchema = z.object({
+export const FormpackSignatureSchema = z.strictObject({ alg: z.enum(['ed25519', 'es256']), keyId: z.string().min(1), sig: z.string().min(1) });
+export const FormpackAttestationSchema = z.strictObject({
   slug,
   version: z.number().int().min(1),
   locale: LocaleSchema,
@@ -476,7 +477,7 @@ export const FormpackAttestationSchema = z.object({
   reviewedAt: IsoDateSchema,
   scope: z.string().min(1).max(1000),
 });
-export const FormpackTemplateFileSchema = z.object({
+export const FormpackTemplateFileSchema = z.strictObject({
   payload: TemplateVersionPayloadSchema,
   localizations: z.array(TemplateLocalizationSchema.omit({ templateVersionId: true })),
   categorySlugs: z.array(z.string()),
@@ -487,7 +488,7 @@ export const TemplateErrorCodeSchema = z.enum([
   'DRAFT_REV_CONFLICT', 'LOCK_VIOLATION', 'TEMPLATE_VARIABLE_UNRESOLVED', 'TEMPLATE_FEATURE_UNAVAILABLE', 'TEMPLATE_UPDATE_REQUIRED', 'TEMPLATE_INVALID',
 ]);
 
-export const TemplateMigrationIssueSchema = z.object({
+export const TemplateMigrationIssueSchema = z.strictObject({
   code: z.enum([
     'payload_not_object', 'unknown_kind', 'schema_version_invalid', 'schema_version_newer', 'migration_step_missing',
     'document_migration_unavailable', 'migration_failed', 'invalid_payload',
@@ -496,6 +497,6 @@ export const TemplateMigrationIssueSchema = z.object({
   message: z.string(),
 });
 export const TemplateMigrationResultSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), payload: TemplateVersionPayloadSchema, notes: z.array(MigrationNoteSchema) }),
-  z.object({ ok: z.literal(false), issues: z.array(TemplateMigrationIssueSchema) }),
+  z.strictObject({ ok: z.literal(true), payload: TemplateVersionPayloadSchema, notes: z.array(MigrationNoteSchema) }),
+  z.strictObject({ ok: z.literal(false), issues: z.array(TemplateMigrationIssueSchema) }),
 ]);

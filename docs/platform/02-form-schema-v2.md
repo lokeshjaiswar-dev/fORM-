@@ -1,6 +1,6 @@
 # Form schema v2
 
-**Status:** v2.1, revised after the compliance and feasibility reviews (`05-review-log.md`). **Package:** `@form/schema` (`packages/schema/src/v2.ts`), with the zod twins in `v2.zod.ts`.
+**Status:** v2.1, revised after the compliance and feasibility reviews (`05-review-log.md`), with the Phase 0 batch-2 decisions applied (`docs/adr/0002-phase0-batch2-decisions.md`). **Package:** `@form/schema` (`packages/schema/src/v2/*.ts`, split by section), with the zod twins in `src/v2/zod/*.ts`.
 **Verification:** the TypeScript in §2 type-checks with TypeScript 6.0.3 under `--strict --exactOptionalPropertyTypes --noUnusedLocals` with no errors. A companion negative-test file has five `@ts-expect-error` checks that all still fail as intended:
 - a server-only action inside `Rule<ClientAction>`;
 - a JS number given as a `number` answer;
@@ -63,7 +63,9 @@ Three candidate designs were scored. Weights: expressiveness 20%, determinism 20
 
 ## 2. Final TypeScript definitions (`packages/schema/src/v2.ts`)
 
-This is the verified file in full. In the package it is split by section; every exported type has a zod twin with a `z.infer<> === T` assertion test.
+This is the verified file in full. In the package it is split by section (`src/v2/<section>.ts`); every exported type has a zod twin (`src/v2/zod/<section>.ts`) with a `z.infer<> === T` assertion test.
+
+**Twins are strict** (ADR-0002 §1). Every object twin rejects unknown keys (`z.strictObject`; zod issue `unrecognized_keys`) on every wire and storage shape, and records reject an own `__proto__` key, so a parse never drops data silently. Forward compatibility comes from `UnsupportedBlock` (a block of an unknown type is kept whole in `raw`) and the `x-*` extension bags, not from ignoring keys. `parseV1` is the only lenient reader, and it reports every repair.
 
 ```ts
 /**
@@ -170,7 +172,7 @@ export type CountryCode = Brand<string, 'CountryCode'>;  // ISO 3166-1 alpha-2
 export type CurrencyCode = Brand<string, 'CurrencyCode'>;// ISO 4217
 /** Exact decimal `^-?(0|[1-9]\d*)(\.\d{1,10})?$`, ≤ 34 significant digits. Never a JS float. */
 export type DecimalString = Brand<string, 'DecimalString'>;
-/** Integer minor units as a string (paise, cents): '49900' = ₹499.00. */
+/** Integer minor units as a string (paise, cents): '49900' = ₹499.00. Always fits a Postgres bigint (±9223372036854775807). */
 export type MinorUnits = Brand<string, 'MinorUnits'>;
 export type IsoDate = Brand<string, 'IsoDate'>;                  // YYYY-MM-DD
 export type IsoTime = Brand<string, 'IsoTime'>;                  // HH:mm (24h wall clock)
@@ -189,7 +191,7 @@ export type TextAlign = 'left' | 'center' | 'right';
 /** Namespaced extension bag; readers ignore, writers and migrations preserve verbatim. */
 export type Extensions = { readonly [key: `x-${string}`]: unknown };
 
-/** Platform asset store reference (S3/MinIO adapter). External URLs are unrepresentable (CMP-12, S7). */
+/** Platform asset store reference (S3 storage adapter). External URLs are unrepresentable (CMP-12, S7). */
 export interface AssetRef {
   assetId: AssetId;
   /** Required for content images (RSP-06/08) unless `decorative`. */
@@ -985,7 +987,9 @@ export interface PublishIssue {
     | 'bundled_consent' | 'retention_out_of_range' | 'no_ending' | 'empty_page' | 'custom_css_unsafe'
     | 'template_variable_unresolved' | 'brand_ref_unresolved' | 'lock_violation' | 'template_update_required'
     | 'notice_incomplete' | 'consent_after_consent_fields' | 'sensitive_pipe_in_unsafe_context' | 'recipient_not_declared'
-    | 'children_policy_incomplete' | 'data_route_not_permitted' | 'validation_bound_page_order';
+    | 'children_policy_incomplete' | 'data_route_not_permitted' | 'validation_bound_page_order'
+    /** I5/I6: rich text outside the allowed AST (node types, limits, single-paragraph InlineDoc). */
+    | 'invalid_rich_text';
   path: string;        // JSON pointer
   message: string;
   fixUrl?: string;     // e.g. '/settings/org-profile#privacy_contact'
@@ -1004,6 +1008,10 @@ export interface FieldDefinition<T extends BlockType> {
   answerSchema: T extends ValueFieldType ? (block: BlockOf<T>, state: { required: boolean }) => SchemaLike<AnswerValueMap[T]> : null;
   paths: T extends ValueFieldType ? Readonly<Record<string, ComparableKind>> : Readonly<Record<string, never>>;
   operators: Partial<Record<ComparableKind, readonly LogicOperator[]>>;
+  /**
+   * Per-type primitive with no block, so option scalars carry an unbound `blockId: ''`. Never called directly:
+   * `answerScalar(block, value, path)` (@form/registry) is the one scalar contract (ADR-0002 §2).
+   */
   toScalar: T extends ValueFieldType ? (value: AnswerValueMap[T], path?: AnswerPath) => ScalarValue : null;
   isEmpty: T extends ValueFieldType ? (value: AnswerValueMap[T]) => boolean : null;
   translatable(block: BlockOf<T>): TextKey[];
@@ -1524,9 +1532,16 @@ export interface WebhookConfig {   // INT-01
   filter?: ConditionGroup;
 }
 
+/** Every one needs egress; @form/config gates them per edition (`integration:<provider>`, INTEGRATIONS_ENABLED). */
+export const INTEGRATION_PROVIDERS = [
+  'google_sheets', 'google_drive', 'dropbox', 'onedrive', 'slack', 'teams', 'mailchimp', 'hubspot', 'salesforce', 'zoho_crm', 'zapier', 'make',
+  'n8n', 'google_calendar', 'outlook_calendar',
+] as const;
+export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
+
 export interface IntegrationBinding {
   id: IntegrationId;
-  provider: 'google_sheets' | 'google_drive' | 'dropbox' | 'onedrive' | 'slack' | 'teams' | 'mailchimp' | 'hubspot' | 'salesforce' | 'zoho_crm' | 'zapier' | 'make' | 'n8n' | 'google_calendar' | 'outlook_calendar';
+  provider: IntegrationProvider;
   connectionId: ConnectionId;
   settings: Readonly<Record<string, unknown>>;   // provider zod schema
   fieldMap: Array<{ from: FieldKey | `variable:${string}` | `meta:${string}`; to: string }>;
@@ -1982,7 +1997,7 @@ export interface BrandKit {
   updatedBy: UserId; updatedAt: IsoInstant; deletedAt?: IsoInstant;
 }
 
-export type OrgProfileTextField = 'display_name' | 'legal_name' | 'registered_address' | 'privacy_contact.name' | 'privacy_contact.designation' | 'privacy_contact.address' | 'dpo.name';
+export type OrgProfileTextField = 'display_name' | 'legal_name' | 'registered_address' | 'board_complaint_info' | 'privacy_contact.name' | 'privacy_contact.designation' | 'privacy_contact.address' | 'dpo.name';
 /** One per org (P1); source of `org.*` variables and DPDP notice data. */
 export interface PostalAddress { line1: string; line2?: string; city: string; state: string; stateCode?: string; postalCode: string; country: CountryCode }
 export interface OrgProfile {
@@ -1991,7 +2006,8 @@ export interface OrgProfile {
   industry?: string;                 // drives "Recommended" sort
   registeredAddress?: PostalAddress;
   website?: SafeUrl; supportEmail?: EmailAddress; supportPhone?: string;
-  privacyPolicyUrl?: SafeUrl; termsUrl?: SafeUrl;
+  privacyPolicyUrl?: SafeUrl; termsUrl?: SafeUrl; rightsUrl?: SafeUrl;
+  boardComplaintInfo?: string;       // source of `org.board_complaint_info`
   /** s.8(9) contact; source of `org.privacy_contact.*`. */
   privacyContact?: { name: string; designation?: string; email: EmailAddress; phone?: string; address?: PostalAddress };
   dpo?: { name: string; email: EmailAddress; phone?: string };
@@ -2078,15 +2094,45 @@ export interface FormpackManifest {
   pack: { publisher: string; name: string; version: string };
   minAppVersion: string; schemaVersion: number;
   templates: Array<{ slug: string; kind: TemplateKind; version: number; path: string; sha256: Sha256Hex; requiredFeatures: FeatureId[]; dependsOn: string[] /* 'slug@ver' */ }>;
-  categories: string;                // path to categories.json
+  categories: { path: string; sha256: Sha256Hex };     // categories.json
+  attestations?: { path: string; sha256: Sha256Hex };  // attestations.json
   assets: Array<{ path: string; sha256: Sha256Hex; mime: string; bytes: number }>;
 }
-export interface FormpackSignature { alg: 'ed25519'; keyId: string; sig: string }
+/** Per key id: Ed25519 (app-held, KMS-wrapped) by default, ES256 where only a KMS-native key is allowed. */
+export interface FormpackSignature { alg: 'ed25519' | 'es256'; keyId: string; sig: string }
+/** One entry of attestations.json: a reviewer vouching for one template version in one locale. */
+export interface FormpackAttestation { slug: string; version: number; locale: Locale; reviewer: string; reviewedAt: IsoDate; scope: string }
 export interface FormpackTemplateFile { payload: TemplateVersionPayload; localizations: Array<Omit<TemplateLocalization, 'templateVersionId'>>; categorySlugs: string[]; changelog?: string }
 
 export type TemplateErrorCode =
   | 'DRAFT_REV_CONFLICT' | 'LOCK_VIOLATION' | 'TEMPLATE_VARIABLE_UNRESOLVED' | 'TEMPLATE_FEATURE_UNAVAILABLE'
   | 'TEMPLATE_UPDATE_REQUIRED' | 'TEMPLATE_INVALID';
+
+/**
+ * §18 hooks: template payloads are migrated by the same `migrate()` as forms. Payload steps run in
+ * sequence from the payload's `schemaVersion` to SCHEMA_VERSION; a `form` payload's `document` goes
+ * through `migrateDocument` (the form `migrate()` with its MigrationContext bound), and inline refs
+ * are migrated as payloads of their own. Steps are pure and never mutate their input.
+ */
+export type RawTemplatePayload = { kind: TemplateKind; schemaVersion: number } & Record<string, unknown>;
+export interface TemplatePayloadMigrationStep {
+  from: number; to: number;
+  kinds: readonly TemplateKind[];
+  migrate(payload: RawTemplatePayload): { payload: RawTemplatePayload; notes: MigrationNote[] };
+}
+export interface TemplateMigrationContext {
+  migrateDocument?: (doc: unknown) => { definition: FormDefinition; notes: MigrationNote[] };
+  steps?: readonly TemplatePayloadMigrationStep[];
+}
+export interface TemplateMigrationIssue {
+  code: 'payload_not_object' | 'unknown_kind' | 'schema_version_invalid' | 'schema_version_newer' | 'migration_step_missing'
+    | 'document_migration_unavailable' | 'migration_failed' | 'invalid_payload';
+  path: string;
+  message: string;
+}
+export type TemplateMigrationResult =
+  | { ok: true; payload: TemplateVersionPayload; notes: MigrationNote[] }
+  | { ok: false; issues: TemplateMigrationIssue[] };
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §18  VERSIONING AND MIGRATION
@@ -2149,6 +2195,7 @@ export interface AnswerCodec<T extends ValueFieldType> { type: T; upgrade(value:
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §19  PACKAGE ENTRY POINTS (pure unless noted)
+ *      Signatures only, as function types (ADR-0002 §1); implemented in logic, validation, templates-core and schema/migrate.
  * ═════════════════════════════════════════════════════════════════════════ */
 
 export interface EvalMeta {
@@ -2183,18 +2230,18 @@ export interface EvalState {
   trace?: Array<{ step: PlanStep; fired: boolean | null; diagnostics?: string[] }>; // LOG-22
 }
 
-export declare function validateDefinition(def: FormDefinition, mode: 'save' | 'publish', registry: FieldRegistry): PublishIssue[];
-export declare function compile(def: FormDefinition, registry: FieldRegistry): { ok: true; compiled: CompiledForm } | { ok: false; issues: PublishIssue[] };
+export type ValidateDefinition = (def: FormDefinition, mode: 'save' | 'publish', registry: FieldRegistry) => PublishIssue[];
+export type Compile = (def: FormDefinition, registry: FieldRegistry) => { ok: true; compiled: CompiledForm } | { ok: false; issues: PublishIssue[] };
 /** Publish: resolve live vars + brand refs, bump consent noticeVersion, compile, hash. */
-export declare function resolveForPublish(draft: FormDefinition, ctx: { orgProfile: OrgProfile; brandKit: BrandKit | null; previous?: FormVersion }): { definition: FormDefinition; snapshot: VariablesSnapshot; issues: PublishIssue[] };
-export declare function evaluate(version: FormVersion | RuntimeFormVersion, answers: Answers, meta: EvalMeta, scope: 'client' | 'server', opts?: { trace?: boolean }): EvalState;
-export declare function projectForRuntime(version: FormVersion, status: RuntimeStatus, publicConfig: RuntimeFormVersion['publicConfig']): RuntimeFormVersion;
-export declare function migrate(doc: AnyFormDocument, ctx: MigrationContext): { definition: FormDefinition; notes: MigrationNote[] };
-export declare function instantiate(version: TemplateVersion, ctx: InstantiateContext): InstantiateResult;
-export declare function insertSnippet(version: TemplateVersion, form: FormDefinition, at: { pageId: PageId; afterBlockId?: BlockId }, ctx: Omit<InstantiateContext, 'newFormId' | 'include'>): InsertSnippetResult;
-export declare function lockFingerprint(doc: FormDefinition, binding: FormTemplateBinding, lock: LockSpec): Sha256Hex;
-export declare function sanitizeForTemplate(def: FormDefinition, ops: FormOps | undefined, orgProfile: OrgProfile): { payload: FormTemplatePayload; piiHits: Array<{ path: string; kind: 'email' | 'phone_in' | 'pan' | 'aadhaar' | 'gstin' }>; warnings: TemplateWarning[] };
-export declare function diffTemplate(base: TemplateVersion, theirs: TemplateVersion, ours: FormDefinition, binding: FormTemplateBinding): TemplateDiff;
+export type ResolveForPublish = (draft: FormDefinition, ctx: { orgProfile: OrgProfile; brandKit: BrandKit | null; previous?: FormVersion }) => { definition: FormDefinition; snapshot: VariablesSnapshot; issues: PublishIssue[] };
+export type Evaluate = (version: FormVersion | RuntimeFormVersion, answers: Answers, meta: EvalMeta, scope: 'client' | 'server', opts?: { trace?: boolean }) => EvalState;
+export type ProjectForRuntime = (version: FormVersion, status: RuntimeStatus, publicConfig: RuntimeFormVersion['publicConfig']) => RuntimeFormVersion;
+export type Migrate = (doc: AnyFormDocument, ctx: MigrationContext) => { definition: FormDefinition; notes: MigrationNote[] };
+export type Instantiate = (version: TemplateVersion, ctx: InstantiateContext) => InstantiateResult;
+export type InsertSnippet = (version: TemplateVersion, form: FormDefinition, at: { pageId: PageId; afterBlockId?: BlockId }, ctx: Omit<InstantiateContext, 'newFormId' | 'include'>) => InsertSnippetResult;
+export type LockFingerprint = (doc: FormDefinition, binding: FormTemplateBinding, lock: LockSpec) => Sha256Hex;
+export type SanitizeForTemplate = (def: FormDefinition, ops: FormOps | undefined, orgProfile: OrgProfile) => { payload: FormTemplatePayload; piiHits: Array<{ path: string; kind: 'email' | 'phone_in' | 'pan' | 'aadhaar' | 'gstin' }>; warnings: TemplateWarning[] };
+export type DiffTemplate = (base: TemplateVersion, theirs: TemplateVersion, ours: FormDefinition, binding: FormTemplateBinding) => TemplateDiff;
 ```
 
 **Negative type tests** (`packages/schema/test/types.negative.test-d.ts`):
@@ -2234,7 +2281,7 @@ export const okStep: S.RuntimeFormVersion['compiled']['plan'][number] = { kind: 
 | Theme presets | `ThemeTemplatePayload`, `Theme.presetRef` |
 | Email and ending templates | `EmailTemplatePayload` (placeholder recipients only), `EndingTemplatePayload` with `StatusScreenRole` → `FormOps.access.screens` |
 | Updates and diff | `TemplateChange`, `TemplateDiff`, `ApplyUpdateRequest`, `updateState` |
-| Bundles | `FormpackManifest`, `FormpackSignature`, `FormpackTemplateFile` |
+| Bundles | `FormpackManifest` (every listed file, `categories` and `attestations` included, carries its sha256), `FormpackSignature` (`ed25519` or `es256` per key id), `FormpackAttestation`, `FormpackTemplateFile` |
 | Governance | `OrgTemplateSettings`, `OrgProfile`, `TemplateCategory`, `TemplateLocalization` |
 
 The DB tables and RLS from the templates spec §5 map one-to-one onto `Template`, `TemplateVersion`, `TemplateLocalization`, `TemplateCategory`, `BrandKit`, `OrgProfile`, `FormTemplateBinding`, `TemplateForkBinding` and `FormpackManifest`.
@@ -2249,6 +2296,16 @@ The DB tables and RLS from the templates spec §5 map one-to-one onto `Template`
 7. `OrgProfile.localized` covers every `OrgProfileTextField`, not only three fields.
 8. The form variable for purposes is `form.purposes` (the old `form.purpose[]` failed the name regex).
 9. Layout values are `'classic' | 'cards'` everywhere, including SQL checks.
+10. `FormpackSignature.alg` is `'ed25519' | 'es256'`, chosen per key id (templates spec §8.1).
+11. The manifest's `categories` and optional `attestations` entries are `{ path, sha256 }`, like every other file in the bundle, so the one signature over the manifest covers them too (ADR-0002 §3).
+12. `OrgProfile` has `rightsUrl` and `boardComplaintInfo` (the sources of `org.rights_url` and `org.board_complaint_info`), and `board_complaint_info` is a localisable `OrgProfileTextField`.
+
+### 2.2 Registry conventions (ADR-0002 §2)
+
+- **One scalar contract.** Logic, validation and templates read an answer as a scalar only through `answerScalar(block, value, path)` from `@form/registry`, which binds option scalars to the block. `FieldDefinition.toScalar(value, path)` stays the per-type primitive behind it (option scalars carry `blockId: ''`); no block-parameter variant of `toScalar` exists.
+- **Stubs.** Types that are not available yet are defined with `defineStub(type, capability, defaultConfig)` (value types) or `defineStubBlock(type, kind, capability, defaultConfig)` (plain blocks): real `configSchema` and `defaultConfig`, `palette: []`, and a `lint` that reports `missing_capability`. `compile()` treats `missing_capability` as fatal (WP-0.07).
+- **Stub capabilities.** A stub whose feature has no named `Capability` uses the extension form `x-field:<type>` (for example `x-field:full_name`), mirroring the `field:<type>` `FeatureId`.
+- **Draft defaults.** `DRAFT_DEFAULT_CONFIG_TYPES` lists the types whose `defaultConfig` is a draft that `configSchema` rejects: today only `repeating_group` (it starts with no children; the builder inserts the first). Code that validates defaults generically skips them.
 
 ---
 
@@ -2267,7 +2324,7 @@ The DB tables and RLS from the templates spec §5 map one-to-one onto `Template`
 - an option → its label, code or score only through `option_*`.
 
 **References**
-- `answer` reads `registry.toScalar(value, path)`. An unanswered block, or one that is not effectively visible (because it, its section, its group or its page is hidden, or its page is off the path), reads as `null`. "Ignore hidden fields" is therefore always on, transitively.
+- `answer` reads `answerScalar(block, value, path)` (§2.2). An unanswered block, or one that is not effectively visible (because it, its section, its group or its page is hidden, or its page is off the path), reads as `null`. "Ignore hidden fields" is therefore always on, transitively.
 - A repeating-group child outside a row scope reads as a `list` (for `sum`, `count`, `row_count`). Inside a row-scoped rule, `row:'current'` binds to that row.
 - `variable` reads the computed value of a logic variable. `meta` reads the frozen `EvalMeta`.
 
@@ -2279,7 +2336,7 @@ The DB tables and RLS from the templates spec §5 map one-to-one onto `Template`
 
 **Text**
 - Values are NFC-normalised. Case-insensitive comparisons use a generated, locale-independent case-fold table (CaseFolding.txt C+S), never host `toLowerCase()`. `caseSensitive: true` opts out.
-- `len` counts grapheme clusters with a **bundled segmenter pinned to one Unicode version** (generated tables, e.g. `graphemer`), never `Intl.Segmenter`, whose rules differ by host Unicode version (Indic conjunct rule GB9c changed in Unicode 15.1).
+- `len` counts grapheme clusters with a **bundled segmenter pinned to one Unicode version** (`unicode-segmenter`, exported by `@form/i18n`), never `Intl.Segmenter`, whose rules differ by host Unicode version (Indic conjunct rule GB9c changed in Unicode 15.1).
 - Regex validation uses **one engine on both sides**: `re2js` (a pure-JS RE2 port) in the browser and on the server, so `\s`, `\w`, `\b` and case folding behave identically.
 
 **Dates.** All date work happens in `behavior.timeZone`; `today` is the date of `meta.now` in that zone. `date_add(d, n, unit)` clamps to the end of the month. `date_diff` truncates towards zero. `age(dob)` is completed years. `working_days(a, b, calendarId?)` excludes Saturdays, Sundays and holiday-calendar dates. `now` and `today` are the only impure functions; both read the frozen clock.

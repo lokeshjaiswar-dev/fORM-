@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as S from '../src/index.ts';
-import { definition, inline } from './fixtures.ts';
+import { definition, ids, inline } from './fixtures.ts';
 
 const ok = (schema: { safeParse(v: unknown): { success: boolean } }, value: unknown) => schema.safeParse(value).success;
 
@@ -36,6 +36,21 @@ describe('runtime twins reject what the types reject', () => {
     expect(answer('address', { city: '' })).toBe(false);
     expect(answer('address', { city: 'Pune' })).toBe(true);
     expect(ok(S.AnswersSchema, { b1: { type: 'multi_choice', value: { optionIds: [] } } })).toBe(false);
+    expect(answer('matrix', { mode: 'single', rows: {} })).toBe(false);
+    expect(answer('matrix', { mode: 'single', rows: { r1: 'c1' } })).toBe(true);
+    expect(answer('matrix', { mode: 'multi', rows: { r1: [] } })).toBe(false);
+    expect(answer('matrix', { mode: 'grid', rows: { r1: {} } })).toBe(false);
+    expect(answer('matrix', { mode: 'grid', rows: { r1: { c1: '' } } })).toBe(false);
+    expect(answer('matrix', { mode: 'grid', rows: { r1: { c1: true } } })).toBe(true);
+    expect(answer('repeating_group', { rows: [] })).toBe(false);
+    expect(answer('repeating_group', { rows: [{ rowId: 'row_1', values: { b2: { type: 'short_text', value: 'x' } } }] })).toBe(true);
+    const consent = { noticeLocale: 'en-IN', noticeVersion: 1 };
+    expect(answer('consent', { ...consent, items: {} })).toBe(false);
+    expect(answer('consent', { ...consent, items: { item_1: false } })).toBe(true);
+    expect(answer('payment', { currency: 'INR' })).toBe(false);
+    expect(answer('payment', { currency: 'INR', items: [] })).toBe(false);
+    expect(answer('payment', { currency: 'INR', customAmount: '49900' })).toBe(true);
+    expect(answer('payment', { currency: 'INR', items: [{ productId: 'p1', quantity: 1 }] })).toBe(true);
   });
 
   it('template recipients are placeholders only', () => {
@@ -76,6 +91,12 @@ describe('primitives', () => {
     expect(ok(S.DecimalStringSchema, '1'.repeat(35))).toBe(false);
     expect(ok(S.MinorUnitsSchema, '49900')).toBe(true);
     expect(ok(S.MinorUnitsSchema, '499.00')).toBe(false);
+    expect(ok(S.MinorUnitsSchema, '9223372036854775807')).toBe(true);
+    expect(ok(S.MinorUnitsSchema, '-9223372036854775808')).toBe(true);
+    expect(ok(S.MinorUnitsSchema, '9223372036854775808')).toBe(false);
+    expect(ok(S.MinorUnitsSchema, '-9223372036854775809')).toBe(false);
+    expect(ok(S.MinorUnitsSchema, '1'.repeat(20))).toBe(false);
+    expect(ok(S.MinorUnitsSchema, '-0')).toBe(false);
     expect(ok(S.IsoDateSchema, '2028-02-29')).toBe(true);
     expect(ok(S.IsoDateSchema, '2027-02-29')).toBe(false);
     expect(ok(S.IsoTimeSchema, '23:59')).toBe(true);
@@ -155,10 +176,22 @@ describe('recursion is bounded', () => {
 });
 
 describe('definitions', () => {
-  it('parses the fixture and strips unknown keys', () => {
+  it('parses the fixture', () => {
     const def = definition();
-    const parsed = S.FormDefinitionSchema.parse({ ...def, order: 3 });
-    expect(parsed).toEqual(def);
+    expect(S.FormDefinitionSchema.parse(def)).toEqual(def);
+  });
+
+  it('rejects unknown keys instead of dropping them (ADR-0002 §1)', () => {
+    const def = definition();
+    const top = S.FormDefinitionSchema.safeParse({ ...def, order: 3 });
+    expect(top.success).toBe(false);
+    expect(top.error?.issues).toEqual([expect.objectContaining({ code: 'unrecognized_keys', keys: ['order'], path: [] })]);
+    const block = def.blocks[ids.name];
+    expect(ok(S.FormDefinitionSchema, { ...def, blocks: { ...def.blocks, [ids.name]: { ...block, order: 1 } } })).toBe(false);
+    const answer = { type: 'short_text', value: 'Asha' };
+    expect(ok(S.StoredAnswerSchema, answer)).toBe(true);
+    expect(ok(S.StoredAnswerSchema, { ...answer, enc: { v: 1 } })).toBe(false);
+    expect(ok(S.SubmitResultSchema, { ok: false, kind: 'closed', retryAfter: 5 })).toBe(false);
   });
 
   it('keeps blocks of unknown type as UnsupportedBlock (forward compatibility)', () => {

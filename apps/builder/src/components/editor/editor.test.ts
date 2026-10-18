@@ -2,6 +2,7 @@ import { Editor } from '@tiptap/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InlineDocSchema, RichDocSchema, normalizeInlineDoc, normalizeRichDoc } from '@form/schema';
 import { editorExtensions, type EditorKind } from '@/components/editor/extensions';
+import { CLIPBOARD_TYPE } from '@/components/editor/paste';
 import { editorContent, editorDoc, editorHtml } from '@/components/editor/useV1Editor';
 import { RICH_TEXT_FIXTURES } from '@/test/richtext-fixtures';
 import { GOOGLE_DOCS, WORD } from '@form/schema/test-fixtures';
@@ -134,5 +135,102 @@ describe('paste filtering', () => {
     const editor = mount('rich', editorDoc('rich', ''));
     paste(editor, { 'text/html': '<b onclick="alert(1)">x</b><img src=x onerror=alert(1)><a href="javascript:alert(1)">y</a><span style="color:red">z</span>' });
     expect(editorHtml('rich', editor.getJSON())).toBe('<b>x</b>yz');
+  });
+});
+
+describe('builder clipboard (copy and paste between builder editors)', () => {
+  function clipboardEvent(editor: Editor, type: 'copy' | 'cut' | 'paste', store: Map<string, string>) {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    const clipboardData = {
+      getData: (t: string) => store.get(t) ?? '',
+      setData: (t: string, v: string) => store.set(t, v),
+      clearData: () => store.clear(),
+    };
+    Object.defineProperty(event, 'clipboardData', { value: clipboardData });
+    editor.view.dom.dispatchEvent(event);
+    return event;
+  }
+  const formatted = (name: string) => RICH_TEXT_FIXTURES.find((f) => f.name === name)!.doc;
+
+  it('keeps every allowed mark and block that the strict paste rules would drop', () => {
+    const doc = normalizeRichDoc({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Title' }] },
+        { type: 'paragraph', content: [
+          { type: 'text', text: 'red', marks: [{ type: 'strike' }, { type: 'textColor', attrs: { color: '#eb5757' } }] },
+          { type: 'text', text: ' code', marks: [{ type: 'code' }] },
+        ] },
+        { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'quote' }] }] },
+      ],
+    });
+    const source = mount('rich', editorContent(doc));
+    const store = new Map<string, string>();
+    source.commands.selectAll();
+    expect(clipboardEvent(source, 'copy', store).defaultPrevented).toBe(true);
+    expect([...store.keys()].sort()).toEqual([CLIPBOARD_TYPE, 'text/html', 'text/plain'].sort());
+    expect(store.get('text/plain')).toBe('Title\nred code\n> quote');
+    expect(store.get('text/html')).not.toMatch(/\son[a-z]+=/i);
+
+    const target = mount('rich', editorDoc('rich', ''));
+    clipboardEvent(target, 'paste', store);
+    expect(normalizeRichDoc(target.getJSON())).toEqual(doc);
+
+    store.delete(CLIPBOARD_TYPE);
+    const external = mount('rich', editorDoc('rich', ''));
+    clipboardEvent(external, 'paste', store);
+    expect(editorHtml('rich', external.getJSON())).toBe('<p>Title</p><p>red code</p><p>quote</p>');
+  });
+
+  it('round-trips the formatted fixtures and pastes a label into a label inline', () => {
+    const doc = formatted('mixed document');
+    const source = mount('rich', editorContent(doc));
+    const store = new Map<string, string>();
+    source.commands.selectAll();
+    clipboardEvent(source, 'copy', store);
+    const target = mount('rich', editorDoc('rich', ''));
+    clipboardEvent(target, 'paste', store);
+    expect(normalizeRichDoc(target.getJSON())).toEqual(doc);
+
+    const label = mount('inline', editorDoc('inline', 'Name <s>old</s> <span style="color: #eb5757">red</span>'));
+    const labelStore = new Map<string, string>();
+    label.commands.selectAll();
+    clipboardEvent(label, 'copy', labelStore);
+    const other = mount('inline', editorDoc('inline', 'Hi:'));
+    other.commands.focus('end');
+    clipboardEvent(other, 'paste', labelStore);
+    expect(editorHtml('inline', other.getJSON())).toBe('Hi:Name <s>old</s> <span style="color: #eb5757">red</span>');
+  });
+
+  it('cut removes the selection', () => {
+    const editor = mount('inline', editorDoc('inline', 'abc'));
+    const store = new Map<string, string>();
+    editor.commands.setTextSelection({ from: 2, to: 3 });
+    clipboardEvent(editor, 'cut', store);
+    expect(editorHtml('inline', editor.getJSON())).toBe('ac');
+    expect(store.get('text/plain')).toBe('b');
+  });
+
+  it('a forged builder payload is still normalized, and a broken one falls back to the strict rules', () => {
+    const forged = JSON.stringify({
+      format: 'fORM-rich-text',
+      version: 1,
+      doc: { type: 'doc', content: [
+        { type: 'paragraph', content: [
+          { type: 'text', text: 'x', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }, { type: 'bold' }] },
+          { type: 'html', content: '<img src=x onerror=alert(1)>' },
+        ] },
+        { type: 'image', attrs: { asset: { url: 'https://evil.example/x.png' } } },
+      ] },
+    });
+    const editor = mount('rich', editorDoc('rich', ''));
+    clipboardEvent(editor, 'paste', new Map([[CLIPBOARD_TYPE, forged]]));
+    expect(editorHtml('rich', editor.getJSON())).toBe('<b>x</b>');
+
+    for (const broken of ['{', JSON.stringify({ format: 'other', version: 1, doc: {} }), JSON.stringify({ format: 'fORM-rich-text', version: 2, doc: {} })]) {
+      const fallback = mount('rich', editorDoc('rich', ''));
+      clipboardEvent(fallback, 'paste', new Map([[CLIPBOARD_TYPE, broken], ['text/html', '<s>struck</s> <b>bold</b>']]));
+      expect(editorHtml('rich', fallback.getJSON())).toBe('struck <b>bold</b>');
+    }
   });
 });

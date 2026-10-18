@@ -16,7 +16,7 @@ import {
 import { RichDocSchema } from './rich-text.ts';
 import { BehaviorSchema, ThemeSchema } from './theme.ts';
 
-export const FormDefinitionSchema = z.object({
+export const FormDefinitionSchema = z.strictObject({
   schemaVersion: z.literal(SCHEMA_VERSION),
   revision: z.number().int().min(0),
   formId: FormIdSchema,
@@ -35,9 +35,9 @@ export const FormDefinitionSchema = z.object({
   x: ExtensionsSchema.exactOptional(),
 });
 
-export const TemplateOriginStampSchema = z.object({ templateId: TemplateIdSchema, versionId: TemplateVersionIdSchema, name: z.string().max(200) });
+export const TemplateOriginStampSchema = z.strictObject({ templateId: TemplateIdSchema, versionId: TemplateVersionIdSchema, name: z.string().max(200) });
 
-export const FormRecordSchema = z.object({
+export const FormRecordSchema = z.strictObject({
   id: FormIdSchema,
   orgId: OrgIdSchema,
   teamId: TeamIdSchema.exactOptional(),
@@ -61,14 +61,14 @@ export const CapabilitySchema = z.union([
 ]);
 
 const perRow = z.literal('per_row').exactOptional();
-export const ClientRuleStepSchema = z.object({ kind: z.literal('rule'), ruleId: RuleIdSchema, scope: z.literal('client+server'), row: perRow });
-export const ServerRuleStepSchema = z.object({ kind: z.literal('rule'), ruleId: RuleIdSchema, scope: z.literal('server'), row: perRow });
+export const ClientRuleStepSchema = z.strictObject({ kind: z.literal('rule'), ruleId: RuleIdSchema, scope: z.literal('client+server'), row: perRow });
+export const ServerRuleStepSchema = z.strictObject({ kind: z.literal('rule'), ruleId: RuleIdSchema, scope: z.literal('server'), row: perRow });
 const commonSteps = [
-  z.object({ kind: z.literal('default'), blockId: BlockIdSchema }),
-  z.object({ kind: z.literal('capture'), blockId: BlockIdSchema }),
-  z.object({ kind: z.literal('variable'), varId: VariableIdSchema }),
-  z.object({ kind: z.literal('calc'), blockId: BlockIdSchema }),
-  z.object({ kind: z.literal('on_path'), pageId: PageIdSchema }),
+  z.strictObject({ kind: z.literal('default'), blockId: BlockIdSchema }),
+  z.strictObject({ kind: z.literal('capture'), blockId: BlockIdSchema }),
+  z.strictObject({ kind: z.literal('variable'), varId: VariableIdSchema }),
+  z.strictObject({ kind: z.literal('calc'), blockId: BlockIdSchema }),
+  z.strictObject({ kind: z.literal('on_path'), pageId: PageIdSchema }),
 ] as const;
 export const PlanStepSchema = z.discriminatedUnion('kind', [
   ...commonSteps,
@@ -76,7 +76,7 @@ export const PlanStepSchema = z.discriminatedUnion('kind', [
 ]);
 const RuntimePlanStepSchema = z.discriminatedUnion('kind', [...commonSteps, ClientRuleStepSchema]);
 
-export const CompiledFormSchema = z.object({
+export const CompiledFormSchema = z.strictObject({
   engine: z.literal('logic@2'),
   requires: z.array(CapabilitySchema),
   documentOrder: z.array(BlockIdSchema),
@@ -84,12 +84,12 @@ export const CompiledFormSchema = z.object({
   pageOf: keyed(z.partialRecord(BlockIdSchema, PageIdSchema)),
   plan: z.array(PlanStepSchema),
   reads: keyed(z.partialRecord(z.string(), z.array(z.string()))),
-  dataInventory: z.array(z.object({ purposeId: PurposeIdSchema, blockIds: z.array(BlockIdSchema), classifications: z.array(DataClassificationSchema) })),
-  taint: keyed(z.partialRecord(z.string(), z.object({ classification: DataClassificationSchema, purposeIds: z.array(PurposeIdSchema) }))),
+  dataInventory: z.array(z.strictObject({ purposeId: PurposeIdSchema, blockIds: z.array(BlockIdSchema), classifications: z.array(DataClassificationSchema) })),
+  taint: keyed(z.partialRecord(z.string(), z.strictObject({ classification: DataClassificationSchema, purposeIds: z.array(PurposeIdSchema) }))),
   definitionHash: Sha256HexSchema,
 });
 
-export const TemplateLineageEntrySchema = z.object({
+export const TemplateLineageEntrySchema = z.strictObject({
   bindingId: TemplateBindingIdSchema,
   templateId: TemplateIdSchema,
   templateVersionId: TemplateVersionIdSchema,
@@ -97,13 +97,13 @@ export const TemplateLineageEntrySchema = z.object({
   governance: z.enum(['bound', 'detached']),
 });
 
-export const VariablesSnapshotSchema = z.object({
+export const VariablesSnapshotSchema = z.strictObject({
   variables: keyed(z.partialRecord(TemplateVariableNameSchema, z.union([z.string(), keyed(z.partialRecord(LocaleSchema, z.string()))]))),
-  brandKit: z.object({ id: BrandKitIdSchema, tokensHash: Sha256HexSchema, tokens: keyed(z.partialRecord(BrandTokenSchema, z.string())) }).exactOptional(),
+  brandKit: z.strictObject({ id: BrandKitIdSchema, tokensHash: Sha256HexSchema, tokens: keyed(z.partialRecord(BrandTokenSchema, z.string())) }).exactOptional(),
   orgProfileUpdatedAt: IsoInstantSchema.exactOptional(),
 });
 
-export const FormVersionSchema = z.object({
+export const FormVersionSchema = z.strictObject({
   id: FormVersionIdSchema,
   orgId: OrgIdSchema,
   formId: FormIdSchema,
@@ -125,16 +125,16 @@ export const PublicFormDefinitionSchema = FormDefinitionSchema.extend({
 
 const screen = { screen: RichDocSchema };
 export const RuntimeStatusSchema = z.discriminatedUnion('state', [
-  z.object({ state: z.literal('open') }),
-  z.object({ state: z.literal('closed'), ...screen }),
-  z.object({ state: z.literal('not_yet_open'), opensAt: IsoInstantSchema, ...screen }),
-  z.object({ state: z.literal('outside_hours'), nextOpenAt: IsoInstantSchema.exactOptional(), ...screen }),
-  z.object({ state: z.literal('limit_reached'), ...screen }),
-  z.object({ state: z.literal('password'), ...screen }),
-  z.object({ state: z.literal('already_submitted'), ...screen }),
+  z.strictObject({ state: z.literal('open') }),
+  z.strictObject({ state: z.literal('closed'), ...screen }),
+  z.strictObject({ state: z.literal('not_yet_open'), opensAt: IsoInstantSchema, ...screen }),
+  z.strictObject({ state: z.literal('outside_hours'), nextOpenAt: IsoInstantSchema.exactOptional(), ...screen }),
+  z.strictObject({ state: z.literal('limit_reached'), ...screen }),
+  z.strictObject({ state: z.literal('password'), ...screen }),
+  z.strictObject({ state: z.literal('already_submitted'), ...screen }),
 ]);
 
-export const RuntimeFormVersionSchema = z.object({
+export const RuntimeFormVersionSchema = z.strictObject({
   versionId: FormVersionIdSchema,
   formId: FormIdSchema,
   contentHash: Sha256HexSchema,
@@ -142,15 +142,15 @@ export const RuntimeFormVersionSchema = z.object({
   compiled: CompiledFormSchema.omit({ dataInventory: true, taint: true, plan: true }).extend({ plan: z.array(RuntimePlanStepSchema) }),
   status: RuntimeStatusSchema,
   accessToken: z.string().exactOptional(),
-  publicConfig: z.object({
+  publicConfig: z.strictObject({
     edition: z.enum(['saas', 'onprem', 'airgapped']),
-    captcha: z.object({
+    captcha: z.strictObject({
       provider: CaptchaConfigSchema.shape.provider,
       siteKey: z.string().exactOptional(),
       powChallengeUrl: z.string().exactOptional(),
     }).exactOptional(),
-    payment: z.object({ gateway: z.enum(['stripe', 'razorpay']), publishableKey: z.string(), testMode: z.boolean() }).exactOptional(),
-    upload: z.object({ presignUrl: z.string(), maxFileBytes: z.number().int().min(0) }),
+    payment: z.strictObject({ gateway: z.enum(['stripe', 'razorpay']), publishableKey: z.string(), testMode: z.boolean() }).exactOptional(),
+    upload: z.strictObject({ presignUrl: z.string(), maxFileBytes: z.number().int().min(0) }),
     soldOut: z.array(ProductIdSchema).exactOptional(),
     branding: z.boolean(),
     thirdPartyTrackingAllowed: z.boolean(),

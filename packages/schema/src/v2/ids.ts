@@ -68,7 +68,7 @@ export type CountryCode = Brand<string, 'CountryCode'>;  // ISO 3166-1 alpha-2
 export type CurrencyCode = Brand<string, 'CurrencyCode'>;// ISO 4217
 /** Exact decimal `^-?(0|[1-9]\d*)(\.\d{1,10})?$`, ≤ 34 significant digits. Never a JS float. */
 export type DecimalString = Brand<string, 'DecimalString'>;
-/** Integer minor units as a string (paise, cents): '49900' = ₹499.00. */
+/** Integer minor units as a string (paise, cents): '49900' = ₹499.00. Always fits a Postgres bigint (±9223372036854775807). */
 export type MinorUnits = Brand<string, 'MinorUnits'>;
 export type IsoDate = Brand<string, 'IsoDate'>;                  // YYYY-MM-DD
 export type IsoTime = Brand<string, 'IsoTime'>;                  // HH:mm (24h wall clock)
@@ -87,7 +87,7 @@ export type TextAlign = 'left' | 'center' | 'right';
 /** Namespaced extension bag; readers ignore, writers and migrations preserve verbatim. */
 export type Extensions = { readonly [key: `x-${string}`]: unknown };
 
-/** Platform asset store reference (S3/MinIO adapter). External URLs are unrepresentable (CMP-12, S7). */
+/** Platform asset store reference (S3 storage adapter). External URLs are unrepresentable (CMP-12, S7). */
 export interface AssetRef {
   assetId: AssetId;
   /** Required for content images (RSP-06/08) unless `decorative`. */

@@ -1,9 +1,10 @@
 import { Extension, Mark, Node, type AnyExtension, type Editor, type JSONContent } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { ThemeColorTokenSchema, isSafeHref, tokenVar } from '@form/schema';
 import { LINK_REL } from '@form/renderer';
-import { clipboardContent } from '@/components/editor/paste';
+import { CLIPBOARD_TYPE, clipboardContent, clipboardPayload } from '@/components/editor/paste';
 
 export type EditorKind = 'inline' | 'rich';
 
@@ -125,7 +126,26 @@ function insert(editor: Editor, content: JSONContent[], at?: number) {
   else editor.chain().focus().insertContentAt(at, content).run();
 }
 
-/** Paste and external drops go through the `fromHtml` allowlist (paste profile); ProseMirror never parses the HTML. */
+const readClipboard = (data: DataTransfer) => ({ html: data.getData('text/html'), text: data.getData('text/plain'), internal: data.getData(CLIPBOARD_TYPE) });
+
+/** Copy and cut write the selection's AST next to HTML and text, so another builder editor can paste it with full formatting. */
+function writeClipboard(view: EditorView, event: ClipboardEvent): boolean {
+  const data = event.clipboardData;
+  if (!data || view.state.selection.empty) return false;
+  const payload = clipboardPayload(view.state.selection.content().content.toJSON());
+  event.preventDefault();
+  data.clearData();
+  data.setData('text/html', payload.html);
+  data.setData('text/plain', payload.text);
+  data.setData(CLIPBOARD_TYPE, payload.internal);
+  if (event.type === 'cut') view.dispatch(view.state.tr.deleteSelection().scrollIntoView().setMeta('uiEvent', 'cut'));
+  return true;
+}
+
+/**
+ * Paste and external drops: the builder's own payload is normalized with the full rich-text profile; other HTML goes
+ * through the `fromHtml` allowlist (paste profile). ProseMirror never parses the HTML.
+ */
 const SafePaste = Extension.create<{ kind: EditorKind }>({
   name: 'safePaste',
   addOptions() {
@@ -139,11 +159,13 @@ const SafePaste = Extension.create<{ kind: EditorKind }>({
         key: new PluginKey('safePaste'),
         props: {
           handleDOMEvents: {
+            copy: writeClipboard,
+            cut: writeClipboard,
             paste: (_view, event) => {
               const data = event.clipboardData;
               if (!data) return false;
               event.preventDefault();
-              insert(editor, clipboardContent(data.getData('text/html'), data.getData('text/plain'), kind));
+              insert(editor, clipboardContent(readClipboard(data), kind));
               return true;
             },
             drop: (view, event) => {
@@ -151,7 +173,7 @@ const SafePaste = Extension.create<{ kind: EditorKind }>({
               if (view.dragging || !data) return false;
               event.preventDefault();
               const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
-              insert(editor, clipboardContent(data.getData('text/html'), data.getData('text/plain'), kind), pos?.pos);
+              insert(editor, clipboardContent(readClipboard(data), kind), pos?.pos);
               return true;
             },
           },

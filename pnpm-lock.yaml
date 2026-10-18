@@ -380,6 +380,9 @@ importers:
       '@form/ports':
         specifier: workspace:*
         version: link:../ports
+      '@form/schema':
+        specifier: workspace:*
+        version: link:../schema
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -443,6 +446,9 @@ importers:
         specifier: 0.17.3
         version: 0.17.3
     devDependencies:
+      '@form/schema':
+        specifier: workspace:*
+        version: link:../schema
       '@form/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
@@ -515,6 +521,10 @@ importers:
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/ports:
+    dependencies:
+      '@form/schema':
+        specifier: workspace:*
+        version: link:../schema
     devDependencies:
       '@form/tsconfig':
         specifier: workspace:*

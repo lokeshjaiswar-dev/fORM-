@@ -115,6 +115,9 @@ describe('template parts', () => {
     const { attestations: _omit, ...withoutAttestations } = manifest();
     expect(ok(S.FormpackManifestSchema, withoutAttestations)).toBe(true);
     expect(ok(S.FormpackManifestSchema, { ...manifest(), formatVersion: 2 })).toBe(false);
+    expect(ok(S.FormpackManifestSchema, { ...manifest(), categories: 'categories.json' })).toBe(false);
+    expect(ok(S.FormpackManifestSchema, { ...manifest(), categories: { path: 'categories.json' } })).toBe(false);
+    expect(ok(S.FormpackManifestSchema, { ...manifest(), attestations: { path: 'attestations.json', sha256: 'A'.repeat(64) } })).toBe(false);
     expect(ok(S.FormpackManifestSchema, { ...manifest(), templates: [{ ...manifest().templates[0], kind: 'survey' }] })).toBe(false);
     expect(ok(S.FormpackSignatureSchema, { alg: 'ed25519', keyId: 'fORM-release-2026', sig: 'c2ln' })).toBe(true);
     expect(ok(S.FormpackSignatureSchema, { alg: 'es256', keyId: 'azure-kv-1', sig: 'c2ln' })).toBe(true);

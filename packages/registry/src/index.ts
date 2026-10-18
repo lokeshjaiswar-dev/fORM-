@@ -77,7 +77,7 @@ export function bindScalar(scalar: ScalarValue, blockId: BlockId): ScalarValue {
   return scalar;
 }
 
-/** `registry.toScalar` for a block's answer, with option scalars bound to the block. */
+/** The one scalar contract (ADR-0002 §2): `registry.toScalar` for a block's answer, with option scalars bound to the block. */
 export const answerScalar = <T extends ValueFieldType>(block: FieldBlockOf<T>, value: AnswerValueMap[T], path?: AnswerPath): ScalarValue =>
   bindScalar(valueDefinition(block.type).toScalar(value, path), block.id);
 

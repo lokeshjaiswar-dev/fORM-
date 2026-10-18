@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@form/ports": "workspace:*",
+    "@form/schema": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
