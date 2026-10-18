@@ -1,0 +1,26 @@
+{
+  "name": "@form/schema",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "twins": "vitest run test/twins.coverage.test.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "canonicalize": "5.1.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@form/tsconfig": "workspace:*",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

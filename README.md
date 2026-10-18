@@ -10,13 +10,14 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 |---|---|---|
 | `apps/builder` | `@form/builder` | Vite + React form builder |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
+| `packages/schema` | `@form/schema` | Form schema v2 types, zod twins, v1 reader, structural validation, JCS hashing |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; no dependencies |
 | `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …) and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, `api`, `worker`, `schema`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `api`, `worker`, `registry`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
 ## Prerequisites
 
@@ -70,7 +71,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 |---|---|
 | `pnpm lint` | Lint with oxlint |
 | `pnpm typecheck` | Type-check every project |
-| `pnpm test` | Unit and component tests (Vitest, jsdom) with coverage in `apps/builder/coverage` |
+| `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage` |
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |

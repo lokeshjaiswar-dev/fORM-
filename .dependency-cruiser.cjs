@@ -46,8 +46,15 @@ module.exports = {
     {
       name: 'no-circular',
       severity: 'error',
-      from: {},
+      from: { pathNot: '^packages/schema/src/v2/' },
       to: { circular: true },
+    },
+    {
+      name: 'no-circular-schema-runtime',
+      comment: 'The schema v2 section files import types from one another (the contract is mutually recursive); those imports are erased at compile time. Runtime cycles still fail.',
+      severity: 'error',
+      from: { path: '^packages/schema/src/v2/' },
+      to: { circular: true, viaOnly: { dependencyTypesNot: ['type-only'] } },
     },
     {
       name: 'pure-no-react-or-node',
