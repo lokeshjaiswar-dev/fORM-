@@ -1,0 +1,514 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`export headers > match the snapshot 1`] = `
+{
+  "blank label": [
+    {
+      "header": "short_text",
+      "suffix": "",
+    },
+  ],
+  "date": [
+    {
+      "header": "My date",
+      "suffix": "",
+    },
+  ],
+  "email": [
+    {
+      "header": "My email",
+      "suffix": "",
+    },
+  ],
+  "file_upload": [
+    {
+      "header": "My file upload",
+      "suffix": "",
+    },
+  ],
+  "hidden": [
+    {
+      "header": "My hidden",
+      "suffix": "",
+    },
+  ],
+  "linear_scale": [
+    {
+      "header": "My linear scale",
+      "suffix": "",
+    },
+  ],
+  "long_text": [
+    {
+      "header": "My long text",
+      "suffix": "",
+    },
+  ],
+  "multi_choice": [
+    {
+      "header": "My multi choice",
+      "suffix": "",
+    },
+  ],
+  "multi_choice+other": [
+    {
+      "header": "My multi choice",
+      "suffix": "",
+    },
+    {
+      "header": "My multi choice (Something else)",
+      "suffix": ".other",
+    },
+  ],
+  "nps": [
+    {
+      "header": "My nps",
+      "suffix": "",
+    },
+  ],
+  "number": [
+    {
+      "header": "My number",
+      "suffix": "",
+    },
+  ],
+  "phone": [
+    {
+      "header": "My phone",
+      "suffix": "",
+    },
+  ],
+  "ranking": [
+    {
+      "header": "My ranking #1",
+      "suffix": ".1",
+    },
+    {
+      "header": "My ranking #2",
+      "suffix": ".2",
+    },
+    {
+      "header": "My ranking #3",
+      "suffix": ".3",
+    },
+  ],
+  "ranking+top2": [
+    {
+      "header": "My ranking #1",
+      "suffix": ".1",
+    },
+    {
+      "header": "My ranking #2",
+      "suffix": ".2",
+    },
+  ],
+  "rating": [
+    {
+      "header": "My rating",
+      "suffix": "",
+    },
+  ],
+  "short_text": [
+    {
+      "header": "My short text",
+      "suffix": "",
+    },
+  ],
+  "signature": [
+    {
+      "header": "My signature",
+      "suffix": "",
+    },
+  ],
+  "single_choice": [
+    {
+      "header": "My single choice",
+      "suffix": "",
+    },
+  ],
+  "single_choice+other": [
+    {
+      "header": "My single choice",
+      "suffix": "",
+    },
+    {
+      "header": "My single choice (Other)",
+      "suffix": ".other",
+    },
+  ],
+  "time": [
+    {
+      "header": "My time",
+      "suffix": "",
+    },
+  ],
+  "time+range": [
+    {
+      "header": "My time",
+      "suffix": "",
+    },
+    {
+      "header": "My time (end)",
+      "suffix": ".end",
+    },
+  ],
+  "url": [
+    {
+      "header": "My url",
+      "suffix": "",
+    },
+  ],
+}
+`;
+
+exports[`operator matrix > matches the snapshot 1`] = `
+{
+  "date": {
+    "operators": {
+      "date": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "before",
+        "after",
+        "on_or_before",
+        "on_or_after",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "date",
+    },
+  },
+  "email": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
+  "file_upload": {
+    "operators": {
+      "file": [
+        "is_answered",
+        "is_not_answered",
+        "count_eq",
+        "count_gte",
+        "count_lte",
+      ],
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "file",
+      "count": "number",
+    },
+  },
+  "hidden": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
+  "linear_scale": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+    },
+  },
+  "long_text": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
+  "multi_choice": {
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "includes_any",
+        "includes_all",
+        "includes_none",
+        "count_eq",
+        "count_gte",
+        "count_lte",
+      ],
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "choices",
+      "count": "number",
+      "other": "text",
+    },
+  },
+  "nps": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+    },
+  },
+  "number": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+    },
+  },
+  "phone": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+      "country": "text",
+      "e164": "text",
+    },
+  },
+  "ranking": {
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "choices",
+    },
+  },
+  "rating": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+    },
+  },
+  "short_text": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+        "matches_preset",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
+  "signature": {
+    "operators": {
+      "boolean": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "boolean",
+    },
+  },
+  "single_choice": {
+    "operators": {
+      "choice": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "includes_any",
+        "includes_none",
+      ],
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "choice",
+      "other": "text",
+    },
+  },
+  "time": {
+    "operators": {
+      "time": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "before",
+        "after",
+        "on_or_before",
+        "on_or_after",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "time",
+      "end": "time",
+      "start": "time",
+    },
+  },
+  "url": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
+}
+`;

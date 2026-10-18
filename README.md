@@ -14,6 +14,7 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/observability` | `@form/observability` | pino logger with redaction, URL and query scrubbing, NTP clock check, OpenTelemetry (OTLP only when configured) |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
 | `packages/schema` | `@form/schema` | Form schema v2 types, zod twins, v1 reader, structural validation, JCS hashing |
+| `packages/registry` | `@form/registry` | Field registry (`REGISTRY: FieldRegistry`): config and answer schemas, operators, paths, compliance defaults, export columns and lint for every block type |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; no dependencies |
 | `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
