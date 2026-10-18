@@ -40,6 +40,14 @@ jobs:
           restore-keys: turbo-check-${{ runner.os }}-
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Rich text is an AST rendered as React elements (WP-0.08): no HTML sink may come back.
+      - name: No HTML sinks in apps or packages
+        run: |
+          set +e
+          git grep -nE 'innerHTML|dangerouslySetInnerHTML|execCommand' -- apps packages
+          status=$?
+          if [ "$status" -eq 0 ]; then echo "::error::HTML sink found in apps or packages"; exit 1; fi
+          if [ "$status" -ne 1 ]; then echo "::error::git grep failed with exit code $status"; exit "$status"; fi
       - run: pnpm typecheck
       - run: pnpm i18n:extract --check
       - run: pnpm test

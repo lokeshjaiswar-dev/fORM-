@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils';
 import { inputStyle, labelStyle } from '@/lib/blockStyle';
 import { ratingCount, scaleRange } from '@/lib/fields';
 import { SignaturePad } from '@/components/blocks/SignaturePad';
-import { RichText } from '@/components/builder/RichText';
+import { InlineEditor } from '@/components/editor/InlineEditor';
+import { RichEditor } from '@/components/editor/RichEditor';
 
 const box =
   'pointer-events-none flex min-h-10 w-full items-center rounded-md border border-zinc-200 bg-white px-3 text-[15px] text-zinc-400';
@@ -27,7 +28,7 @@ export function EditBlock({ block }: { block: FormBlock }) {
     const size =
       block.type === 'heading' ? 'text-[32px]' : block.type === 'heading_2' ? 'text-[24px]' : 'text-[20px]';
     return (
-      <RichText
+      <InlineEditor
         value={block.label}
         onChange={(label) => updateBlock(block.id, { label })}
         onEnter={onEnter}
@@ -41,7 +42,7 @@ export function EditBlock({ block }: { block: FormBlock }) {
 
   if (block.type === 'paragraph') {
     return (
-      <RichText
+      <RichEditor
         value={block.label}
         onChange={(label) => updateBlock(block.id, { label })}
         onEnter={onEnter}
@@ -69,7 +70,7 @@ export function EditBlock({ block }: { block: FormBlock }) {
 
   if (block.type === 'thank_you') {
     return (
-      <RichText
+      <InlineEditor
         value={block.label}
         onChange={(label) => updateBlock(block.id, { label })}
         onEnter={onEnter}
@@ -84,12 +85,13 @@ export function EditBlock({ block }: { block: FormBlock }) {
     <div className={cn('space-y-2', width)}>
       {!block.customize?.hideLabel && (
         <div className="flex h-8 min-w-0 items-center gap-1">
-          <RichText
+          <InlineEditor
             value={block.label}
             onChange={(label) => updateBlock(block.id, { label })}
             onEnter={onEnter}
             autoFocus={focused}
             fill={false}
+            editorClassName="whitespace-pre!"
             className="min-h-8 min-w-[12.5rem] whitespace-nowrap bg-transparent text-left text-[22px] font-semibold leading-8"
             style={labelStyle(block)}
             placeholder={placeholder}

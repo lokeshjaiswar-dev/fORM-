@@ -13,15 +13,16 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/db` | `@form/db` | Drizzle tables, SQL migrations, roles (`fr_migrator`, `fr_app`, `fr_template_seeder`, `fr_system_agg`), null-safe RLS helpers, `withTenant()`, definer functions, RLS meta-checks |
 | `packages/observability` | `@form/observability` | pino logger with redaction, URL and query scrubbing, NTP clock check, OpenTelemetry (OTLP only when configured) |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
-| `packages/schema` | `@form/schema` | Form schema v2 types, zod twins, v1 reader, structural validation, JCS hashing |
 | `packages/registry` | `@form/registry` | Field registry (`REGISTRY: FieldRegistry`): config and answer schemas, operators, paths, compliance defaults, export columns and lint for every block type |
+| `packages/schema` | `@form/schema` | Form schema v2 types, zod twins, v1 reader, structural validation, JCS hashing, rich-text AST tools (`fromHtml` allowlist, `normalize`, `toPlain`) |
+| `packages/renderer` | `@form/renderer` | React rendering of form content; today `RichTextView` (rich-text AST → React elements) |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; no dependencies |
 | `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, `worker`, `registry`, `logic`, `validation`, `renderer`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `worker`, `logic`, `validation`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
 ## Prerequisites
 
@@ -90,6 +91,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |
+| `git grep -nE 'innerHTML\|dangerouslySetInnerHTML\|execCommand' -- apps packages` | Must find nothing: rich text is an AST rendered as React elements (CI fails on any match) |
 | `pnpm i18n:extract` | Regenerate `packages/i18n/locales/en-IN/*.json` from `defineMessages(…)` calls; `--check` only reports stale catalogues (CI runs it) |
 
 **First e2e run:** download the browser once:

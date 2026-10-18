@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
 import type { LogicOperator } from '@/types/form';
 import { LOGIC_OPERATORS, operatorNeedsValue } from '@/lib/logic';
+import { labelText } from '@/lib/v1html';
 
 const TABS = ['Customize', 'Logic', 'Validations'] as const;
 
@@ -229,7 +230,7 @@ export function BlockInspector() {
                     placeholder="Select a question"
                     options={otherFields.map((b) => ({
                       value: b.id,
-                      label: (b.label || b.type).replace(/<[^>]+>/g, '') || b.type,
+                      label: labelText(b.label) || b.type,
                     }))}
                   />
                 </Field>

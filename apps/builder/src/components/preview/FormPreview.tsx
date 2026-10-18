@@ -12,12 +12,14 @@ import { NiceSelect } from '@/components/ui/select';
 import { SignaturePad } from '@/components/blocks/SignaturePad';
 import type { FormBlock, PreviewDevice } from '@/types/form';
 import { cn } from '@/lib/utils';
-import { inputStyle, labelStyle } from '@/lib/blockStyle';
+import { inputStyle, labelStyle, themeVars } from '@/lib/blockStyle';
 import { isHalf, packRows } from '@/lib/layout';
 import { Tooltip } from '@/components/ui/tooltip';
 import { DeviceFrame } from '@/components/preview/DeviceFrame';
 import { Confetti } from '@/components/preview/Confetti';
-import { safeRedirectUrl, sanitizeHtml } from '@/lib/sanitize';
+import { safeRedirectUrl } from '@/lib/url';
+import { RichTextView } from '@form/renderer';
+import { isEmptyLabel, labelDoc, richDoc } from '@/lib/v1html';
 
 function pagesOf(blocks: FormBlock[]) {
   const pages: FormBlock[][] = [[]];
@@ -111,7 +113,9 @@ export function FormPreview() {
           <div className={cn('relative z-20 mx-auto flex size-12 items-center justify-center rounded-full bg-[#edf3ec] text-[#448361]', s.successAnimation && 'success-pop')}>
             <Check className="size-5" />
           </div>
-          <h2 className="relative z-20 mt-4 max-w-md text-[22px] font-semibold">{ty?.label || s.successMessage}</h2>
+          <h2 className="fr-label relative z-20 mt-4 max-w-md text-[22px] font-semibold">
+            {ty && !isEmptyLabel(ty.label) ? <RichTextView doc={labelDoc(ty.label)} inline /> : s.successMessage}
+          </h2>
           <button
             type="button"
             className="relative z-20 mt-6 rounded-[4px] px-3 py-1.5 text-[14px] text-zinc-500 hover:bg-zinc-100"
@@ -216,8 +220,9 @@ function ScreenShell({
   font: string;
   fill?: boolean;
 }) {
+  const settings = useFormStore((s) => s.form.settings);
   return (
-    <div className={fill ? 'flex h-full min-h-full flex-col' : 'min-h-full'} style={{ background: bg, color, fontFamily: font }}>
+    <div className={fill ? 'flex h-full min-h-full flex-col' : 'min-h-full'} style={{ ...themeVars(settings), background: bg, color, fontFamily: font }}>
       {children}
     </div>
   );
@@ -240,20 +245,26 @@ function PreviewField({
   if (!isBlockVisible(block, values, blocks)) return null;
 
   if (block.type === 'heading')
-    return <h2 className="pt-2 text-left text-[30px] font-bold leading-[1.2]" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
+    return <h2 className="fr-label pt-2 text-left text-[30px] font-bold leading-[1.2]"><RichTextView doc={labelDoc(block.label)} inline /></h2>;
   if (block.type === 'heading_2')
-    return <h3 className="pt-1 text-left text-[24px] font-bold" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
+    return <h3 className="fr-label pt-1 text-left text-[24px] font-bold"><RichTextView doc={labelDoc(block.label)} inline /></h3>;
   if (block.type === 'heading_3')
-    return <h4 className="text-left text-[20px] font-semibold" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
+    return <h4 className="fr-label text-left text-[20px] font-semibold"><RichTextView doc={labelDoc(block.label)} inline /></h4>;
   if (block.type === 'paragraph')
-    return <p className="text-left text-[16px] leading-[1.6]" dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />;
+    return (
+      <div className="fr-rich text-left text-[16px] leading-[1.6]">
+        <RichTextView doc={richDoc(block.label)} />
+      </div>
+    );
   if (block.type === 'divider') return <hr className="border-zinc-200" />;
 
   return (
     <div className="space-y-1.5 text-left">
       {!block.customize?.hideLabel && (
         <label className="text-[16px] font-medium" style={labelStyle(block)}>
-          <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.label) }} />
+          <span className="fr-label">
+            <RichTextView doc={labelDoc(block.label)} inline />
+          </span>
           {block.validation?.required && <span className="text-black"> *</span>}
         </label>
       )}

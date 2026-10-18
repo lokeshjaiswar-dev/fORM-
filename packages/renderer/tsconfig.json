@@ -1,0 +1,9 @@
+{
+  "extends": "@form/tsconfig/strict.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "jsx": "react-jsx",
+    "types": []
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

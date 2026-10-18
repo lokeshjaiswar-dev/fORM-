@@ -73,3 +73,53 @@ button {
 .success-pop {
   animation: success-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+.fr-rich ul,
+.ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+.fr-rich ol,
+.ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.fr-rich blockquote,
+.ProseMirror blockquote {
+  border-left: 3px solid #e4e4e7;
+  padding-left: 0.75em;
+  color: #787774;
+}
+.fr-rich h1,
+.ProseMirror h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+}
+.fr-rich h2,
+.ProseMirror h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+}
+.fr-rich h3,
+.ProseMirror h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+.fr-rich hr,
+.ProseMirror hr {
+  margin: 0.5em 0;
+  border-color: #e4e4e7;
+}
+.fr-rich a,
+.ProseMirror a,
+.fr-label a {
+  text-decoration: underline;
+}
+.ProseMirror code,
+.fr-rich code,
+.fr-label code {
+  border-radius: 4px;
+  background: #f4f4f5;
+  padding: 0 0.25em;
+  font-size: 0.9em;
+}

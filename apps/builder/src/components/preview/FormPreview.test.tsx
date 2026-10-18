@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { FormPreview } from '@/components/preview/FormPreview';
 import { block, resetStore } from '@/test/fixtures';
 import type { FormBlock } from '@/types/form';
+import { XSS_PAYLOADS } from '@form/schema/test-fixtures';
 
 function renderPreview(blocks: FormBlock[]) {
   resetStore(blocks);
@@ -135,16 +136,28 @@ describe('FormPreview', () => {
     expect(await screen.findByText(thanks)).toBeInTheDocument();
   });
 
-  it('S1/S2: labels are sanitised before they are rendered as HTML', () => {
+  it('S1/S2/S4: stored label HTML is rendered from the AST, never as HTML', () => {
     renderPreview([
-      block('paragraph', { id: 'p', label: '<b>Bold</b><img src=x onerror=alert(1)><a href="javascript:alert(1)">bad</a>' }),
+      block('paragraph', { id: 'p', label: '<b>Bold</b><img src=x onerror=alert(1)><a href="javascript:alert(1)">bad</a> <a href="https://ok.example">ok</a>' }),
       block('text', { id: 't', label: '<span style="color: red; position: fixed">Name</span><script>alert(1)</script>' }),
     ]);
     expect(document.querySelector('img, script')).toBeNull();
-    expect(screen.getByText('Bold').tagName).toBe('B');
+    expect(screen.getByText('Bold').tagName).toBe('STRONG');
     expect(screen.getByText('bad')).not.toHaveAttribute('href');
-    expect(screen.getByText('Name').getAttribute('style')).toBe('color: red;');
+    expect(screen.getByText('ok')).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+    expect(screen.getByText('Name').getAttribute('style')).toBe('color: rgb(255, 0, 0);');
   });
+
+  it('renders the XSS corpus as inert text and safe elements', () => {
+    const types = ['paragraph', 'heading', 'text', 'heading_2'] as const;
+    renderPreview(XSS_PAYLOADS.map((label, i) => block(types[i % types.length], { id: `b${i}`, label })));
+    const elements = [...document.body.querySelectorAll('*')];
+    expect(elements.flatMap((el) => [...el.attributes].map((a) => a.name)).filter((name) => name.startsWith('on'))).toEqual([]);
+    for (const a of document.querySelectorAll('a')) expect(a.getAttribute('href')).toMatch(/^(https?:\/\/|mailto:|tel:)/);
+    const form = document.querySelector('form');
+    expect(form?.textContent).toContain('docs');
+    expect(form?.querySelector('script, img, iframe, svg, math, dialog, object, embed, style, form, base, meta, link, template')).toBeNull();
+  }, 30_000);
 
   it('B28: rating and scale point counts are clamped', () => {
     renderPreview([

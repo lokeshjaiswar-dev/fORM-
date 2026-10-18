@@ -6,3 +6,4 @@ export { jsonPointer, validateStructure } from './validate/structure.ts';
 export type { StructureOptions } from './validate/structure.ts';
 export { canonicalJson, contentHash, sha256Jcs } from './hash.ts';
 export { TEMPLATE_PAYLOAD_MIGRATIONS, migrateTemplatePayload } from './migrate/templates.ts';
+export * from './richtext/index.ts';

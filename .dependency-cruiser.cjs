@@ -83,6 +83,20 @@ module.exports = {
       to: { dependencyTypes: ['core'] },
     },
     {
+      name: 'html-parsing-only-in-schema-richtext',
+      comment: 'HTML is read in one place: the @form/schema fromHtml allowlist (WP-0.08). No sanitiser shims, no second parser.',
+      severity: 'error',
+      from: { pathNot: '^packages/schema/src/richtext/' },
+      to: { path: ['(^|/)node_modules/(htmlparser2|dompurify|isomorphic-dompurify|sanitize-html|parse5|domhandler)/', '^(htmlparser2|dompurify|isomorphic-dompurify|sanitize-html|parse5|domhandler)(/|$)'] },
+    },
+    {
+      name: 'schema-test-fixtures-only-from-tests',
+      comment: '@form/schema/test-fixtures (XSS corpus, paste samples) is test data: unit tests and e2e specs only.',
+      severity: 'error',
+      from: { pathNot: [TESTS, '^apps/[^/]+/e2e/', '^packages/schema/test/'] },
+      to: { path: '^packages/schema/test/' },
+    },
+    {
       name: 'no-deep-import',
       comment: 'Import @form/* packages through their exports, never their src/ files.',
       severity: 'error',
@@ -148,7 +162,8 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: ['(^|/)dist/', '(^|/)coverage/'] },
+    /* Workspace build output only: npm packages ship their code in dist/ and must stay visible to the rules. */
+    exclude: { path: ['^(apps|packages)/[^/]+/(dist|coverage)/'] },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: path.join(__dirname, 'apps/builder/tsconfig.app.json') },
     enhancedResolveOptions: {

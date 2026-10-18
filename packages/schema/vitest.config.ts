@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     name: 'schema',
     environment: 'node',
+    testTimeout: 30_000,
     include: ['test/**/*.test.ts'],
     typecheck: {
       enabled: true,

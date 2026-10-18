@@ -11,7 +11,8 @@ import { TemplateModal } from '@/components/builder/TemplateModal';
 import { isHalf, packRows } from '@/lib/layout';
 import type { FieldType, FormBlock } from '@/types/form';
 import { cn } from '@/lib/utils';
-import { escapeHtml } from '@/lib/sanitize';
+import { textToV1Html } from '@/lib/v1html';
+import { themeVars } from '@/lib/blockStyle';
 import { Tooltip } from '@/components/ui/tooltip';
 
 export function FormCanvas() {
@@ -51,6 +52,7 @@ export function FormCanvas() {
     <div
       ref={setNodeRef}
       className={cn('min-h-full flex-1 overflow-y-auto overflow-x-hidden bg-white', isOver && 'bg-[#fafafa]')}
+      style={themeVars(form.settings)}
       onClick={() => setActiveBlock(null)}
     >
       <div className="mx-auto w-full max-w-[720px] pb-40 pl-[108px] pr-8 pt-[72px]">
@@ -132,7 +134,7 @@ export function FormCanvas() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && draft && !draft.startsWith('/')) {
                       e.preventDefault();
-                      addBlock('paragraph', form.blocks.length, { label: escapeHtml(draft) });
+                      addBlock('paragraph', form.blocks.length, { label: textToV1Html(draft) });
                       setDraft('');
                     }
                   }}
