@@ -1,0 +1,30 @@
+{
+  "name": "@form/templates-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:determinism": "playwright test"
+  },
+  "dependencies": {
+    "@form/registry": "workspace:*",
+    "@form/schema": "workspace:*",
+    "@noble/hashes": "catalog:"
+  },
+  "devDependencies": {
+    "@form/logic": "workspace:*",
+    "@form/tsconfig": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

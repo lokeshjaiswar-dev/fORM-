@@ -1,0 +1,17 @@
+export { TemplateCoreError } from './errors.ts';
+export type { TemplateCoreErrorCode } from './errors.ts';
+export { instantiate } from './instantiate.ts';
+export { LOCK_FINGERPRINT_VERSION, lockFingerprint, opsLockFingerprint } from './lock.ts';
+export { NOTHING_REMOVED, applyOptionalParts, partIncluded, pruneRemoved } from './parts.ts';
+export type { Removed } from './parts.ts';
+export { PII_KINDS, scanPii, verhoeffValid } from './pii.ts';
+export type { PiiKind, PiiMatch } from './pii.ts';
+export { IDENTITY, cloneJson, inverseRemapOf, mapKey, parseMapKey, remapOf, remapRefs, remapTextKey, textKeyRef } from './remap.ts';
+export type { IdNamespace, Remap } from './remap.ts';
+export { TEMPLATE_FORM_ID, sanitizeForTemplate } from './sanitize.ts';
+export { OFFLINE_ACTOR, ROOT_SOURCE_ID, uniqueKey } from './shared.ts';
+export type { Actor, EngineOptions } from './shared.ts';
+export { applyDocumentOps, insertSnippet } from './snippet.ts';
+export { SEED_NAMESPACE, isUuid, seedNamespace, uuidv5 } from './uuid.ts';
+export { bakeVariables, bindingOf, orgValue, resolveVariables, variableNames } from './variables.ts';
+export type { ResolvedVariables, VariableContext } from './variables.ts';

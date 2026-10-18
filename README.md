@@ -17,6 +17,7 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/schema` | `@form/schema` | Form schema v2 types, strict zod twins, v1 reader, structural validation, JCS hashing, rich-text AST tools (`fromHtml` allowlist, `normalize`, `toPlain`) |
 | `packages/registry` | `@form/registry` | Field registry (`REGISTRY: FieldRegistry`): config and answer schemas, operators, paths, compliance defaults, export columns and lint for every block type; `answerScalar` |
 | `packages/logic` | `@form/logic` | The `logic@2` engine: `compile()` (plan, cycles, page order, taint), `evaluate()` (full and incremental), `validateDefinition`, `projectForRuntime`; deterministic across Node, Chromium, Firefox and WebKit |
+| `packages/templates-core` | `@form/templates-core` | The template engine: `instantiate()` (deterministic `uuidv5` ids, remapped references, origin stamps, baked variables, optional parts, refs and bindings), `insertSnippet()`, `lockFingerprint()`, the save-as-template sanitiser with its PII scan; byte-identical across Node, Chromium, Firefox and WebKit |
 | `packages/renderer` | `@form/renderer` | React rendering of form content; today `RichTextView` (rich-text AST → React elements) |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; depends only on `@form/schema` (its brands) |
@@ -93,7 +94,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 | `pnpm test:int` | Integration tests against Postgres 18 in Testcontainers: migrations, RLS isolation for every actor kind, RLS meta-tests, definer functions, the API, the worker (outbox enqueue, forged jobs, SIGTERM retries, partitions) (CI job `db`). Needs Docker |
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
-| `pnpm test:determinism` | Runs the `@form/logic` corpus in Chromium, Firefox and WebKit and diffs every `EvalState` JSON byte-for-byte with Node's, plus the `@form/i18n` grapheme corpus (CI job `determinism`) |
+| `pnpm test:determinism` | Runs the `@form/logic` corpus in Chromium, Firefox and WebKit and diffs every `EvalState` JSON byte-for-byte with Node's, plus the `@form/i18n` grapheme corpus and the `@form/templates-core` corpus (`instantiate`, snippets, sanitiser, lock fingerprints) (CI job `determinism`) |
 | `pnpm test:perf` | Runs the `@form/logic` benchmark (300 blocks, 200 rules) alone and without coverage, and prints every trial's p95 (CI job `determinism`) |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |
 | `git grep -nE 'innerHTML\|dangerouslySetInnerHTML\|execCommand' -- apps packages` | Must find nothing: rich text is an AST rendered as React elements (CI fails on any match) |

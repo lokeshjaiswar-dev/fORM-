@@ -1,0 +1,7 @@
+{
+  "extends": "@form/tsconfig/strict.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src", "test", "determinism", "vitest.config.ts", "playwright.config.ts"]
+}
