@@ -148,6 +148,20 @@ describe('validateStructure', () => {
       expect(codes(validateStructure(def))).toEqual(['error:invalid_rich_text:/blocks/name_1/label']);
     });
 
+    it('holds translations of inline sources to one paragraph (BL-025)', () => {
+      const def = definition();
+      const twoParagraphs = { type: 'doc', content: [{ type: 'paragraph' }, { type: 'paragraph' }] } as unknown as S.InlineDoc;
+      const entry = (value: S.TranslationEntry['value']): S.TranslationEntry => ({ value, sourceHash: id<S.Sha256Hex>('a'.repeat(64)), origin: 'human' });
+      def.i18n.messages = {
+        [id<S.Locale>('hi-IN')]: {
+          [`block:${ids.name}:label`]: entry(twoParagraphs),
+          [`consent:${ids.consent}:item:${ids.item}`]: entry(inline('समाचार पत्र भेजें')),
+          'form:description': entry(twoParagraphs),
+        },
+      };
+      expect(codes(validateStructure(def))).toEqual([`error:invalid_rich_text:/i18n/messages/hi-IN/block:${ids.name}:label/value`]);
+    });
+
     it('rejects unknown nodes and nesting past the limits', () => {
       const def = definition();
       let list: unknown = { type: 'paragraph' };

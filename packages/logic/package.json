@@ -1,0 +1,32 @@
+{
+  "name": "@form/logic",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:perf": "vitest run --config vitest.perf.config.ts",
+    "test:determinism": "playwright test",
+    "casefold": "node scripts/gen-casefold.ts"
+  },
+  "dependencies": {
+    "@form/i18n": "workspace:*",
+    "@form/registry": "workspace:*",
+    "@form/schema": "workspace:*",
+    "decimal.js": "10.6.0"
+  },
+  "devDependencies": {
+    "@form/tsconfig": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

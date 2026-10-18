@@ -81,7 +81,7 @@ describe('isBlockVisible', () => {
     );
   });
 
-  it.fails('B21: a rule whose source block was deleted is disabled', () => {
+  it('B21: a rule whose source block was deleted is disabled', () => {
     const target = block('text', {
       id: 'target',
       logic: { enabled: true, action: 'show', sourceBlockId: 'deleted', operator: 'equals', value: 'yes' },

@@ -21,6 +21,8 @@ export function operatorNeedsValue(op?: LogicOperator) {
 export function isBlockVisible(block: FormBlock, values: Record<string, unknown>, blocks: FormBlock[]) {
   const logic = block.logic;
   if (!logic?.enabled || !logic.sourceBlockId) return true;
+  /* B21: a rule whose source block was deleted is disabled, as in logic@2 (@form/logic compile). */
+  if (!blocks.some((b) => b.id === logic.sourceBlockId)) return true;
   const raw = values[logic.sourceBlockId];
   const source = Array.isArray(raw) ? raw.join(' ') : String(raw ?? '');
   const target = logic.value ?? '';
@@ -69,6 +71,5 @@ export function isBlockVisible(block: FormBlock, values: Record<string, unknown>
   }
 
   const show = logic.action !== 'hide';
-  void blocks;
   return show ? matched : !matched;
 }

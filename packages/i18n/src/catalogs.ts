@@ -1,6 +1,6 @@
-import builder from '../locales/en-IN/builder.json';
-import renderer from '../locales/en-IN/renderer.json';
-import system from '../locales/en-IN/system.json';
+import builder from '../locales/en-IN/builder.json' with { type: 'json' };
+import renderer from '../locales/en-IN/renderer.json' with { type: 'json' };
+import system from '../locales/en-IN/system.json' with { type: 'json' };
 import type { Catalogs } from './messages';
 
 export const SOURCE_LOCALE = 'en-IN';

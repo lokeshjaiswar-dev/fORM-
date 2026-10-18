@@ -68,8 +68,9 @@ module.exports = {
     },
     {
       name: 'pure-no-node-builtins',
+      comment: 'Build-time generators in scripts/ (the logic case-fold table) may use Node; nothing they emit does.',
       severity: 'error',
-      from: { path: `^packages/(${PURE.join('|')})/` },
+      from: { path: `^packages/(${PURE.join('|')})/`, pathNot: `^packages/(${PURE.join('|')})/scripts/` },
       to: { dependencyTypes: ['core'] },
     },
     {
@@ -98,6 +99,13 @@ module.exports = {
       severity: 'error',
       from: { pathNot: [TESTS, '^apps/[^/]+/e2e/', '^packages/schema/test/'] },
       to: { path: '^packages/schema/test/' },
+    },
+    {
+      name: 'i18n-test-fixtures-only-from-tests',
+      comment: '@form/i18n/test-fixtures (the golden grapheme corpus) is test data: unit tests and the logic determinism corpus only.',
+      severity: 'error',
+      from: { pathNot: [TESTS, '^packages/i18n/test/'] },
+      to: { path: '^packages/i18n/test/' },
     },
     {
       name: 'no-deep-import',

@@ -1,2 +1,4 @@
 # Vitest snapshots are compared byte-for-byte; keep them LF on every OS
 *.snap text eol=lf
+# Unicode data files are hashed by their generators
+packages/logic/scripts/data/*.txt text eol=lf

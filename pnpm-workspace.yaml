@@ -13,6 +13,7 @@ catalog:
   '@opentelemetry/resources': 2.11.0
   '@opentelemetry/sdk-trace-base': 2.11.0
   '@opentelemetry/sdk-trace-node': 2.11.0
+  '@playwright/test': 1.63.0
   '@types/node': 24.19.1
   '@types/pg': 8.23.1
   '@types/react': ^19.2.18

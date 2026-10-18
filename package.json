@@ -16,6 +16,8 @@
     "test": "turbo run test",
     "test:int": "turbo run test:int",
     "e2e": "turbo run e2e",
+    "test:determinism": "turbo run test:determinism",
+    "test:perf": "turbo run test:perf --concurrency=1",
     "lint": "oxlint",
     "deps": "depcruise apps packages --config .dependency-cruiser.cjs",
     "i18n:extract": "pnpm --filter @form/i18n i18n:extract"

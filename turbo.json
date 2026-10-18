@@ -12,6 +12,8 @@
       "passThroughEnv": ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*"]
     },
     "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
+    "test:determinism": { "dependsOn": ["^typecheck"], "cache": false, "passThroughEnv": ["CI"] },
+    "test:perf": { "cache": false, "passThroughEnv": ["FORM_PERF_SLACK"] },
     "dev": { "cache": false, "persistent": true }
   }
 }

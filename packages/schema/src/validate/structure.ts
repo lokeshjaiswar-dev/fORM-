@@ -328,20 +328,31 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
 
   /* I5/I6: rich text. Inline-only locations must hold exactly one paragraph. */
   const inlinePaths = new Set<string>();
+  /* The TextKey of each inline source, so its translations are held to the same single-paragraph rule. */
+  const inlineKeys = new Set<string>();
+  const inlineAt = (key: string, ...path: Array<string | number>) => {
+    inlinePaths.add(jsonPointer(...path));
+    inlineKeys.add(key);
+  };
   for (const [id, b] of blocks) {
-    if ('key' in b) inlinePaths.add(jsonPointer('blocks', id, 'label'));
+    if ('key' in b) inlineAt(`block:${id}:label`, 'blocks', id, 'label');
     if (b.type === 'heading') {
-      inlinePaths.add(jsonPointer('blocks', id, 'config', 'text'));
-      inlinePaths.add(jsonPointer('blocks', id, 'config', 'subheading'));
+      inlineAt(`block:${id}:text`, 'blocks', id, 'config', 'text');
+      inlineAt(`block:${id}:subheading`, 'blocks', id, 'config', 'subheading');
     }
-    if (b.type === 'section') inlinePaths.add(jsonPointer('blocks', id, 'config', 'title'));
-    if (b.type === 'signature') inlinePaths.add(jsonPointer('blocks', id, 'config', 'statement'));
+    if (b.type === 'section') inlineAt(`block:${id}:title`, 'blocks', id, 'config', 'title');
+    if (b.type === 'signature') inlineAt(`block:${id}:statement`, 'blocks', id, 'config', 'statement');
     if (b.type === 'consent') {
-      inlinePaths.add(jsonPointer('blocks', id, 'config', 'withdrawalText'));
-      b.config.items.forEach((_, i) => inlinePaths.add(jsonPointer('blocks', id, 'config', 'items', i, 'label')));
+      inlineAt(`consent:${id}:withdrawal`, 'blocks', id, 'config', 'withdrawalText');
+      b.config.items.forEach((item, i) => inlineAt(`consent:${id}:item:${item.id}`, 'blocks', id, 'config', 'items', i, 'label'));
     }
   }
-  def.privacy.purposes.forEach((_, i) => inlinePaths.add(jsonPointer('privacy', 'purposes', i, 'description')));
+  def.privacy.purposes.forEach((p, i) => inlineAt(`purpose:${p.id}:description`, 'privacy', 'purposes', i, 'description'));
+  for (const [locale, entries] of Object.entries(def.i18n.messages)) {
+    for (const key of Object.keys(entries ?? {})) {
+      if (inlineKeys.has(key)) inlinePaths.add(jsonPointer('i18n', 'messages', locale, key, 'value'));
+    }
+  }
 
   for (const [doc, path] of docs) {
     let badLinks = 0;
