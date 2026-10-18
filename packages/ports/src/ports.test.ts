@@ -3,6 +3,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   CAPTCHA_PROVIDERS,
   FIRST_PARTY_CAPTCHA_PROVIDERS,
+  DEFAULT_JOB_POLICY,
+  JOB_POLICIES,
   JOBS,
   PortError,
   THIRD_PARTY_CAPTCHA_PROVIDERS,
@@ -15,6 +17,7 @@ import {
   type JobData,
   type JobName,
   type JobRequest,
+  type JobSignal,
   type SystemJobName,
 } from './index.ts';
 
@@ -80,6 +83,28 @@ describe('job contracts', () => {
     expectTypeOf<JobRequest<'email.send'>['orgId']>().toEqualTypeOf<string | null>();
     expectTypeOf<'retention.sweep'>().toExtend<SystemJobName>();
     expectTypeOf<'file.inspect'>().not.toExtend<SystemJobName>();
+  });
+
+  it('gives every queue a retry policy, following the architecture table', () => {
+    expect(Object.keys(JOB_POLICIES).sort()).toEqual(Object.keys(JOBS).sort());
+    for (const [name, p] of Object.entries(JOB_POLICIES)) {
+      expect(p.retryLimit, name).toBeGreaterThanOrEqual(0);
+      expect(p.retryDelaySeconds, name).toBeGreaterThanOrEqual(0);
+      expect(p.retryDelayMaxSeconds, name).toBeGreaterThanOrEqual(p.retryDelaySeconds);
+      expect(p.expireInSeconds, name).toBeGreaterThanOrEqual(1);
+      expect(p.concurrency, name).toBeGreaterThanOrEqual(1);
+    }
+    expect(JOB_POLICIES['email.send']).toMatchObject({ retryLimit: 8, retryDelaySeconds: 60, retryDelayMaxSeconds: 6 * 3600, retryBackoff: true });
+    expect(JOB_POLICIES['webhook.deliver']).toMatchObject({ retryLimit: 3, retryDelayMaxSeconds: 24 * 3600 });
+    expect(JOB_POLICIES['org.delete'].retryLimit).toBe(0);
+    expect(JOB_POLICIES['partitions.maintain']).toEqual({ ...DEFAULT_JOB_POLICY, exclusive: true });
+    expect(JOB_POLICIES['templates.seed'].exclusive).toBe(true);
+  });
+
+  it('lets an AbortSignal stand in for a JobSignal', () => {
+    const signal: JobSignal = AbortSignal.abort();
+    expect(signal.aborted).toBe(true);
+    expect(() => signal.throwIfAborted()).toThrow();
   });
 
   it('keeps payloads to ids', () => {

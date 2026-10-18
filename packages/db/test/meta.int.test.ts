@@ -73,6 +73,22 @@ describe('RLS meta-tests', () => {
     ).toEqual([{ rule: 'partition-outside-parts', object: 'audit_log_2001_01' }]);
   });
 
+  it('leave partitioned tables of other schemas (pg-boss) alone, but not partitions of public tables placed there', async () => {
+    expect(
+      await violationsAfter(`create schema queue_like;
+        create table queue_like.job (name text not null, id uuid not null) partition by list (name);
+        create table queue_like.job_common partition of queue_like.job default;
+        grant select on queue_like.job_common to fr_app`),
+    ).toEqual([]);
+    expect(
+      await violationsAfter(`create schema elsewhere;
+        create table elsewhere.audit_log_2001_01 partition of audit_log for values from ('2001-01-01') to ('2001-02-01')`),
+    ).toEqual([
+      { rule: 'partition-outside-parts', object: 'elsewhere.audit_log_2001_01' },
+      { rule: 'partition-rls-not-forced', object: 'elsewhere.audit_log_2001_01' },
+    ]);
+  });
+
   it('fail on a definer function without a pinned search_path or executable by PUBLIC', async () => {
     const v = await violationsAfter(`
       create function unsafe_lookup() returns int language sql security definer as $$ select 1 $$;

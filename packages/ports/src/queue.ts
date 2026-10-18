@@ -62,6 +62,7 @@ export interface JobData {
   'templates.stats': NoData;
   'search.reindex': { formId: string; reason: 'sensitivity_change' | 'bulk_import' };
   'geoip.refresh': NoData;
+  /** Liveness probe: with an org it makes one round trip inside that tenant, without one it checks the database. */
   'system.heartbeat': NoData;
 }
 
@@ -114,8 +115,87 @@ export const JOBS = {
   'templates.stats': { scope: 'system' },
   'search.reindex': { scope: 'org' },
   'geoip.refresh': { scope: 'system' },
-  'system.heartbeat': { scope: 'system' },
+  'system.heartbeat': { scope: 'any' },
 } as const satisfies { readonly [N in JobName]: { readonly scope: JobScope } };
+
+/**
+ * Retry, expiry and exclusivity of a queue (architecture §5.1, §5.2). Every queue also has a dead-letter queue
+ * that receives a job once its retries are spent, and every rejected (forged) envelope.
+ */
+export interface JobPolicy {
+  /** Retries after the first attempt. */
+  retryLimit: number;
+  retryDelaySeconds: number;
+  /** Doubles the delay per retry (with jitter) up to `retryDelayMaxSeconds`. */
+  retryBackoff: boolean;
+  retryDelayMaxSeconds: number;
+  /** An attempt still running after this long is failed, and retried while retries remain. */
+  expireInSeconds: number;
+  /** At most one job of the queue is active at a time: cron sweeps, seeding, the audit chain. */
+  exclusive: boolean;
+  /** Handlers per worker process. */
+  concurrency: number;
+}
+
+export const DEFAULT_JOB_POLICY: JobPolicy = {
+  retryLimit: 2,
+  retryDelaySeconds: 30,
+  retryBackoff: true,
+  retryDelayMaxSeconds: 3600,
+  expireInSeconds: 900,
+  exclusive: false,
+  concurrency: 1,
+};
+
+const MINUTE = 60;
+const HOUR = 3600;
+const LIKE_WEBHOOKS: Partial<JobPolicy> = { retryLimit: 3, retryDelaySeconds: MINUTE, retryDelayMaxSeconds: 24 * HOUR, concurrency: 4 };
+const CRON: Partial<JobPolicy> = { exclusive: true };
+
+/** The §5.2 table; queues it lists without a retry column keep the default (a crash or shutdown still retries). */
+const POLICY_OVERRIDES: { readonly [N in JobName]?: Partial<JobPolicy> } = {
+  'submission.fanout': { retryLimit: 5, retryDelaySeconds: 10, concurrency: 4 },
+  'notification.dispatch': { retryLimit: 5, retryDelaySeconds: 30, retryDelayMaxSeconds: HOUR, concurrency: 4 },
+  'email.send': { retryLimit: 8, retryDelaySeconds: MINUTE, retryDelayMaxSeconds: 6 * HOUR, concurrency: 8 },
+  'webhook.fanout': LIKE_WEBHOOKS,
+  'webhook.deliver': LIKE_WEBHOOKS,
+  'integration.fanout': LIKE_WEBHOOKS,
+  'integration.run': LIKE_WEBHOOKS,
+  'consent.withdrawn': { retryLimit: 5 },
+  'guardian.expire': CRON,
+  'workflow.step': { retryLimit: 5 },
+  'pdf.render': { retryLimit: 3 },
+  'export.build': { retryLimit: 2, expireInSeconds: HOUR },
+  'file.inspect': { retryLimit: 3, concurrency: 2 },
+  'retention.sweep': { ...CRON, expireInSeconds: HOUR },
+  'signals.ttl': CRON,
+  'statutory.purge': CRON,
+  'drafts.expire': CRON,
+  'dsr.execute': { retryLimit: 3, expireInSeconds: HOUR },
+  'dsr.overdue': CRON,
+  'inactivity.notify': CRON,
+  'inactivity.erase': CRON,
+  /** Manual: an operator re-runs it after reading the failure. */
+  'org.delete': { retryLimit: 0, expireInSeconds: 4 * HOUR, exclusive: true },
+  'analytics.rollup': CRON,
+  'partitions.maintain': CRON,
+  'audit.chain': { exclusive: true, retryDelaySeconds: 5, retryDelayMaxSeconds: MINUTE },
+  'audit.checkpoint': CRON,
+  'audit.verify': { ...CRON, expireInSeconds: 4 * HOUR },
+  'audit.archive': { ...CRON, expireInSeconds: 4 * HOUR },
+  'kms.rotate': CRON,
+  'payment.reconcile': { retryLimit: 10, retryDelaySeconds: MINUTE, retryDelayMaxSeconds: HOUR },
+  'billing.meter': CRON,
+  'templates.seed': { exclusive: true, retryDelaySeconds: 10 },
+  'templates.stats': CRON,
+  'search.reindex': { retryLimit: 3, expireInSeconds: HOUR },
+  'geoip.refresh': CRON,
+  'system.heartbeat': { retryLimit: 1, retryDelaySeconds: 5, retryBackoff: false, expireInSeconds: MINUTE },
+};
+
+export const JOB_POLICIES = Object.fromEntries(
+  (Object.keys(JOBS) as JobName[]).map((name) => [name, { ...DEFAULT_JOB_POLICY, ...POLICY_OVERRIDES[name] }]),
+) as { readonly [N in JobName]: JobPolicy };
 
 export type JobScopeOf<N extends JobName> = (typeof JOBS)[N]['scope'];
 export type SystemJobName = { [N in JobName]: JobScopeOf<N> extends 'org' ? never : N }[JobName];
@@ -159,10 +239,26 @@ export interface JobEnvelope<N extends JobName> extends JobRequest<N> {
   sig: string;
 }
 
+/**
+ * Runs one statement inside the caller's open transaction. Passed as `SendOptions.tx`, it makes the enqueue
+ * commit or roll back with the business change (the transactional outbox); `@form/db` adapts a Drizzle tx.
+ */
+export interface SqlExecutor {
+  executeSql(text: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
+}
+
 export interface SendOptions {
   /** At most one queued job per key; a duplicate send returns null. */
   singletonKey?: string;
   startAfter?: IsoInstant;
+  /** Enqueue inside this transaction instead of on a pooled connection of the queue. */
+  tx?: SqlExecutor;
+}
+
+/** Aborted when the worker shuts down or the attempt expires; the attempt is then retried. An `AbortSignal` qualifies. */
+export interface JobSignal {
+  readonly aborted: boolean;
+  throwIfAborted(): void;
 }
 
 export interface ReceivedJob<N extends JobName> {
@@ -172,11 +268,13 @@ export interface ReceivedJob<N extends JobName> {
   attempt: number;
   /** Signature already verified and the org re-derived from the resource. */
   envelope: JobEnvelope<N>;
+  signal: JobSignal;
 }
 
 export type JobHandler<N extends JobName> = (job: ReceivedJob<N>) => Promise<void>;
 
 export interface WorkOptions {
+  /** Defaults to the queue's `JOB_POLICIES` concurrency. */
   concurrency?: number;
 }
 

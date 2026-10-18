@@ -2,13 +2,14 @@
 
 A form platform for multi-tenant SaaS and on-prem deployments, working toward feature parity with JotForm, with SOC 2 and India DPDP compliance built in. The plan, schema, architecture and delivery roadmap are in [`docs/platform/`](docs/platform/README.md).
 
-> **Status:** Phase 0 (foundation). Today the repo contains the form builder and an API skeleton over Postgres with row-level security. The builder keeps forms in memory, so a page refresh starts over; builder persistence and the public runtime arrive in later work packages.
+> **Status:** Phase 0 (foundation). Today the repo contains the form builder, and API and worker skeletons over Postgres with row-level security. The builder keeps forms in memory, so a page refresh starts over; builder persistence and the public runtime arrive in later work packages.
 
 ## Workspace
 
 | Path | Package | What it is |
 |---|---|---|
 | `apps/builder` | `@form/builder` | Vite + React form builder |
+| `apps/worker` | `@form/worker` | pg-boss worker skeleton: handler registry, signed job envelopes verified and the org re-derived with `resolve_job_org`, per-job tenant context, cron in UTC, graceful `SIGTERM`; jobs `system.heartbeat`, `partitions.maintain`, `templates.seed` (stub) |
 | `apps/api` | `@form/api` | Fastify 5 API skeleton: `buildApp(config)`, zod type provider, problem+json errors, `/livez` and `/readyz`, OpenAPI, `GET /v1/forms` behind RLS, dev header auth stub |
 | `packages/db` | `@form/db` | Drizzle tables, SQL migrations, roles (`fr_migrator`, `fr_app`, `fr_template_seeder`, `fr_system_agg`), null-safe RLS helpers, `withTenant()`, definer functions, RLS meta-checks |
 | `packages/observability` | `@form/observability` | pino logger with redaction, URL and query scrubbing, NTP clock check, OpenTelemetry (OTLP only when configured) |
@@ -18,11 +19,11 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/renderer` | `@form/renderer` | React rendering of form content; today `RichTextView` (rich-text AST → React elements) |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; depends only on `@form/schema` (its brands) |
-| `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review |
+| `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review; the pg-boss queue (HMAC-signed envelopes, `installQueueSchema`) |
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, `worker`, `logic`, `validation`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `logic`, `validation`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
 ## Prerequisites
 
@@ -65,8 +66,9 @@ Do not use `npm install` or `yarn`: the workspace uses pnpm catalogs (`catalog:`
 5. **API and database (optional; needs Docker)**
    ```sh
    docker compose -f deploy/docker/compose.dev.yaml up -d   # Postgres 18, S3 (SeaweedFS), Mailpit, Grafana LGTM
-   pnpm dev:setup     # roles, migrations, demo org; writes apps/api/.env.local
+   pnpm dev:setup     # roles, migrations, demo org, pg-boss schema; writes apps/api/.env.local and apps/worker/.env.local
    pnpm dev:api       # tsx watch on http://127.0.0.1:8080
+   pnpm dev:worker    # tsx watch; works the queues and runs cron (heartbeat, partition maintenance)
    curl -H 'X-FR-Dev-User: 01970000-0000-7000-8000-000000000002' \
         -H 'X-FR-Org: 01970000-0000-7000-8000-000000000001' http://127.0.0.1:8080/v1/forms
    ```
@@ -87,7 +89,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 | `pnpm lint` | Lint with oxlint |
 | `pnpm typecheck` | Type-check every project |
 | `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage` |
-| `pnpm test:int` | Integration tests against Postgres 18 in Testcontainers: migrations, RLS isolation for every actor kind, RLS meta-tests, definer functions, the API (CI job `db`). Needs Docker |
+| `pnpm test:int` | Integration tests against Postgres 18 in Testcontainers: migrations, RLS isolation for every actor kind, RLS meta-tests, definer functions, the API, the worker (outbox enqueue, forged jobs, SIGTERM retries, partitions) (CI job `db`). Needs Docker |
 | `pnpm build` | Build every app and package |
 | `pnpm e2e` | Builds, then runs Playwright end-to-end tests in Chromium |
 | `pnpm deps` | Check dependency-layer rules (dependency-cruiser) |

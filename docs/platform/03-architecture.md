@@ -138,6 +138,9 @@ DATABASE_URL=postgres://fr_app@pg:5432/form           # app role (NOBYPASSRLS)
 DATABASE_MIGRATOR_URL_FILE=/run/secrets/db_migrator
 DATABASE_AGG_URL_FILE=/run/secrets/db_agg             # fr_system_agg, used only by rollup/stats handlers
 QUEUE_DATABASE_URL=                                   # optional separate pg-boss database
+JOB_SIGNING_KEYS_FILE=/run/secrets/job_keys           # ADR-0016 HMAC keys, `id:base64url` (≥ 32 bytes) comma-separated, first signs; api and worker
+WORKER_QUEUES=pdf.*,templates.thumbnail               # worker: queues to serve (default: all with a handler)
+WORKER_SHUTDOWN_GRACE_MS=25000                        # worker: SIGTERM grace before running jobs are failed back for a retry
 DATABASE_POOL_MAX=20
 STORAGE_DRIVER=s3  STORAGE_ENDPOINT=  STORAGE_BUCKET_STAGING=  STORAGE_BUCKET_UPLOADS=  STORAGE_BUCKET_ASSETS=  STORAGE_BUCKET_EXPORTS=  STORAGE_BUCKET_AUDIT=
 MAILER_DRIVER=smtp|log  SMTP_URL_FILE=
@@ -901,6 +904,9 @@ gc: uploads.gc deletes unattached files after 24 h
 ### 5.1 Conventions
 - **pg-boss v10+** in its own schema (optionally in a separate queue database). pg-boss tables are not under RLS; they hold ids only.
 - **Job envelope (ADR-0016):** `{ v: 1, orgId, resource: { type, id }, data, sig }`, where `sig` = HMAC over the rest with a worker-held key. Handlers verify `sig`, re-derive the org with `resolve_job_org(resource)` and abort on mismatch before entering `withTenant({ orgId, actor: 'system', perms: [job-specific minimal set] })`. Arbitrary inserts into `pgboss.job` therefore cannot act on another org (F-23).
+  - As built (WP-0.14): `sig` is `<keyId>.<base64url HMAC-SHA256>` over the canonical JSON (sorted keys) of `{ v, queue, orgId, resource, data }`; the queue name is signed so an envelope cannot be replayed into another handler. `JOB_SIGNING_KEYS` is a key ring (the first signs, all verify). The queue scope (`JOBS`) is checked too: `org` jobs need an org, `system` jobs must have none. A rejected envelope (malformed, scope mismatch, unknown key, bad signature, resource missing or of a type `resolve_job_org` does not know, org mismatch) never runs: it gets a `job.rejected` denied audit record on its own connection, filed under the org that owns the resource when the database names one, and goes straight to the dead-letter queue.
+  - The pg-boss schema is installed by its owner (`installQueueSchema`, with the migrations); `fr_app` gets row access only. Every queue `<name>` has the dead-letter queue `<name>.dead`; the policies are `JOB_POLICIES` in `@form/ports`, and `exclusive` queues use pg-boss's `singleton` policy.
+  - `system.heartbeat` has scope `any`: with an org it makes one RLS round trip in that tenant and leaves an audit record; from cron it pings the database.
 - **Payloads carry ids only.** Where a job must carry a secret (magic link, OTP code, invite token for `email.send`), that field is encrypted with the secrets DEK, and auth queues have a 1-day archive retention.
 - **Org-spanning jobs** (`retention.sweep`, `drafts.expire`, `analytics.rollup`, `audit.checkpoint`, `payment.reconcile`, `billing.meter`, `kms.rotate`, `dsr.overdue`) call `orgs_due_for(job)` and process one `withTenant` per org. Cross-tenant aggregates (`templates.stats`) use the `fr_system_agg` role only. `partitions.maintain` calls `create_partitions()` (F-1).
 - **Transactional outbox:** enqueue in the business transaction.
@@ -994,7 +1000,7 @@ The sketch above is abridged; `packages/ports` holds the exact signatures. Where
 - `AVScanner` verdicts add `skipped`, which the no-op scanner returns; it never claims `clean`.
 - `GuardianVerifier.start` also returns the `verificationId` that `complete` takes.
 - `AuditSink` has a `kind` and `GeoIP` a `databaseVersion`. `EgressGuard.assertAllowed` takes the URL fields it reads (a `URL` satisfies it).
-- `Queue` is spelled out: `send(name, JobRequest)` signs the request into a `JobEnvelope`, and `JOBS` gives each queue its scope (`org`, `system` or `any`).
+- `Queue` is spelled out: `send(name, JobRequest)` signs the request into a `JobEnvelope`, and `JOBS` gives each queue its scope (`org`, `system` or `any`). `SendOptions.tx` (a `SqlExecutor`; `@form/db` `txExecutor(tx)` adapts a Drizzle transaction) enqueues inside the business transaction, `ReceivedJob.signal` is aborted on shutdown, and `JOB_POLICIES` holds each queue's retry, expiry, exclusivity and concurrency.
 - `SearchIndex` is a minimal Postgres-FTS-shaped port.
 - Expected failures throw `PortError` with a typed code (`not_found`, `invalid_argument`, `unsupported`, `integrity`, `expired`, `rejected`, …).
 - `Mailer.send` returns `{ messageId, refused }`: recipients the server refused while it accepted the message for others, each marked `permanent` (5xx, a hard bounce to suppress) or not (4xx, retry that address). A 5xx to every recipient or to the message itself throws `PortError('rejected')`; outages, sender or auth refusals and 4xx replies throw `unavailable`, so `email.send` retries them.

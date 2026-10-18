@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "turbo run dev --filter=@form/builder",
     "dev:api": "pnpm --filter @form/api dev",
-    "dev:setup": "pnpm --filter @form/db db:setup --env-out ../../apps/api/.env.local",
+    "dev:worker": "pnpm --filter @form/worker dev",
+    "dev:setup": "pnpm --filter @form/db db:setup --env-out ../../apps/api/.env.local && pnpm --filter @form/worker dev:setup --env-out .env.local",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

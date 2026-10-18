@@ -127,8 +127,11 @@ module.exports = {
     },
     {
       name: 'adapters-only-from-composition-roots',
+      comment: 'Composition roots wire real adapters: the api and worker main modules, the CLI, worker setup scripts and app integration tests.',
       severity: 'error',
-      from: { pathNot: ['^apps/api/src/main\\.ts$', '^apps/worker/src/main\\.ts$', '^apps/cli/', '^packages/adapters/'] },
+      from: {
+        pathNot: ['^apps/api/src/main\\.ts$', '^apps/worker/src/main\\.ts$', '^apps/worker/scripts/', '^apps/[^/]+/test/', '^apps/cli/', '^packages/adapters/'],
+      },
       to: { path: '^packages/adapters/' },
     },
     {

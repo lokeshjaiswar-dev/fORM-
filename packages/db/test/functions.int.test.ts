@@ -8,6 +8,7 @@ import {
   listUserOrgs,
   membershipFor,
   orgsDueFor,
+  partitionsOf,
   PLATFORM_ORG_KEY,
   resolveJobOrg,
   withTenant,
@@ -56,16 +57,23 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
   });
 
   it('create_partitions is idempotent and creates forced-RLS partitions in parts that fr_app cannot touch', async () => {
-    const created = await createPartitions(t.app.db, 'audit_log', 6);
-    expect(created).toHaveLength(3);
-    expect(await createPartitions(t.app.db, 'audit_log', 6)).toEqual([]);
-    const { rows } = await t.owner.query<{ name: string; forced: boolean; owner: string; acl: string | null }>(
-      `select c.oid::regclass::text as name, c.relrowsecurity and c.relforcerowsecurity as forced, pg_get_userbyid(c.relowner) as owner, c.relacl::text as acl
-       from pg_inherits i join pg_class c on c.oid = i.inhrelid where i.inhparent = 'public.audit_log'::regclass and c.relkind = 'r' order by 1`,
+    const before = await partitionsOf(t.owner, 'audit_log');
+    // The months come from the database clock, so a run that spans a month boundary still agrees.
+    const { rows: months } = await t.owner.query<{ name: string }>(
+      `select 'audit_log_' || to_char(date_trunc('month', now() at time zone 'UTC') + make_interval(months => i), 'YYYY_MM') as name
+       from generate_series(0, 6) i order by i`,
     );
-    expect(rows).toHaveLength(7);
-    for (const r of rows) expect(r).toMatchObject({ name: expect.stringMatching(/^parts\.audit_log_\d{4}_\d{2}$/), forced: true, owner: 'fr_migrator' });
-    for (const r of rows) expect(r.acl === null || !/fr_app|^=|,=/.test(r.acl)).toBe(true);
+    const expected = months.map((m) => m.name).filter((n) => !before.some((p) => p.name === `parts.${n}`));
+    const created = await createPartitions(t.app.db, 'audit_log', 6);
+    expect(created).toEqual(expected);
+    expect(created.length).toBeGreaterThan(0);
+    expect(await createPartitions(t.app.db, 'audit_log', 6)).toEqual([]);
+    const rows = await partitionsOf(t.owner, 'audit_log');
+    expect(rows.map((r) => r.name)).toEqual(expect.arrayContaining(months.map((m) => `parts.${m.name}`)));
+    for (const r of rows) {
+      expect(r).toMatchObject({ name: expect.stringMatching(/^parts\.audit_log_\d{4}_\d{2}$/), forced: true, owner: 'fr_migrator' });
+      expect(r.grantees.filter((g) => g !== 'fr_migrator')).toEqual([]);
+    }
     const err = await failure(t.app.pool.query(`select * from parts.${created[0]!}`));
     expect(pgCode(err)).toBe('42501');
   });

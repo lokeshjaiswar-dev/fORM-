@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@form/ports": "workspace:*",
-    "nodemailer": "10.0.13"
+    "nodemailer": "10.0.13",
+    "pg-boss": "catalog:"
   },
   "devDependencies": {
     "@form/testkit": "workspace:*",
