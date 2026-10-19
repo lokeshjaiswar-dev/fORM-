@@ -16,9 +16,9 @@ This folder is the plan for turning fORM- (today a front-end-only form builder, 
 | [`06-templates.md`](06-templates.md) | The customizable templates spec: kinds, scopes, variables, brand kits, forks, updates, locks, gallery, packs | You work on templates, the gallery, brand kits or compliance snippets |
 | [`backlog.md`](backlog.md) | Open minor reviewer issues from merged work packages (`BL-001`…), each with a suggested fix and an owner WP | You start a WP (pick up its rows) or look for small fixes |
 
-Decisions taken during delivery are ADRs in [`docs/adr/`](../adr/); ADR-0002 records the Phase 0 batch-2 decisions.
+Decisions are ADRs in [`docs/adr/`](../adr/): ADR-0001 and ADR-0003 to ADR-0019 write up the architecture's decisions (architecture §10), ADR-0002 records the Phase 0 batch-2 decisions, and ADR-0020 to ADR-0022 record the rich text, logic engine and field registry decisions.
 
-**How to read them.** Start here, then the matrix summary (end of `01`) for scope. Engineers then read the schema §2–3 and architecture §0–2. Planners read the delivery plan §0–1 and §6. Anyone touching consent, retention or DSR should read architecture §8 and the review log §1. IDs are stable across documents: matrix rows (`FND-03`, `TPL-07`, `CMP-13`), work packages (`WP-0.07`, `WP-T1.4`), decisions (`D1`–`D20`), ADRs (`ADR-0001`–`ADR-0019`), review findings (`C-B1`, `F-24`), backlog items (`BL-001`).
+**How to read them.** Start here, then the matrix summary (end of `01`) for scope. Engineers then read the schema §2–3 and architecture §0–2. Planners read the delivery plan §0–1 and §6. Anyone touching consent, retention or DSR should read architecture §8 and the review log §1. IDs are stable across documents: matrix rows (`FND-03`, `TPL-07`, `CMP-13`), work packages (`WP-0.07`, `WP-T1.4`), decisions (`D1`–`D20`), ADRs (`ADR-0001`–`ADR-0022`), review findings (`C-B1`, `F-24`), backlog items (`BL-001`).
 
 ---
 

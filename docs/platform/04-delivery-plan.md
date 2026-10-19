@@ -282,7 +282,7 @@ v1.0 planned 1,289 raw ed (P2 at 30 weeks). The increase comes from re-sizing to
 - The builder only edits v2; preview runs `@form/renderer`; B1–B29 and S1–S4 fixed or carried with a named P1 WP (S5–S11).
 - `schema`, `registry`, `logic`, `validation` ≥ 90% line coverage; determinism green in Node + Chromium + Firefox + WebKit.
 - API and worker run locally with RLS; meta-tests (incl. partitions and actor kinds) in CI.
-- ADRs merged: 0001 monorepo, rich text, logic engine, registry, RLS model (0001, 0015, 0016).
+- ADRs merged: 0001 monorepo, rich text (0020), logic engine (0021), registry (0022), RLS model (0015, 0016).
 
 ---
 

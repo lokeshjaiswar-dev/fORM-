@@ -16,6 +16,8 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**'],
       reporter: ['text-summary', 'lcov'],
+      /* Phase 0 exit gate: schema ≥ 90% line coverage. */
+      thresholds: { lines: 90 },
     },
   },
 });

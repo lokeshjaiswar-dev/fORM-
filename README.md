@@ -27,7 +27,7 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, `worker-pdf`, `cli`, `admin`, …) arrive in Phase 1 and later. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `worker-pdf`, `cli`, `admin`, …) arrive in Phase 1 and later. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md); the other architecture decisions are ADR-0002 to ADR-0022 in [`docs/adr/`](docs/adr/).
 
 ## Prerequisites
 
@@ -92,7 +92,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 |---|---|
 | `pnpm lint` | Lint with oxlint |
 | `pnpm typecheck` | Type-check every project |
-| `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage` |
+| `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage`; `schema`, `registry`, `logic`, `validation`, `templates-core` and `templates` fail below 90% line coverage |
 | `pnpm test:int` | Integration tests against Postgres 18 in Testcontainers: migrations, RLS isolation for every actor kind, RLS meta-tests, definer functions, the API, the worker (outbox enqueue, forged jobs, SIGTERM retries, partitions) (CI job `db`). Needs Docker |
 | `pnpm build` | Build every app and package (the template pack first: the builder bundles it) |
 | `pnpm templates:build` | Validate the system templates and write the signed `packages/templates/dist/system-core-<version>.formpack`; `pnpm dev` and `pnpm test` build it first, a bare `vite` or `vitest` in `apps/builder` needs it built |

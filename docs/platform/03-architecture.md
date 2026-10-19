@@ -1154,8 +1154,10 @@ The platform is the **Data Processor** for respondent data and the **Data Fiduci
 
 ## 10. Decisions this document takes (ADRs)
 
+Each decision is written up in [`docs/adr/`](../adr/) as `00NN-<slug>.md`. ADR-0020 to ADR-0022 record decisions the schema spec and the Phase 0 work packages took (rich text, the logic engine, the field registry).
+
 1. **ADR-0001:** Monorepo layout and names (`@form/*`, `packages/registry`, `ports` + `adapters`, source-only internal packages, dependency-cruiser).
-2. **ADR-0002** (written): Phase 0 batch-2 decisions: strict zod twins, `answerScalar` as the scalar contract, signed formpack file hashes, `capability:*` feature ids, SeaweedFS for dev/CI S3, i18n test and formatting rules, builder clipboard ([`docs/adr/0002-phase0-batch2-decisions.md`](../adr/0002-phase0-batch2-decisions.md)).
+2. **ADR-0002:** Phase 0 batch-2 decisions: strict zod twins, `answerScalar` as the scalar contract, signed formpack file hashes, `capability:*` feature ids, SeaweedFS for dev/CI S3, i18n test and formatting rules, builder clipboard ([`docs/adr/0002-phase0-batch2-decisions.md`](../adr/0002-phase0-batch2-decisions.md)).
 3. **ADR-0003:** Runtime HTML cacheable by path only; per-visitor state from `POST /session`; version JSON immutable; hash-based CSP.
 4. **ADR-0004:** Submissions range-partitioned monthly in an ungranted `parts` schema, bound to the uuidv7 id; no default data partition; idempotency in a side table; counters updated last.
 5. **ADR-0005:** KMS root → org KEK → purpose DEKs; erasure = deletion + backup expiry ≤ 35 d; crypto-shredding only with per-org root keys (P3).
@@ -1173,5 +1175,8 @@ The platform is the **Data Processor** for respondent data and the **Data Fiduci
 17. **ADR-0017:** In-house authentication on our own tables (no third-party auth framework), for air-gapped operation, no telemetry and a clean Jackson seam in P3.
 18. **ADR-0018:** Storage is bring-your-own S3 on-prem; no AGPL object store in the bundle.
 19. **ADR-0019:** One `fr-server` image with several entrypoints; runtime SSR embeddable in the API process (planned as ADR-0002, renumbered when ADR-0002 recorded the batch-2 decisions).
+20. **ADR-0020:** Rich text is a constrained TipTap-compatible AST, never HTML; HTML is parsed only by the `@form/schema` allowlist reader, and nothing reads or writes `innerHTML`.
+21. **ADR-0021:** The `logic@2` engine: a compiled, acyclic plan evaluated in one pass, total and deterministic across Node, Chromium, Firefox and WebKit, versioned by engine id.
+22. **ADR-0022:** The field registry (`@form/registry`) is the single source of type knowledge: one `FieldDefinition` per `BlockType`, `answerScalar` as the scalar contract, stubs for unavailable types.
 
 **Open questions for review** (also in the README and the delivery plan §9): breach SLA (24 h preliminary from awareness, or stricter); consent-record retention after erasure (purpose retention + 1 year, pseudonymised); per-org KMS keys before P3 for high tiers; Postgres floor 16 for external databases; SaaS user-content domain name; bundled on-prem object store (none vs SeaweedFS / Ceph RGW).

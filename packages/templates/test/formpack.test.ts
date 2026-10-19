@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import {
@@ -101,5 +101,24 @@ describe('readFormpack verification', () => {
   it('returns false for a signature it cannot check', async () => {
     expect(await verifySignature('ed25519', new Uint8Array(3), new Uint8Array(64), new Uint8Array(1))).toBe(false);
     expect(await verifySignature('es256', new Uint8Array(65), new Uint8Array(64), new Uint8Array(1))).toBe(false);
+  });
+});
+
+describe('pack bytes', () => {
+  /** The system-core pack signed with the dev key. A template, category or format change moves it; a time zone must not (BL-119). */
+  const SYSTEM_CORE_SHA256 = '8ca759eeaf23bb893e807628f49387f01aa52d6f7cc8f1554df9dbab3ef2b64c';
+  const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+  it('are the same in every time zone', async () => {
+    const tz = process.env.TZ;
+    try {
+      for (const zone of ['UTC', 'Asia/Kolkata', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago']) {
+        process.env.TZ = zone;
+        expect(sha256(await pack()), zone).toBe(SYSTEM_CORE_SHA256);
+      }
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
   });
 });

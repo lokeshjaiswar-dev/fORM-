@@ -84,19 +84,24 @@ export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** Zip entries are written in this order with a fixed timestamp, so the same files give the same bytes. */
-const ZIP_TIME = Date.UTC(2000, 0, 1, 12);
+/**
+ * Zip entries are written in this order with a fixed timestamp, so the same files give the same bytes. fflate writes
+ * DOS times from the local-time fields of the date, so the date is built in local time, at write time: 2000-01-01 12:00
+ * in every time zone (BL-119).
+ */
+const zipTime = (): Date => new Date(2000, 0, 1, 12);
 
 /** Writes the manifest, signs it and zips the bundle. `files` holds every file the manifest lists. */
 export async function writeFormpack(manifest: FormpackManifest, files: ReadonlyMap<string, Uint8Array>, signer: PackSigner): Promise<Uint8Array> {
   const signed = manifestBytes(manifest);
   const { alg, signature } = await signer.sign(signed);
   const sig: FormpackSignature = { alg, keyId: signer.keyId, sig: toBase64(signature) };
+  const mtime = zipTime();
   const zippable: Zippable = {
-    [MANIFEST_PATH]: [jsonBytes(manifest), { mtime: ZIP_TIME }],
-    [SIGNATURE_PATH]: [jsonBytes(sig), { mtime: ZIP_TIME }],
+    [MANIFEST_PATH]: [jsonBytes(manifest), { mtime }],
+    [SIGNATURE_PATH]: [jsonBytes(sig), { mtime }],
   };
-  for (const path of [...files.keys()].sort()) zippable[path] = [files.get(path) ?? new Uint8Array(), { mtime: ZIP_TIME }];
+  for (const path of [...files.keys()].sort()) zippable[path] = [files.get(path) ?? new Uint8Array(), { mtime }];
   return zipSync(zippable, { level: 9 });
 }
 
