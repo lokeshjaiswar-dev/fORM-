@@ -65,7 +65,7 @@ Do not use `npm install` or `yarn`: the workspace uses pnpm catalogs (`catalog:`
    ```sh
    pnpm dev
    ```
-   Open http://localhost:5173. It redirects to `/builder/demo`. Type `/` on the canvas (or use the field picker) to add fields, then switch to **Preview** to fill in and submit the form.
+   Open http://localhost:5173. It redirects to `/forms`, the forms saved in this browser (IndexedDB). **New form** opens `/builder/<id>`; type `/` on the canvas (or use the field picker) to add fields, then switch to **Preview** (`/builder/<id>/preview`) to fill in and submit the form. Edits save automatically. **Import v1 JSON** reads a v1 form export as a new form and lists what the reader repaired and what the v2 preview changes.
 
 5. **API and database (optional; needs Docker)**
    ```sh

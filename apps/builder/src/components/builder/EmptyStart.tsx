@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { FileText, LayoutTemplate } from 'lucide-react';
-import { useFormStore } from '@/store/useFormStore';
+import { useUiStore } from '@/state/uiStore';
 
 export function EmptyStart({ onTemplates }: { onTemplates: () => void }) {
-  const startBlank = useFormStore((s) => s.startBlank);
+  const startBlank = useUiStore((s) => s.startBlank);
 
   return (
     <div className="mt-10 space-y-8" onClick={(e) => e.stopPropagation()}>

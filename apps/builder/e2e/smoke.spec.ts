@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { openNewForm } from './helpers.ts';
 
 test('insert Short answer, preview, fill and submit', async ({ page }) => {
-  await page.goto('/builder/demo');
+  await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
 
   await page.getByPlaceholder("Type '/' to insert blocks").fill('/short');

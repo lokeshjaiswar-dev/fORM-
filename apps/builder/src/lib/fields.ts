@@ -90,8 +90,8 @@ export function ratingCount(block: FormBlock) {
   return clampInt(block.customize?.ratingMax, 5, 1, 10);
 }
 
+/** The range the migrated v2 scale has, so the canvas draws what the preview shows (schema §4.2.1, BL-109). */
 export function scaleRange(block: FormBlock): [number, number] {
-  const min = clampInt(block.customize?.scaleMin, 1, -1000, 1000);
-  const max = clampInt(block.customize?.scaleMax, 5, min + 1, min + 9);
-  return [min, max];
+  const min = clampInt(block.customize?.scaleMin, 1, -1000, 1000) <= 0 ? 0 : 1;
+  return [min, clampInt(block.customize?.scaleMax, 5, 2, 10)];
 }

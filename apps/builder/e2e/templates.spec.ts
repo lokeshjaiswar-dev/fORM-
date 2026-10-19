@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { openNewForm } from './helpers.ts';
 
 test('New-form gallery: the five pack templates, instantiated with the network cut off', async ({ page }) => {
-  await page.goto('/builder/demo');
+  await openNewForm(page);
   await page.context().setOffline(true);
   await page.getByRole('button', { name: 'Start from a template' }).click();
 

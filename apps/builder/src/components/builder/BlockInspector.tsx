@@ -3,7 +3,9 @@ import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
 import { Input, Label } from '@/components/ui/input';
 import { NiceSelect } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { useFormStore } from '@/store/useFormStore';
+import { setBlockWidth, updateBlock } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import { uid } from '@/lib/utils';
 import { isContentBlock } from '@/lib/fields';
 import { patternError } from '@/lib/zodFromBlocks';
@@ -16,15 +18,14 @@ import { labelText } from '@/lib/v1html';
 const TABS = ['Customize', 'Logic', 'Validations'] as const;
 
 export function BlockInspector() {
-  const inspectorOpen = useFormStore((s) => s.inspectorOpen);
-  const inspectorWidth = useFormStore((s) => s.inspectorWidth);
-  const setInspectorWidth = useFormStore((s) => s.setInspectorWidth);
-  const activeBlockId = useFormStore((s) => s.activeBlockId);
-  const form = useFormStore((s) => s.form);
-  const closeInspector = useFormStore((s) => s.closeInspector);
-  const updateBlock = useFormStore((s) => s.updateBlock);
+  const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const inspectorWidth = useUiStore((s) => s.inspectorWidth);
+  const setInspectorWidth = useUiStore((s) => s.setInspectorWidth);
+  const activeBlockId = useUiStore((s) => s.activeBlockId);
+  const blocks = useDoc((d) => d.blocks);
+  const closeInspector = useUiStore((s) => s.closeInspector);
   const [resizing, setResizing] = useState(false);
-  const block = form.blocks.find((b) => b.id === activeBlockId);
+  const block = blocks.find((b) => b.id === activeBlockId);
   const [tab, setTab] = useState<(typeof TABS)[number]>('Customize');
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export function BlockInspector() {
     block.type === 'multi_select' ||
     block.type === 'ranking';
   const numeric = block.type === 'number' || block.type === 'text' || block.type === 'long_text';
-  const otherFields = form.blocks.filter((b) => b.id !== block.id && !isContentBlock(b.type));
+  const otherFields = blocks.filter((b) => b.id !== block.id && !isContentBlock(b.type));
 
   function moveOption(from: number, to: number) {
     const options = [...(block!.options ?? [])];
@@ -274,15 +275,7 @@ export function BlockInspector() {
                       'rounded-md px-2 py-1.5 text-[13px] font-medium capitalize',
                       (block.customize?.width ?? 'full') === w ? 'bg-white shadow-sm' : 'text-zinc-500 hover:text-[#111]',
                     )}
-                    onClick={() => {
-                      updateBlock(block.id, { customize: { ...block.customize, width: w, besidePrevious: false } });
-                      if (w === 'full') {
-                        const next = form.blocks[form.blocks.findIndex((b) => b.id === block.id) + 1];
-                        if (next?.customize?.besidePrevious) {
-                          updateBlock(next.id, { customize: { ...next.customize, besidePrevious: false } });
-                        }
-                      }
-                    }}
+                    onClick={() => setBlockWidth(block.id, w)}
                   >
                     {w}
                   </button>

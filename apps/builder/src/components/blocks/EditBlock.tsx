@@ -1,6 +1,7 @@
 import { Star } from 'lucide-react';
 import type { FieldType, FormBlock } from '@/types/form';
-import { useFormStore } from '@/store/useFormStore';
+import { updateBlock } from '@/state/actions';
+import { useUiStore } from '@/state/uiStore';
 import { cn } from '@/lib/utils';
 import { inputStyle, labelStyle } from '@/lib/blockStyle';
 import { ratingCount, scaleRange } from '@/lib/fields';
@@ -11,10 +12,8 @@ const box =
   'pointer-events-none flex min-h-10 w-full items-center rounded-md border border-zinc-200 bg-white px-3 text-[15px] text-zinc-400';
 
 export function EditBlock({ block }: { block: FormBlock }) {
-  const updateBlock = useFormStore((s) => s.updateBlock);
-  const activeBlockId = useFormStore((s) => s.activeBlockId);
-  const requestInsertFocus = useFormStore((s) => s.requestInsertFocus);
-  const focused = activeBlockId === block.id;
+  const focused = useUiStore((s) => s.activeBlockId === block.id);
+  const requestInsertFocus = useUiStore((s) => s.requestInsertFocus);
   const placeholder = placeholderFor(block.type);
   const required = !!block.validation?.required;
   const width = 'w-full';

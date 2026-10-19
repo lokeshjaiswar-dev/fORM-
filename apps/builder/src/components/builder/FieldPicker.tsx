@@ -3,16 +3,17 @@ import { useDraggable } from '@dnd-kit/core';
 import { ChevronDown, ChevronsLeft, Search } from 'lucide-react';
 import { CATEGORIES, FIELD_CATALOG } from '@/lib/fields';
 import type { FieldType } from '@/types/form';
-import { useFormStore } from '@/store/useFormStore';
+import { addBlock } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
 
 export function FieldPicker() {
-  const sidebarOpen = useFormStore((s) => s.sidebarOpen);
-  const setSidebarOpen = useFormStore((s) => s.setSidebarOpen);
-  const addBlock = useFormStore((s) => s.addBlock);
-  const form = useFormStore((s) => s.form);
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const title = useDoc((d) => d.title);
   const [q, setQ] = useState('');
 
   const filtered = FIELD_CATALOG.filter(
@@ -67,7 +68,7 @@ export function FieldPicker() {
             <span className="flex size-5 items-center justify-center rounded-[4px] bg-white text-[11px] font-semibold shadow-sm ring-1 ring-[var(--notion-border)]">
               F
             </span>
-            <span className="truncate text-[14px]">{form.title || 'Form title'}</span>
+            <span className="truncate text-[14px]">{title || 'Form title'}</span>
           </div>
           <p className="mb-1 px-2 text-[11px] font-medium text-[var(--notion-text-faint)]">Drag a field onto the form</p>
 

@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BlockInspector } from '@/components/builder/BlockInspector';
-import { useFormStore } from '@/store/useFormStore';
-import { block, resetStore } from '@/test/fixtures';
+import { useUiStore } from '@/state/uiStore';
+import { block, doc, resetStore } from '@/test/fixtures';
 
-const options = () => useFormStore.getState().form.blocks[0].options ?? [];
+const options = () => doc().blocks[0].options ?? [];
 
 beforeEach(() => {
   resetStore([
@@ -19,7 +19,7 @@ beforeEach(() => {
       ],
     }),
   ]);
-  useFormStore.getState().openInspector('color');
+  useUiStore.getState().openInspector('color');
 });
 
 function renderInspector() {
@@ -72,11 +72,11 @@ describe('BlockInspector options', () => {
 describe('BlockInspector validations', () => {
   it("B12: an invalid pattern '[' shows an inline error and does not crash", async () => {
     resetStore([block('text', { id: 'name', label: 'Name' })]);
-    useFormStore.getState().openInspector('name');
+    useUiStore.getState().openInspector('name');
     const user = renderInspector();
     await user.click(screen.getByRole('button', { name: 'Validations' }));
     await user.type(screen.getByPlaceholderText('e.g. ^[A-Z].+'), '[[');
-    expect(useFormStore.getState().form.blocks[0].validation?.pattern).toBe('[');
+    expect(doc().blocks[0].validation?.pattern).toBe('[');
     expect(screen.getByText(/Invalid pattern/)).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('e.g. ^[A-Z].+'), ']]a');
     expect(screen.queryByText(/Invalid pattern/)).not.toBeInTheDocument();
@@ -84,11 +84,11 @@ describe('BlockInspector validations', () => {
 
   it('B28: Max stars is clamped to 1-10', async () => {
     resetStore([block('rating', { id: 'stars', label: 'Stars', customize: { ratingMax: 5 } })]);
-    useFormStore.getState().openInspector('stars');
+    useUiStore.getState().openInspector('stars');
     const user = renderInspector();
     const input = screen.getByDisplayValue('5');
     await user.clear(input);
     await user.type(input, '99');
-    expect(useFormStore.getState().form.blocks[0].customize?.ratingMax).toBe(10);
+    expect(doc().blocks[0].customize?.ratingMax).toBe(10);
   });
 });

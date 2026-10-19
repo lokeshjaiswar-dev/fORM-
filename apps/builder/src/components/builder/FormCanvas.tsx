@@ -2,8 +2,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowRight, GripVertical, Plus, Trash2 } from 'lucide-react';
-import { useFormStore } from '@/store/useFormStore';
+import { ArrowRight, Copy, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { addBlock, duplicateBlock, requestDeleteBlock, setTitle } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
+import { useBuilderMode } from '@/pages/useBuilderMode';
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { SlashMenu } from '@/components/builder/SlashMenu';
 import { EmptyStart } from '@/components/builder/EmptyStart';
@@ -16,21 +19,21 @@ import { themeVars } from '@/lib/blockStyle';
 import { Tooltip } from '@/components/ui/tooltip';
 
 export function FormCanvas() {
-  const form = useFormStore((s) => s.form);
-  const setTitle = useFormStore((s) => s.setTitle);
-  const addBlock = useFormStore((s) => s.addBlock);
-  const startBlank = useFormStore((s) => s.startBlank);
-  const started = useFormStore((s) => s.started);
-  const setMode = useFormStore((s) => s.setMode);
-  const setActiveBlock = useFormStore((s) => s.setActiveBlock);
+  const title = useDoc((d) => d.title);
+  const blocks = useDoc((d) => d.blocks);
+  const settings = useDoc((d) => d.settings);
+  const startBlank = useUiStore((s) => s.startBlank);
+  const started = useUiStore((s) => s.started);
+  const [, setMode] = useBuilderMode();
+  const setActiveBlock = useUiStore((s) => s.setActiveBlock);
   const [slashOpen, setSlashOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState('');
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const insertRef = useRef<HTMLInputElement>(null);
-  const insertFocusKey = useFormStore((s) => s.insertFocusKey);
-  const showStart = !started && form.blocks.length === 0;
+  const insertFocusKey = useUiStore((s) => s.insertFocusKey);
+  const showStart = !started && blocks.length === 0;
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop' });
 
   useEffect(() => {
@@ -42,7 +45,7 @@ export function FormCanvas() {
   }, [showStart, insertFocusKey]);
 
   function commitSlash(type: FieldType) {
-    addBlock(type, form.blocks.length);
+    addBlock(type, blocks.length);
     setSlashOpen(false);
     setQuery('');
     setDraft('');
@@ -52,13 +55,13 @@ export function FormCanvas() {
     <div
       ref={setNodeRef}
       className={cn('min-h-full flex-1 overflow-y-auto overflow-x-hidden bg-white', isOver && 'bg-[#fafafa]')}
-      style={themeVars(form.settings)}
+      style={themeVars(settings)}
       onClick={() => setActiveBlock(null)}
     >
       <div className="mx-auto w-full max-w-[720px] pb-40 pl-[108px] pr-8 pt-[72px]">
         <input
           ref={titleRef}
-          value={form.title}
+          value={title}
           onChange={(e) => setTitle(e.target.value)}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
@@ -78,9 +81,9 @@ export function FormCanvas() {
           </>
         ) : (
           <>
-            <SortableContext items={form.blocks.map((b) => b.id)} strategy={rectSortingStrategy}>
+            <SortableContext items={blocks.map((b) => b.id)} strategy={rectSortingStrategy}>
               <div className="space-y-1">
-                {packRows(form.blocks).map((row) => (
+                {packRows(blocks).map((row) => (
                   <div key={row.map((b) => b.id).join('-')} className="flex w-full items-start gap-3">
                     {row.map((block) => (
                       <SortableBlock key={block.id} block={block} half={isHalf(block)} share={row.length === 2} />
@@ -134,7 +137,7 @@ export function FormCanvas() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && draft && !draft.startsWith('/')) {
                       e.preventDefault();
-                      addBlock('paragraph', form.blocks.length, { label: textToV1Html(draft) });
+                      addBlock('paragraph', blocks.length, { label: textToV1Html(draft) });
                       setDraft('');
                     }
                   }}
@@ -163,7 +166,7 @@ export function FormCanvas() {
               onClick={() => setMode('preview')}
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#111] px-4 py-2 text-[15px] font-medium text-white"
             >
-              {form.settings.submitButtonText} <ArrowRight className="size-4" />
+              {settings.submitButtonText} <ArrowRight className="size-4" />
             </button>
           </>
         )}
@@ -187,16 +190,12 @@ function SortableBlock({ block, half, share }: { block: FormBlock; half: boolean
     id: block.id,
     data: { type: 'block' },
   });
-  const form = useFormStore((s) => s.form);
-  const activeBlockId = useFormStore((s) => s.activeBlockId);
-  const setActiveBlock = useFormStore((s) => s.setActiveBlock);
-  const openInspector = useFormStore((s) => s.openInspector);
-  const deleteBlock = useFormStore((s) => s.deleteBlock);
-  const addBlock = useFormStore((s) => s.addBlock);
+  const selected = useUiStore((s) => s.activeBlockId === block.id);
+  const setActiveBlock = useUiStore((s) => s.setActiveBlock);
+  const openInspector = useUiStore((s) => s.openInspector);
+  const index = useDoc((d) => d.blocks.findIndex((b) => b.id === block.id));
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const selected = activeBlockId === block.id;
-  const index = form.blocks.findIndex((b) => b.id === block.id);
 
   return (
     <div
@@ -219,8 +218,11 @@ function SortableBlock({ block, half, share }: { block: FormBlock; half: boolean
             selected || menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
           )}
         >
-          <IconBtn label="Delete block" danger onClick={() => deleteBlock(block.id)}>
+          <IconBtn label="Delete block" danger onClick={() => requestDeleteBlock(block.id)}>
             <Trash2 className="size-3.5" />
+          </IconBtn>
+          <IconBtn label="Duplicate block" onClick={() => duplicateBlock(block.id)}>
+            <Copy className="size-3.5" />
           </IconBtn>
           <div className="relative">
             <IconBtn

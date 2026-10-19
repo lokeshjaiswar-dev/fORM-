@@ -97,10 +97,9 @@ export function toDecimal(raw: string | number): DecimalString | null {
   return isDecimalString(out) ? brand<DecimalString>(out) : null;
 }
 
-/** The answer range v1 drew for a linear scale (`scaleRange`): min in [-1000, 1000], max in [min + 1, min + 9]. */
+/** The answer range the v1 builder drew for a linear scale (e1be409): `scaleMin..scaleMax`, rounded, with no cap (BL-109). */
 function v1ScaleRange(c: Customize): [number, number] {
-  const min = Math.min(1000, Math.max(-1000, Math.round(finite(c, 'scaleMin') ?? 1)));
-  return [min, Math.min(min + 9, Math.max(min + 1, Math.round(finite(c, 'scaleMax') ?? 5)))];
+  return [Math.round(finite(c, 'scaleMin') ?? 1), Math.round(finite(c, 'scaleMax') ?? 5)];
 }
 
 /** Whether `x <op> n` is true for some, and false for some, integer x in [lo, hi]; undefined for other operators. */
@@ -261,7 +260,8 @@ class V1Migration {
 
   /**
    * Claims every v1 id that is kept before any id is generated, so `fresh()` never repeats one: block ids that are
-   * valid and unique (I1, in v1 `order`), then option ids that are valid and unique within their block.
+   * valid and unique (I1, in v1 `order`), then option ids that are valid and unique within their block, then the
+   * source ids of dangling rules, which stay their disabled rule's left operand (BL-110).
    */
   private reserve(): Reserved[] {
     const sorted = this.form.blocks.map((block, index) => ({ block, index })).sort((a, b) => a.block.order - b.block.order || a.index - b.index);
@@ -278,6 +278,11 @@ class V1Migration {
         if (keep) this.used.add(o.id);
         return keep;
       }));
+    }
+    const v1Ids = new Set(this.form.blocks.map((b) => b.id));
+    for (const { block } of reserved) {
+      const source = block.logic?.sourceBlockId;
+      if (source && !v1Ids.has(source) && isOpaqueId(source)) this.used.add(source);
     }
     return reserved;
   }

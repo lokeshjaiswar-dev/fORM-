@@ -4,6 +4,7 @@ import {
   htmlToInline, htmlToPlain, migrateV1ToV2, parseV1,
   type CountryCode, type FileRef, type FileId, type FormDefinition, type FormVersion, type FormVersionId, type IsoInstant, type Locale,
   type OrgId, type PublishIssue, type RichDoc, type RuntimeFormVersion, type RuntimeStatus, type Sha256Hex, type TimeZone, type UserId,
+  type V1, type V1MigrationResult,
 } from '@form/schema';
 import type { UploadRequest } from '@form/renderer';
 import { patternProblem } from '@form/validation';
@@ -31,11 +32,9 @@ export interface PreviewDraft {
   password?: string;
 }
 
-/** The v1 builder document as the v2 definition a load would produce (schema §4.2). */
-export function previewDraft(form: FormSchema, now: IsoInstant): PreviewDraft {
-  const parsed = parseV1(form);
-  if (!parsed.success) throw new Error(`preview: ${parsed.error}`);
-  const result = migrateV1ToV2(parsed.data, {
+/** `migrateV1ToV2` with the builder's context: a v1 form as the v2 definition, ops and notes a load would produce. */
+export function migrateForBuilder(form: V1.FormSchema, now: IsoInstant): V1MigrationResult {
+  return migrateV1ToV2(form, {
     idFactory: sequence('pv'),
     now,
     orgDefaults: { locale: 'en-IN' as Locale, timeZone: 'Asia/Kolkata' as TimeZone, country: 'IN' as CountryCode },
@@ -44,6 +43,13 @@ export function previewDraft(form: FormSchema, now: IsoInstant): PreviewDraft {
     isSafePattern: (source) => patternProblem({ source }) === null,
     registry: REGISTRY,
   });
+}
+
+/** The v1 builder document as the v2 definition a load would produce (schema §4.2). */
+export function previewDraft(form: FormSchema, now: IsoInstant): PreviewDraft {
+  const parsed = parseV1(form);
+  if (!parsed.success) throw new Error(`preview: ${parsed.error}`);
+  const result = migrateForBuilder(parsed.data, now);
   const access = result.ops.access;
   const status: RuntimeStatus = !access.enabled
     ? { state: 'closed', screen: access.screens.closed?.content ?? EMPTY }

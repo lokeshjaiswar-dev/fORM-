@@ -2,14 +2,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input, Label } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { NiceSelect } from '@/components/ui/select';
-import { useFormStore } from '@/store/useFormStore';
+import { updateSettings } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
 
 const PRESETS = ['#111111', '#2563eb', '#7c3aed', '#db2777', '#059669', '#ea580c'];
 const FONTS = ['Inter', 'Georgia', 'Mono'] as const;
 
 export function ThemeSettings({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const settings = useFormStore((s) => s.form.settings);
-  const updateSettings = useFormStore((s) => s.updateSettings);
+  const settings = useDoc((d) => d.settings);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

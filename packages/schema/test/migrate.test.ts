@@ -235,8 +235,10 @@ describe('v1 → v2 mapping', () => {
     expect(block(result, 'b28_scale')).toMatchObject({ config: { min: 0, max: 4 } });
     expect(block(result, 'b28_wide')).toMatchObject({ config: { min: 1, max: 10 } });
     const scales = migrated('b07-unanswered-scales');
-    /* v1 drew at most 10 points (scaleRange): 0–10 showed as 0–9. */
-    expect(block(scales, 'b07_ease')).toMatchObject({ config: { min: 0, max: 9, lowLabel: 'Hard', highLabel: 'Easy' } });
+    /* The v1 builder drew scaleMin..scaleMax with no cap (BL-109): 0–10 stays 0–10, and 1–50 is clamped with a note. */
+    expect(block(scales, 'b07_ease')).toMatchObject({ config: { min: 0, max: 10, lowLabel: 'Hard', highLabel: 'Easy' } });
+    expect(scales.notes.filter((n) => n.path.startsWith('/blocks/b07_ease/config'))).toEqual([]);
+    expect(result.notes.find((n) => n.path === '/blocks/b28_wide/config/max')).toMatchObject({ code: 'clamped', detail: expect.stringContaining('50 is now 10') });
     expect(block(scales, 'b07_score')).toMatchObject({ type: 'nps', config: {} });
   });
 
@@ -444,6 +446,36 @@ describe('v1 → v2 edge cases', () => {
       expect(S.V1MigrationResultSchema.safeParse(wire(result)).success).toBe(true);
     }
     expect(S.migrateV1ToV2({ ...base(), settings: { ...S.V1.DEFAULT_SETTINGS, font: 'Georgia' } }, ctx()).definition.theme.tokens.typography.body).toBe('georgia');
+  });
+
+  it('keeps a 0–10 scale whole, so a rule on its top value stays live (BL-109)', () => {
+    const form: S.V1.FormSchema = {
+      ...base(),
+      blocks: [
+        { id: 's', type: 'linear_scale', label: 'S', order: 0, customize: { scaleMin: 0, scaleMax: 10 } },
+        text('t', 'T', 1, { logic: { enabled: true, action: 'show', sourceBlockId: 's', operator: 'greater_than', value: '9' } }),
+      ],
+    };
+    const result = S.migrateV1ToV2(form, ctx());
+    expect(block(result, 's')).toMatchObject({ config: { min: 0, max: 10 } });
+    expect(result.definition.logic.rules.map((r) => r.enabled)).toEqual([true]);
+    expect(codes(result)).not.toContain('clamped');
+    expect(codes(result)).not.toContain('logic_value_unmatched');
+  });
+
+  it('never gives the source id of a deleted rule source to another block (BL-110)', () => {
+    const form: S.V1.FormSchema = {
+      ...base(),
+      blocks: [
+        text('bad id', 'Renamed', 0),
+        text('t', 'T', 1, { logic: { enabled: true, action: 'show', sourceBlockId: 'm_1', operator: 'equals', value: 'x' } }),
+      ],
+    };
+    const result = S.migrateV1ToV2(form, ctx());
+    expect(Object.keys(result.definition.blocks)).not.toContain('m_1');
+    const [rule] = result.definition.logic.rules;
+    expect(rule).toMatchObject({ enabled: false, when: { children: [{ left: { ref: { blockId: 'm_1' } } }] } });
+    expect(result.notes.find((n) => n.code === 'dangling_logic_source')?.detail).toContain("'m_1' was deleted");
   });
 
   it('never generates an id that a kept v1 option id uses (seeded idFactory)', () => {

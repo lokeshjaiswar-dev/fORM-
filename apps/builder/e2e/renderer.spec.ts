@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { openNewForm } from './helpers.ts';
 
 async function insert(page: Page, command: string, option: RegExp) {
   await page.getByPlaceholder("Type '/' to insert blocks").fill(command);
@@ -32,7 +33,7 @@ async function recordSubmissions(page: Page) {
 }
 
 test('three pages: logic hides a required field, the form submits, and the hidden answer is absent from onSubmit', async ({ page }) => {
-  await page.goto('/builder/demo');
+  await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
   await insert(page, '/short', /Short answer/);
   await label(page, 'Attending');
@@ -81,7 +82,9 @@ test('three pages: logic hides a required field, the form submits, and the hidde
 });
 
 test('the preview has no serious or critical axe violations, before and after validation', async ({ page }) => {
-  await page.goto('/builder/demo');
+  /* About 13 s alone and close to the default 30 s under six workers (BL-146). */
+  test.slow();
+  await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
   const fields: Array<[string, RegExp, string]> = [
     ['/short', /Short answer/, 'Full name'],
@@ -112,5 +115,6 @@ test('the preview has no serious or critical axe violations, before and after va
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
   await expect(page.getByText('This field is required.', { exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: /Full name/ })).toBeFocused();
+  await expect(page.locator('.fr-root')).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
 });

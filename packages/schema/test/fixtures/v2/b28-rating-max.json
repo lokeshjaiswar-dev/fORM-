@@ -783,6 +783,11 @@
       "detail": "key 'scale'"
     },
     {
+      "code": "clamped",
+      "path": "/blocks/b28_wide/config/max",
+      "detail": "scale end 50 is now 10 (v2 allows 2–10)"
+    },
+    {
       "code": "key_generated",
       "path": "/blocks/b28_wide/key",
       "detail": "key 'wide'"

@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { openNewForm } from './helpers.ts';
 
 test('typing and formatting a label reaches the preview as safe elements', async ({ page }) => {
-  await page.goto('/builder/demo');
+  await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
   await page.getByPlaceholder("Type '/' to insert blocks").fill('/short');
   await page.getByRole('option', { name: /Short answer/ }).click();
@@ -23,7 +24,7 @@ test('typing and formatting a label reaches the preview as safe elements', async
 
 test('copy and paste between labels keeps formatting the strict paste rules drop', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto('/builder/demo');
+  await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
   for (let i = 0; i < 2; i += 1) {
     await page.getByPlaceholder("Type '/' to insert blocks").fill('/short');

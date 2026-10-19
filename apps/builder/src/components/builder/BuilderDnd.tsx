@@ -11,7 +11,9 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { useFormStore } from '@/store/useFormStore';
+import { addBlock, moveBlock, placeBeside } from '@/state/actions';
+import { currentDoc, useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import type { FieldType } from '@/types/form';
 import { FIELD_CATALOG } from '@/lib/fields';
 import { FieldTile } from '@/components/builder/FieldIcon';
@@ -32,12 +34,9 @@ const collision: CollisionDetection = (args) => {
 };
 
 export function BuilderDnd({ children }: { children: ReactNode }) {
-  const form = useFormStore((s) => s.form);
-  const addBlock = useFormStore((s) => s.addBlock);
-  const placeBeside = useFormStore((s) => s.placeBeside);
-  const reorderBlocks = useFormStore((s) => s.reorderBlocks);
-  const startBlank = useFormStore((s) => s.startBlank);
+  const startBlank = useUiStore((s) => s.startBlank);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const overlayBlock = useDoc((d) => d.blocks.find((b) => b.id === activeId));
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -80,22 +79,22 @@ export function BuilderDnd({ children }: { children: ReactNode }) {
       return;
     }
 
+    const { blocks } = currentDoc();
     if (fromPalette && type) {
       startBlank();
-      const overIndex = form.blocks.findIndex((b) => b.id === overId);
-      addBlock(type, overIndex >= 0 ? overIndex : form.blocks.length);
+      const overIndex = blocks.findIndex((b) => b.id === overId);
+      addBlock(type, overIndex >= 0 ? overIndex : blocks.length);
       return;
     }
 
     if (overId === 'canvas-drop') return;
 
-    const from = form.blocks.findIndex((b) => b.id === active.id);
-    const to = form.blocks.findIndex((b) => b.id === overId);
-    if (from >= 0 && to >= 0 && from !== to) reorderBlocks(from, to);
+    const from = blocks.findIndex((b) => b.id === active.id);
+    const to = blocks.findIndex((b) => b.id === overId);
+    if (from >= 0 && to >= 0 && from !== to) moveBlock(from, to);
   }
 
   const overlayType = activeId?.startsWith('palette-') ? (activeId.replace('palette-', '') as FieldType) : null;
-  const overlayBlock = form.blocks.find((b) => b.id === activeId);
 
   return (
     <DndContext

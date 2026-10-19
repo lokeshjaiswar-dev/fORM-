@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ChevronRight,
   MoreHorizontal,
@@ -7,10 +8,12 @@ import {
   LayoutTemplate,
   Palette,
   Star,
-  Clock,
   PanelLeft,
 } from 'lucide-react';
-import { useFormStore, useTemporalStore } from '@/store/useFormStore';
+import { useDoc } from '@/state/documentStore';
+import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
+import { useUiStore, type SaveState } from '@/state/uiStore';
+import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateModal } from '@/components/builder/TemplateModal';
 import { ThemeSettings } from '@/components/builder/ThemeSettings';
 import { toast } from 'sonner';
@@ -18,37 +21,15 @@ import { cn } from '@/lib/utils';
 import { Tooltip, modKey } from '@/components/ui/tooltip';
 
 export function BuilderHeader() {
-  const form = useFormStore((s) => s.form);
-  const mode = useFormStore((s) => s.mode);
-  const setMode = useFormStore((s) => s.setMode);
-  const sidebarOpen = useFormStore((s) => s.sidebarOpen);
-  const setSidebarOpen = useFormStore((s) => s.setSidebarOpen);
-  const undo = useTemporalStore((s) => s.undo);
-  const redo = useTemporalStore((s) => s.redo);
-  const past = useTemporalStore((s) => s.pastStates);
-  const future = useTemporalStore((s) => s.futureStates);
+  const title = useDoc((d) => d.title);
+  const [mode, setMode] = useBuilderMode();
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const save = useUiStore((s) => s.save);
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
   const [templates, setTemplates] = useState(false);
   const [theme, setTheme] = useState(false);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey;
-      const target = e.target as HTMLElement | null;
-      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
-        if (typing) return;
-        e.preventDefault();
-        undo();
-      }
-      if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
-        if (typing) return;
-        e.preventDefault();
-        redo();
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo]);
 
   return (
     <>
@@ -59,10 +40,15 @@ export function BuilderHeader() {
           </Ghost>
         )}
         <div className="flex min-w-0 flex-1 items-center gap-0.5 text-[14px] text-[var(--notion-text-muted)]">
-          <span className="truncate rounded-[4px] px-1.5 py-0.5 hover:bg-[var(--notion-hover)]">Forms</span>
+          <Link to="/forms" className="truncate rounded-[4px] px-1.5 py-0.5 hover:bg-[var(--notion-hover)]">
+            Forms
+          </Link>
           <ChevronRight className="size-3.5 shrink-0 text-[var(--notion-text-faint)]" />
           <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-[var(--notion-text)] hover:bg-[var(--notion-hover)]">
-            <span className="truncate">{form.title || 'Form title'}</span>
+            <span className="truncate">{title || 'Form title'}</span>
+          </span>
+          <span role="status" title={save.state === 'error' ? save.message : undefined} className="ml-1 shrink-0 text-[13px] text-[var(--notion-text-faint)]">
+            {saveLabel(save)}
           </span>
         </div>
 
@@ -71,6 +57,7 @@ export function BuilderHeader() {
             <button
               key={m}
               type="button"
+              aria-pressed={mode === m}
               onClick={() => setMode(m)}
               className={cn(
                 'rounded-[6px] px-2 py-1 text-[14px] capitalize',
@@ -82,10 +69,10 @@ export function BuilderHeader() {
           ))}
         </div>
 
-        <Ghost disabled={past.length === 0} onClick={() => undo()} label="Undo" shortcut={`${modKey()}+Z`}>
+        <Ghost disabled={!canUndo} onClick={undo} label="Undo" shortcut={`${modKey()}+Z`}>
           <Undo2 className="size-4" />
         </Ghost>
-        <Ghost disabled={future.length === 0} onClick={() => redo()} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
+        <Ghost disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
           <Redo2 className="size-4" />
         </Ghost>
         <Ghost onClick={() => setTemplates(true)} label="Templates">
@@ -93,9 +80,6 @@ export function BuilderHeader() {
         </Ghost>
         <Ghost onClick={() => setTheme(true)} label="Customize form">
           <Palette className="size-4" />
-        </Ghost>
-        <Ghost onClick={() => toast.message('Updated just now')} label="Last edited just now">
-          <Clock className="size-4" />
         </Ghost>
         <Tooltip content="Copy share link">
           <button
@@ -122,6 +106,19 @@ export function BuilderHeader() {
   );
 }
 
+function saveLabel(save: SaveState): string {
+  switch (save.state) {
+    case 'saving':
+      return 'Saving…';
+    case 'saved':
+      return 'Saved';
+    case 'error':
+      return 'Not saved';
+    default:
+      return '';
+  }
+}
+
 function Ghost({
   children,
   onClick,
@@ -139,6 +136,7 @@ function Ghost({
     <Tooltip content={label} shortcut={shortcut}>
       <button
         type="button"
+        aria-label={label}
         disabled={disabled}
         onClick={onClick}
         className="flex size-[28px] items-center justify-center rounded-[6px] text-[var(--notion-text-muted)] hover:bg-[var(--notion-hover)] disabled:opacity-30"

@@ -7,7 +7,7 @@ import { isSafeHref, type ColorValue } from '@form/schema';
 import { Tooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { themeVars } from '@/lib/blockStyle';
-import { useFormStore } from '@/store/useFormStore';
+import { useDoc } from '@/state/documentStore';
 import { colorCss } from '@/components/editor/extensions';
 
 interface Swatch {
@@ -47,7 +47,7 @@ const HIGHLIGHT_SWATCHES: Swatch[] = [
 const MARKS = ['bold', 'italic', 'underline', 'textColor', 'highlight', 'link'] as const;
 
 export function FormatMenu({ editor }: { editor: Editor }) {
-  const settings = useFormStore((s) => s.form.settings);
+  const settings = useDoc((d) => d.settings);
   const [colorOpen, setColorOpen] = useState<'textColor' | 'highlight' | null>(null);
   const state = useEditorState({
     editor,

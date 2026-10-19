@@ -5,11 +5,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { GALLERY_LOCALE, formFromTemplate, loadSystemPack } from '@/lib/systemPack';
 import { uid } from '@/lib/utils';
-import { useFormStore } from '@/store/useFormStore';
+import { replaceDocument } from '@/state/actions';
 import { toast } from 'sonner';
 
 export function TemplateModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const loadTemplate = useFormStore((s) => s.loadTemplate);
   const [pack, setPack] = useState<Formpack | null>(null);
   const [failed, setFailed] = useState(false);
   const [pendingSlug, setPendingSlug] = useState<string | null>(null);
@@ -30,8 +29,9 @@ export function TemplateModal({ open, onOpenChange }: { open: boolean; onOpenCha
     const template = pack?.templates.find((t) => t.entry.slug === slug);
     if (pack && template) {
       const { form } = formFromTemplate(pack, template, { idSeed: uid(), bindingIdSeed: uid(), now: new Date().toISOString() as IsoInstant });
-      loadTemplate(form);
-      toast.success(`Loaded “${localizationOf(template.file, GALLERY_LOCALE)?.title ?? slug}”`);
+      const title = localizationOf(template.file, GALLERY_LOCALE)?.title ?? slug;
+      if (replaceDocument(form).ok) toast.success(`Loaded “${title}”`);
+      else toast.error(`“${title}” could not be loaded into this form`);
     }
     setPendingSlug(null);
     onOpenChange(false);

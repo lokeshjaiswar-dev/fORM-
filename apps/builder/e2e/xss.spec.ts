@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openNewForm } from './helpers.ts';
 
 const payload = '<img src=x onerror=alert(1)>';
 
@@ -9,7 +10,7 @@ test('a typed label never runs script in the builder or preview', async ({ page 
     void dialog.dismiss();
   });
 
-  await page.goto('/builder/demo');
+  await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
   const insert = page.getByPlaceholder("Type '/' to insert blocks");
   await insert.fill(payload);

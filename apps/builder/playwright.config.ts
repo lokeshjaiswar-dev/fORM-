@@ -15,7 +15,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `pnpm exec vite preview --port ${port} --strictPort`,
-    url: `http://localhost:${port}/builder/demo`,
+    url: `http://localhost:${port}/forms`,
     reuseExistingServer: !process.env.CI,
   },
 });
