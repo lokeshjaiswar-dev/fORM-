@@ -95,4 +95,5 @@ export { UNBOUND_BLOCK_ID } from './fields/shared.ts';
 export { SHORT_TEXT_MAX } from './fields/short_text.ts';
 export { DRAFT_DEFAULT_CONFIG_TYPES } from './stubs.ts';
 export { DEFAULT_TEXT, PALETTE_LABELS } from './messages.ts';
+export { CALLING_CODE_REGIONS, callingCodeOf } from './util/calling-codes.ts';
 export { CHOICES_OPS, CHOICE_OPS, FILE_OPS, NUMBER_OPS, PRESENCE_OPS, TEMPORAL_OPS, TEXT_OPS } from './operators.ts';

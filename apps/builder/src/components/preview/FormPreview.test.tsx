@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormPreview } from '@/components/preview/FormPreview';
 import { block, resetStore } from '@/test/fixtures';
@@ -13,6 +13,7 @@ function renderPreview(blocks: FormBlock[]) {
 }
 
 const thanks = 'Thanks for your response!';
+const required = 'This field is required.';
 
 beforeEach(() => resetStore());
 
@@ -27,7 +28,7 @@ describe('FormPreview', () => {
   it('shows Required and stays on the form when a required field is empty', async () => {
     const user = renderPreview([block('text', { id: 'name', label: 'Name', validation: { required: true } })]);
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(await screen.findByText(required)).toBeInTheDocument();
     expect(screen.queryByText(thanks)).not.toBeInTheDocument();
   });
 
@@ -84,11 +85,11 @@ describe('FormPreview', () => {
     ]);
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText('Second')).toBeInTheDocument();
-    expect(screen.queryByText('Required')).not.toBeInTheDocument();
+    expect(screen.queryByText(required)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText('Third')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(await screen.findByText(required)).toBeInTheDocument();
     expect(screen.queryByText(thanks)).not.toBeInTheDocument();
     await user.type(screen.getByPlaceholderText('Third answer'), 'Asha');
     await user.click(screen.getByRole('button', { name: 'Submit' }));
@@ -102,7 +103,7 @@ describe('FormPreview', () => {
       block('text', { id: 'b', label: 'Second' }),
     ]);
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(await screen.findByText(required)).toBeInTheDocument();
     expect(screen.queryByText('Second')).not.toBeInTheDocument();
   });
 
@@ -118,14 +119,14 @@ describe('FormPreview', () => {
     ]);
     await user.type(screen.getByPlaceholderText('Country'), 'IN');
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(await screen.findByText(required)).toBeInTheDocument();
     expect(screen.queryByText(thanks)).not.toBeInTheDocument();
   });
 
   it('B4: a required empty signature blocks submit', async () => {
     const user = renderPreview([block('signature', { id: 'sig', label: 'Sign here', validation: { required: true } })]);
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('Please sign')).toBeInTheDocument();
+    expect(await screen.findByText(required)).toBeInTheDocument();
     expect(screen.queryByText(thanks)).not.toBeInTheDocument();
   });
 
@@ -164,18 +165,20 @@ describe('FormPreview', () => {
       block('rating', { id: 'r', label: 'Stars', customize: { ratingMax: 10_000_000 } }),
       block('linear_scale', { id: 's', label: 'Scale', customize: { scaleMin: 1, scaleMax: 1000 } }),
     ]);
-    expect(screen.getByText('Stars').closest('div')!.querySelectorAll('svg')).toHaveLength(10);
-    expect(screen.getByRole('button', { name: '10' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '11' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('radiogroup', { name: 'Stars' })).getAllByRole('radio')).toHaveLength(10);
+    const scale = within(screen.getByRole('radiogroup', { name: 'Scale' }));
+    expect(scale.getByRole('radio', { name: '10' })).toBeInTheDocument();
+    expect(scale.queryByRole('radio', { name: '11' })).not.toBeInTheDocument();
   });
 
   it('B7: an unanswered NPS shows no score selected', () => {
     renderPreview([block('nps', { id: 'nps', label: 'Recommend?' })]);
-    expect(screen.getByRole('button', { name: '0' })).not.toHaveAttribute('style');
+    expect(screen.getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true')).toEqual([]);
+    expect(screen.getByRole('radio', { name: '0' })).toHaveAttribute('aria-checked', 'false');
   });
 
   it('B7: an unanswered linear scale starting at 0 shows nothing selected', () => {
     renderPreview([block('linear_scale', { id: 'scale', label: 'Scale', customize: { scaleMin: 0, scaleMax: 5 } })]);
-    expect(screen.getByRole('button', { name: '0' })).not.toHaveAttribute('style');
+    expect(screen.getByRole('radio', { name: '0' })).toHaveAttribute('aria-checked', 'false');
   });
 });

@@ -28,6 +28,9 @@ const BY_REGION: ReadonlyMap<string, string> = new Map(
   Object.entries(BY_CODE).flatMap(([code, regions]) => regions.split(' ').map((region) => [region, code] as const)),
 );
 
+/** Every region with a calling code, in ISO code order. */
+export const CALLING_CODE_REGIONS: readonly CountryCode[] = [...BY_REGION.keys()].sort() as CountryCode[];
+
 /** The calling code of a region, or undefined when the region has none in the table. */
 export const callingCodeOf = (country: CountryCode): string | undefined => BY_REGION.get(country);
 

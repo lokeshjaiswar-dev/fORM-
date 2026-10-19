@@ -11,6 +11,8 @@ Answer validation (FND-05, VAL-01, VAL-05, VAL-07, VAL-10, RSP-02; `docs/platfor
 | `src/checks.ts` | What the registry leaves to validation: author patterns, presets and masks, relative and field date bounds, age, holiday calendars, options hidden by logic |
 | `src/pattern.ts`, `src/formats.ts` | re2js compilation (author patterns capped at 256 characters and 1000 program instructions, values at 40,000 code units), preset and mask sources |
 | `src/dates.ts` | Integer calendar arithmetic on `YYYY-MM-DD` (month-end clamping, completed years) |
+| `src/regex.ts` | The installed regex engine (`installRegexEngine`) and `needsRegexEngine(definition)` |
+| `src/index.ts`, `src/lazy.ts`, `src/api.ts` | The entries, both exporting `api.ts`: `@form/validation` installs re2js on import (servers, the builder); `@form/validation/lazy` (the renderer) leaves it to `await loadRegexEngine()`, a dynamic import, before validating a form for which `needsRegexEngine` is true (BL-099) |
 
 ## Rules
 

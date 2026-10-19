@@ -88,6 +88,20 @@ module.exports = {
       to: { dependencyTypes: ['core'] },
     },
     {
+      name: 'renderer-store-independent',
+      comment: 'FormRenderer takes everything as props (WP-0.10): no builder store library in @form/renderer.',
+      severity: 'error',
+      from: { path: '^packages/renderer/' },
+      to: { path: ['(^|/)node_modules/(zustand|zundo)/', '^(zustand|zundo)(/|$)'] },
+    },
+    {
+      name: 'renderer-lazy-regex',
+      comment: 'The renderer loads re2js only for forms that need it (BL-129): it imports @form/validation/lazy, never the eager entry or re2js itself.',
+      severity: 'error',
+      from: { path: '^packages/renderer/src/' },
+      to: { path: ['^packages/validation/src/index\\.ts$', '(^|/)node_modules/re2js/', '^re2js(/|$)'] },
+    },
+    {
       name: 'html-parsing-only-in-schema-richtext',
       comment: 'HTML is read in one place: the @form/schema fromHtml allowlist (WP-0.08). No sanitiser shims, no second parser.',
       severity: 'error',
@@ -110,10 +124,10 @@ module.exports = {
     },
     {
       name: 'no-deep-import',
-      comment: 'Import @form/* packages through their exports, never their src/ files.',
+      comment: 'Import @form/* packages through their exports, never their src/ files. A package stylesheet export (@form/renderer/styles.css) and the lazy validation entry (@form/validation/lazy) are entry points too.',
       severity: 'error',
       from: { path: '^(?:apps|packages)/([^/]+)/' },
-      to: { path: '^packages/[^/]+/src/', pathNot: ['^packages/$1/', '^packages/[^/]+/src/index\\.ts$'] },
+      to: { path: '^packages/[^/]+/src/', pathNot: ['^packages/$1/', '^packages/[^/]+/src/index\\.ts$', '^packages/[^/]+/src/styles\\.css$', '^packages/validation/src/lazy\\.ts$'] },
     },
     {
       name: 'no-deep-import-unresolved',

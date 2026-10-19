@@ -1,0 +1,743 @@
+/*
+ * @form/renderer styles. Every rule is scoped under .fr-root (`:where(.fr-root)` adds no specificity, so the rules keep
+ * their order of precedence) and reads the theme through custom properties set by theme/cssVars.ts. The renderer's
+ * rules never reach the host page; a host rule that matches elements inside .fr-root still applies there.
+ */
+
+.fr-root {
+  --fr-focus: 0 0 0 3px color-mix(in srgb, var(--fr-accent) 35%, transparent);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--fr-page);
+  background-image: var(--fr-page-image, none);
+  color: var(--fr-text);
+  font-family: var(--fr-font);
+  font-size: var(--fr-size);
+  line-height: 1.5;
+  text-align: start;
+}
+
+.fr-root *,
+.fr-root *::before,
+.fr-root *::after {
+  box-sizing: inherit;
+}
+
+.fr-root :focus-visible {
+  outline: 2px solid var(--fr-accent);
+  outline-offset: 2px;
+}
+
+:where(.fr-root) .fr-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:where(.fr-root) .fr-form,
+:where(.fr-root) .fr-screen {
+  width: 100%;
+  max-width: var(--fr-width);
+  margin: 0 auto;
+  padding: 40px 24px;
+  outline: none;
+}
+
+:where(.fr-root) .fr-header {
+  margin-bottom: var(--fr-gap);
+}
+
+:where(.fr-root) .fr-title {
+  margin: 0;
+  font-family: var(--fr-heading-font);
+  font-size: 2.25em;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+:where(.fr-root) .fr-header .fr-description {
+  margin-top: 8px;
+  color: var(--fr-muted);
+}
+
+:where(.fr-root) .fr-page-title {
+  margin: 0 0 var(--fr-gap);
+  font-family: var(--fr-heading-font);
+  font-size: 1.4em;
+}
+
+:where(.fr-root) .fr-progress {
+  height: 4px;
+  margin-bottom: var(--fr-gap);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--fr-text) 10%, transparent);
+  overflow: hidden;
+}
+
+:where(.fr-root) .fr-progress-fill {
+  height: 100%;
+  background: var(--fr-accent);
+  transition: width 0.2s ease;
+}
+
+:where(.fr-root) .fr-progress-text {
+  margin: 0 0 var(--fr-gap);
+  color: var(--fr-muted);
+  font-size: 0.875em;
+}
+
+:where(.fr-root) .fr-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fr-gap);
+}
+
+:where(.fr-root) .fr-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+:where(.fr-root) .fr-cell {
+  flex: 0 0 calc((100% - 16px * (12 / var(--fr-span) - 1)) * var(--fr-span) / 12);
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  :where(.fr-root) .fr-row {
+    flex-direction: column;
+    gap: var(--fr-gap);
+  }
+
+  :where(.fr-root) .fr-cell {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+:where(.fr-root) .fr-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  text-align: var(--fr-align, start);
+}
+
+:where(.fr-root) .fr-label {
+  display: block;
+  margin: 0 0 6px;
+  padding: 0;
+  color: var(--fr-label-color, inherit);
+  font-size: var(--fr-label-size, 1em);
+  font-weight: var(--fr-label-weight, 500);
+}
+
+.fr-root[data-label-align='left'] .fr-field,
+.fr-root[data-label-align='right'] .fr-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  column-gap: 16px;
+}
+
+.fr-root[data-label-align='left'] .fr-field > :not(.fr-label),
+.fr-root[data-label-align='right'] .fr-field > :not(.fr-label) {
+  grid-column: 2;
+}
+
+.fr-root[data-label-align='right'] .fr-field > .fr-label {
+  text-align: end;
+}
+
+:where(.fr-root) .fr-required {
+  color: var(--fr-accent);
+}
+
+:where(.fr-root) .fr-description {
+  margin: -2px 0 8px;
+  color: var(--fr-muted);
+  font-size: 0.875em;
+}
+
+:where(.fr-root) .fr-error {
+  margin: 6px 0 0;
+  color: var(--fr-error);
+  font-size: 0.875em;
+}
+
+:where(.fr-root) .fr-hint,
+:where(.fr-root) .fr-counter {
+  margin: 4px 0 0;
+  color: var(--fr-muted);
+  font-size: 0.8125em;
+}
+
+:where(.fr-root) .fr-counter {
+  text-align: end;
+}
+
+:where(.fr-root) .fr-counter[data-over] {
+  color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-input {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--fr-input-border, var(--fr-inputBorder));
+  border-radius: var(--fr-radius);
+  background: var(--fr-input-bg, var(--fr-inputBg));
+  color: var(--fr-input-color, var(--fr-inputText));
+  font: inherit;
+  font-size: var(--fr-input-size, 1em);
+  text-align: var(--fr-align, start);
+}
+
+:where(.fr-root) .fr-input::placeholder {
+  color: var(--fr-placeholder, var(--fr-muted));
+  opacity: 1;
+}
+
+:where(.fr-root) .fr-input:focus {
+  border-color: var(--fr-accent);
+  box-shadow: var(--fr-focus);
+  outline: none;
+}
+
+:where(.fr-root) .fr-input:disabled,
+:where(.fr-root) .fr-input[readonly] {
+  background: color-mix(in srgb, var(--fr-text) 5%, var(--fr-inputBg));
+}
+
+:where(.fr-root) .fr-field[data-invalid] .fr-input {
+  border-color: var(--fr-error);
+}
+
+.fr-root[data-input-style='filled'] .fr-input {
+  border-color: transparent;
+  background: var(--fr-input-bg, color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg)));
+}
+
+.fr-root[data-input-style='underlined'] .fr-input {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding-inline: 0;
+  background: transparent;
+}
+
+:where(.fr-root) .fr-textarea {
+  resize: vertical;
+}
+
+:where(.fr-root) .fr-select {
+  appearance: auto;
+}
+
+:where(.fr-root) .fr-affix,
+:where(.fr-root) .fr-phone,
+:where(.fr-root) .fr-range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+:where(.fr-root) .fr-affix > .fr-input,
+:where(.fr-root) .fr-phone > .fr-input:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+:where(.fr-root) .fr-phone-country {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+:where(.fr-root) .fr-range {
+  flex-wrap: wrap;
+}
+
+:where(.fr-root) .fr-range > .fr-input {
+  flex: 1 1 140px;
+  width: auto;
+}
+
+:where(.fr-root) .fr-affix-text,
+:where(.fr-root) .fr-sublabel {
+  color: var(--fr-muted);
+  font-size: 0.875em;
+}
+
+:where(.fr-root) .fr-choices {
+  display: grid;
+  grid-template-columns: repeat(var(--fr-columns, 1), minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+:where(.fr-root) .fr-choices[hidden] {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  :where(.fr-root) .fr-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+:where(.fr-root) .fr-choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-choice input {
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--fr-accent);
+  flex: none;
+}
+
+:where(.fr-root) .fr-other {
+  margin-top: 8px;
+}
+
+:where(.fr-root) .fr-disclosure-toggle {
+  text-align: start;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-disclosure .fr-choices {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--fr-inputBorder);
+  border-radius: var(--fr-radius);
+}
+
+:where(.fr-root) .fr-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+:where(.fr-root) .fr-point-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+:where(.fr-root) .fr-point {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 6px;
+  border: 1px solid var(--fr-inputBorder);
+  border-radius: var(--fr-radius);
+  background: var(--fr-inputBg);
+  color: var(--fr-inputText);
+  font: inherit;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-points[data-variant='icons'] .fr-point {
+  border-color: transparent;
+  background: transparent;
+  color: var(--fr-muted);
+  padding: 0;
+}
+
+:where(.fr-root) .fr-point[aria-checked='true'] {
+  border-color: var(--fr-accent);
+  background: var(--fr-accent);
+  color: var(--fr-accentText);
+}
+
+:where(.fr-root) .fr-points[data-variant='icons'] .fr-point[aria-checked='true'] {
+  background: transparent;
+  color: var(--fr-accent);
+}
+
+:where(.fr-root) .fr-point:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+:where(.fr-root) .fr-icon {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+:where(.fr-root) .fr-icon[data-filled] {
+  fill: var(--fr-accent);
+  stroke: var(--fr-accent);
+}
+
+:where(.fr-root) .fr-point-label {
+  color: var(--fr-muted);
+  font-size: 0.8125em;
+}
+
+:where(.fr-root) .fr-ranking {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.fr-root) .fr-rank {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--fr-inputBorder);
+  border-radius: var(--fr-radius);
+  background: var(--fr-inputBg);
+}
+
+:where(.fr-root) .fr-rank-position {
+  min-width: 1.5em;
+  color: var(--fr-muted);
+  font-size: 0.8125em;
+  text-align: center;
+}
+
+:where(.fr-root) .fr-rank-label {
+  flex: 1;
+  min-width: 0;
+}
+
+:where(.fr-root) .fr-rank-move {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--fr-radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-rank-move:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+:where(.fr-root) .fr-rank-move svg,
+:where(.fr-root) .fr-ending-mark svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:where(.fr-root) .fr-file-input {
+  max-width: 100%;
+  font: inherit;
+}
+
+:where(.fr-root) .fr-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.fr-root) .fr-file {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  font-size: 0.875em;
+}
+
+:where(.fr-root) .fr-file[data-error] {
+  color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-signature {
+  position: relative;
+}
+
+:where(.fr-root) .fr-signature-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--fr-inputBorder);
+  border-radius: var(--fr-radius);
+  background: var(--fr-inputBg);
+  touch-action: none;
+}
+
+:where(.fr-root) .fr-signature-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+:where(.fr-root) .fr-statement {
+  margin: 0 0 8px;
+  font-size: 0.875em;
+}
+
+:where(.fr-root) .fr-link-button {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--fr-radius);
+  background: transparent;
+  color: var(--fr-accent);
+  font: inherit;
+  font-size: 0.875em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-heading {
+  margin: 0;
+  font-family: var(--fr-heading-font);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+:where(.fr-root) .fr-heading-block[data-level='1'] .fr-heading {
+  font-size: 1.75em;
+}
+
+:where(.fr-root) .fr-heading-block[data-level='2'] .fr-heading {
+  font-size: 1.4em;
+}
+
+:where(.fr-root) .fr-heading-block[data-level='3'] .fr-heading {
+  font-size: 1.2em;
+}
+
+:where(.fr-root) .fr-subheading {
+  margin: 4px 0 0;
+  color: var(--fr-muted);
+}
+
+:where(.fr-root) .fr-divider {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--fr-inputBorder);
+}
+
+:where(.fr-root) .fr-divider[data-line='dashed'] {
+  border-top-style: dashed;
+}
+
+:where(.fr-root) .fr-divider[data-line='dotted'] {
+  border-top-style: dotted;
+}
+
+:where(.fr-root) .fr-divider[data-line='none'] {
+  border-top-color: transparent;
+}
+
+:where(.fr-root) .fr-divider[data-spacing='lg'] {
+  margin: 16px 0;
+}
+
+:where(.fr-root) .fr-rich p,
+:where(.fr-root) .fr-rich ul,
+:where(.fr-root) .fr-rich ol,
+:where(.fr-root) .fr-rich blockquote,
+:where(.fr-root) .fr-rich figure {
+  margin: 0 0 0.75em;
+}
+
+:where(.fr-root) .fr-rich > :last-child {
+  margin-bottom: 0;
+}
+
+:where(.fr-root) .fr-rich ul,
+:where(.fr-root) .fr-rich ol {
+  padding-inline-start: 1.5em;
+}
+
+:where(.fr-root) .fr-rich blockquote {
+  padding-inline-start: 12px;
+  border-inline-start: 3px solid var(--fr-inputBorder);
+}
+
+:where(.fr-root) .fr-rich h1,
+:where(.fr-root) .fr-rich h2,
+:where(.fr-root) .fr-rich h3 {
+  margin: 0 0 0.5em;
+  font-family: var(--fr-heading-font);
+  line-height: 1.25;
+}
+
+:where(.fr-root) .fr-rich hr {
+  border: 0;
+  border-top: 1px solid var(--fr-inputBorder);
+}
+
+.fr-root a {
+  color: var(--fr-accent);
+}
+
+:where(.fr-root) .fr-rich code,
+:where(.fr-root) .fr-label code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--fr-text) 8%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+:where(.fr-root) .fr-form-error {
+  margin-top: var(--fr-gap);
+  padding: 12px 14px;
+  border: 1px solid var(--fr-error);
+  border-radius: var(--fr-radius);
+  color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-form-error p {
+  margin: 0;
+}
+
+:where(.fr-root) .fr-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: calc(var(--fr-gap) * 1.25);
+}
+
+:where(.fr-root) .fr-nav[data-align='center'] {
+  justify-content: center;
+}
+
+:where(.fr-root) .fr-nav[data-align='right'] {
+  justify-content: flex-end;
+}
+
+:where(.fr-root) .fr-nav[data-align='full'] .fr-primary {
+  flex: 1;
+}
+
+:where(.fr-root) .fr-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--fr-radius);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-button:disabled,
+:where(.fr-root) .fr-button[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+:where(.fr-root) .fr-primary {
+  background: var(--fr-accent);
+  color: var(--fr-accentText);
+}
+
+:where(.fr-root) .fr-secondary {
+  border-color: var(--fr-inputBorder);
+  background: var(--fr-surface);
+  color: var(--fr-text);
+}
+
+:where(.fr-root) .fr-screen {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+}
+
+:where(.fr-root) .fr-screen-title {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-family: var(--fr-heading-font);
+  font-size: 1.5em;
+}
+
+:where(.fr-root) .fr-screen > :not(.fr-confetti) {
+  position: relative;
+  z-index: 1;
+}
+
+:where(.fr-root) .fr-ending-mark {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fr-success) 15%, transparent);
+  color: var(--fr-success);
+}
+
+:where(.fr-root) .fr-confetti {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+:where(.fr-root) .fr-password {
+  display: flex;
+  width: 100%;
+  max-width: 320px;
+  flex-direction: column;
+  gap: 8px;
+  text-align: start;
+}
+
+@media (max-width: 639px) {
+  :where(.fr-root) .fr-form,
+  :where(.fr-root) .fr-screen {
+    padding: 28px 16px;
+  }
+
+  :where(.fr-root) .fr-title {
+    font-size: 1.75em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-root *,
+  .fr-root *::before,
+  .fr-root *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

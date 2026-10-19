@@ -4,7 +4,6 @@ import { useFormStore } from '@/store/useFormStore';
 import { cn } from '@/lib/utils';
 import { inputStyle, labelStyle } from '@/lib/blockStyle';
 import { ratingCount, scaleRange } from '@/lib/fields';
-import { SignaturePad } from '@/components/blocks/SignaturePad';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { RichEditor } from '@/components/editor/RichEditor';
 
@@ -205,7 +204,11 @@ function FieldPreview({ block }: { block: FormBlock }) {
         </div>
       );
     case 'signature':
-      return <SignaturePad disabled />;
+      return (
+        <div className="flex h-[140px] items-center justify-center rounded-md border border-zinc-200 bg-white text-[13px] text-zinc-400">
+          Signature pad
+        </div>
+      );
     case 'hidden':
       return <p className="text-[12px] text-zinc-400">Hidden from respondents</p>;
     default:

@@ -1,5 +1,5 @@
 import type { InputMask, TextPreset } from '@form/schema';
-import { RE2JS } from 're2js';
+import { regexEngine } from './regex.ts';
 import { compileBuiltIn, withinBudget } from './pattern.ts';
 
 /*
@@ -47,7 +47,7 @@ export function maskSource(mask: InputMask): string | null {
   const hasTail = open >= 0 || close >= 0;
   if (hasTail && (open < 0 || close !== mask.pattern.length - 1 || open > close || mask.pattern.indexOf('[', open + 1) >= 0)) return null;
   if (hasTail && mask.pattern.indexOf(']') !== close) return null;
-  const part = (text: string) => [...text].map((ch) => SLOT[ch] ?? (mask.storeMasked ? RE2JS.quote(ch) : '')).join('');
+  const part = (text: string) => [...text].map((ch) => SLOT[ch] ?? (mask.storeMasked ? regexEngine().quote(ch) : '')).join('');
   const head = part(hasTail ? mask.pattern.slice(0, open) : mask.pattern);
   const tail = hasTail ? part(mask.pattern.slice(open + 1, close)) : '';
   return `^${head}${tail ? `(?:${tail})?` : ''}$`;

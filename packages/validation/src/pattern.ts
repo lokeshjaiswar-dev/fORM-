@@ -1,5 +1,5 @@
 import type { SafePattern } from '@form/schema';
-import { RE2JS } from 're2js';
+import { regexEngine } from './regex.ts';
 
 /*
  * VAL-04: every regex runs through re2js, a pure-JS RE2 port, in the browser and on the server, so `\s`,
@@ -43,8 +43,9 @@ function compile(source: string, flags: SafePattern['flags'], capped: boolean): 
   if (capped && source.length > PATTERN_MAX_LENGTH) {
     return { ok: false, reason: 'too_long', message: `the pattern is longer than ${PATTERN_MAX_LENGTH} characters` };
   }
+  const re2 = regexEngine();
   try {
-    const re = RE2JS.compile(source, flags === 'i' ? RE2JS.CASE_INSENSITIVE : 0);
+    const re = re2.compile(source, flags === 'i' ? re2.CASE_INSENSITIVE : 0);
     const size = re.programSize();
     if (size > PATTERN_MAX_PROGRAM) {
       return {

@@ -1,13 +1,17 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { SignaturePad } from '@/components/blocks/SignaturePad';
+import { SignaturePad } from '../src/index.ts';
 
-const dataUrl = `data:image/png;base64,${'A'.repeat(64)}`;
+const png = new Blob(['png'], { type: 'image/png' });
 
 beforeEach(() => {
   const ctx = { beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), setTransform: vi.fn(), clearRect: vi.fn() };
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
-  vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(dataUrl);
+  vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (this: HTMLCanvasElement, callback: BlobCallback, type?: string) {
+    expect(type).toBe('image/png');
+    callback(png);
+  });
 });
 
 function sign(canvas: HTMLCanvasElement) {
@@ -17,18 +21,19 @@ function sign(canvas: HTMLCanvasElement) {
 }
 
 describe('SignaturePad', () => {
-  it('reports the canvas image after a stroke', () => {
+  it('reports the drawing as a PNG blob as the stroke ends (S10: never a data URL)', async () => {
     const onChange = vi.fn();
     const { container } = render(<SignaturePad onChange={onChange} />);
     sign(container.querySelector('canvas')!);
-    expect(onChange).toHaveBeenLastCalledWith(dataUrl);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await expect(onChange.mock.lastCall?.[0]).resolves.toBe(png);
   });
 
   it('B4: a pointerup without strokes does not produce a signature', () => {
     const onChange = vi.fn();
     render(<SignaturePad onChange={onChange} />);
     fireEvent.pointerUp(window);
-    expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/^data:/));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('B4: a tap without movement does not produce a signature', () => {
@@ -44,7 +49,7 @@ describe('SignaturePad', () => {
     const { container } = render(<SignaturePad onChange={onChange} />);
     sign(container.querySelector('canvas')!);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(onChange).toHaveBeenLastCalledWith('');
+    expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
   it('a disabled pad ignores strokes and has no Clear button', () => {
@@ -55,7 +60,7 @@ describe('SignaturePad', () => {
     expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
   });
 
-  it('B6: a new onChange each render does not re-bind listeners and the latest one is called', () => {
+  it('B6: a new onChange each render does not re-bind listeners and the latest one is called', async () => {
     const add = vi.spyOn(window, 'addEventListener');
     const first = vi.fn();
     const latest = vi.fn();
@@ -65,7 +70,7 @@ describe('SignaturePad', () => {
     expect(add.mock.calls.filter(([type]) => type === 'pointerup')).toHaveLength(1);
     sign(container.querySelector('canvas')!);
     expect(first).not.toHaveBeenCalled();
-    expect(latest).toHaveBeenCalledWith(dataUrl);
+    await expect(latest.mock.lastCall?.[0]).resolves.toBe(png);
   });
 
   it('B5: scales the backing store by devicePixelRatio', () => {

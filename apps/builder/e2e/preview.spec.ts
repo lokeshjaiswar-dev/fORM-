@@ -22,7 +22,7 @@ test('a 3-page form with a required field on page 3 advances from page 1', async
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
-  await expect(page.getByText('Required', { exact: true })).toBeVisible();
+  await expect(page.getByText('This field is required.', { exact: true })).toBeVisible();
 
   const answer = page.getByPlaceholder('Enter short answer');
   await answer.fill('Asha');

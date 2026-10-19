@@ -15,12 +15,14 @@ type Piece = {
   shape: 0 | 1 | 2;
 };
 
+/** DSN-11 success burst; nothing moves when the respondent prefers reduced motion, and it stops after a few seconds. */
 export function Confetti() {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -51,7 +53,7 @@ export function Confetti() {
         vy,
         rot: Math.random() * Math.PI,
         vr: (Math.random() - 0.5) * 0.12,
-        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        color: COLORS[Math.floor(Math.random() * COLORS.length)] ?? '#3b82f6',
         shape: (Math.floor(Math.random() * 3) as 0 | 1 | 2),
       });
     }
@@ -67,6 +69,10 @@ export function Confetti() {
 
     function tick() {
       frame += 1;
+      if (frame > 360) {
+        ctx!.clearRect(0, 0, w, h);
+        return;
+      }
       ctx!.clearRect(0, 0, w, h);
       if (frame === 50 || frame === 110) burst();
       for (const p of pieces) {
@@ -98,14 +104,14 @@ export function Confetti() {
       raf = requestAnimationFrame(tick);
     }
 
-    const ro = new ResizeObserver(resize);
-    if (canvas.parentElement) ro.observe(canvas.parentElement);
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+    if (canvas.parentElement) ro?.observe(canvas.parentElement);
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
-      ro.disconnect();
+      ro?.disconnect();
     };
   }, []);
 
-  return <canvas ref={ref} className="pointer-events-none absolute inset-0 z-10 h-full w-full" />;
+  return <canvas ref={ref} className="fr-confetti" aria-hidden="true" />;
 }

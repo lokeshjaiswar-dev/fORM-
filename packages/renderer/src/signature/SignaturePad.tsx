@@ -2,21 +2,49 @@ import { useEffect, useRef } from 'react';
 
 type Point = { x: number; y: number };
 
-export function SignaturePad({
-  disabled,
-  onChange,
-}: {
-  disabled?: boolean;
-  onChange?: (dataUrl: string) => void;
-}) {
+export interface SignaturePadProps {
+  disabled?: boolean | undefined;
+  /**
+   * Called as each stroke ends with the drawing's PNG, which the canvas encodes asynchronously (B4: never without a
+   * stroke), and with null after Clear. Calling it at once lets a form wait for the encoding before it submits.
+   */
+  onChange?: ((png: Promise<Blob | null> | null) => void) | undefined;
+  /** Stroke colour; any CSS colour, `var(--fr-text)` by default. */
+  penColor?: string | undefined;
+  heightPx?: number | undefined;
+  label?: string | undefined;
+  clearLabel?: string | undefined;
+  id?: string | undefined;
+  describedBy?: string | undefined;
+}
+
+/** The colour a CSS value computes to, so the canvas can draw with theme variables. */
+function resolveColor(canvas: HTMLCanvasElement, color: string): string {
+  if (!color.startsWith('var(')) return color;
+  const probe = canvas.ownerDocument.createElement('span');
+  probe.style.color = color;
+  probe.style.display = 'none';
+  canvas.parentElement?.appendChild(probe);
+  const resolved = canvas.ownerDocument.defaultView?.getComputedStyle(probe).color || '#111111';
+  probe.remove();
+  return resolved;
+}
+
+/**
+ * FLD-28 drawing surface. The backing store is scaled by devicePixelRatio and redrawn on resize (B5); listeners bind
+ * once and read the latest props from refs (B6).
+ */
+export function SignaturePad({ disabled, onChange, penColor = 'var(--fr-text)', heightPx = 160, label = 'Signature', clearLabel = 'Clear', id, describedBy }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokes = useRef<Point[][]>([]);
   const disabledRef = useRef(disabled);
   const onChangeRef = useRef(onChange);
+  const colorRef = useRef(penColor);
 
   useEffect(() => {
     disabledRef.current = disabled;
     onChangeRef.current = onChange;
+    colorRef.current = penColor;
   });
 
   useEffect(() => {
@@ -26,10 +54,11 @@ export function SignaturePad({
     if (!ctx) return;
     let stroke: Point[] | null = null;
 
-    function line(points: Point[]) {
+    function line([first, ...rest]: Point[]) {
+      if (!first) return;
       ctx!.beginPath();
-      ctx!.moveTo(points[0].x, points[0].y);
-      for (const p of points.slice(1)) ctx!.lineTo(p.x, p.y);
+      ctx!.moveTo(first.x, first.y);
+      for (const p of rest) ctx!.lineTo(p.x, p.y);
       ctx!.stroke();
     }
 
@@ -40,7 +69,7 @@ export function SignaturePad({
       canvas!.width = Math.round(r.width * dpr);
       canvas!.height = Math.round(r.height * dpr);
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx!.strokeStyle = '#111';
+      ctx!.strokeStyle = resolveColor(canvas!, colorRef.current);
       ctx!.lineWidth = 2;
       ctx!.lineCap = 'round';
       ctx!.lineJoin = 'round';
@@ -65,7 +94,7 @@ export function SignaturePad({
       if (!stroke) return;
       if (stroke.length > 1) {
         strokes.current.push(stroke);
-        onChangeRef.current?.(canvas!.toDataURL());
+        onChangeRef.current?.(new Promise((resolve) => canvas!.toBlob(resolve, 'image/png')));
       }
       stroke = null;
     }
@@ -90,25 +119,25 @@ export function SignaturePad({
     const canvas = canvasRef.current;
     strokes.current = [];
     if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
-    onChange?.('');
+    onChange?.(null);
   }
 
   return (
-    <div className="relative">
+    <div className="fr-signature">
       <canvas
         ref={canvasRef}
+        id={id}
         width={480}
-        height={140}
-        aria-label="Signature"
-        className="block h-[140px] w-full touch-none rounded-md border border-zinc-200 bg-white"
+        height={heightPx}
+        role="img"
+        aria-label={label}
+        aria-describedby={describedBy}
+        className="fr-signature-canvas"
+        style={{ height: `${heightPx}px` }}
       />
       {disabled ? null : (
-        <button
-          type="button"
-          onClick={clear}
-          className="absolute right-2 top-2 rounded-[4px] px-2 py-0.5 text-[12px] text-zinc-500 hover:bg-zinc-100"
-        >
-          Clear
+        <button type="button" onClick={clear} className="fr-link-button fr-signature-clear">
+          {clearLabel}
         </button>
       )}
     </div>

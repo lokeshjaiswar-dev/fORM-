@@ -6,6 +6,8 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 30_000,
     include: ['test/**/*.test.{ts,tsx}'],
+    setupFiles: ['./test/setup.ts'],
+    restoreMocks: true,
     coverage: {
       provider: 'v8',
       include: ['src/**'],
