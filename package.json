@@ -20,7 +20,8 @@
     "test:perf": "turbo run test:perf --concurrency=1",
     "lint": "oxlint",
     "deps": "depcruise apps packages --config .dependency-cruiser.cjs",
-    "i18n:extract": "pnpm --filter @form/i18n i18n:extract"
+    "i18n:extract": "pnpm --filter @form/i18n i18n:extract",
+    "templates:build": "turbo run templates:build"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -155,7 +155,7 @@ describe('optional parts', () => {
     expect(definition.logic.rules[2]?.then).toEqual([{ type: 'hide', targets: ['diet_notes'] }]);
     expect(definition.logic.rules[3]?.then).toEqual([{ type: 'block_submit', message: 'no' }]);
     expect(warnings.map((w) => w.at)).toEqual(['/logic/rules/4']);
-    expect(applyOptionalParts(def, [], {}, [])).toEqual({ definition: def, warnings: [], removed: { blocks: new Set(), variables: new Set() } });
+    expect(applyOptionalParts(def, [], {}, [])).toEqual({ definition: def, warnings: [], removed: NOTHING_REMOVED });
   });
 
   it('turns pipes to a removed block into their fallback and drops bounds and recipients on it', () => {
@@ -177,7 +177,7 @@ describe('optional parts', () => {
 });
 
 describe('pruneRemoved', () => {
-  const removed = { blocks: new Set(['dob', 'proof', 'gpage', 'buyer']), variables: new Set<string>() };
+  const removed = { blocks: new Set(['dob', 'proof', 'gpage', 'buyer']), variables: new Set<string>(), rules: new Set<string>(), purposes: new Set<string>() };
   const guardian = { guardianEmailBlockId: 'g', methods: ['manual_document_review'], expiryHours: 48 };
   const children = { mode: 'age_gate', subject: 'respondent', dobBlockId: 'dob', adultAge: 18, underAge: { kind: 'parental_consent', guardian: { ...guardian, evidenceUploadBlockId: 'proof', pageId: 'gpage' } }, disableTrackingForMinors: true };
 

@@ -1,0 +1,8 @@
+{
+  "extends": "@form/tsconfig/strict.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src"]
+}

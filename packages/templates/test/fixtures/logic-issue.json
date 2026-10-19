@@ -1,0 +1,455 @@
+{
+  "payload": {
+    "kind": "form",
+    "schemaVersion": 2,
+    "document": {
+      "schemaVersion": 2,
+      "revision": 0,
+      "formId": "template_form",
+      "title": "Contact us",
+      "description": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "We usually reply within one business day."
+              }
+            ]
+          }
+        ]
+      },
+      "blocks": {
+        "heading": {
+          "id": "heading",
+          "type": "heading",
+          "config": {
+            "level": 1,
+            "text": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Contact us"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "intro": {
+          "id": "intro",
+          "type": "paragraph",
+          "config": {
+            "content": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Tell us how we can help."
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "name": {
+          "id": "name",
+          "type": "short_text",
+          "key": "full_name",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Full name"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "personal",
+            "category": "free_text",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "placeholder": "Your name"
+          }
+        },
+        "email": {
+          "id": "email",
+          "type": "email",
+          "key": "email",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Email"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "personal",
+            "category": "contact",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include",
+            "principalIdentifier": "email"
+          },
+          "config": {
+            "placeholder": "Your email address"
+          }
+        },
+        "message": {
+          "id": "message",
+          "type": "long_text",
+          "key": "message",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Message"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "personal",
+            "category": "free_text",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "rows": 4,
+            "placeholder": "How can we help?"
+          }
+        }
+      },
+      "pages": [
+        {
+          "id": "page_1",
+          "children": [
+            "heading",
+            "intro",
+            "name",
+            "email",
+            "message"
+          ]
+        }
+      ],
+      "endings": [
+        {
+          "id": "thanks",
+          "kind": "message",
+          "name": "Thank you",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Thanks — we received your response."
+                  }
+                ]
+              }
+            ]
+          },
+          "actions": [
+            {
+              "kind": "fill_again",
+              "prefill": "none"
+            }
+          ],
+          "confetti": true
+        }
+      ],
+      "defaultEndingId": "thanks",
+      "logic": {
+        "rules": [
+          {
+            "id": "r_email",
+            "enabled": true,
+            "when": {
+              "kind": "group",
+              "id": "g_email",
+              "combinator": "all",
+              "children": [
+                {
+                  "kind": "condition",
+                  "id": "c_email",
+                  "left": {
+                    "kind": "ref",
+                    "ref": {
+                      "kind": "answer",
+                      "blockId": "email"
+                    }
+                  },
+                  "op": "gt",
+                  "right": {
+                    "kind": "literal",
+                    "value": {
+                      "type": "number",
+                      "value": "5"
+                    }
+                  }
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "hide",
+                "targets": [
+                  "message"
+                ]
+              }
+            ]
+          }
+        ],
+        "ruleGroups": [],
+        "variables": []
+      },
+      "privacy": {
+        "fiduciary": {
+          "legalName": [
+            {
+              "var": {
+                "name": "org.legal_name"
+              }
+            }
+          ],
+          "contactEmail": [
+            {
+              "var": {
+                "name": "org.support_email"
+              }
+            }
+          ],
+          "privacyContact": {
+            "name": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.name"
+                }
+              }
+            ],
+            "email": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.email"
+                }
+              }
+            ]
+          },
+          "rightsUrl": [
+            {
+              "var": {
+                "name": "org.rights_url"
+              }
+            }
+          ],
+          "boardComplaintInfo": [
+            {
+              "var": {
+                "name": "org.board_complaint_info"
+              }
+            }
+          ]
+        },
+        "purposes": [
+          {
+            "id": "respond",
+            "name": "Respond to this form",
+            "description": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Read and act on what you send in this form."
+                    }
+                  ]
+                }
+              ]
+            },
+            "lawfulBasis": {
+              "kind": "legitimate_use",
+              "ground": "s7a_voluntarily_provided_for_specified_purpose",
+              "justification": "The respondent provides these details to have this form handled."
+            },
+            "retention": {
+              "kind": "org_default"
+            }
+          }
+        ],
+        "children": {
+          "mode": "not_applicable"
+        },
+        "encryption": {
+          "mode": "server"
+        },
+        "dropAnswersWithoutConsent": true,
+        "networkSignals": {
+          "ipHash": true,
+          "userAgentHash": true,
+          "ttlDays": 30
+        }
+      },
+      "theme": {
+        "layout": "classic",
+        "tokens": {
+          "colors": {
+            "page": "#ffffff",
+            "text": "#111111",
+            "inputText": "#111111",
+            "accent": "#2383e2"
+          },
+          "typography": {
+            "body": "inter",
+            "baseSizePx": 16
+          },
+          "radius": "md",
+          "density": "comfortable",
+          "formWidth": "normal",
+          "labelAlign": "top",
+          "inputStyle": "outlined",
+          "progress": "none"
+        }
+      },
+      "behavior": {
+        "submit": {
+          "label": "Submit",
+          "align": "left"
+        },
+        "navigation": {
+          "allowBack": true,
+          "showPageTitles": false
+        },
+        "saveAndResume": {
+          "enabled": false,
+          "showButton": false,
+          "delivery": [],
+          "expiryDays": 30
+        },
+        "localAutosave": {
+          "enabled": false,
+          "allowWithSensitive": false
+        },
+        "timeZone": "Asia/Kolkata",
+        "spam": {
+          "honeypot": true,
+          "minFillSeconds": 3,
+          "captcha": "off"
+        },
+        "urlPrefill": false,
+        "showBranding": true,
+        "a11y": {
+          "announceErrors": "polite",
+          "focusFirstError": true
+        },
+        "successAnimation": true
+      },
+      "i18n": {
+        "defaultLocale": "en-IN",
+        "locales": [
+          {
+            "locale": "en-IN",
+            "direction": "ltr"
+          }
+        ],
+        "detect": [
+          "url_param"
+        ],
+        "urlParam": "lang",
+        "switcher": "none",
+        "messages": {},
+        "systemMessages": {},
+        "reviewedConsentLocales": []
+      }
+    },
+    "variables": [],
+    "locks": [],
+    "requiredFeatures": [],
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "messages": {}
+    },
+    "dataInventory": [
+      {
+        "purposeName": "Respond to this form",
+        "fieldSourceIds": [
+          "name",
+          "email",
+          "message"
+        ],
+        "classification": "personal",
+        "encrypted": false
+      }
+    ],
+    "estimatedMinutes": 2
+  },
+  "localizations": [
+    {
+      "locale": "en-IN",
+      "title": "Contact us",
+      "summary": "Name, email and a message.",
+      "fieldLabels": "Full name, Email, Message",
+      "completeness": 100
+    }
+  ],
+  "categorySlugs": [
+    "general"
+  ]
+}

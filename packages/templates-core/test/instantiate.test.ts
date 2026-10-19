@@ -101,6 +101,22 @@ describe('instantiate', () => {
     expect(dangling(d)).toEqual([]);
   });
 
+  it('drops payload-level translations about what an optional part removed (BL-089)', () => {
+    const payload = eventPayload();
+    payload.i18n = { ...payload.i18n, locales: payload.document.i18n.locales, messages: payload.document.i18n.messages };
+    payload.document.i18n.messages = {};
+    const keys = (variables: S.InstantiateContext['variables']) => {
+      const d = run({ variables }, payload).definition;
+      return { d, keys: Object.keys(d.i18n.messages[HI_IN] ?? {}) };
+    };
+    const kept = keys({ 'custom.event_name': 'Mela', 'custom.dietary': true });
+    expect(kept.keys).toContain(`option:${blockBySource(kept.d, 'diet')?.id}/veg`);
+    const { d, keys: dropped } = keys({ 'custom.event_name': 'Mela', 'custom.dietary': false });
+    expect(dropped.filter((k) => k.startsWith('option:') || k.startsWith('rule:'))).toEqual([]);
+    expect(dropped).toContain(`block:${blockBySource(d, 'name')?.id}:label`);
+    expect(dropped.every((k) => !/(^|[:/])(diet|r_diet)([:/]|$)/.test(k))).toBe(true);
+  });
+
   it('prunes what the applied refs read from a removed optional part, and reports what it cannot prune', () => {
     const payload = eventPayload();
     payload.variables.push({ name: 'custom.contact', source: 'prompt', type: 'boolean', label: 'Ask for contact details?', required: false, default: true, binding: 'bake' });

@@ -1,0 +1,6 @@
+[
+  { "facet": "use_case", "slug": "general", "names": { "en-IN": "General" }, "icon": "mail", "kinds": ["form"], "sort": 10 },
+  { "facet": "use_case", "slug": "feedback", "names": { "en-IN": "Feedback and surveys" }, "icon": "message-square", "kinds": ["form"], "sort": 20 },
+  { "facet": "use_case", "slug": "events", "names": { "en-IN": "Events" }, "icon": "calendar", "kinds": ["form"], "sort": 30 },
+  { "facet": "use_case", "slug": "hr", "names": { "en-IN": "Hiring and HR" }, "icon": "briefcase", "kinds": ["form"], "sort": 40 }
+]

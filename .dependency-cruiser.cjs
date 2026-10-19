@@ -14,6 +14,7 @@ const ALLOWED = {
   logic: ['registry', ...L0],
   validation: ['logic', 'registry', ...L0],
   'templates-core': ['validation', 'logic', 'registry', ...L0],
+  templates: ['templates-core', 'validation', 'logic', 'registry', ...L0],
   renderer: [...L1, ...L0, 'ui'],
   ui: [],
   sdk: ['schema'],
@@ -34,7 +35,7 @@ const TEST_ALLOWED = { i18n: ['schema'] };
 const TESTS = '(\\.test(-d)?\\.tsx?|/test/.+\\.tsx?)$';
 
 const APPS = {
-  builder: ['renderer', 'ui', 'sdk', 'templates-core', ...L1, ...L0],
+  builder: ['renderer', 'ui', 'sdk', 'templates-core', 'templates', ...L1, ...L0],
   runtime: ['renderer', 'sdk', 'config', 'observability', ...L1, ...L0],
   api: ['ports', 'crypto', 'config', 'observability', 'db', 'adapters', 'templates-core', 'email', ...L1, ...L0],
   worker: ['ports', 'crypto', 'config', 'observability', 'db', 'adapters', 'templates-core', 'email', 'renderer', ...L1, ...L0],

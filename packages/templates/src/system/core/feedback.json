@@ -1,0 +1,441 @@
+{
+  "payload": {
+    "kind": "form",
+    "schemaVersion": 2,
+    "document": {
+      "schemaVersion": 2,
+      "revision": 0,
+      "formId": "template_form",
+      "title": "How was your experience?",
+      "description": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Your feedback helps us improve."
+              }
+            ]
+          }
+        ]
+      },
+      "blocks": {
+        "heading": {
+          "id": "heading",
+          "type": "heading",
+          "config": {
+            "level": 1,
+            "text": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Share your feedback"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "rating": {
+          "id": "rating",
+          "type": "rating",
+          "key": "overall_rating",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Overall rating"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "none",
+            "purposeIds": [],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "max": 5,
+            "icon": "star"
+          }
+        },
+        "recommend": {
+          "id": "recommend",
+          "type": "single_choice",
+          "key": "would_you_recommend_us",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Would you recommend us?"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "none",
+            "purposeIds": [],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "display": "radio",
+            "options": [
+              {
+                "id": "recommend_yes",
+                "label": "Yes",
+                "code": "yes"
+              },
+              {
+                "id": "recommend_maybe",
+                "label": "Maybe",
+                "code": "maybe"
+              },
+              {
+                "id": "recommend_no",
+                "label": "No",
+                "code": "no"
+              }
+            ]
+          }
+        },
+        "improve": {
+          "id": "improve",
+          "type": "long_text",
+          "key": "what_could_be_better",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "What could be better?"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": false,
+          "compliance": {
+            "classification": "personal",
+            "category": "free_text",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "rows": 4,
+            "placeholder": "Tell us what we could do better"
+          }
+        },
+        "email": {
+          "id": "email",
+          "type": "email",
+          "key": "email_optional",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Email (optional)"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": false,
+          "compliance": {
+            "classification": "personal",
+            "category": "contact",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include",
+            "principalIdentifier": "email"
+          },
+          "config": {
+            "placeholder": "Your email address"
+          }
+        }
+      },
+      "pages": [
+        {
+          "id": "page_1",
+          "children": [
+            "heading",
+            "rating",
+            "recommend",
+            "improve",
+            "email"
+          ]
+        }
+      ],
+      "endings": [
+        {
+          "id": "thanks",
+          "kind": "message",
+          "name": "Thank you",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Thanks — we received your response."
+                  }
+                ]
+              }
+            ]
+          },
+          "actions": [
+            {
+              "kind": "fill_again",
+              "prefill": "none"
+            }
+          ],
+          "confetti": true
+        }
+      ],
+      "defaultEndingId": "thanks",
+      "logic": {
+        "rules": [],
+        "ruleGroups": [],
+        "variables": []
+      },
+      "privacy": {
+        "fiduciary": {
+          "legalName": [
+            {
+              "var": {
+                "name": "org.legal_name"
+              }
+            }
+          ],
+          "contactEmail": [
+            {
+              "var": {
+                "name": "org.support_email"
+              }
+            }
+          ],
+          "privacyContact": {
+            "name": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.name"
+                }
+              }
+            ],
+            "email": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.email"
+                }
+              }
+            ]
+          },
+          "rightsUrl": [
+            {
+              "var": {
+                "name": "org.rights_url"
+              }
+            }
+          ],
+          "boardComplaintInfo": [
+            {
+              "var": {
+                "name": "org.board_complaint_info"
+              }
+            }
+          ]
+        },
+        "purposes": [
+          {
+            "id": "respond",
+            "name": "Respond to this form",
+            "description": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Read and act on what you send in this form."
+                    }
+                  ]
+                }
+              ]
+            },
+            "lawfulBasis": {
+              "kind": "legitimate_use",
+              "ground": "s7a_voluntarily_provided_for_specified_purpose",
+              "justification": "The respondent provides these details to have this form handled."
+            },
+            "retention": {
+              "kind": "org_default"
+            }
+          }
+        ],
+        "children": {
+          "mode": "not_applicable"
+        },
+        "encryption": {
+          "mode": "server"
+        },
+        "dropAnswersWithoutConsent": true,
+        "networkSignals": {
+          "ipHash": true,
+          "userAgentHash": true,
+          "ttlDays": 30
+        }
+      },
+      "theme": {
+        "layout": "classic",
+        "tokens": {
+          "colors": {
+            "page": "#ffffff",
+            "text": "#111111",
+            "inputText": "#111111",
+            "accent": "#2383e2"
+          },
+          "typography": {
+            "body": "inter",
+            "baseSizePx": 16
+          },
+          "radius": "md",
+          "density": "comfortable",
+          "formWidth": "normal",
+          "labelAlign": "top",
+          "inputStyle": "outlined",
+          "progress": "none"
+        }
+      },
+      "behavior": {
+        "submit": {
+          "label": "Submit",
+          "align": "left"
+        },
+        "navigation": {
+          "allowBack": true,
+          "showPageTitles": false
+        },
+        "saveAndResume": {
+          "enabled": false,
+          "showButton": false,
+          "delivery": [],
+          "expiryDays": 30
+        },
+        "localAutosave": {
+          "enabled": false,
+          "allowWithSensitive": false
+        },
+        "timeZone": "Asia/Kolkata",
+        "spam": {
+          "honeypot": true,
+          "minFillSeconds": 3,
+          "captcha": "off"
+        },
+        "urlPrefill": false,
+        "showBranding": true,
+        "a11y": {
+          "announceErrors": "polite",
+          "focusFirstError": true
+        },
+        "successAnimation": true
+      },
+      "i18n": {
+        "defaultLocale": "en-IN",
+        "locales": [
+          {
+            "locale": "en-IN",
+            "direction": "ltr"
+          }
+        ],
+        "detect": [
+          "url_param"
+        ],
+        "urlParam": "lang",
+        "switcher": "none",
+        "messages": {},
+        "systemMessages": {},
+        "reviewedConsentLocales": []
+      }
+    },
+    "variables": [],
+    "locks": [],
+    "requiredFeatures": [],
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "messages": {}
+    },
+    "dataInventory": [
+      {
+        "purposeName": "Respond to this form",
+        "fieldSourceIds": [
+          "improve",
+          "email"
+        ],
+        "classification": "personal",
+        "encrypted": false
+      }
+    ],
+    "estimatedMinutes": 2
+  },
+  "localizations": [
+    {
+      "locale": "en-IN",
+      "title": "Customer feedback",
+      "summary": "A rating, a recommendation and comments.",
+      "fieldLabels": "Overall rating, Would you recommend us?, What could be better?, Email",
+      "completeness": 100
+    }
+  ],
+  "categorySlugs": [
+    "feedback"
+  ]
+}

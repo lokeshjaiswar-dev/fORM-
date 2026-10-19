@@ -7,6 +7,8 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
+  assetsInclude: ['**/*.formpack'],
   resolve: {
     alias: {
       '@': path.resolve(root, './src'),

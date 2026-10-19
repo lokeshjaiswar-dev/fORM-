@@ -5,7 +5,7 @@ import type {
   WorkflowDefinition, WorkflowId, WorkflowTemplatePayload,
 } from '@form/schema';
 import { TemplateCoreError } from './errors.ts';
-import { applyOptionalParts, pruneRemoved } from './parts.ts';
+import { applyOptionalParts, keptMessages, pruneRemoved, type Removed } from './parts.ts';
 import { IDENTITY, cloneJson, remapRefs, remapTextKey, type Remap } from './remap.ts';
 import { Baker, IdAllocator, OFFLINE_ACTOR, ROOT_SOURCE_ID, binding, conditionIds, origin, sensitiveWarning, type EngineOptions } from './shared.ts';
 import { seedNamespace } from './uuid.ts';
@@ -62,10 +62,10 @@ function remapDocument(def: FormDefinition, remap: Remap, bindingId: string): Fo
 
 /**
  * The form's locales: the template's, limited to its default locale, `ctx.locale` and `ctx.extraLocales`.
- * Translations are copied (document entries win over payload entries; `tplvar:` keys stay with the template),
- * keys remapped, marked `origin: 'template'`.
+ * Translations are copied (document entries win over payload entries; `tplvar:` keys stay with the template, keys about
+ * what an optional part removed are dropped), keys remapped, marked `origin: 'template'`.
  */
-function instanceI18n(def: FormDefinition, payload: FormTemplatePayload, ctx: InstantiateContext, remap: Remap, warnings: TemplateWarning[]): FormDefinition['i18n'] {
+function instanceI18n(def: FormDefinition, payload: FormTemplatePayload, ctx: InstantiateContext, remap: Remap, removed: Removed, warnings: TemplateWarning[]): FormDefinition['i18n'] {
   const i18n = def.i18n;
   const wanted = new Set<string>([i18n.defaultLocale, ctx.locale, ...ctx.extraLocales]);
   const available = [...i18n.locales];
@@ -77,7 +77,7 @@ function instanceI18n(def: FormDefinition, payload: FormTemplatePayload, ctx: In
   const kept = new Set<string>(locales.map((l) => l.locale));
   const messages: FormDefinition['i18n']['messages'] = {};
   /* `def` is already remapped; the payload's own messages are not. */
-  for (const [source, map] of [[payload.i18n.messages, remap], [i18n.messages, IDENTITY]] as const) {
+  for (const [source, map] of [[keptMessages(payload.i18n.messages, removed), remap], [i18n.messages, IDENTITY]] as const) {
     for (const [locale, entries] of Object.entries(source)) {
       if (!kept.has(locale) || locale === i18n.defaultLocale || !entries) continue;
       const out: Partial<Record<string, TranslationEntry>> = { ...messages[locale as Locale] };
@@ -195,7 +195,7 @@ export const instantiate = ((version: TemplateVersion, ctx: InstantiateContext, 
 
   const { analytics: _analytics, ...behavior } = remapped.behavior;
   let definition: FormDefinition = baker.bake({ ...remapped, formId: ctx.newFormId, behavior, i18n: { ...remapped.i18n, messages: {} } }, defaultLocale);
-  const i18n = instanceI18n(remapped, payload, ctx, remap, warnings);
+  const i18n = instanceI18n(remapped, payload, ctx, remap, parts.removed, warnings);
   const messages: FormDefinition['i18n']['messages'] = {};
   for (const [locale, entries] of Object.entries(i18n.messages)) messages[locale as Locale] = baker.bake(entries, locale as Locale);
   definition = { ...definition, i18n: { ...i18n, messages } };
@@ -203,7 +203,7 @@ export const instantiate = ((version: TemplateVersion, ctx: InstantiateContext, 
   const bindings: FormTemplateBinding[] = [binding(formBindingId, 'form', version, ctx.newFormId, actor, ctx.now, ids.idMap, { keyMap })];
   const refBinding = (kind: FormTemplateBinding['kind'], name: string, ref: RefPayload<TemplateVersionPayload>, instanceRootId?: string) => {
     const id = bindingIds.named(name);
-    const map = instanceRootId === undefined ? {} : { [ROOT_SOURCE_ID]: instanceRootId };
+    const map: Record<string, string> = instanceRootId === undefined ? {} : { [ROOT_SOURCE_ID]: instanceRootId };
     bindings.push(binding(id, kind, ref.version ?? version, ctx.newFormId, actor, ctx.now, map, instanceRootId === undefined ? {} : { instanceRootId }));
     return id;
   };

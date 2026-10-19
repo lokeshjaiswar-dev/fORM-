@@ -1,0 +1,34 @@
+{
+  "name": "@form/templates",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./packs/*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "templates:build": "tsx scripts/build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@form/logic": "workspace:*",
+    "@form/registry": "workspace:*",
+    "@form/schema": "workspace:*",
+    "@form/templates-core": "workspace:*",
+    "@noble/hashes": "catalog:",
+    "fflate": "0.8.3",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@form/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

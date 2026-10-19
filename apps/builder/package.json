@@ -17,6 +17,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@form/renderer": "workspace:*",
     "@form/schema": "workspace:*",
+    "@form/templates": "workspace:*",
+    "@form/templates-core": "workspace:*",
     "@form/validation": "workspace:*",
     "@hookform/resolvers": "5.9.1",
     "@tiptap/core": "3.31.4",

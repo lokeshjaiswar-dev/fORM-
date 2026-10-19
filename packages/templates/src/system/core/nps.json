@@ -1,0 +1,397 @@
+{
+  "payload": {
+    "kind": "form",
+    "schemaVersion": 2,
+    "document": {
+      "schemaVersion": 2,
+      "revision": 0,
+      "formId": "template_form",
+      "title": "How likely are you to recommend us?",
+      "description": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Takes about 30 seconds."
+              }
+            ]
+          }
+        ]
+      },
+      "blocks": {
+        "heading": {
+          "id": "heading",
+          "type": "heading",
+          "config": {
+            "level": 1,
+            "text": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Your feedback"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "score": {
+          "id": "score",
+          "type": "nps",
+          "key": "score",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "How likely are you to recommend us to a friend or colleague?"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "none",
+            "purposeIds": [],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "lowLabel": "Not at all likely",
+            "highLabel": "Extremely likely"
+          }
+        },
+        "reason": {
+          "id": "reason",
+          "type": "long_text",
+          "key": "reason",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "What is the main reason for your score?"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": false,
+          "compliance": {
+            "classification": "personal",
+            "category": "free_text",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "rows": 4,
+            "placeholder": "Tell us a little more"
+          }
+        },
+        "email": {
+          "id": "email",
+          "type": "email",
+          "key": "email",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Email (optional)"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": false,
+          "compliance": {
+            "classification": "personal",
+            "category": "contact",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include",
+            "principalIdentifier": "email"
+          },
+          "config": {
+            "placeholder": "Your email address"
+          }
+        }
+      },
+      "pages": [
+        {
+          "id": "page_score",
+          "children": [
+            "heading",
+            "score"
+          ]
+        },
+        {
+          "id": "page_reason",
+          "children": [
+            "reason",
+            "email"
+          ]
+        }
+      ],
+      "endings": [
+        {
+          "id": "thanks",
+          "kind": "message",
+          "name": "Thank you",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Thanks — we received your response."
+                  }
+                ]
+              }
+            ]
+          },
+          "actions": [
+            {
+              "kind": "fill_again",
+              "prefill": "none"
+            }
+          ],
+          "confetti": true
+        }
+      ],
+      "defaultEndingId": "thanks",
+      "logic": {
+        "rules": [],
+        "ruleGroups": [],
+        "variables": []
+      },
+      "privacy": {
+        "fiduciary": {
+          "legalName": [
+            {
+              "var": {
+                "name": "org.legal_name"
+              }
+            }
+          ],
+          "contactEmail": [
+            {
+              "var": {
+                "name": "org.support_email"
+              }
+            }
+          ],
+          "privacyContact": {
+            "name": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.name"
+                }
+              }
+            ],
+            "email": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.email"
+                }
+              }
+            ]
+          },
+          "rightsUrl": [
+            {
+              "var": {
+                "name": "org.rights_url"
+              }
+            }
+          ],
+          "boardComplaintInfo": [
+            {
+              "var": {
+                "name": "org.board_complaint_info"
+              }
+            }
+          ]
+        },
+        "purposes": [
+          {
+            "id": "respond",
+            "name": "Respond to this form",
+            "description": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Read and act on what you send in this form."
+                    }
+                  ]
+                }
+              ]
+            },
+            "lawfulBasis": {
+              "kind": "legitimate_use",
+              "ground": "s7a_voluntarily_provided_for_specified_purpose",
+              "justification": "The respondent provides these details to have this form handled."
+            },
+            "retention": {
+              "kind": "org_default"
+            }
+          }
+        ],
+        "children": {
+          "mode": "not_applicable"
+        },
+        "encryption": {
+          "mode": "server"
+        },
+        "dropAnswersWithoutConsent": true,
+        "networkSignals": {
+          "ipHash": true,
+          "userAgentHash": true,
+          "ttlDays": 30
+        }
+      },
+      "theme": {
+        "layout": "classic",
+        "tokens": {
+          "colors": {
+            "page": "#ffffff",
+            "text": "#111111",
+            "inputText": "#111111",
+            "accent": "#2383e2"
+          },
+          "typography": {
+            "body": "inter",
+            "baseSizePx": 16
+          },
+          "radius": "md",
+          "density": "comfortable",
+          "formWidth": "normal",
+          "labelAlign": "top",
+          "inputStyle": "outlined",
+          "progress": "none"
+        }
+      },
+      "behavior": {
+        "submit": {
+          "label": "Submit",
+          "align": "left"
+        },
+        "navigation": {
+          "allowBack": true,
+          "showPageTitles": false
+        },
+        "saveAndResume": {
+          "enabled": false,
+          "showButton": false,
+          "delivery": [],
+          "expiryDays": 30
+        },
+        "localAutosave": {
+          "enabled": false,
+          "allowWithSensitive": false
+        },
+        "timeZone": "Asia/Kolkata",
+        "spam": {
+          "honeypot": true,
+          "minFillSeconds": 3,
+          "captcha": "off"
+        },
+        "urlPrefill": false,
+        "showBranding": true,
+        "a11y": {
+          "announceErrors": "polite",
+          "focusFirstError": true
+        },
+        "successAnimation": true
+      },
+      "i18n": {
+        "defaultLocale": "en-IN",
+        "locales": [
+          {
+            "locale": "en-IN",
+            "direction": "ltr"
+          }
+        ],
+        "detect": [
+          "url_param"
+        ],
+        "urlParam": "lang",
+        "switcher": "none",
+        "messages": {},
+        "systemMessages": {},
+        "reviewedConsentLocales": []
+      }
+    },
+    "variables": [],
+    "locks": [],
+    "requiredFeatures": [],
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "messages": {}
+    },
+    "dataInventory": [
+      {
+        "purposeName": "Respond to this form",
+        "fieldSourceIds": [
+          "reason",
+          "email"
+        ],
+        "classification": "personal",
+        "encrypted": false
+      }
+    ],
+    "estimatedMinutes": 1
+  },
+  "localizations": [
+    {
+      "locale": "en-IN",
+      "title": "NPS survey",
+      "summary": "Score, reason and optional contact.",
+      "fieldLabels": "How likely are you to recommend us, Main reason for your score, Email",
+      "completeness": 100
+    }
+  ],
+  "categorySlugs": [
+    "feedback"
+  ]
+}

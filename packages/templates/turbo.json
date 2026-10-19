@@ -1,0 +1,7 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": { "outputs": ["dist/**"], "env": ["FORM_PACK_SIGNING_KEY", "FORM_PACK_KEY_ID"] }
+  }
+}

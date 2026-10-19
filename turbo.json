@@ -4,7 +4,7 @@
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
-    "test": { "dependsOn": ["^typecheck"], "outputs": ["coverage/**"], "env": ["FORM_TEST_MAILPIT_SMTP", "FORM_TEST_MAILPIT_API"] },
+    "test": { "dependsOn": ["^typecheck", "^build"], "outputs": ["coverage/**"], "env": ["FORM_TEST_MAILPIT_SMTP", "FORM_TEST_MAILPIT_API"] },
     "test:int": {
       "dependsOn": ["^typecheck"],
       "cache": false,
@@ -14,6 +14,7 @@
     "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
     "test:determinism": { "dependsOn": ["^typecheck"], "cache": false, "passThroughEnv": ["CI"] },
     "test:perf": { "cache": false, "passThroughEnv": ["FORM_PERF_SLACK"] },
-    "dev": { "cache": false, "persistent": true }
+    "templates:build": { "outputs": ["dist/**"], "env": ["FORM_PACK_SIGNING_KEY", "FORM_PACK_KEY_ID"] },
+    "dev": { "dependsOn": ["^build"], "cache": false, "persistent": true }
   }
 }

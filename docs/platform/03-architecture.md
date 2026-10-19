@@ -88,9 +88,10 @@ fORM-/
 ```
 L0  schema, i18n(core), lint-config, tsconfig
 L1  registry → L0 ; logic → registry,L0 ; validation → logic,registry,L0 ; templates-core → validation,logic,registry,L0
+L1t templates → templates-core,validation,logic,registry,L0 (system template data, pack build and `readFormpack`)
 L2  renderer → L1,L0,i18n,ui ; ui → (react only) ; sdk → schema
 L2s ports → schema ; crypto → schema ; config → ports,crypto,schema ; observability ; db → schema,crypto,config ; adapters → ports,crypto,config ; email → renderer(email mode),schema
-L3  apps/builder → renderer,ui,sdk(client),templates-core,L1,L0
+L3  apps/builder → renderer,ui,sdk(client),templates-core,templates (the bundled system pack and its reader),L1,L0
     apps/runtime → renderer,sdk,config,observability,L1,L0
     apps/api, apps/worker → L2s + L1 + templates-core + email (+ renderer for email/PDF HTML in the worker)
     apps/cli → db, config, crypto, adapters, templates-core

@@ -1,0 +1,477 @@
+{
+  "payload": {
+    "kind": "form",
+    "schemaVersion": 2,
+    "document": {
+      "schemaVersion": 2,
+      "revision": 0,
+      "formId": "template_form",
+      "title": "Event registration",
+      "description": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Reserve your seat."
+              }
+            ]
+          }
+        ]
+      },
+      "blocks": {
+        "heading": {
+          "id": "heading",
+          "type": "heading",
+          "config": {
+            "level": 1,
+            "text": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Join us"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "name": {
+          "id": "name",
+          "type": "short_text",
+          "key": "full_name",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Full name"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "personal",
+            "category": "free_text",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "placeholder": "Your name"
+          }
+        },
+        "email": {
+          "id": "email",
+          "type": "email",
+          "key": "email",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Email"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "personal",
+            "category": "contact",
+            "purposeIds": [
+              "respond"
+            ],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include",
+            "principalIdentifier": "email"
+          },
+          "config": {
+            "placeholder": "Your email address"
+          }
+        },
+        "ticket": {
+          "id": "ticket",
+          "type": "single_choice",
+          "key": "ticket_type",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Ticket type"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": true,
+          "compliance": {
+            "classification": "none",
+            "purposeIds": [],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "display": "dropdown",
+            "options": [
+              {
+                "id": "ticket_general",
+                "label": "General admission",
+                "code": "general"
+              },
+              {
+                "id": "ticket_vip",
+                "label": "VIP",
+                "code": "vip"
+              },
+              {
+                "id": "ticket_student",
+                "label": "Student",
+                "code": "student"
+              }
+            ],
+            "placeholder": "Choose a ticket"
+          }
+        },
+        "guests": {
+          "id": "guests",
+          "type": "number",
+          "key": "number_of_guests",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Number of guests"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": false,
+          "compliance": {
+            "classification": "none",
+            "purposeIds": [],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "display": "stepper",
+            "min": "0",
+            "max": "10",
+            "integerOnly": true,
+            "allowNegative": false
+          }
+        },
+        "date": {
+          "id": "date",
+          "type": "date",
+          "key": "preferred_date",
+          "label": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Preferred date"
+                  }
+                ]
+              }
+            ]
+          },
+          "required": false,
+          "compliance": {
+            "classification": "none",
+            "purposeIds": [],
+            "encrypt": false,
+            "allowPrefill": true,
+            "inNotifications": "include",
+            "inExports": "include"
+          },
+          "config": {
+            "pattern": "DD-MM-YYYY",
+            "picker": "calendar"
+          }
+        }
+      },
+      "pages": [
+        {
+          "id": "page_1",
+          "children": [
+            "heading",
+            "name",
+            "email",
+            "ticket",
+            "guests",
+            "date"
+          ]
+        }
+      ],
+      "endings": [
+        {
+          "id": "thanks",
+          "kind": "message",
+          "name": "Thank you",
+          "content": {
+            "type": "doc",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Thanks — we received your response."
+                  }
+                ]
+              }
+            ]
+          },
+          "actions": [
+            {
+              "kind": "fill_again",
+              "prefill": "none"
+            }
+          ],
+          "confetti": true
+        }
+      ],
+      "defaultEndingId": "thanks",
+      "logic": {
+        "rules": [],
+        "ruleGroups": [],
+        "variables": []
+      },
+      "privacy": {
+        "fiduciary": {
+          "legalName": [
+            {
+              "var": {
+                "name": "org.legal_name"
+              }
+            }
+          ],
+          "contactEmail": [
+            {
+              "var": {
+                "name": "org.support_email"
+              }
+            }
+          ],
+          "privacyContact": {
+            "name": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.name"
+                }
+              }
+            ],
+            "email": [
+              {
+                "var": {
+                  "name": "org.privacy_contact.email"
+                }
+              }
+            ]
+          },
+          "rightsUrl": [
+            {
+              "var": {
+                "name": "org.rights_url"
+              }
+            }
+          ],
+          "boardComplaintInfo": [
+            {
+              "var": {
+                "name": "org.board_complaint_info"
+              }
+            }
+          ]
+        },
+        "purposes": [
+          {
+            "id": "respond",
+            "name": "Respond to this form",
+            "description": {
+              "type": "doc",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Read and act on what you send in this form."
+                    }
+                  ]
+                }
+              ]
+            },
+            "lawfulBasis": {
+              "kind": "legitimate_use",
+              "ground": "s7a_voluntarily_provided_for_specified_purpose",
+              "justification": "The respondent provides these details to have this form handled."
+            },
+            "retention": {
+              "kind": "org_default"
+            }
+          }
+        ],
+        "children": {
+          "mode": "not_applicable"
+        },
+        "encryption": {
+          "mode": "server"
+        },
+        "dropAnswersWithoutConsent": true,
+        "networkSignals": {
+          "ipHash": true,
+          "userAgentHash": true,
+          "ttlDays": 30
+        }
+      },
+      "theme": {
+        "layout": "classic",
+        "tokens": {
+          "colors": {
+            "page": "#ffffff",
+            "text": "#111111",
+            "inputText": "#111111",
+            "accent": "#2383e2"
+          },
+          "typography": {
+            "body": "inter",
+            "baseSizePx": 16
+          },
+          "radius": "md",
+          "density": "comfortable",
+          "formWidth": "normal",
+          "labelAlign": "top",
+          "inputStyle": "outlined",
+          "progress": "none"
+        }
+      },
+      "behavior": {
+        "submit": {
+          "label": "Submit",
+          "align": "left"
+        },
+        "navigation": {
+          "allowBack": true,
+          "showPageTitles": false
+        },
+        "saveAndResume": {
+          "enabled": false,
+          "showButton": false,
+          "delivery": [],
+          "expiryDays": 30
+        },
+        "localAutosave": {
+          "enabled": false,
+          "allowWithSensitive": false
+        },
+        "timeZone": "Asia/Kolkata",
+        "spam": {
+          "honeypot": true,
+          "minFillSeconds": 3,
+          "captcha": "off"
+        },
+        "urlPrefill": false,
+        "showBranding": true,
+        "a11y": {
+          "announceErrors": "polite",
+          "focusFirstError": true
+        },
+        "successAnimation": true
+      },
+      "i18n": {
+        "defaultLocale": "en-IN",
+        "locales": [
+          {
+            "locale": "en-IN",
+            "direction": "ltr"
+          }
+        ],
+        "detect": [
+          "url_param"
+        ],
+        "urlParam": "lang",
+        "switcher": "none",
+        "messages": {},
+        "systemMessages": {},
+        "reviewedConsentLocales": []
+      }
+    },
+    "variables": [],
+    "locks": [],
+    "requiredFeatures": [],
+    "i18n": {
+      "defaultLocale": "en-IN",
+      "locales": [
+        {
+          "locale": "en-IN",
+          "direction": "ltr"
+        }
+      ],
+      "messages": {}
+    },
+    "dataInventory": [
+      {
+        "purposeName": "Respond to this form",
+        "fieldSourceIds": [
+          "name",
+          "email"
+        ],
+        "classification": "personal",
+        "encrypted": false
+      }
+    ],
+    "estimatedMinutes": 2
+  },
+  "localizations": [
+    {
+      "locale": "en-IN",
+      "title": "Event registration",
+      "summary": "RSVP with ticket type and guests.",
+      "fieldLabels": "Full name, Email, Ticket type, Number of guests, Preferred date",
+      "completeness": 100
+    }
+  ],
+  "categorySlugs": [
+    "events"
+  ]
+}

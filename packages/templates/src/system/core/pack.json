@@ -1,0 +1,13 @@
+{
+  "publisher": "fORM-",
+  "name": "system-core",
+  "version": "2026.10.0",
+  "minAppVersion": "0.0.0",
+  "templates": [
+    { "slug": "core/contact", "version": 1, "source": "contact.json" },
+    { "slug": "core/feedback", "version": 1, "source": "feedback.json" },
+    { "slug": "core/nps", "version": 1, "source": "nps.json" },
+    { "slug": "core/job-application", "version": 1, "source": "job-application.json" },
+    { "slug": "core/event-registration", "version": 1, "source": "event-registration.json" }
+  ]
+}

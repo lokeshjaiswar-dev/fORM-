@@ -2,7 +2,7 @@ export { TemplateCoreError } from './errors.ts';
 export type { TemplateCoreErrorCode } from './errors.ts';
 export { instantiate } from './instantiate.ts';
 export { LOCK_FINGERPRINT_VERSION, lockFingerprint, opsLockFingerprint } from './lock.ts';
-export { NOTHING_REMOVED, applyOptionalParts, partIncluded, pruneRemoved } from './parts.ts';
+export { NOTHING_REMOVED, applyOptionalParts, keptMessages, partIncluded, pruneRemoved } from './parts.ts';
 export type { Removed } from './parts.ts';
 export { PII_KINDS, scanPii, verhoeffValid } from './pii.ts';
 export type { PiiKind, PiiMatch } from './pii.ts';

@@ -30,10 +30,26 @@ function readsAny(value: unknown, blocks: ReadonlySet<string>, variables: Readon
   return false;
 }
 
-/** What the optional parts that are off removed: element ids (blocks, pages, endings) and logic-variable ids. */
-export interface Removed { blocks: ReadonlySet<string>; variables: ReadonlySet<string> }
+/** What the optional parts that are off removed: element ids (blocks, pages, endings), logic-variable, rule and purpose ids. */
+export interface Removed { blocks: ReadonlySet<string>; variables: ReadonlySet<string>; rules: ReadonlySet<string>; purposes: ReadonlySet<string> }
 
-export const NOTHING_REMOVED: Removed = { blocks: new Set(), variables: new Set() };
+export const NOTHING_REMOVED: Removed = { blocks: new Set(), variables: new Set(), rules: new Set(), purposes: new Set() };
+
+/** Translations without the keys about a removed element, rule or purpose (document and payload messages alike). */
+export function keptMessages(messages: FormDefinition['i18n']['messages'], removed: Removed): FormDefinition['i18n']['messages'] {
+  const out: FormDefinition['i18n']['messages'] = {};
+  for (const [locale, entries] of Object.entries(messages)) {
+    const kept = Object.entries(entries ?? {}).filter(([key]) => {
+      const ref = textKeyRef(key);
+      if (ref?.ns === 'element') return !removed.blocks.has(ref.id);
+      if (ref?.ns === 'rule') return !removed.rules.has(ref.id);
+      if (ref?.ns === 'purpose') return !removed.purposes.has(ref.id);
+      return true;
+    });
+    out[locale as keyof typeof out] = Object.fromEntries(kept);
+  }
+  return out;
+}
 
 const removedRef = (v: unknown, gone: ReadonlySet<string>, goneVars: ReadonlySet<string>): boolean =>
   isRec(v) && ((v['kind'] === 'answer' && typeof v['blockId'] === 'string' && gone.has(v['blockId'])) || (v['kind'] === 'variable' && typeof v['varId'] === 'string' && goneVars.has(v['varId'])));
@@ -224,19 +240,9 @@ export function applyOptionalParts(
   }
   const endings = def.endings.filter((e) => keep(e.id));
   const pages = def.pages.filter((p) => keep(p.id)).map((p) => ({ ...p, children: p.children.filter(keep) }));
-  const messages: FormDefinition['i18n']['messages'] = {};
-  for (const [locale, entries] of Object.entries(def.i18n.messages)) {
-    const kept = Object.entries(entries ?? {}).filter(([key]) => {
-      const ref = textKeyRef(key);
-      if (!ref) return true;
-      if (ref.ns === 'element') return !gone.has(ref.id);
-      if (ref.ns === 'rule') return rules.some((r) => r.id === ref.id);
-      if (ref.ns === 'purpose') return !gonePurposes.has(ref.id);
-      return true;
-    });
-    messages[locale as keyof typeof messages] = Object.fromEntries(kept);
-  }
-  const removedIds: Removed = { blocks: gone, variables: goneVars };
+  const keptRules = new Set(rules.map((r) => r.id));
+  const removedIds: Removed = { blocks: gone, variables: goneVars, rules: new Set(def.logic.rules.map((r) => r.id).filter((id) => !keptRules.has(id))), purposes: gonePurposes };
+  const messages = keptMessages(def.i18n.messages, removedIds);
   const definition: FormDefinition = pruneRemoved({
     ...def,
     blocks,
