@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { editionSummary, loadEditionConfig } from '@form/config';
 import type { Formpack } from '@form/templates';
 import TemplateGallery from '@/components/templates/TemplateGallery';
+import { useEditionStore } from '@/edition/edition';
 import { formFromTemplate, loadSystemPack } from '@/lib/systemPack';
 import { formWith } from '@/test/fixtures';
 
 vi.mock('@/lib/systemPack', () => ({ GALLERY_LOCALE: 'en-IN', loadSystemPack: vi.fn(), formFromTemplate: vi.fn() }));
 
 const template = {
-  entry: { slug: 'test/event' },
+  entry: { slug: 'test/event', requiredFeatures: ['field:short_text'] },
   file: {
     payload: {
       kind: 'form',
@@ -29,6 +31,7 @@ const template = {
 const pack = { templates: [template] } as unknown as Formpack;
 
 beforeEach(() => {
+  useEditionStore.setState({ summary: null, source: 'unknown' });
   vi.mocked(loadSystemPack).mockReset();
   vi.mocked(formFromTemplate).mockReset();
 });
@@ -61,5 +64,29 @@ describe('TemplateGallery', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('button', { name: /^Event registration/ })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('edition matrix: templates the edition cannot run are hidden, with a count (FND-19)', async () => {
+    const sheets = {
+      ...template,
+      entry: { slug: 'test/sheets', requiredFeatures: ['field:short_text', 'integration:google_sheets'] },
+      file: { ...template.file, localizations: [{ locale: 'en-IN', title: 'Sheets sync', summary: '' }] },
+    };
+    vi.mocked(loadSystemPack).mockResolvedValue({ templates: [template, sheets] } as unknown as Formpack);
+    const cases: Array<[string, Record<string, string> | null, boolean]> = [
+      ['saas', { DEPLOYMENT_MODE: 'saas' }, true],
+      ['on-prem with Sheets enabled', { DEPLOYMENT_MODE: 'onprem', INTEGRATIONS_ENABLED: 'google_sheets' }, true],
+      ['on-prem', { DEPLOYMENT_MODE: 'onprem' }, false],
+      ['air-gapped', { DEPLOYMENT_MODE: 'onprem', EGRESS_POLICY: 'none' }, false],
+      ['unknown', null, false],
+    ];
+    for (const [name, env, shown] of cases) {
+      useEditionStore.setState({ summary: env ? editionSummary(loadEditionConfig(env)) : null, source: env ? 'server' : 'unknown' });
+      const { unmount } = render(<TemplateGallery onUse={() => {}} onCancel={() => {}} />);
+      expect(await screen.findByRole('button', { name: /^Event registration/ }), name).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Sheets sync/ }) !== null, name).toBe(shown);
+      expect(screen.queryByText('1 template needs features this installation does not offer.') !== null, name).toBe(!shown);
+      unmount();
+    }
   });
 });

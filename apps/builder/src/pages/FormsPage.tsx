@@ -7,6 +7,7 @@ import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
+import { EditionBadge } from '@/edition/EditionBadge';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
 import { uid } from '@/lib/utils';
 import { DOCUMENT_FORMAT, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
@@ -103,7 +104,10 @@ export function FormsPage() {
 
   return (
     <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-[var(--notion-text)]">
-      <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
+        <EditionBadge />
+      </div>
       <div className="mt-6 flex gap-2">
         <Button onClick={() => setCreating(true)}>
           <Plus /> {t(M['forms.new'])}

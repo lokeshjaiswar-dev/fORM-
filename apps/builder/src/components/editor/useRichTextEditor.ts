@@ -59,6 +59,8 @@ export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, 
 
   const editor = useEditor({
     ...initial,
+    /* Base styles are in index.css: an injected <style> element breaks the CSP (style-src 'self'). */
+    injectCSS: false,
     shouldRerenderOnTransaction: false,
     editorProps,
     onUpdate: ({ editor: e }) => {

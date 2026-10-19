@@ -1,3 +1,4 @@
+import type { RuntimeEdition } from '@form/config';
 import { compile, projectForRuntime } from '@form/logic';
 import { REGISTRY } from '@form/registry';
 import type {
@@ -22,8 +23,11 @@ export function previewStatus(ops: LocalOps): RuntimeStatus {
 
 export type PreviewBuild = { ok: true; version: RuntimeFormVersion } | { ok: false; issues: PublishIssue[] };
 
-/** compile() and projectForRuntime() over a draft, as publish would; issues instead when the engine refuses it. */
-export function previewVersion(definition: FormDefinition, status: RuntimeStatus, now: IsoInstant): PreviewBuild {
+/**
+ * compile() and projectForRuntime() over a draft, as publish would; issues instead when the engine refuses it. `edition`
+ * is the deployment's (air-gapped while it is unknown, like every edition check in the builder).
+ */
+export function previewVersion(definition: FormDefinition, status: RuntimeStatus, now: IsoInstant, edition: RuntimeEdition = 'airgapped'): PreviewBuild {
   let compiled;
   try {
     compiled = compile(definition, REGISTRY);
@@ -49,7 +53,7 @@ export function previewVersion(definition: FormDefinition, status: RuntimeStatus
   return {
     ok: true,
     version: projectForRuntime(version, status, {
-      edition: 'saas',
+      edition,
       upload: { presignUrl: '', maxFileBytes: 10 * 1024 * 1024 },
       branding: false,
       thirdPartyTrackingAllowed: false,

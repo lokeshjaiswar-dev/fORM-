@@ -10,12 +10,14 @@
     "preview": "vite preview",
     "test": "vitest run --coverage",
     "test:perf": "vitest run --config vitest.perf.config.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "headers:nginx": "node security/print.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@form/config": "workspace:*",
     "@form/i18n": "workspace:*",
     "@form/logic": "workspace:*",
     "@form/registry": "workspace:*",

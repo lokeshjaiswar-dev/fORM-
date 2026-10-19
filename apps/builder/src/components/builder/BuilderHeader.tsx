@@ -16,6 +16,7 @@ import { useUiStore, type SaveState } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
 import { ThemeSettings } from '@/components/builder/ThemeSettings';
+import { EditionBadge } from '@/edition/EditionBadge';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Tooltip, modKey } from '@/components/ui/tooltip';
@@ -51,6 +52,8 @@ export function BuilderHeader() {
             {saveLabel(save)}
           </span>
         </div>
+
+        <EditionBadge className="mr-1" />
 
         <div className="flex items-center">
           {(['edit', 'preview'] as const).map((m) => (

@@ -91,7 +91,7 @@ L1  registry → L0 ; logic → registry,L0 ; validation → logic,registry,L0 ;
 L1t templates → templates-core,validation,logic,registry,L0 (system template data, pack build and `readFormpack`)
 L2  renderer → L1,L0,i18n,ui ; ui → (react only) ; sdk → schema
 L2s ports → schema ; crypto → schema ; config → ports,crypto,schema ; observability ; db → schema,crypto,config ; adapters → ports,crypto,config ; email → renderer(email mode),schema
-L3  apps/builder → renderer,ui,sdk(client),templates-core,templates (the bundled system pack and its reader),L1,L0
+L3  apps/builder → renderer,ui,sdk(client),config (edition summary and feature checks only),templates-core,templates (the bundled system pack and its reader),L1,L0
     apps/runtime → renderer,sdk,config,observability,L1,L0
     apps/api, apps/worker → L2s + L1 + templates-core + email (+ renderer for email/PDF HTML in the worker)
     apps/cli → db, config, crypto, adapters, templates-core
@@ -684,6 +684,7 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 | `GET/PUT /v1/org/profile` · `GET/PUT /v1/org/settings/templates` · `GET/PUT /v1/org/security-contacts` | TPL-06, CMP-14 |
 | `GET/POST/PATCH/DELETE /v1/teams[/:id]` · `…/members` (P2) · `/v1/folders[/:id]` | |
 | `GET /v1/meta/features` · `GET /v1/meta/registry` · `GET /v1/usage` | |
+| `GET /v1/meta/edition` | No session (the sign-in page needs it too): `@form/config` `editionSummary`, i.e. deployment mode, egress policy and what the edition can run (FND-19). Never the egress allowlist or config notices |
 | `GET /v1/billing` · `POST /v1/billing/checkout` · `POST /v1/billing/portal` | SaaS only |
 
 **Forms, drafts and versions** (P1)
@@ -744,6 +745,7 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 
 - API keys (P2): `GET/POST /v1/api-keys`, `POST …/:id/rotate`, `DELETE …/:id`.
 - Assets: `POST /v1/assets/uploads` → `…/complete` → `GET /v1/assets/:id`.
+- Security: `POST /v1/csp-reports` (no session; `application/csp-report` and `application/reports+json`, 64 KB) logs the builder's CSP violations scrubbed, without samples (§4.5, control 14).
 
 **Runtime public** (runtime host):
 
@@ -870,7 +872,7 @@ report-to csp;
 - The bootstrap script, theme variables and custom CSS are inline blocks whose hashes are stored in the version's runtime projection; the CSP header is a function of the version, so it is identical for every visitor and cacheable.
 - Analytics origins are added only when ANA-05 is enabled **and** the consent purpose is granted; tags load after consent through the bootstrap.
 - Custom CSS (DSN-04) is sanitised at publish with a css-tree allowlist (no `@import`, no `url()` other than bundled fonts, no `expression`, `behavior`, `-moz-binding`), scoped under `.fr-root`.
-- **Builder:** `script-src 'self'`, `style-src 'self'`, Trusted Types enforced, `frame-ancestors 'none'`. **API:** `default-src 'none'; frame-ancestors 'none'`. Runtime and builder send `Referrer-Policy: no-referrer` and `strict-origin-when-cross-origin` respectively.
+- **Builder:** `script-src 'self'`, `style-src 'self'`, Trusted Types enforced with no policies (`trusted-types 'none'`), `frame-ancestors 'none'`, reports to `POST /v1/csp-reports`; served as in [builder-security-headers.md](builder-security-headers.md) (WP-1.05). **API:** `default-src 'none'; frame-ancestors 'none'`. Runtime and builder send `Referrer-Policy: no-referrer` and `strict-origin-when-cross-origin` respectively.
 
 ### 4.6 File uploads: presigned POST, staging bucket, AV scan
 

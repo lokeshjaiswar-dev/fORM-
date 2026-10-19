@@ -1,3 +1,4 @@
+import { isEditionFeatureAvailable, type EditionFeatures } from '@form/config';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { AVAILABLE_TYPES, REGISTRY, type AvailableType } from '@form/registry';
 import type { PaletteEntry } from '@form/schema';
@@ -93,9 +94,15 @@ export const tileOf = (type: string, overrides?: Readonly<Record<string, unknown
   return of[0];
 };
 
-/** Tiles whose label, id or keywords contain `query` (case-insensitive); all tiles for an empty query. */
-export function matchTiles(query: string): Tile[] {
+/** Whether the edition runs the tile's block type (`field:<type>`); a disabled feature is hidden (architecture §1.5). */
+export const tileAvailable = (tile: Tile, edition: EditionFeatures): boolean =>
+  tile.kind === 'page_break' || isEditionFeatureAvailable(edition, `field:${tile.choice.type}`);
+
+/** The edition's tiles whose label, id or keywords contain `query` (case-insensitive); all of them for an empty query. */
+export function matchTiles(query: string, edition: EditionFeatures): Tile[] {
   const q = query.trim().toLowerCase();
-  if (!q) return [...TILES];
-  return TILES.filter((tile) => tile.label.toLowerCase().includes(q) || tile.id.replaceAll('_', ' ').includes(q) || tile.keywords.some((k) => k.includes(q)));
+  return TILES.filter(
+    (tile) =>
+      tileAvailable(tile, edition) && (!q || tile.label.toLowerCase().includes(q) || tile.id.replaceAll('_', ' ').includes(q) || tile.keywords.some((k) => k.includes(q))),
+  );
 }

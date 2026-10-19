@@ -4,6 +4,7 @@ import { ChevronDown, ChevronsLeft, Search } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { CATEGORIES, categoryLabel, matchTiles, type Tile } from '@/fields/tiles';
+import { useEdition } from '@/edition/edition';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { insertTile } from '@/components/builder/insert';
@@ -26,7 +27,8 @@ export function FieldPicker() {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const title = useDoc((d) => d.title);
   const [q, setQ] = useState('');
-  const tiles = matchTiles(q);
+  const edition = useEdition();
+  const tiles = matchTiles(q, edition);
 
   return (
     <aside className={cn('shrink-0 overflow-hidden bg-[var(--notion-sidebar)] transition-[width] duration-300 ease-out', sidebarOpen ? 'w-[252px]' : 'w-0')}>

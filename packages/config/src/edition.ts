@@ -159,11 +159,14 @@ export function loadEditionConfig(env: Record<string, string | undefined>): Edit
   return r.config;
 }
 
+/** What feature checks read: a full `EditionConfig` or the public `EditionSummary` the builder receives. */
+export type EditionFeatures = Pick<EditionConfig, 'captcha' | 'thirdPartyAnalytics' | 'integrations' | 'payments' | 'guardianVerifiers'>;
+
 /**
  * Whether the edition can run a feature at all (the first factor of `effectiveFeatures`, architecture §1.5).
  * Plans, licences and org restrictions narrow this further.
  */
-export function isEditionFeatureAvailable(edition: EditionConfig, feature: FeatureId): boolean {
+export function isEditionFeatureAvailable(edition: EditionFeatures, feature: FeatureId): boolean {
   const [kind, name] = splitFeature(feature);
   if (kind === 'integration') return (edition.integrations as readonly string[]).includes(name);
   if (feature === 'field:payment' || feature === 'capability:payments') return edition.payments.length > 0;
@@ -185,12 +188,12 @@ export interface FeatureScope {
   restricted?: ReadonlySet<FeatureId>;
 }
 
-export function isFeatureEnabled(edition: EditionConfig, feature: FeatureId, scope: FeatureScope): boolean {
+export function isFeatureEnabled(edition: EditionFeatures, feature: FeatureId, scope: FeatureScope): boolean {
   return isEditionFeatureAvailable(edition, feature) && scope.entitled.has(feature) && !scope.restricted?.has(feature);
 }
 
 /** For template `requiredFeatures` and publish checks: the features the edition cannot run, in input order. */
-export function missingEditionFeatures(edition: EditionConfig, required: readonly FeatureId[]): FeatureId[] {
+export function missingEditionFeatures(edition: EditionFeatures, required: readonly FeatureId[]): FeatureId[] {
   return required.filter((f) => !isEditionFeatureAvailable(edition, f));
 }
 

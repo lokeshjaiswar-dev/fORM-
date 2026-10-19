@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { openNewForm, openSettings } from './helpers.ts';
 
 test('New-form gallery: the five pack templates, instantiated with the network cut off', async ({ page }) => {

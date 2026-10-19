@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.ts';
 import { insert, label, openNewForm } from './helpers.ts';
 
 test('insert Short answer, preview, fill and submit', async ({ page }) => {

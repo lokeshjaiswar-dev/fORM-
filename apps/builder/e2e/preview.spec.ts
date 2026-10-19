@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.ts';
 import { insert, label, openNewForm, openSettings } from './helpers.ts';
 
 test('a 3-page form with a required field on page 3 advances from page 1', async ({ page }) => {

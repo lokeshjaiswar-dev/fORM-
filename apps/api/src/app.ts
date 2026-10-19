@@ -11,8 +11,10 @@ import { cachedClockCheck, createLogger, type ClockStatus } from '@form/observab
 import { DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
+import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { formRoutes } from './routes/forms.ts';
 import { healthRoutes } from './routes/health.ts';
+import { metaRoutes } from './routes/meta.ts';
 
 export interface AppDeps {
   /** Defaults to a pool on `config.database.url`, closed with the app. */
@@ -20,6 +22,7 @@ export interface AppDeps {
   clock?: () => Promise<ClockStatus>;
   /** Log destination (tests); stdout by default. */
   logStream?: DestinationStream;
+  cspReports?: CspReportDeps;
 }
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -103,6 +106,8 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     clock: deps.clock ?? cachedClockCheck({ servers: config.ntp.servers, maxOffsetMs: config.ntp.maxOffsetMs, ttlMs: 60_000 }),
   });
   formRoutes(app, { db: handle.db });
+  metaRoutes(app, { edition: config.edition });
+  await cspReportRoutes(app, deps.cspReports);
   app.get('/v1/openapi.json', { config: { auth: 'none' }, schema: { hide: true } }, async () => app.swagger());
 
   return app;

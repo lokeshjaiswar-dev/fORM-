@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { missingEditionFeatures } from '@form/config';
 import { defineMessages } from '@form/i18n';
 import type { FormDefinition, IsoInstant, TemplateVariable } from '@form/schema';
 import { localizationOf, type Formpack, type FormpackTemplate } from '@form/templates';
+import { useEdition } from '@/edition/edition';
 import { t } from '@/i18n';
 import { GALLERY_LOCALE, formFromTemplate, loadSystemPack, type VariableAnswers } from '@/lib/systemPack';
 import { uid } from '@/lib/utils';
@@ -22,6 +24,7 @@ const M = defineMessages('builder', {
   'gallery.answers': 'Before you start',
   'gallery.required': '{label} (required)',
   'gallery.part': 'Includes: {label}',
+  'gallery.hidden': '{n, plural, one {# template needs} other {# templates need}} features this installation does not offer.',
 });
 
 type Status = { state: 'loading' } | { state: 'failed' } | { state: 'ready'; pack: Formpack };
@@ -54,6 +57,7 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
   const [attempt, setAttempt] = useState(0);
   const [picked, setPicked] = useState<FormpackTemplate | null>(null);
   const [answers, setAnswers] = useState<VariableAnswers>({});
+  const edition = useEdition();
 
   useEffect(() => {
     let live = true;
@@ -131,9 +135,15 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
     );
   }
 
+  /* A template the edition cannot run is hidden, like its features in the palette (architecture §1.5). */
+  const forms = pack.templates.filter((tpl) => tpl.file.payload.kind === 'form');
+  const usable = forms.filter((tpl) => missingEditionFeatures(edition, tpl.entry.requiredFeatures).length === 0);
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {pack.templates.filter((tpl) => tpl.file.payload.kind === 'form').map((tpl) => {
+      {usable.length < forms.length ? (
+        <p className="text-[12px] text-[var(--notion-text-faint)] sm:col-span-2">{t(M['gallery.hidden'], { n: forms.length - usable.length })}</p>
+      ) : null}
+      {usable.map((tpl) => {
         const text = localizationOf(tpl.file, GALLERY_LOCALE);
         const payload = tpl.file.payload;
         const fields = payload.kind === 'form' ? Object.values(payload.document.blocks).filter((b) => b !== undefined && 'compliance' in b).length : 0;

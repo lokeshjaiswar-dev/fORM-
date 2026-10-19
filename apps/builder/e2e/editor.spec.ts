@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.ts';
 import { openNewForm } from './helpers.ts';
 
 test('typing and formatting a label reaches the preview as safe elements', async ({ page }) => {
