@@ -12,7 +12,7 @@ test.describe('SaaS', () => {
   test('offers Google and Microsoft when the server does', async ({ page }) => {
     await page.route('**/v1/auth/methods', (route) => route.fulfill({ json: offered }));
     await page.goto('/auth/sign-in');
-    await expect(page.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/v1/auth/oauth/google/start');
+    await expect(page.getByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/v1/auth/oauth/google/start?notice=2026-10-19');
     await expect(page.getByRole('link', { name: 'Continue with Microsoft' })).toBeVisible();
   });
 });

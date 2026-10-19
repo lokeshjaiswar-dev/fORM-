@@ -7,6 +7,7 @@ import { chainPending, createDb, PLATFORM_ORG_KEY, provision, withTenant, type D
 import { createTestDatabase, startMockOidcProvider, startSmtpSink, type MockOidcProvider, type SmtpSink } from '@form/testkit';
 import { buildApp, type AppDeps } from '../src/app.ts';
 import { parseConfig } from '../src/config.ts';
+import { NOTICE_VERSION } from '../src/modules/account/notice.ts';
 import { base32Decode } from '../src/modules/auth/crypto.ts';
 import { hotp, totpStep } from '../src/modules/auth/totp.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
@@ -147,7 +148,7 @@ async function events(userId: string): Promise<Array<{ action: string; outcome: 
 async function signedUp(email = newEmail()): Promise<{ jar: Jar; email: string; userId: string }> {
   const since = sink.messages.length;
   const jar = new Jar();
-  expect((await call(jar, 'POST', '/v1/auth/signup', { email, password: PASSWORD, name: 'Asha' })).statusCode).toBe(202);
+  expect((await call(jar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, name: 'Asha' })).statusCode).toBe(202);
   const { token } = await mailTo(email, '/auth/verify', since);
   const verified = await call(jar, 'POST', '/v1/auth/verify-email', { token });
   expect(verified.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true, totpEnabled: false } });
@@ -283,7 +284,7 @@ describe('sessions', () => {
     const email = newEmail();
     const since = sink.messages.length;
     const jar = new Jar();
-    const signup = await call(jar, 'POST', '/v1/auth/signup', { email, password: PASSWORD });
+    const signup = await call(jar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD });
     expect(signup.cookies.find((c) => c.name === '__Host-fr_signup')).toMatchObject({ path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });
     const res = await call(jar, 'POST', '/v1/auth/verify-email', { token: (await mailTo(email, '/auth/verify', since)).token });
     const cookie = res.cookies.find((c) => c.name === '__Host-fr_sess')!;
@@ -393,21 +394,21 @@ describe('password and email-link flows', () => {
   it('does not reveal a taken address at sign-up; the owner gets a notice instead', async () => {
     const { email } = await signedUp();
     const since = sink.messages.length;
-    const res = await call(null, 'POST', '/v1/auth/signup', { email: email.toUpperCase(), password: 'another-strong-passphrase' });
+    const res = await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: email.toUpperCase(), password: 'another-strong-passphrase' });
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ status: 'verification_sent' });
     expect(await subjectsTo(email, since)).toEqual(['You already have an account']);
   });
 
   it('refuses weak passwords with the reason', async () => {
-    const res = await call(null, 'POST', '/v1/auth/signup', { email: newEmail(), password: 'password123' });
+    const res = await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: newEmail(), password: 'password123' });
     expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({ code: 'WEAK_PASSWORD', detail: expect.stringMatching(/too common/) });
   });
 
   it('asks an unverified account to verify first, with a fresh link', async () => {
     const email = newEmail();
-    await call(null, 'POST', '/v1/auth/signup', { email, password: PASSWORD });
+    await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD });
     const since = sink.messages.length;
     const res = await call(null, 'POST', '/v1/auth/login', { email, password: PASSWORD });
     expect(res.statusCode).toBe(403);
@@ -420,7 +421,7 @@ describe('password and email-link flows', () => {
     const since = sink.messages.length;
     // Someone registers the victim's address with their own password; the victim gets the verification mail.
     const squatter = new Jar();
-    await call(squatter, 'POST', '/v1/auth/signup', { email: victim, password: 'squatters-own-passphrase' });
+    await call(squatter, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: victim, password: 'squatters-own-passphrase' });
     const { token } = await mailTo(victim, '/auth/verify', since);
     const victimJar = new Jar();
     expect((await call(victimJar, 'POST', '/v1/auth/link', { token, purpose: 'verify_email' })).json()).toEqual({ email: victim, passwordRequired: true });
@@ -449,14 +450,14 @@ describe('password and email-link flows', () => {
   it('verifies in another browser with the password, and in the signing-up browser without it', async () => {
     const email = newEmail();
     const since = sink.messages.length;
-    await call(new Jar(), 'POST', '/v1/auth/signup', { email, password: PASSWORD });
+    await call(new Jar(), 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD });
     const { token } = await mailTo(email, '/auth/verify', since);
     const phone = new Jar();
     expect((await call(phone, 'POST', '/v1/auth/verify-email', { token, password: PASSWORD })).json()).toMatchObject({ status: 'signed_in', user: { emailVerified: true } });
     // A forged sign-up cookie does not stand in for the password.
     const other = newEmail();
     const otherSince = sink.messages.length;
-    await call(null, 'POST', '/v1/auth/signup', { email: other, password: PASSWORD });
+    await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: other, password: PASSWORD });
     const forged = new Jar();
     forged.cookies.set('__Host-fr_signup', randomBytes(32).toString('base64url'));
     const otherToken = (await mailTo(other, '/auth/verify', otherSince)).token;
@@ -671,8 +672,8 @@ describe('Google and Microsoft sign-in (OIDC, SaaS only)', () => {
   });
 
   /** start → provider → callback, as the browser follows the redirects. */
-  async function oauth(jar: Jar): Promise<LightMyRequestResponse> {
-    const startRes = await call(jar, 'GET', '/v1/auth/oauth/google/start');
+  async function oauth(jar: Jar, notice: string | null = NOTICE_VERSION): Promise<LightMyRequestResponse> {
+    const startRes = await call(jar, 'GET', `/v1/auth/oauth/google/start${notice ? `?notice=${notice}` : ''}`);
     expect(startRes.statusCode).toBe(302);
     const callback = new URL(await google.authorize(startRes.headers.location as string));
     return call(jar, 'GET', `${callback.pathname}${callback.search}`);
@@ -712,6 +713,27 @@ describe('Google and Microsoft sign-in (OIDC, SaaS only)', () => {
     const second = new Jar();
     await oauth(second);
     expect((await call(second, 'GET', '/v1/me')).json()).toMatchObject({ user: { id: me.user.id } });
+  });
+
+  it('creates an account only with the current privacy notice, and records it (CMP-21)', async () => {
+    for (const notice of [null, '2020-01-01']) {
+      google.nextUser = { sub: `g-${randomUUID()}`, email: newEmail(), email_verified: true };
+      expect((await oauth(new Jar(), notice)).headers.location).toBe(`${BUILDER}/auth/sign-in#error=oauth_notice`);
+      expect(await owner.query(`select 1 from users where email = $1`, [google.nextUser.email])).toMatchObject({ rowCount: 0 });
+    }
+    const email = newEmail();
+    google.nextUser = { sub: `g-${randomUUID()}`, email, email_verified: true };
+    const jar = new Jar();
+    expect((await oauth(jar)).headers.location).toBe(`${BUILDER}/forms`);
+    expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ notice: { version: NOTICE_VERSION, acknowledgedVersion: NOTICE_VERSION, current: true } });
+    const { rows } = await owner.query(`select a.context, a.notice_version from user_notice_acks a join users u on u.id = a.user_id where u.email = $1`, [email]);
+    expect(rows).toEqual([{ context: 'oauth_signup', notice_version: NOTICE_VERSION }]);
+
+    // An existing account links without one: it was shown the notice when it signed up.
+    const { email: existing, userId } = await signedUp();
+    google.nextUser = { sub: `g-${randomUUID()}`, email: existing, email_verified: true };
+    expect((await oauth(new Jar(), null)).headers.location).toBe(`${BUILDER}/forms`);
+    expect(await events(userId)).toEqual(expect.arrayContaining([{ action: 'auth.oauth_linked', outcome: 'success' }]));
   });
 
   it('links a verified address to the existing account and still asks for its second factor', async () => {
@@ -754,7 +776,7 @@ describe('Google and Microsoft sign-in (OIDC, SaaS only)', () => {
       const ms = await start({ OIDC_MICROSOFT_CLIENT_ID: 'fr-microsoft', OIDC_MICROSOFT_CLIENT_SECRET: 'microsoft-test-secret', OIDC_MICROSOFT_ISSUER: microsoft.issuer });
       expect((await call(null, 'GET', '/v1/auth/methods', undefined, {}, ms)).json()).toMatchObject({ oauth: ['google', 'microsoft'] });
       const signIn = async (jar: Jar) => {
-        const startRes = await call(jar, 'GET', '/v1/auth/oauth/microsoft/start', undefined, {}, ms);
+        const startRes = await call(jar, 'GET', `/v1/auth/oauth/microsoft/start?notice=${NOTICE_VERSION}`, undefined, {}, ms);
         expect(new URL(startRes.headers.location as string).searchParams.get('code_challenge_method')).toBe('S256');
         const callback = new URL(await microsoft.authorize(startRes.headers.location as string));
         return call(jar, 'GET', `${callback.pathname}${callback.search}`, undefined, {}, ms);

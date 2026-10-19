@@ -1,27 +1,37 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { MailAddress, Mailer } from '@form/ports';
 
-export type AuthMailKind = 'verify_email' | 'magic_link' | 'password_reset' | 'account_exists';
+export type LinkMailKind = 'verify_email' | 'magic_link' | 'password_reset' | 'account_exists';
 
-export const LINK_MINUTES: Record<Exclude<AuthMailKind, 'account_exists'>, number> = {
+export const LINK_MINUTES: Record<Exclude<LinkMailKind, 'account_exists'>, number> = {
   verify_email: 24 * 60,
   magic_link: 15,
   password_reset: 60,
 };
 
 /** Builder pages that read the token from the fragment, so it never reaches a server log or a Referer. */
-export const LINK_PATHS: Record<Exclude<AuthMailKind, 'account_exists'>, string> = {
+export const LINK_PATHS: Record<Exclude<LinkMailKind, 'account_exists'>, string> = {
   verify_email: '/auth/verify',
   magic_link: '/auth/magic',
   password_reset: '/auth/reset',
 };
 
-export interface AuthMail {
-  kind: AuthMailKind;
-  to: MailAddress;
-  /** Builder URL the message links to, the token in its fragment. */
-  link: string;
-}
+/** Account and privacy messages (CMP-21): the deletion confirmation, and a grievance's receipt and its copy for the privacy contact. */
+export type AccountMail =
+  | { kind: 'account_deleted'; to: MailAddress; backupsExpireBy: string; contactEmail: string }
+  | { kind: 'grievance_received'; to: MailAddress; reference: string; dueBy: string; contactEmail: string }
+  | { kind: 'grievance_filed'; to: MailAddress; reference: string; category: string; dueBy: string; from: string; message: string };
+
+export type AuthMail =
+  | {
+      kind: LinkMailKind;
+      to: MailAddress;
+      /** Builder URL the message links to, the token in its fragment. */
+      link: string;
+    }
+  | AccountMail;
+
+export type AuthMailKind = AuthMail['kind'];
 
 function body(m: AuthMail): { subject: string; text: string } {
   switch (m.kind) {
@@ -44,6 +54,21 @@ function body(m: AuthMail): { subject: string; text: string } {
       return {
         subject: 'You already have an account',
         text: `Someone tried to create a fORM- account with this address, which already has one. Sign in here:\n\n${m.link}\n\nForgot your password? Use "Forgot password" on that page. If this was not you, no action is needed.\n`,
+      };
+    case 'account_deleted':
+      return {
+        subject: 'Your account was deleted',
+        text: `Your fORM- account was deleted: you were signed out everywhere and removed from your organisations. Forms you owned stay with their organisations.\n\nCopies in our backups expire by ${m.backupsExpireBy}. Security records are kept as the privacy notice describes and no longer name you.\n\nIf you did not do this, write to ${m.contactEmail} at once.\n`,
+      };
+    case 'grievance_received':
+      return {
+        subject: `We received your request ${m.reference}`,
+        text: `We received your privacy request. Its reference is ${m.reference}; we answer by ${m.dueBy}, sooner when we can.\n\nTo add anything, write to ${m.contactEmail} and quote the reference.\n`,
+      };
+    case 'grievance_filed':
+      return {
+        subject: `Privacy request ${m.reference} (${m.category})`,
+        text: `A builder user sent a privacy request.\n\nReference: ${m.reference}\nCategory: ${m.category}\nFrom: ${m.from}\nAnswer by: ${m.dueBy}\n\n${m.message}\n`,
       };
   }
 }

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './test.ts';
-import { mailLink, totp } from './stack.ts';
+import { newEmail, PASSWORD, signUpAndVerify, totp } from './stack.ts';
 
 /*
  * WP-1.01 acceptance, end to end in Chromium against the real API (playwright.stack.config.ts): sign-up → verify →
@@ -8,23 +8,6 @@ import { mailLink, totp } from './stack.ts';
  */
 
 test.use({ realApi: true });
-
-const PASSWORD = 'violet-anchor-teapot-91';
-const newEmail = () => `e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`;
-
-async function signUpAndVerify(page: Page, email: string): Promise<void> {
-  await page.goto('/auth/sign-up');
-  await page.getByLabel('Your name').fill('Asha');
-  await page.getByLabel('Work email').fill(email);
-  await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('status')).toContainText(`We sent a link to ${email}`);
-  await page.goto(await mailLink(email, '/auth/verify'));
-  // The link names its account and is used only on the click (no silent sign-in from a link someone else sent).
-  await page.getByRole('button', { name: `Continue as ${email}` }).click();
-  await page.waitForURL('**/forms');
-  await expect(page.getByRole('navigation', { name: 'Account' })).toContainText(email);
-}
 
 async function signIn(page: Page, email: string): Promise<void> {
   await page.goto('/auth/sign-in');

@@ -94,6 +94,12 @@ export const apiEnvSchema = z
     OIDC_MICROSOFT_CLIENT_ID: z.string().min(1).optional(),
     OIDC_MICROSOFT_CLIENT_SECRET: z.string().min(1).optional(),
     OIDC_MICROSOFT_ISSUER: z.url().default('https://login.microsoftonline.com/common/v2.0'),
+    /** Who is the Data Fiduciary for builder accounts (CMP-21): the SaaS operator, or the customer that runs the service on-prem. */
+    PRIVACY_FIDUCIARY_NAME: z.string().trim().min(1).max(200).default('fORM-'),
+    /** Where builder users send privacy requests and grievances; named in the platform privacy notice. */
+    PRIVACY_CONTACT_EMAIL: z.email().optional(),
+    /** The person or role who answers them, e.g. "Grievance Officer, Asha Rao". */
+    PRIVACY_CONTACT_NAME: z.string().trim().min(1).max(200).optional(),
   })
   .superRefine((env, ctx) => {
     const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
@@ -103,6 +109,7 @@ export const apiEnvSchema = z
     if (production && !env.KMS_KEYFILE_PATH) issue('KMS_KEYFILE_PATH', 'is required in production: TOTP secrets are encrypted');
     if (production && !env.PUBLIC_BUILDER_URL) issue('PUBLIC_BUILDER_URL', 'is required in production: sign-in emails link to the builder');
     if (production && env.MAILER_DRIVER === 'smtp' && !env.SMTP_URL) issue('SMTP_URL', 'is required in production with MAILER_DRIVER=smtp');
+    if (production && !env.PRIVACY_CONTACT_EMAIL) issue('PRIVACY_CONTACT_EMAIL', 'is required in production: the privacy notice names it as the contact for builder users');
     for (const p of ['GOOGLE', 'MICROSOFT'] as const) {
       if (!env[`OIDC_${p}_CLIENT_ID`] !== !env[`OIDC_${p}_CLIENT_SECRET`]) issue(`OIDC_${p}_CLIENT_SECRET`, `goes together with OIDC_${p}_CLIENT_ID`);
       if (production && new URL(env[`OIDC_${p}_ISSUER`]).protocol !== 'https:') issue(`OIDC_${p}_ISSUER`, 'must be https in production');
@@ -124,9 +131,17 @@ export interface ApiConfig {
   auth: AuthConfig;
   mailer: { driver: 'smtp' | 'log'; smtpUrl: string | undefined; from: { address: string; name: string } };
   kms: { driver: 'keyfile'; keyfilePath: string | undefined };
+  /** The platform's own privacy notice for builder users (CMP-21). */
+  privacy: PrivacyConfig;
   edition: EditionConfig;
   /** Settings accepted but without effect here; logged at start. */
   notices: string[];
+}
+
+export interface PrivacyConfig {
+  fiduciaryName: string;
+  contactEmail: string;
+  contactName: string | null;
 }
 
 export type OidcProviderName = 'google' | 'microsoft';
@@ -222,6 +237,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
       },
       mailer: { driver: e.MAILER_DRIVER, smtpUrl: e.SMTP_URL, from: { address: e.MAIL_FROM, name: e.MAIL_FROM_NAME } },
       kms: { driver: e.KMS_DRIVER, keyfilePath: e.KMS_KEYFILE_PATH },
+      privacy: { fiduciaryName: e.PRIVACY_FIDUCIARY_NAME, contactEmail: e.PRIVACY_CONTACT_EMAIL ?? 'privacy@form.local', contactName: e.PRIVACY_CONTACT_NAME ?? null },
       edition: ed,
       notices,
     },

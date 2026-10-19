@@ -3,6 +3,7 @@ export * from './client.ts';
 export * from './tenant.ts';
 export * from './functions.ts';
 export * from './auth.ts';
+export * from './account.ts';
 export * from './audit/index.ts';
 export * from './migrate.ts';
 export * from './bootstrap.ts';

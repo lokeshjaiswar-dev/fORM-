@@ -15,6 +15,7 @@ const parsed = parseConfig({
   AUTH_SECRET: 'A'.repeat(43),
   KMS_KEYFILE_PATH: '/dev/null',
   MAILER_DRIVER: 'log',
+  PRIVACY_CONTACT_EMAIL: 'privacy@form.example',
 });
 if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
 

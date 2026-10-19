@@ -150,6 +150,7 @@ AUTH_SECRET_FILE=/run/secrets/auth_secret             # api: ≥ 32 bytes base64
 PASSWORD_BREACH_CHECK=hibp|off                        # api: HIBP k-anonymity; default hibp on SaaS with open egress, always off when air-gapped
 OIDC_GOOGLE_CLIENT_ID=  OIDC_GOOGLE_CLIENT_SECRET_FILE=  OIDC_MICROSOFT_CLIENT_ID=  OIDC_MICROSOFT_CLIENT_SECRET_FILE=   # SaaS only; ignored on-prem with a notice
 AUTH_TOTP_ISSUER=fORM-                                # api: the issuer authenticator apps show
+PRIVACY_FIDUCIARY_NAME=fORM-  PRIVACY_CONTACT_EMAIL=privacy@form.example  PRIVACY_CONTACT_NAME=   # api: named in the builder-user privacy notice (CMP-21); the email is required in production
 KMS_DRIVER=aws|gcp|azure|vault|keyfile  KMS_KEY_ID=  KMS_KEYFILE_PATH=/run/secrets/form-master.key
 AUDIT_SIGNING_KEY_ID=audit-v1  AUDIT_RETIRED_SIGNING_KEY_IDS=  AUDIT_SYSLOG_URL=tls://siem.corp.local:6514  AUDIT_SYSLOG_CA_FILE=  AUDIT_RETENTION_YEARS=7   # worker: checkpoint signing and anchoring (§2.7)
 AUDIT_CHAIN_POLL_MS=250  AUDIT_DATABASE_POOL_MAX=2  DATABASE_AUDIT_POOL_MAX=2   # worker dispatcher; separate audit pools (worker, api)
@@ -354,6 +355,8 @@ export const sessions = pgTable('sessions', {   // opaque tokens; only SHA-256 s
 // lookup by token only through auth_session()
 ```
 `invites (id, org_id, email_norm, role, team_ids, token_hash unique, expires_at, invited_by, accepted_at)` with the tenant policy; acceptance through `invite_by_token()`.
+
+*As built (WP-1.31, migration 0007):* `users.deleted_at` (set with status `deleted`: the row is then a tombstone, `deleted-<id>@deleted.invalid`, every credential and name cleared); `user_notice_acks (id, user_id, notice_version, notice_hash, locale, context: signup|oauth_signup|settings, acknowledged_at)`, unique per user and text, append-only, kept after deletion; `user_grievances (id, user_id, reference GRV-…, category, message, status open|answered|closed, created_at, due_at ≤ 90 d, closed_at)`, the message cleared on deletion. Both tables have a `*_self` policy (a user actor's own rows, like `sessions`); fr_app may only insert and read them. `account_export_data()` and `account_delete(user, apply)` are definer functions that refuse any caller but the user in their own context (`withUser`); `account_org_plan()` behind them names the blocker per org (`last_member`, `sole_owner`, `no_owner_for_forms`) and the owner who takes the forms.
 
 **Permissions** (code constant in `apps/api/src/authz/roles.ts`, loaded into `app.perms`):
 
@@ -693,8 +696,9 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 | `GET /v1/auth/oauth/:provider/start` · `…/callback` | Google, Microsoft; PKCE + state + nonce; hidden when `EGRESS_POLICY=none` |
 | `POST /v1/auth/password/forgot` · `…/reset` | Local top-100k password list everywhere; HIBP k-anonymity SaaS only |
 | `POST /v1/auth/mfa/totp/setup` · `/verify` · `/disable` · `POST /v1/auth/mfa/recovery` | |
-| *As built (WP-1.01):* `GET /v1/auth/methods` · `POST /v1/auth/link` (who an emailed link is for, before it is used) · `POST /v1/auth/verify-email` · `POST /v1/auth/mfa/totp` (TOTP for an MFA ticket) · `POST /v1/auth/mfa/recovery` (recovery code for a ticket) · `POST /v1/auth/mfa/recovery-codes` · `GET /v1/me` · `GET /v1/me/sessions` · `DELETE /v1/me/sessions/:id` | Sign-up answers 202 and emails a verification link whose redemption signs in; email tokens travel in the builder URL fragment; `/v1/me/export` and `/v1/me/delete` arrive with WP-1.31 |
+| *As built (WP-1.01):* `GET /v1/auth/methods` · `POST /v1/auth/link` (who an emailed link is for, before it is used) · `POST /v1/auth/verify-email` · `POST /v1/auth/mfa/totp` (TOTP for an MFA ticket) · `POST /v1/auth/mfa/recovery` (recovery code for a ticket) · `POST /v1/auth/mfa/recovery-codes` · `GET /v1/me` · `GET /v1/me/sessions` · `DELETE /v1/me/sessions/:id` | Sign-up answers 202 and emails a verification link whose redemption signs in; email tokens travel in the builder URL fragment |
 | `GET/PATCH /v1/me` · `GET/DELETE /v1/me/sessions[/:id]` · `POST /v1/me/export` · `POST /v1/me/delete` | Account self-service export and deletion (CMP-21) |
+| *As built (WP-1.31):* `GET /v1/privacy/notice` · `PATCH /v1/me` (name) · `POST /v1/me/notice` · `POST /v1/me/export` · `GET /v1/me/deletion` · `POST /v1/me/delete` · `GET/POST /v1/me/grievances` | The platform as Fiduciary for builder accounts (CMP-21). Sign-up and a first OAuth sign-in (`…/start?notice=`) carry the notice version the builder showed; a stale one is `NOTICE_OUTDATED`, and the version and SHA-256 of the text go into `user_notice_acks`; `GET /v1/me` says whether the user has read the current text. The export is a JSON download (`fr.account-export@1`). Deletion needs a sign-in from the last 15 minutes and the address typed as confirmation; it is `ACCOUNT_DELETION_BLOCKED` while an org would be left without an owner or members (`account_delete()`), and otherwise passes the user's forms to the org's longest-standing other owner, ends every session and leaves a pseudonymous tombstone. Privacy requests get a `GRV-` reference, a 90-day due date, a receipt and an email to `PRIVACY_CONTACT_EMAIL`; ten a day per user |
 | (P3) `GET /v1/auth/sso/:connection/start` | BoxyHQ Jackson; LDAP behind the same seam |
 
 **Org, members and workspace**

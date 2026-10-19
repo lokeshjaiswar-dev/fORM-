@@ -37,6 +37,8 @@ const meSchema = z.object({
   user: meUserSchema,
   session: z.object({ id: z.string(), mfaLevel: z.string(), expiresAt: z.string() }).nullable(),
   orgs: z.array(z.object({ id: z.string(), slug: z.string(), name: z.string(), role: z.string() })),
+  /** The platform privacy notice: `current` is false until the user has read this version (CMP-21). */
+  notice: z.object({ version: z.string(), acknowledgedVersion: z.string().nullable(), current: z.boolean() }).optional(),
 });
 export type Me = z.infer<typeof meSchema>;
 
@@ -60,7 +62,9 @@ export class ApiUnreachable extends Error {
   }
 }
 
-export async function api<T>(method: 'GET' | 'POST' | 'DELETE', path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
+type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+
+async function send(method: Method, path: string, body?: unknown): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -80,8 +84,13 @@ export async function api<T>(method: 'GET' | 'POST' | 'DELETE', path: string, sc
     }
     throw new ApiUnreachable();
   }
+  return res;
+}
+
+export async function api<T>(method: Method, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
+  const res = await send(method, path, body);
   if (schema === null) return undefined as T;
-  if (!type.includes('json')) throw new ApiUnreachable();
+  if (!(res.headers.get('content-type') ?? '').includes('json')) throw new ApiUnreachable();
   const parsed = schema.safeParse(await res.json());
   if (!parsed.success) throw new ApiUnreachable();
   return parsed.data;
@@ -115,8 +124,42 @@ export async function signOut(): Promise<void> {
 
 export const fetchMethods = () => api('GET', '/v1/auth/methods', methodsSchema);
 
-/** Where the browser goes to start Google or Microsoft sign-in (a top-level navigation to the API). */
-export const oauthStartUrl = (provider: 'google' | 'microsoft') => `${API_BASE}/v1/auth/oauth/${provider}/start`;
+/**
+ * Where the browser goes to start Google or Microsoft sign-in (a top-level navigation to the API), with the privacy
+ * notice version shown next to the button: the API records it if the sign-in creates the account.
+ */
+export const oauthStartUrl = (provider: 'google' | 'microsoft', noticeVersion?: string) =>
+  `${API_BASE}/v1/auth/oauth/${provider}/start${noticeVersion ? `?notice=${encodeURIComponent(noticeVersion)}` : ''}`;
+
+export const noticeSchema = z.object({
+  version: z.string(),
+  locale: z.string(),
+  title: z.string(),
+  fiduciary: z.string(),
+  contact: z.object({ name: z.string().nullable(), email: z.string() }),
+  sections: z.array(z.object({ id: z.string(), heading: z.string(), paragraphs: z.array(z.string()), items: z.array(z.string()) })),
+  hash: z.string(),
+});
+export type PlatformNotice = z.infer<typeof noticeSchema>;
+
+/** The platform's own privacy notice for builder accounts (CMP-21), as this deployment shows it. */
+export const fetchNotice = () => api('GET', '/v1/privacy/notice', noticeSchema);
+
+/** POSTs and hands the browser the answer as a file to save (the account export). */
+export async function download(path: string, fallbackName: string): Promise<void> {
+  const res = await send('POST', path);
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.rel = 'noopener';
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // The browser reads the blob after the click returns.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 /** `#token=…` or `#ticket=…` from the address bar, which the email link or the OAuth callback put there. */
 export function fragmentParam(hash: string, name: 'token' | 'ticket' | 'error'): string | null {

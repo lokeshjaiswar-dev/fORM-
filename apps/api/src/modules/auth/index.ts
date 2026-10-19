@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { renderNotice } from '../account/notice.ts';
+import { accountRoutes } from '../account/routes.ts';
 import { client, type AuthCtx, type AuthModuleDeps } from './context.ts';
 import { createAuthMailer } from './mail.ts';
 import { meRoutes } from './me.ts';
@@ -13,13 +15,14 @@ export { CLIENT_BUILDER, CLIENT_HEADER, registerCsrfGuard } from './csrf.ts';
 export { SESSION_COOKIE } from './sessions.ts';
 
 /**
- * The auth module (WP-1.01, ADR-0017): `/v1/auth/*`, `/v1/me*`. Every auth request counts against the per-IP
+ * The auth module (WP-1.01, ADR-0017): `/v1/auth/*`, `/v1/me*`, and the account module's privacy notice, export,
+ * deletion and privacy requests (WP-1.31, CMP-21), which share its context. Every auth request counts against the per-IP
  * `auth_any` bucket first; the routes add the per-account buckets. Emails in flight are awaited on close.
  */
 export function registerAuthModule(app: FastifyInstance, deps: AuthModuleDeps): void {
   const mail = createAuthMailer({ mailer: deps.mailer, from: { address: deps.config.mailer.from.address, name: deps.config.mailer.from.name }, log: app.log });
   const { throttle } = deps;
-  const c: AuthCtx = { ...deps, mail };
+  const c: AuthCtx = { ...deps, mail, notice: renderNotice(deps.config.privacy) };
 
   // onRequest, so malformed requests count too. The CSRF guard runs first and counts the requests it refuses.
   app.addHook('onRequest', async (request, reply) => {
@@ -32,4 +35,5 @@ export function registerAuthModule(app: FastifyInstance, deps: AuthModuleDeps): 
   authRoutes(app, c);
   oidcRoutes(app, c);
   meRoutes(app, c);
+  accountRoutes(app, c);
 }

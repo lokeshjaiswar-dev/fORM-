@@ -95,6 +95,36 @@ isolation(
 );
 
 isolation(
+  'user_notice_acks',
+  {
+    foreign: (s) => sql`user_id = ${s.a.editorId}`,
+    own: (s) => sql`user_id = ${s.b.editorId}`,
+    update: (s) => sql`update user_notice_acks set locale = 'hi-IN' where user_id = ${s.a.editorId}`,
+    insertForeign: (s) =>
+      sql`insert into user_notice_acks (id, user_id, notice_version, notice_hash, locale, context)
+          values (${randomUUID()}, ${s.a.editorId}, '2026-10-19', ${Buffer.alloc(32, 3)}, 'en-IN', 'settings')`,
+    visibleTo: ['user'],
+    expect: { select: 0, update: 'denied' },
+  },
+  env,
+);
+
+isolation(
+  'user_grievances',
+  {
+    foreign: (s) => sql`user_id = ${s.a.editorId}`,
+    own: (s) => sql`user_id = ${s.b.editorId}`,
+    update: (s) => sql`update user_grievances set status = 'answered' where user_id = ${s.a.editorId}`,
+    insertForeign: (s) =>
+      sql`insert into user_grievances (id, user_id, reference, category, message, due_at)
+          values (${randomUUID()}, ${s.a.editorId}, 'GRV-AAAAAAAA', 'other', 'x', now() + interval '1 day')`,
+    visibleTo: ['user'],
+    expect: { select: 0, update: 'denied' },
+  },
+  env,
+);
+
+isolation(
   'auth_throttle',
   {
     foreign: () => sql`true`,

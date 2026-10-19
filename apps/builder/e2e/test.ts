@@ -18,6 +18,20 @@ declare global {
 
 export const SAAS_EDITION = editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'saas' }));
 
+/** What `GET /v1/privacy/notice` answers in the suites without an API (the real text is the API's, CMP-21). */
+export const TEST_NOTICE = {
+  version: '2026-10-19',
+  locale: 'en-IN',
+  title: 'Privacy notice for fORM- accounts',
+  fiduciary: 'fORM-',
+  contact: { name: null, email: 'privacy@form.test' },
+  sections: [
+    { id: 'who', heading: 'Who is responsible', paragraphs: ['fORM- runs this service and is the Data Fiduciary for the personal data of your account.'], items: [] },
+    { id: 'rights', heading: 'Your choices and rights', paragraphs: [], items: ['See and download what we hold about you.', 'Delete your account.'] },
+  ],
+  hash: 'c'.repeat(64),
+};
+
 /**
  * Every e2e test runs under the production CSP (vite preview) and fails on any `securitypolicyviolation` its pages
  * raise, so a flow that needs an inline script or style, `eval` or an HTML sink is caught where it happens. A test that
@@ -55,6 +69,7 @@ export const test = base.extend<{
           route.fulfill({ status: 401, contentType: 'application/problem+json', json: { status: 401, code: 'UNAUTHENTICATED', title: 'Authentication required' } }),
         );
         await context.route('**/v1/auth/methods', (route) => route.fulfill({ json: { password: true, emailLinks: true, oauth: [] } }));
+        await context.route('**/v1/privacy/notice', (route) => route.fulfill({ json: TEST_NOTICE }));
       }
       await use();
     },

@@ -9,11 +9,23 @@ const M = defineMessages('builder', {
   'auth.brand': 'fORM-',
 });
 
-/** The centred card every sign-in page uses. */
-export function AuthLayout({ title, description, children, footer }: { title: string; description?: string; children: ReactNode; footer?: ReactNode }) {
+/** The centred card every sign-in page uses; `wide` for the account pages with longer text (privacy). */
+export function AuthLayout({
+  title,
+  description,
+  children,
+  footer,
+  wide = false,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  wide?: boolean;
+}) {
   return (
-    <main className="flex min-h-screen items-start justify-center bg-[var(--notion-hover)] px-4 pt-[12vh] text-[var(--notion-text)]">
-      <div className="w-full max-w-[400px]">
+    <main className={cn('flex min-h-screen items-start justify-center bg-[var(--notion-hover)] px-4 text-[var(--notion-text)]', wide ? 'py-[6vh]' : 'pt-[12vh]')}>
+      <div className={cn('w-full', wide ? 'max-w-[680px]' : 'max-w-[400px]')}>
         <div className="mb-4 flex items-center justify-between">
           <Link to="/forms" className="text-[15px] font-semibold tracking-tight">
             {t(M['auth.brand'])}

@@ -89,6 +89,8 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef order by 1`,
     );
     expect(rows.map((r) => r.fn)).toEqual([
+      'account_delete',
+      'account_export_data',
       'audit_archive_detach',
       'audit_chain_begin',
       'audit_chain_keys',

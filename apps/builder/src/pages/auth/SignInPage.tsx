@@ -7,6 +7,7 @@ import { api, fetchMethods, oauthStartUrl, signInResultSchema, type AuthMethods 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useEdition } from '@/edition/edition';
+import { useNotice } from '../privacy/useNotice';
 import { AuthLayout, Field, FormError, Notice } from './AuthLayout';
 import { useFinishSignIn, useFragment } from './useFinishSignIn';
 import { problemText, submit } from './util';
@@ -31,12 +32,16 @@ const M = defineMessages('builder', {
   'signin.oauth_failed': 'That sign-in did not work. Try again, or use your email address.',
   'signin.oauth_unverified': 'Your provider did not confirm that email address. Sign in with your email address instead.',
   'signin.oauth_unavailable': 'That sign-in provider cannot be reached right now.',
+  'signin.oauth_notice': 'New accounts need the privacy notice first. Read it, then continue again.',
+  'signin.oauth_notice_note': 'New to fORM-? Continuing with Google or Microsoft creates your account under our privacy notice.',
+  'signin.privacy_notice': 'Read the privacy notice',
 });
 
 const OAUTH_ERRORS: Record<string, keyof typeof M> = {
   oauth_failed: 'signin.oauth_failed',
   oauth_email_unverified: 'signin.oauth_unverified',
   oauth_unavailable: 'signin.oauth_unavailable',
+  oauth_notice: 'signin.oauth_notice',
 };
 
 /**
@@ -63,6 +68,8 @@ export function SignInPage() {
   const finish = useFinishSignIn();
   const oauthError = useFragment('error');
   const { providers, emailLinks } = useSignInMethods();
+  // A first Google or Microsoft sign-in creates the account: the buttons carry the notice version shown here.
+  const { state: notice } = useNotice();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -138,18 +145,24 @@ export function SignInPage() {
           </div>
         ) : null}
       </form>
-      {providers.length > 0 ? (
+      {providers.length > 0 && notice.status === 'ready' ? (
         <div className="mt-5 space-y-2">
           <p className="text-center text-[12px] uppercase tracking-wide text-zinc-400">{t(M['signin.or'])}</p>
           {providers.map((p) => (
             <a
               key={p}
-              href={oauthStartUrl(p)}
+              href={oauthStartUrl(p, notice.notice.version)}
               className="flex h-9 w-full items-center justify-center rounded-md border border-zinc-200 bg-white text-sm font-medium hover:bg-zinc-50"
             >
               {t(M[p === 'google' ? 'signin.google' : 'signin.microsoft'])}
             </a>
           ))}
+          <p className="text-center text-[12px] text-[var(--notion-text-muted)]">
+            {t(M['signin.oauth_notice_note'])}{' '}
+            <Link to="/privacy" className="font-medium text-zinc-800 underline underline-offset-2">
+              {t(M['signin.privacy_notice'])}
+            </Link>
+          </p>
         </div>
       ) : null}
     </AuthLayout>

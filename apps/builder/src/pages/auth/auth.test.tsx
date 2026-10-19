@@ -21,6 +21,15 @@ interface Call {
 
 const USER = { id: 'u1', email: 'asha@example.test', name: 'Asha', emailVerified: true, totpEnabled: false };
 const ME = { user: USER, session: { id: 's1', mfaLevel: 'pwd', expiresAt: '2026-11-02T00:00:00Z' }, orgs: [] };
+const NOTICE = {
+  version: '2026-10-19',
+  locale: 'en-IN',
+  title: 'Privacy notice for fORM- accounts',
+  fiduciary: 'fORM-',
+  contact: { name: null, email: 'privacy@form.test' },
+  sections: [{ id: 'who', heading: 'Who is responsible', paragraphs: ['fORM- runs this service.'], items: [] }],
+  hash: 'a'.repeat(64),
+};
 
 let calls: Call[];
 let answers: Record<string, (body: unknown) => { status: number; body: unknown }>;
@@ -30,6 +39,7 @@ beforeEach(() => {
   answers = {
     'GET /v1/auth/methods': () => ({ status: 200, body: { password: true, emailLinks: true, oauth: ['google', 'microsoft'] } }),
     'GET /v1/me': () => ({ status: 200, body: ME }),
+    'GET /v1/privacy/notice': () => ({ status: 200, body: NOTICE }),
   };
   vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET';
@@ -121,7 +131,8 @@ describe('sign-in', () => {
 
   it('offers Google and Microsoft on SaaS when the server does, and never when air-gapped', async () => {
     const { unmount } = at('/auth/sign-in');
-    expect(await screen.findByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/v1/auth/oauth/google/start');
+    expect(await screen.findByRole('link', { name: 'Continue with Google' })).toHaveAttribute('href', '/v1/auth/oauth/google/start?notice=2026-10-19');
+    expect(screen.getByRole('link', { name: 'Read the privacy notice' })).toHaveAttribute('href', '/privacy');
     expect(screen.getByRole('link', { name: 'Continue with Microsoft' })).toBeInTheDocument();
     unmount();
     useEditionStore.setState({ summary: editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'onprem', EGRESS_POLICY: 'none' })), source: 'server' });
@@ -136,6 +147,11 @@ describe('sign-in', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Email me a sign-in link' })).not.toBeInTheDocument());
     expect(screen.queryByRole('link', { name: 'Forgot password?' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('asks for the privacy notice when a first OAuth sign-in came without it', async () => {
+    at('/auth/sign-in#error=oauth_notice');
+    expect(await screen.findByRole('alert')).toHaveTextContent('New accounts need the privacy notice first.');
   });
 
   it('explains an OAuth failure handed back in the fragment and clears it', async () => {
@@ -169,17 +185,44 @@ describe('sign-up and email links', () => {
   it('creates the account and asks to check the email', async () => {
     answers['POST /v1/auth/signup'] = () => ({ status: 202, body: { status: 'verification_sent' } });
     at('/auth/sign-up');
+    expect(await screen.findByText('By creating an account you confirm that you have read the privacy notice (version 2026-10-19).')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Read the privacy notice: what we collect, why, how long we keep it, and your rights.'));
+    expect(screen.getByRole('heading', { name: 'Who is responsible' })).toBeInTheDocument();
     type('Your name', 'Asha');
     type('Work email', 'asha@example.test');
     type('Password', 'violet-anchor-teapot-91');
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('status')).toHaveTextContent('We sent a link to asha@example.test.');
-    expect(calls.find((c) => c.url === '/v1/auth/signup')?.body).toEqual({ email: 'asha@example.test', password: 'violet-anchor-teapot-91', name: 'Asha' });
+    expect(calls.find((c) => c.url === '/v1/auth/signup')?.body).toEqual({
+      email: 'asha@example.test',
+      password: 'violet-anchor-teapot-91',
+      name: 'Asha',
+      noticeVersion: '2026-10-19',
+    });
+  });
+
+  it('cannot sign up without the notice, and loads the new one when it changed meanwhile', async () => {
+    answers['GET /v1/privacy/notice'] = () => ({ status: 503, body: { code: 'SERVICE_UNAVAILABLE' } });
+    at('/auth/sign-up');
+    expect(await screen.findByRole('alert')).toHaveTextContent('The privacy notice cannot be loaded, so you cannot sign up yet.');
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    answers['GET /v1/privacy/notice'] = () => ({ status: 200, body: NOTICE });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled());
+
+    answers['POST /v1/auth/signup'] = () => ({ status: 409, body: { code: 'NOTICE_OUTDATED', detail: 'The privacy notice changed while you were signing up.' } });
+    answers['GET /v1/privacy/notice'] = () => ({ status: 200, body: { ...NOTICE, version: '2026-12-01' } });
+    type('Work email', 'asha@example.test');
+    type('Password', 'violet-anchor-teapot-91');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The privacy notice changed while you were signing up.');
+    expect(await screen.findByText(/privacy notice \(version 2026-12-01\)/)).toBeInTheDocument();
   });
 
   it('shows a refused password', async () => {
     answers['POST /v1/auth/signup'] = () => ({ status: 422, body: { code: 'WEAK_PASSWORD', detail: 'This password is too common.' } });
     at('/auth/sign-up');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled());
     type('Work email', 'asha@example.test');
     type('Password', 'password123');
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));

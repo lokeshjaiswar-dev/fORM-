@@ -13,7 +13,9 @@ import {
   memberships,
   orgs,
   sessions,
+  userGrievances,
   userIdentities,
+  userNoticeAcks,
   users,
 } from './schema/index.ts';
 
@@ -25,6 +27,8 @@ export const tables = {
   userIdentities,
   authTokens,
   authThrottle,
+  userNoticeAcks,
+  userGrievances,
   forms,
   formDrafts,
   auditPending,

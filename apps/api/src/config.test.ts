@@ -9,6 +9,7 @@ const base = {
   KMS_KEYFILE_PATH: '/run/secrets/form-master.key',
   PUBLIC_BUILDER_URL: 'https://app.form.example',
   SMTP_URL: 'smtp://relay:25',
+  PRIVACY_CONTACT_EMAIL: 'privacy@form.example',
 };
 
 describe('parseConfig', () => {
@@ -110,12 +111,21 @@ describe('auth settings (WP-1.01)', () => {
       'KMS_KEYFILE_PATH: is required in production: TOTP secrets are encrypted',
       'PUBLIC_BUILDER_URL: is required in production: sign-in emails link to the builder',
       'SMTP_URL: is required in production with MAILER_DRIVER=smtp',
+      'PRIVACY_CONTACT_EMAIL: is required in production: the privacy notice names it as the contact for builder users',
     ]);
     expect(parseConfig({ ...base, SMTP_URL: '', MAILER_DRIVER: 'log' }).ok).toBe(true);
     const dev = parseConfig({ DEPLOYMENT_MODE: 'onprem', DATABASE_URL: base.DATABASE_URL, NODE_ENV: 'development' });
     expect(dev.ok && dev.config.auth.secret.byteLength).toBe(32);
     expect(dev.ok && dev.config.notices).toContain('AUTH_SECRET is not set: a random secret is used for this process');
     expect(dev.ok && dev.config.auth).toMatchObject({ builderUrl: 'http://localhost:5173', apiUrl: 'http://127.0.0.1:8080', oidcAllowInsecure: true });
+  });
+
+  it('names the privacy contact of the platform notice (CMP-21)', () => {
+    const r = parseConfig({ ...base, PRIVACY_FIDUCIARY_NAME: 'Acme Hospital', PRIVACY_CONTACT_NAME: 'Grievance Officer' });
+    expect(r.ok && r.config.privacy).toEqual({ fiduciaryName: 'Acme Hospital', contactEmail: 'privacy@form.example', contactName: 'Grievance Officer' });
+    const dev = parseConfig({ DEPLOYMENT_MODE: 'onprem', DATABASE_URL: base.DATABASE_URL, NODE_ENV: 'development' });
+    expect(dev.ok && dev.config.privacy).toEqual({ fiduciaryName: 'fORM-', contactEmail: 'privacy@form.local', contactName: null });
+    expect(parseConfig({ ...base, PRIVACY_CONTACT_EMAIL: 'not an address' }).ok).toBe(false);
   });
 
   it('refuses a short or malformed auth secret and reads it from a file', () => {

@@ -5,6 +5,7 @@ import { audit, authUserCredentials, listUserOrgs, MEMBERSHIP_ROLES, PLATFORM_OR
 import { z } from 'zod';
 import { accountOf } from '../../auth.ts';
 import { ProblemError } from '../../errors.ts';
+import { latestNoticeAck } from '../account/notice.ts';
 import { client, liveSessions, meUser, toMe, type AuthCtx } from './context.ts';
 import { hex } from './crypto.ts';
 import { clearSessionCookie } from './sessions.ts';
@@ -18,7 +19,7 @@ const sessionView = z.object({
   current: z.boolean(),
 });
 
-/** `GET /v1/me` and the user's own sessions (architecture §3.3). Export and deletion (CMP-21) arrive with WP-1.31. */
+/** `GET /v1/me` and the user's own sessions (architecture §3.3). Export, deletion and the notice live in `../account` (CMP-21). */
 export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tags = ['account'];
@@ -35,6 +36,8 @@ export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
             user: meUser,
             session: z.object({ id: z.uuid(), mfaLevel: z.string(), expiresAt: z.iso.datetime({ offset: true }) }).nullable(),
             orgs: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string(), role: z.enum(MEMBERSHIP_ROLES) })),
+            /** The platform privacy notice: `current` is false until the user has read this version (CMP-21). */
+            notice: z.object({ version: z.string(), acknowledgedVersion: z.string().nullable(), current: z.boolean() }),
           }),
         },
       },
@@ -44,6 +47,7 @@ export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
       const user = await authUserCredentials(c.db, account.userId);
       if (!user || user.status !== 'active') throw new ProblemError('UNAUTHENTICATED');
       const orgs = await listUserOrgs(c.db, account.userId);
+      const ack = await withUser(c.db, { userId: account.userId, requestId: request.id }, (tx) => latestNoticeAck(tx, account.userId));
       reply.header('cache-control', 'no-store');
       return {
         user: toMe(user),
@@ -51,6 +55,7 @@ export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
           ? { id: account.session.id, mfaLevel: account.session.mfaLevel, expiresAt: account.session.absoluteExpiresAt.toISOString() }
           : null,
         orgs: orgs.map((o) => ({ id: o.orgId, slug: o.slug, name: o.name, role: o.role })),
+        notice: { version: c.notice.version, acknowledgedVersion: ack?.version ?? null, current: ack?.hash === c.notice.hash },
       };
     },
   );

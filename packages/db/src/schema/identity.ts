@@ -40,6 +40,8 @@ export const users = pgTable('users', {
   lastLoginAt: tsNull('last_login_at'),
   createdAt: ts('created_at'),
   totpLastStep: bigint('totp_last_step', { mode: 'number' }),
+  /** Set with status `deleted`: the row is then a pseudonymous tombstone (`account_delete()`, CMP-21). */
+  deletedAt: tsNull('deleted_at'),
 });
 
 export const userPublicColumns = {

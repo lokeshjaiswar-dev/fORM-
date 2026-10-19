@@ -90,6 +90,14 @@ async function seedOrg(owner: pg.Pool, slug: string): Promise<OrgSeed> {
     s.editorId,
   ]);
   await owner.query(
+    `insert into user_notice_acks (id, user_id, notice_version, notice_hash, locale, context) values ($1, $2, '2026-10-19', $3, 'en-IN', 'signup')`,
+    [randomUUID(), s.editorId, randomBytes(32)],
+  );
+  await owner.query(
+    `insert into user_grievances (id, user_id, reference, category, message, due_at) values ($1, $2, $3, 'information', 'What do you hold?', now() + interval '90 days')`,
+    [randomUUID(), s.editorId, `GRV-${randomBytes(5).toString('hex').slice(0, 8).toUpperCase().replace(/[01890]/g, 'A')}`],
+  );
+  await owner.query(
     `insert into audit_log (org_id, seq, occurred_at, actor_kind, actor_id, action, resource_type, resource_id, outcome, prev_hash, hash)
      values ($1, 1, now(), 'user', $2, 'form.created', 'form', $3, 'success', $4, $4)`,
     [s.orgId, s.ownerId, s.formIds[0], HASH],

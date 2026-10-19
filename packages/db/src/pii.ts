@@ -30,7 +30,21 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
   user_identities: { columns: ['user_id', 'subject'], erase: 'delete', retainBasis: 'until unlinked or the account is deleted' },
   auth_tokens: { columns: ['user_id', 'data'], erase: 'ttl', retainBasis: 'minutes to a day: single-use email tokens and MFA tickets, purged once expired' },
   auth_throttle: { columns: ['key'], erase: 'ttl', retainBasis: 'one rate-limit window (at most a day); keyed hashes of IPs and addresses only' },
-  forms: { columns: ['owner_user_id', 'updated_by'], erase: 'pseudonymise', retainBasis: 'org lifetime; user ids re-pointed on account deletion' },
+  user_notice_acks: {
+    columns: ['user_id'],
+    erase: 'pseudonymise',
+    retainBasis: 'kept after account deletion against the pseudonymous user id: the record of which notice was given (CMP-21)',
+  },
+  user_grievances: {
+    columns: ['user_id', 'message'],
+    erase: 'pseudonymise',
+    retainBasis: 'account lifetime; on deletion the message goes and the reference, category and dates stay against the pseudonymous id (CMP-21)',
+  },
+  forms: {
+    columns: ['owner_user_id', 'updated_by'],
+    erase: 'pseudonymise',
+    retainBasis: 'org lifetime; on account deletion owner_user_id passes to an org owner, updated_by keeps the pseudonymous id',
+  },
   form_drafts: { columns: ['draft', 'updated_by'], erase: 'delete', retainBasis: 'with the form' },
   audit_pending: { columns: ['event'], erase: 'ttl', retainBasis: 'seconds: moved into audit_log by audit.chain' },
   audit_log: {

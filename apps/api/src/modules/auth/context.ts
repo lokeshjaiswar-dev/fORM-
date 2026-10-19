@@ -19,6 +19,7 @@ import type { KeyProvider, Mailer } from '@form/ports';
 import { z } from 'zod';
 import { clientInfo, type Account } from '../../auth.ts';
 import type { ApiConfig } from '../../config.ts';
+import type { PlatformNotice } from '../account/notice.ts';
 import { accountKey, equalBytes, hex, hmac, randomToken, TOKEN_PATTERN, tokenHash } from './crypto.ts';
 import { LINK_MINUTES, LINK_PATHS, type AuthMail, type AuthMailer } from './mail.ts';
 import type { BreachCheck } from './passwords.ts';
@@ -41,6 +42,8 @@ export interface AuthModuleDeps {
 
 export interface AuthCtx extends AuthModuleDeps {
   mail: AuthMailer;
+  /** The platform privacy notice as this deployment shows it (CMP-21). */
+  notice: PlatformNotice;
 }
 
 export const MFA_TICKET_MINUTES = 5;

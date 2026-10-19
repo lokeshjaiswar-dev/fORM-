@@ -114,6 +114,34 @@ export const AUDIT_EVENTS = {
     resourceType: 'route',
     description: 'An auth limit was reached (bucket in metadata): refused with 429, or for auth_account stepped up to an emailed link.',
   },
+  'account.notice_acknowledged': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description:
+      'The user was shown a version of the platform privacy notice (CMP-21): at sign-up, first OAuth sign-in or in settings (version, hash, context in metadata).',
+  },
+  'account.profile_updated': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description: 'The user corrected their own profile (which columns changed in metadata, never the values).',
+  },
+  'account.exported': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description: 'The user downloaded the export of their own account data (CMP-21).',
+  },
+  'account.deleted': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description:
+      'The user deleted their account: memberships, sessions and credentials gone, forms passed to an org owner (counts in metadata); denied while an org would be left without an owner or members, or for a stale sign-in or a wrong confirmation.',
+  },
+  'account.grievance_filed': {
+    outcomes: ['success'],
+    resourceType: 'grievance',
+    description:
+      'A builder user sent a privacy request or grievance to the platform privacy contact (category and due date in metadata, never the message).',
+  },
   'job.rejected': {
     outcomes: ['denied'],
     resourceType: 'job',

@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { z } from 'zod';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
-import { api } from '@/auth/client';
+import { api, ApiProblem } from '@/auth/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PrivacyNotice } from '../privacy/PrivacyNotice';
+import { useNotice } from '../privacy/useNotice';
 import { AuthLayout, Field, FormError, Notice } from './AuthLayout';
 import { problemText, submit } from './util';
 
@@ -17,6 +19,11 @@ const M = defineMessages('builder', {
   'signup.password': 'Password',
   'signup.password_hint': 'At least 8 characters. Long passphrases are best; common passwords are refused.',
   'signup.notice': 'We use your name and email address to run your account, to sign you in and to send you account and security messages.',
+  'signup.notice_read': 'Read the privacy notice: what we collect, why, how long we keep it, and your rights.',
+  'signup.notice_accept': 'By creating an account you confirm that you have read the privacy notice (version {version}).',
+  'signup.notice_loading': 'Loading the privacy notice…',
+  'signup.notice_failed': 'The privacy notice cannot be loaded, so you cannot sign up yet.',
+  'signup.notice_retry': 'Try again',
   'signup.submit': 'Create account',
   'signup.busy': 'Creating…',
   'signup.sent_title': 'Check your email',
@@ -26,6 +33,7 @@ const M = defineMessages('builder', {
 });
 
 export function SignUpPage() {
+  const { state: notice, reload } = useNotice();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,13 +42,21 @@ export function SignUpPage() {
   const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function signUp() {
+    if (notice.status !== 'ready') return;
     setBusy(true);
     setError(null);
     try {
-      await api('POST', '/v1/auth/signup', z.object({ status: z.string() }), { email, password, ...(name.trim() ? { name: name.trim() } : {}) });
+      await api('POST', '/v1/auth/signup', z.object({ status: z.string() }), {
+        email,
+        password,
+        ...(name.trim() ? { name: name.trim() } : {}),
+        noticeVersion: notice.notice.version,
+      });
       setSentTo(email.trim());
     } catch (err) {
       setError(problemText(err));
+      // A newer notice came out meanwhile: show it before another try.
+      if (err instanceof ApiProblem && err.code === 'NOTICE_OUTDATED') reload();
     } finally {
       setBusy(false);
     }
@@ -76,9 +92,31 @@ export function SignUpPage() {
           <Input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <p className="text-[12px] text-[var(--notion-text-muted)]">{t(M['signup.password_hint'])}</p>
-        <p className="rounded-md bg-[var(--notion-hover)] px-3 py-2 text-[12px] text-[var(--notion-text-muted)]">{t(M['signup.notice'])}</p>
+        <div className="space-y-2 rounded-md bg-[var(--notion-hover)] px-3 py-2 text-[12px] text-[var(--notion-text-muted)]">
+          <p>{t(M['signup.notice'])}</p>
+          {notice.status === 'ready' ? (
+            <>
+              <details>
+                <summary className="cursor-pointer font-medium text-zinc-800">{t(M['signup.notice_read'])}</summary>
+                <PrivacyNotice notice={notice.notice} headingLevel={3} className="mt-2 max-h-72 overflow-y-auto rounded border border-[var(--notion-border)] bg-white p-3" />
+              </details>
+              <p>{t(M['signup.notice_accept'], { version: notice.notice.version })}</p>
+            </>
+          ) : notice.status === 'failed' ? (
+            <div className="flex items-center justify-between gap-2">
+              <span role="alert" className="text-red-600">
+                {t(M['signup.notice_failed'])}
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={reload}>
+                {t(M['signup.notice_retry'])}
+              </Button>
+            </div>
+          ) : (
+            <p>{t(M['signup.notice_loading'])}</p>
+          )}
+        </div>
         <FormError message={error} />
-        <Button type="submit" className="w-full" disabled={busy}>
+        <Button type="submit" className="w-full" disabled={busy || notice.status !== 'ready'}>
           {busy ? t(M['signup.busy']) : t(M['signup.submit'])}
         </Button>
       </form>

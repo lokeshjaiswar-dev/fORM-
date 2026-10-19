@@ -23,6 +23,7 @@ import {
 import { z } from 'zod';
 import { accountOf, type Account } from '../../auth.ts';
 import { ProblemError } from '../../errors.ts';
+import { recordNoticeAck } from '../account/notice.ts';
 import {
   accountBudget,
   clearSignupCookie,
@@ -117,15 +118,36 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
       schema: {
         tags,
         summary: 'Create an account; a verification link is emailed',
-        body: z.object({ email: emailSchema, password: passwordSchema, name: z.string().trim().min(1).max(200).optional() }),
+        description:
+          'The builder shows the platform privacy notice (`GET /v1/privacy/notice`) and sends the version it showed; a stale version is refused with `NOTICE_OUTDATED`, and the version is recorded with the new account (CMP-21).',
+        body: z.object({
+          email: emailSchema,
+          password: passwordSchema,
+          name: z.string().trim().min(1).max(200).optional(),
+          noticeVersion: z.string().max(32),
+        }),
         response: { 202: accepted },
       },
     },
     async (request, reply) => {
-      const { email, password, name } = request.body;
+      const { email, password, name, noticeVersion } = request.body;
       const emailNorm = normaliseEmail(email);
       const cl = client(c, request);
       await c.throttle.hit(request, reply, [loginLimit(c, cl, emailNorm)], { ipHash: cl.ipHash });
+      if (noticeVersion !== c.notice.version) {
+        await audit.appendDetached(c.auditDb, null, {
+          actorKind: 'none',
+          actorIpHash: hex(cl.ipHash),
+          actorUa: cl.ua,
+          action: 'auth.signup',
+          resourceType: 'user',
+          outcome: 'denied',
+          reason: 'notice_outdated',
+          requestId: request.id,
+          metadata: { noticeVersion: noticeVersion.slice(0, 32), current: c.notice.version },
+        });
+        throw new ProblemError('NOTICE_OUTDATED', 'The privacy notice changed while you were signing up. Read the new version, then create your account.');
+      }
       const problem = await passwordProblem(password, { email: emailNorm, breached: c.breached });
       if (problem) {
         await audit.appendDetached(c.auditDb, null, {
@@ -143,25 +165,28 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
       await c.throttle.hit(request, reply, [mailLimit(c, emailNorm)], { ipHash: cl.ipHash }, MAIL_LIMIT_DETAIL);
       const id = randomUUID();
       const passwordHash = await hashPassword(password);
-      const created = await authCreateUser(c.db, { id, email: email.trim(), emailNorm, name: name ?? null, locale: null, passwordHash, emailVerified: false });
-      if (created) {
-        const { mail, proof } = await withUser(c.db, { userId: id, requestId: request.id }, async (tx) => {
-          const m = await verificationMail(c, tx, { id, email: email.trim(), name: name ?? null });
-          await audit.append(tx, PLATFORM_ORG_KEY, {
-            actorKind: 'user',
-            actorId: id,
-            actorIpHash: hex(cl.ipHash),
-            actorUa: cl.ua,
-            action: 'auth.signup',
-            resourceType: 'user',
-            resourceId: id,
-            outcome: 'success',
-            requestId: request.id,
-          });
-          return m;
+      // The account and the record of the notice it was shown are created together, or not at all.
+      const created = await withUser(c.db, { userId: id, requestId: request.id }, async (tx) => {
+        if (!(await authCreateUser(tx, { id, email: email.trim(), emailNorm, name: name ?? null, locale: null, passwordHash, emailVerified: false }))) return null;
+        await recordNoticeAck(tx, { userId: id, notice: c.notice, context: 'signup', client: cl });
+        const m = await verificationMail(c, tx, { id, email: email.trim(), name: name ?? null });
+        await audit.append(tx, PLATFORM_ORG_KEY, {
+          actorKind: 'user',
+          actorId: id,
+          actorIpHash: hex(cl.ipHash),
+          actorUa: cl.ua,
+          action: 'auth.signup',
+          resourceType: 'user',
+          resourceId: id,
+          outcome: 'success',
+          requestId: request.id,
+          metadata: { noticeVersion: c.notice.version },
         });
-        setSignupCookie(reply, proof);
-        c.mail.send(mail);
+        return m;
+      });
+      if (created) {
+        setSignupCookie(reply, created.proof);
+        c.mail.send(created.mail);
       } else {
         // The same cookie either way, so the answer does not tell whether the address was free.
         setSignupCookie(reply, randomToken());

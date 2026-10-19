@@ -18,6 +18,7 @@ function config(env: Record<string, string> = {}): ApiConfig {
     AUTH_SECRET: 'A'.repeat(43),
     KMS_KEYFILE_PATH: '/run/secrets/form-master.key',
     MAILER_DRIVER: 'log',
+    PRIVACY_CONTACT_EMAIL: 'privacy@form.test',
     ...env,
   });
   if (!r.ok) throw new Error(r.errors.join('\n'));
@@ -360,9 +361,15 @@ describe('OpenAPI', () => {
       '/v1/csp-reports',
       '/v1/forms',
       '/v1/me',
+      '/v1/me/delete',
+      '/v1/me/deletion',
+      '/v1/me/export',
+      '/v1/me/grievances',
+      '/v1/me/notice',
       '/v1/me/sessions',
       '/v1/me/sessions/{id}',
       '/v1/meta/edition',
+      '/v1/privacy/notice',
     ]);
     expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);
     expect(JSON.stringify(doc.paths['/v1/forms'])).toContain('"maximum":200');

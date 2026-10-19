@@ -8,6 +8,8 @@ import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPage
 import { SecurityPage } from '@/pages/auth/SecurityPage';
 import { SignInPage } from '@/pages/auth/SignInPage';
 import { SignUpPage } from '@/pages/auth/SignUpPage';
+import { NoticePage } from '@/pages/privacy/NoticePage';
+import { PrivacyPage } from '@/pages/privacy/PrivacyPage';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 
 export function AppRoutes() {
@@ -23,6 +25,8 @@ export function AppRoutes() {
       <Route path="/auth/forgot" element={<ForgotPasswordPage />} />
       <Route path="/auth/reset" element={<ResetPasswordPage />} />
       <Route path="/account/security" element={<SecurityPage />} />
+      <Route path="/account/privacy" element={<PrivacyPage />} />
+      <Route path="/privacy" element={<NoticePage />} />
       <Route path="*" element={<Navigate to="/forms" replace />} />
     </Routes>
   );

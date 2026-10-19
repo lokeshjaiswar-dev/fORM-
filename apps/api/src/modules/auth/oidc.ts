@@ -12,18 +12,23 @@ import {
   PLATFORM_ORG_KEY,
   userIdentities,
   users,
+  withUser,
   type OAuthProvider,
 } from '@form/db';
 import { z } from 'zod';
 import type { OidcProviderConfig } from '../../config.ts';
+import { recordNoticeAck } from '../account/notice.ts';
 import { client, completeFirstFactor, normaliseEmail, presentedAccount, type AuthCtx } from './context.ts';
 import { equalBytes, hex, hmac } from './crypto.ts';
 
-/** The OAuth transaction between start and callback: state, nonce and PKCE verifier, signed, 10 minutes. */
+/**
+ * The OAuth transaction between start and callback: state, nonce and PKCE verifier, signed, 10 minutes; `nv` is the
+ * privacy notice version the builder showed next to the button, recorded if the callback creates the account.
+ */
 export const OAUTH_COOKIE = '__Host-fr_oauth';
 const TRANSACTION_SECONDS = 600;
 
-const transactionSchema = z.object({ p: z.enum(['google', 'microsoft']), s: z.string(), n: z.string(), v: z.string(), exp: z.number() });
+const transactionSchema = z.object({ p: z.enum(['google', 'microsoft']), s: z.string(), n: z.string(), v: z.string(), nv: z.string().optional(), exp: z.number() });
 type Transaction = z.infer<typeof transactionSchema>;
 
 function seal(secret: Uint8Array, t: Transaction): string {
@@ -54,7 +59,8 @@ function verifiedEmail(claims: oidc.IDToken): string | null {
  * `GET /v1/auth/oauth/:provider/start` and `…/callback` (architecture §3.3): Google and Microsoft through
  * openid-client with PKCE, state and nonce, SaaS only. Registered only for configured providers, so an
  * on-prem or air-gapped deployment has no OAuth routes at all. An account is found by its linked identity, else
- * linked to the user with the same verified address, else created (verified, no password). A user with TOTP on
+ * linked to the user with the same verified address, else created (verified, no password) when the start request
+ * carried the current privacy notice version (`?notice=`), which is then recorded with the account. A user with TOTP on
  * still needs the second factor: the callback hands the builder an MFA ticket in the URL fragment.
  */
 export function oidcRoutes(app: FastifyInstance, c: AuthCtx): void {
@@ -98,7 +104,14 @@ export function oidcRoutes(app: FastifyInstance, c: AuthCtx): void {
   for (const [provider, p] of providers) {
     r.get(
       `/v1/auth/oauth/${provider}/start`,
-      { config: { auth: 'none' }, schema: { tags: ['auth'], summary: `Sign in with ${provider === 'google' ? 'Google' : 'Microsoft'}: redirect to the provider` } },
+      {
+        config: { auth: 'none' },
+        schema: {
+          tags: ['auth'],
+          summary: `Sign in with ${provider === 'google' ? 'Google' : 'Microsoft'}: redirect to the provider`,
+          querystring: z.object({ notice: z.string().max(32).optional() }),
+        },
+      },
       async (request, reply) => {
         let config: oidc.Configuration;
         try {
@@ -108,7 +121,14 @@ export function oidcRoutes(app: FastifyInstance, c: AuthCtx): void {
           await denied(request, provider, 'oauth_unavailable');
           return toBuilder(reply, '/auth/sign-in#error=oauth_unavailable');
         }
-        const t: Transaction = { p: provider, s: oidc.randomState(), n: oidc.randomNonce(), v: oidc.randomPKCECodeVerifier(), exp: c.now().getTime() + TRANSACTION_SECONDS * 1000 };
+        const t: Transaction = {
+          p: provider,
+          s: oidc.randomState(),
+          n: oidc.randomNonce(),
+          v: oidc.randomPKCECodeVerifier(),
+          ...(request.query.notice ? { nv: request.query.notice } : {}),
+          exp: c.now().getTime() + TRANSACTION_SECONDS * 1000,
+        };
         const url = oidc.buildAuthorizationUrl(config, {
           redirect_uri: redirectUri(provider),
           scope: 'openid email profile',
@@ -165,9 +185,18 @@ export function oidcRoutes(app: FastifyInstance, c: AuthCtx): void {
           if (existing) {
             userId = existing.id;
           } else {
+            // A new account needs the notice the builder showed next to the button (CMP-21).
+            if (t.nv !== c.notice.version) {
+              await denied(request, provider, 'notice_required');
+              return toBuilder(reply, '/auth/sign-in#error=oauth_notice');
+            }
             const id = randomUUID();
             const name = typeof claims.name === 'string' ? claims.name.slice(0, 200) : null;
-            await authCreateUser(c.db, { id, email, emailNorm, name, locale: null, passwordHash: null, emailVerified: true });
+            await withUser(c.db, { userId: id, requestId: request.id }, async (tx) => {
+              if (await authCreateUser(tx, { id, email, emailNorm, name, locale: null, passwordHash: null, emailVerified: true })) {
+                await recordNoticeAck(tx, { userId: id, notice: c.notice, context: 'oauth_signup', client: cl });
+              }
+            });
             userId = (await authUserByEmail(c.db, emailNorm))?.id ?? id;
           }
           link = true;
