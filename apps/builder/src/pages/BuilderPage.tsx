@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BuilderHeader } from '@/components/builder/BuilderHeader';
 import { FieldPicker } from '@/components/builder/FieldPicker';
@@ -5,8 +6,10 @@ import { FormCanvas } from '@/components/builder/FormCanvas';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { DeleteBlockDialog } from '@/components/builder/DeleteBlockDialog';
 import { SessionBanners } from '@/components/builder/SessionBanners';
-import { FormPreview } from '@/components/preview/FormPreview';
+import { FormPreview } from '@/components/preview/PreviewPane';
 import { BuilderDnd } from '@/components/builder/BuilderDnd';
+import { useBlockClipboard } from '@/components/builder/useBlockClipboard';
+import { preloadGallery } from '@/components/templates/gallery';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFormSession } from '@/persistence/useFormSession';
 import { useBuilderMode } from '@/pages/useBuilderMode';
@@ -35,8 +38,10 @@ export function BuilderPage() {
 
 function Builder() {
   const [mode] = useBuilderMode();
-  const blockKey = useDoc((d) => d.blocks.map((b) => b.id).join('|'));
+  const structure = useDoc((d) => d.pages.map((p) => p.children.join(',')).join('|'));
   useHistoryShortcuts();
+  useBlockClipboard();
+  useEffect(preloadGallery, []);
 
   return (
     <BuilderDnd>
@@ -52,7 +57,7 @@ function Builder() {
               </ErrorBoundary>
             ) : (
               <ErrorBoundary key="preview" label="preview">
-                <FormPreview key={blockKey} />
+                <FormPreview key={structure} />
               </ErrorBoundary>
             )}
             {mode === 'edit' && <BlockInspector />}

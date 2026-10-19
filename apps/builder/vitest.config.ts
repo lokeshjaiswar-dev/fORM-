@@ -19,6 +19,8 @@ export default defineConfig({
     environment: 'jsdom',
     testTimeout: 30_000,
     include: ['src/**/*.test.{ts,tsx}'],
+    /* Timing runs alone, without coverage: `pnpm test:perf` (vitest.perf.config.ts). */
+    exclude: ['src/perf/**'],
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
     coverage: {

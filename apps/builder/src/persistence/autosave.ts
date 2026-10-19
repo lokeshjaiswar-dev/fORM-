@@ -1,6 +1,7 @@
-import type { FormSchema } from '@/types/form';
+import type { FormDefinition } from '@form/schema';
 import { DOCUMENT_FORMAT, type DocumentRepository } from '@/persistence/DocumentRepository';
 import { useDocumentStore } from '@/state/documentStore';
+import { useOpsStore, type LocalOps } from '@/state/opsStore';
 import type { SaveState } from '@/state/uiStore';
 
 export const AUTOSAVE_MS = 400;
@@ -40,30 +41,42 @@ export interface Autosave {
   discard: () => void;
 }
 
+interface Snapshot {
+  doc: FormDefinition;
+  ops: LocalOps;
+}
+
+const snapshot = (): Snapshot => ({ doc: useDocumentStore.getState().doc, ops: useOpsStore.getState() });
+
 /**
- * Saves the open document a short while after each change (undo and redo included), one save at a time. The state is
- * `saving` from the first unsaved change until every change is written. A change that fails to save stays pending and
- * is written again by the next flush.
+ * Saves the open document and its local FormOps a short while after each change (undo and redo included), one save
+ * at a time. The state is `saving` from the first unsaved change until every change is written. A change that fails
+ * to save stays pending and is written again by the next flush, unless a newer change was queued after it: an older
+ * document never overwrites a newer one (BL-147).
  */
 export function startAutosave({ repo, id, rev, delayMs = AUTOSAVE_MS, now = () => new Date().toISOString(), onState, onSaved }: AutosaveOptions): Autosave {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let pending: FormSchema | null = null;
+  let pending: Snapshot | null = null;
+  /** The last snapshot handed to `write`. */
+  let queued: Snapshot | null = null;
   let stopped = false;
   let discarded = false;
+
   const report = (state: SaveState) => {
     if (!stopped) onState?.(state);
   };
 
-  const write = (doc: FormSchema) => {
+  const write = (snap: Snapshot) => {
+    queued = snap;
     writes = writes.then(async () => {
       const savedAt = now();
       try {
-        await repo.save({ id, format: DOCUMENT_FORMAT, rev: rev + 1, savedAt, doc });
+        await repo.save({ id, format: DOCUMENT_FORMAT, rev: rev + 1, savedAt, doc: snap.doc, ops: snap.ops });
         rev += 1;
-        if (pending === null) report({ state: 'saved', at: savedAt });
+        if (pending === null && queued === snap) report({ state: 'saved', at: savedAt });
         onSaved?.(rev);
       } catch (e) {
-        if (pending === null && !discarded) pending = doc;
+        if (pending === null && !discarded && queued === snap) pending = snap;
         report({ state: 'error', message: e instanceof Error ? e.message : String(e) });
       }
     });
@@ -73,23 +86,29 @@ export function startAutosave({ repo, id, rev, delayMs = AUTOSAVE_MS, now = () =
   const flush = () => {
     if (timer !== null) clearTimeout(timer);
     timer = null;
-    const doc = pending;
+    const snap = pending;
     pending = null;
-    return doc ? write(doc) : writes;
+    return snap ? write(snap) : writes;
   };
 
-  const unsubscribe = useDocumentStore.subscribe((state, prev) => {
-    if (state.doc === prev.doc) return;
+  const changed = () => {
     if (pending === null) report({ state: 'saving' });
-    pending = state.doc;
+    pending = snapshot();
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => void flush(), delayMs);
+  };
+  const unsubscribeDoc = useDocumentStore.subscribe((state, prev) => {
+    if (state.doc !== prev.doc) changed();
   });
+  const unsubscribeOps = useOpsStore.subscribe(changed);
+
   const onHide = () => void flush();
   window.addEventListener('pagehide', onHide);
+
   const detach = () => {
     stopped = true;
-    unsubscribe();
+    unsubscribeDoc();
+    unsubscribeOps();
     window.removeEventListener('pagehide', onHide);
     if (active === autosave) active = null;
   };

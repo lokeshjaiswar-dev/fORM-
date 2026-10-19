@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useEditor, type Editor, type JSONContent } from '@tiptap/react';
 import { normalizeInlineDoc, normalizeRichDoc, type InlineDoc, type RichDoc } from '@form/schema';
 import { editorExtensions, type EditorKind } from '@/components/editor/extensions';
-import { labelDoc, richDoc, toV1Html } from '@/lib/v1html';
 
-export interface V1EditorProps {
-  /** v1 label HTML from the store; read only through the `fromHtml` allowlist. */
-  value: string;
-  onChange: (html: string) => void;
+/** What each editor kind edits: a one-paragraph label, or multi-block rich text. */
+export type DocOf<K extends EditorKind> = K extends 'inline' ? InlineDoc : RichDoc;
+
+export interface RichTextEditorProps<D extends InlineDoc | RichDoc> {
+  /** The stored AST; the editor shows it and writes every change back as a normalized AST. */
+  value: D;
+  onChange: (doc: D) => void;
   onEnter?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
@@ -18,13 +20,12 @@ export interface V1EditorProps {
 /** The editor needs at least one block; an empty `RichDoc` opens as one empty paragraph. */
 export const editorContent = (doc: InlineDoc | RichDoc): JSONContent => (doc.content.length ? doc : { type: 'doc', content: [{ type: 'paragraph' }] }) as JSONContent;
 
-export const editorDoc = (kind: EditorKind, html: string): JSONContent => editorContent(kind === 'inline' ? labelDoc(html) : richDoc(html));
+/** Editor JSON → canonical AST: the only way editor content reaches the store. */
+export const editorAst = (kind: EditorKind, json: unknown): InlineDoc | RichDoc => (kind === 'inline' ? normalizeInlineDoc(json) : normalizeRichDoc(json));
 
-/** Editor JSON → canonical AST → v1 HTML: the only way editor content reaches the store. */
-export const editorHtml = (kind: EditorKind, json: unknown): string =>
-  toV1Html(kind === 'inline' ? normalizeInlineDoc(json) : normalizeRichDoc(json));
+const same = (a: InlineDoc | RichDoc, b: InlineDoc | RichDoc) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
-interface Callbacks { onChange: (html: string) => void; onEnter?: (() => void) | undefined }
+interface Callbacks { onChange: (doc: InlineDoc | RichDoc) => void; onEnter?: (() => void) | undefined }
 
 /** Forwards editor events to the latest props without recreating the editor. */
 function relay() {
@@ -33,12 +34,12 @@ function relay() {
     set: (next: Callbacks) => {
       current = next;
     },
-    change: (html: string) => current.onChange(html),
+    change: (doc: InlineDoc | RichDoc) => current.onChange(doc),
     enter: () => current.onEnter?.(),
   };
 }
 
-export function useV1Editor(kind: EditorKind, { value, onChange, onEnter, autoFocus, placeholder }: V1EditorProps, editorClass: string): Editor | null {
+export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, autoFocus, placeholder }: RichTextEditorProps<InlineDoc | RichDoc>, editorClass: string): Editor | null {
   const stored = useRef(value);
   const [events] = useState(relay);
   useEffect(() => {
@@ -46,7 +47,7 @@ export function useV1Editor(kind: EditorKind, { value, onChange, onEnter, autoFo
   });
 
   // TipTap compares options by identity on every render; only a changed class or label may reach setOptions.
-  const [initial] = useState(() => ({ extensions: editorExtensions(kind, { onEnter: events.enter }), content: editorDoc(kind, value) }));
+  const [initial] = useState(() => ({ extensions: editorExtensions(kind, { onEnter: events.enter }), content: editorContent(value) }));
   const editorProps = useMemo(() => ({
     attributes: {
       class: editorClass,
@@ -61,17 +62,17 @@ export function useV1Editor(kind: EditorKind, { value, onChange, onEnter, autoFo
     shouldRerenderOnTransaction: false,
     editorProps,
     onUpdate: ({ editor: e }) => {
-      const html = editorHtml(kind, e.getJSON());
-      if (html === stored.current) return;
-      stored.current = html;
-      events.change(html);
+      const doc = editorAst(kind, e.getJSON());
+      if (same(doc, stored.current)) return;
+      stored.current = doc;
+      events.change(doc);
     },
   });
 
   useEffect(() => {
     if (!editor || value === stored.current) return;
     stored.current = value;
-    if (editorHtml(kind, editor.getJSON()) !== value) editor.commands.setContent(editorDoc(kind, value), { emitUpdate: false });
+    if (!same(editorAst(kind, editor.getJSON()), value)) editor.commands.setContent(editorContent(value), { emitUpdate: false });
   }, [editor, kind, value]);
 
   useEffect(() => {

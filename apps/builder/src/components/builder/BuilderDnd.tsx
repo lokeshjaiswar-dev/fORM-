@@ -1,21 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import {
-  closestCenter,
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  pointerWithin,
-  useSensor,
-  useSensors,
-  type CollisionDetection,
-  type DragEndEvent,
-  type DragStartEvent,
+  closestCenter, DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors,
+  type CollisionDetection, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
-import { addBlock, moveBlock, placeBeside } from '@/state/actions';
-import { currentDoc, useDoc } from '@/state/documentStore';
+import type { BlockId } from '@form/schema';
+import type { Tile } from '@/fields/tiles';
+import { placementOf } from '@/lib/definition';
+import { moveBlock, placeBeside } from '@/state/actions';
+import { currentDoc, useBlock } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import type { FieldType } from '@/types/form';
-import { FIELD_CATALOG } from '@/lib/fields';
+import { insertTile } from '@/components/builder/insert';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { EditBlock } from '@/components/blocks/EditBlock';
 
@@ -33,83 +27,58 @@ const collision: CollisionDetection = (args) => {
   return [];
 };
 
+const tileOf = (data: unknown): Tile | null => {
+  const d = data as { from?: string; tile?: Tile } | undefined;
+  return d?.from === 'palette' && d.tile ? d.tile : null;
+};
+
 export function BuilderDnd({ children }: { children: ReactNode }) {
   const startBlank = useUiStore((s) => s.startBlank);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const overlayBlock = useDoc((d) => d.blocks.find((b) => b.id === activeId));
+  const [active, setActive] = useState<{ id: string; tile: Tile | null } | null>(null);
+  const overlayBlock = useBlock((active && !active.tile ? active.id : '') as BlockId);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function onDragStart(e: DragStartEvent) {
-    setActiveId(String(e.active.id));
-  }
-
-  function onDragCancel() {
-    setActiveId(null);
+    setActive({ id: String(e.active.id), tile: tileOf(e.active.data.current) });
   }
 
   function onDragEnd(e: DragEndEvent) {
-    setActiveId(null);
-    const { active, over } = e;
-    const fromPalette = active.data.current?.from === 'palette';
-    const type = active.data.current?.type as FieldType | undefined;
+    setActive(null);
+    const { active: dragged, over } = e;
+    const tile = tileOf(dragged.data.current);
+    const overId = over ? String(over.id) : null;
 
-    if (!over) {
-      if (fromPalette && type) {
-        startBlank();
-        addBlock(type);
-      }
+    if (tile) startBlank();
+    if (overId === null || overId.startsWith('palette-') || overId === 'canvas-drop') {
+      if (tile) insertTile(tile);
       return;
     }
-
-    const overId = String(over.id);
-    if (overId.startsWith('palette-')) {
-      if (fromPalette && type) {
-        startBlank();
-        addBlock(type);
-      }
-      return;
-    }
-
     if (overId.startsWith('beside-')) {
-      const hostId = overId.slice('beside-'.length);
-      startBlank();
-      if (fromPalette && type) placeBeside(hostId, { type });
-      else placeBeside(hostId, { id: String(active.id) });
+      const hostId = overId.slice('beside-'.length) as BlockId;
+      if (!tile) placeBeside(hostId, { id: String(dragged.id) as BlockId });
+      else if (tile.kind === 'block') placeBeside(hostId, { choice: tile.choice });
+      else insertTile(tile);
       return;
     }
-
-    const { blocks } = currentDoc();
-    if (fromPalette && type) {
-      startBlank();
-      const overIndex = blocks.findIndex((b) => b.id === overId);
-      addBlock(type, overIndex >= 0 ? overIndex : blocks.length);
+    const at = placementOf(currentDoc(), overId as BlockId);
+    if (!at || !('pageId' in at.parent)) return;
+    const slot = { pageId: at.parent.pageId, index: at.index };
+    if (tile) {
+      insertTile(tile, slot);
       return;
     }
-
-    if (overId === 'canvas-drop') return;
-
-    const from = blocks.findIndex((b) => b.id === active.id);
-    const to = blocks.findIndex((b) => b.id === overId);
-    if (from >= 0 && to >= 0 && from !== to) moveBlock(from, to);
+    if (String(dragged.id) !== overId) moveBlock(String(dragged.id) as BlockId, slot);
   }
 
-  const overlayType = activeId?.startsWith('palette-') ? (activeId.replace('palette-', '') as FieldType) : null;
-
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={collision}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragCancel={onDragCancel}
-    >
+    <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       {children}
       <DragOverlay dropAnimation={null}>
-        {overlayType ? (
+        {active?.tile ? (
           <div className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm shadow-lg">
-            <FieldTile type={overlayType} />
-            {FIELD_CATALOG.find((f) => f.type === overlayType)?.label}
+            <FieldTile tile={active.tile} />
+            {active.tile.label}
           </div>
         ) : overlayBlock ? (
           <div className="max-w-md rounded-md border bg-white px-4 py-3 opacity-90 shadow-lg">

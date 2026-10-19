@@ -1,27 +1,73 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { ArrowRight, Copy, GripVertical, Plus, Trash2 } from 'lucide-react';
-import { addBlock, duplicateBlock, requestDeleteBlock, setTitle } from '@/state/actions';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
+import { ArrowRight, GripVertical, Plus, Trash2, X } from 'lucide-react';
+import { defineMessages } from '@form/i18n';
+import { packRows, themeCssVars } from '@form/renderer';
+import type { BlockId, BlockLayout, FormDefinition, PageId } from '@form/schema';
+import { t } from '@/i18n';
+import { labelString } from '@/fields/style';
+import { addParagraph, endSlot, removePageBreak, setTitle } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
-import { EditBlock } from '@/components/blocks/EditBlock';
+import { CanvasBlock } from '@/components/builder/CanvasBlock';
+import { insertTile } from '@/components/builder/insert';
 import { SlashMenu } from '@/components/builder/SlashMenu';
 import { EmptyStart } from '@/components/builder/EmptyStart';
-import { TemplateModal } from '@/components/builder/TemplateModal';
-import { isHalf, packRows } from '@/lib/layout';
-import type { FieldType, FormBlock } from '@/types/form';
 import { cn } from '@/lib/utils';
-import { textToV1Html } from '@/lib/v1html';
-import { themeVars } from '@/lib/blockStyle';
 import { Tooltip } from '@/components/ui/tooltip';
+
+const M = defineMessages('builder', {
+  'canvas.title_placeholder': 'Form title',
+  'canvas.insert_placeholder': 'Type ‘/’ to insert blocks',
+  'canvas.insert': 'Insert a block',
+  'canvas.page_break': 'Page break',
+  'canvas.remove_page_break': 'Remove this page break',
+  'canvas.delete': 'Delete',
+  'canvas.drag': 'Drag to move',
+});
+
+interface Placed {
+  id: BlockId;
+  span: number;
+}
+
+interface CanvasPage {
+  id: PageId;
+  rows: Placed[][];
+}
+
+/**
+ * The canvas layout (pages, rows and spans) as a string, so the canvas re-renders only when the structure or a
+ * block's layout changes, never while a block's text is typed (FND-13).
+ */
+function layoutKey(doc: FormDefinition): string {
+  return doc.pages.map((p) => `${p.id}:${p.children.map((id) => {
+    const b = doc.blocks[id];
+    const layout = b && b.type !== 'unsupported' ? b.layout : undefined;
+    return `${id}/${layout?.width ?? 'full'}/${layout?.startNewRow ? 1 : 0}`;
+  }).join(',')}`).join('\n');
+}
+
+function parseLayout(key: string): CanvasPage[] {
+  return key.split('\n').map((line) => {
+    const at = line.indexOf(':');
+    const blocks = line.slice(at + 1).split(',').filter(Boolean).map((part) => {
+      const [id = '', width = 'full', newRow = '0'] = part.split('/');
+      return { id: id as BlockId, layout: { width: width as BlockLayout['width'], ...(newRow === '1' ? { startNewRow: true } : {}) } };
+    });
+    return { id: line.slice(0, at) as PageId, rows: packRows(blocks).map((row) => row.map(({ block, span }) => ({ id: block.id, span }))) };
+  });
+}
 
 export function FormCanvas() {
   const title = useDoc((d) => d.title);
-  const blocks = useDoc((d) => d.blocks);
-  const settings = useDoc((d) => d.settings);
+  const key = useDoc(layoutKey);
+  const tokens = useDoc((d) => d.theme.tokens);
+  const submitLabel = useDoc((d) => labelString(d.behavior.submit.label));
+  const pages = useMemo(() => parseLayout(key), [key]);
+  const ids = useMemo(() => pages.flatMap((p) => p.rows.flat().map((b) => b.id)), [pages]);
   const startBlank = useUiStore((s) => s.startBlank);
   const started = useUiStore((s) => s.started);
   const [, setMode] = useBuilderMode();
@@ -29,11 +75,10 @@ export function FormCanvas() {
   const [slashOpen, setSlashOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState('');
-  const [templatesOpen, setTemplatesOpen] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const insertRef = useRef<HTMLInputElement>(null);
   const insertFocusKey = useUiStore((s) => s.insertFocusKey);
-  const showStart = !started && blocks.length === 0;
+  const showStart = !started && ids.length === 0 && pages.length === 1;
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop' });
 
   useEffect(() => {
@@ -44,18 +89,17 @@ export function FormCanvas() {
     if (!showStart) insertRef.current?.focus();
   }, [showStart, insertFocusKey]);
 
-  function commitSlash(type: FieldType) {
-    addBlock(type, blocks.length);
+  const closeSlash = () => {
     setSlashOpen(false);
     setQuery('');
     setDraft('');
-  }
+  };
 
   return (
     <div
       ref={setNodeRef}
       className={cn('min-h-full flex-1 overflow-y-auto overflow-x-hidden bg-white', isOver && 'bg-[#fafafa]')}
-      style={themeVars(settings)}
+      style={themeCssVars(tokens)}
       onClick={() => setActiveBlock(null)}
     >
       <div className="mx-auto w-full max-w-[720px] pb-40 pl-[108px] pr-8 pt-[72px]">
@@ -70,40 +114,44 @@ export function FormCanvas() {
             if (showStart) startBlank();
             else insertRef.current?.focus();
           }}
-          placeholder="Form title"
+          placeholder={t(M['canvas.title_placeholder'])}
+          aria-label={t(M['canvas.title_placeholder'])}
           className="mb-8 w-full bg-transparent text-left text-[40px] font-bold leading-[1.15] tracking-[-0.02em] outline-none placeholder:text-[#c5c4c1]"
         />
 
         {showStart ? (
-          <>
-            <EmptyStart onTemplates={() => setTemplatesOpen(true)} />
-            <TemplateModal open={templatesOpen} onOpenChange={setTemplatesOpen} />
-          </>
+          <EmptyStart />
         ) : (
           <>
-            <SortableContext items={blocks.map((b) => b.id)} strategy={rectSortingStrategy}>
+            <SortableContext items={ids} strategy={rectSortingStrategy}>
               <div className="space-y-1">
-                {packRows(blocks).map((row) => (
-                  <div key={row.map((b) => b.id).join('-')} className="flex w-full items-start gap-3">
-                    {row.map((block) => (
-                      <SortableBlock key={block.id} block={block} half={isHalf(block)} share={row.length === 2} />
+                {pages.map((page, p) => (
+                  <Fragment key={page.id}>
+                    {p > 0 ? <PageBreak pageId={page.id} /> : null}
+                    {page.rows.map((row) => (
+                      <div key={row.map((b) => b.id).join('-')} className="flex w-full items-start gap-3">
+                        {row.map((b) => (
+                          <CanvasBlock key={b.id} id={b.id} span={b.span} share={row.length > 1} />
+                        ))}
+                        {row.length === 1 && row[0] && row[0].span < 12 ? <BesideDrop hostId={row[0].id} /> : null}
+                      </div>
                     ))}
-                    {row.length === 1 && isHalf(row[0]) ? <BesideDrop hostId={row[0].id} /> : null}
-                  </div>
+                  </Fragment>
                 ))}
               </div>
             </SortableContext>
 
             <div className="relative mt-2" onClick={(e) => e.stopPropagation()}>
               <div className="absolute right-full top-0 flex h-8 items-center text-[#b8b8b8]">
-                <Tooltip content="Delete" side="top">
-                  <button type="button" className="flex size-6 items-center justify-center rounded hover:bg-red-50 hover:text-red-500" disabled>
+                <Tooltip content={t(M['canvas.delete'])} side="top">
+                  <button type="button" aria-label={t(M['canvas.delete'])} className="flex size-6 items-center justify-center rounded hover:bg-red-50 hover:text-red-500" disabled>
                     <Trash2 className="size-3.5" />
                   </button>
                 </Tooltip>
-                <Tooltip content="Insert a block" shortcut="/" side="top">
+                <Tooltip content={t(M['canvas.insert'])} shortcut="/" side="top">
                   <button
                     type="button"
+                    aria-label={t(M['canvas.insert'])}
                     className="flex size-6 items-center justify-center rounded hover:bg-black/5 hover:text-[#6b6b6b]"
                     onClick={() => {
                       setSlashOpen(true);
@@ -113,7 +161,7 @@ export function FormCanvas() {
                     <Plus className="size-3.5" />
                   </button>
                 </Tooltip>
-                <Tooltip content="Drag to move" side="top">
+                <Tooltip content={t(M['canvas.drag'])} side="top">
                   <span className="flex size-6 items-center justify-center">
                     <GripVertical className="size-3.5" />
                   </span>
@@ -137,11 +185,12 @@ export function FormCanvas() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && draft && !draft.startsWith('/')) {
                       e.preventDefault();
-                      addBlock('paragraph', blocks.length, { label: textToV1Html(draft) });
+                      addParagraph(draft);
                       setDraft('');
                     }
                   }}
-                  placeholder="Type '/' to insert blocks"
+                  placeholder={t(M['canvas.insert_placeholder'])}
+                  aria-label={t(M['canvas.insert_placeholder'])}
                   className="h-8 w-full bg-transparent text-[16px] leading-8 outline-none placeholder:text-[#c5c4c1]"
                 />
                 <SlashMenu
@@ -151,12 +200,11 @@ export function FormCanvas() {
                     setQuery(q);
                     setDraft(`/${q}`);
                   }}
-                  onClose={() => {
-                    setSlashOpen(false);
-                    setQuery('');
-                    setDraft('');
+                  onClose={closeSlash}
+                  onSelect={(tile) => {
+                    insertTile(tile, endSlot());
+                    closeSlash();
                   }}
-                  onSelect={commitSlash}
                 />
               </div>
             </div>
@@ -166,7 +214,7 @@ export function FormCanvas() {
               onClick={() => setMode('preview')}
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#111] px-4 py-2 text-[15px] font-medium text-white"
             >
-              {settings.submitButtonText} <ArrowRight className="size-4" />
+              {submitLabel} <ArrowRight className="size-4" />
             </button>
           </>
         )}
@@ -175,126 +223,29 @@ export function FormCanvas() {
   );
 }
 
-function BesideDrop({ hostId }: { hostId: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `beside-${hostId}` });
+/** The break before page `pageId`; removing it merges the page into the one before. */
+function PageBreak({ pageId }: { pageId: PageId }) {
   return (
-    <div
-      ref={setNodeRef}
-      className={cn('min-h-[72px] w-1/2 self-stretch rounded-md', isOver && 'bg-zinc-50')}
-    />
-  );
-}
-
-function SortableBlock({ block, half, share }: { block: FormBlock; half: boolean; share: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: block.id,
-    data: { type: 'block' },
-  });
-  const selected = useUiStore((s) => s.activeBlockId === block.id);
-  const setActiveBlock = useUiStore((s) => s.setActiveBlock);
-  const openInspector = useUiStore((s) => s.openInspector);
-  const index = useDoc((d) => d.blocks.findIndex((b) => b.id === block.id));
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [query, setQuery] = useState('');
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        'group min-w-0 py-1',
-        half ? (share ? 'min-w-0 flex-1' : 'w-1/2') : 'w-full',
-        isDragging && 'opacity-40',
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        setActiveBlock(block.id);
-      }}
-    >
-      <div className="relative">
-        <div
-          className={cn(
-            'absolute right-full top-0 flex h-8 items-center text-[#b8b8b8] transition-opacity',
-            selected || menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-          )}
-        >
-          <IconBtn label="Delete block" danger onClick={() => requestDeleteBlock(block.id)}>
-            <Trash2 className="size-3.5" />
-          </IconBtn>
-          <IconBtn label="Duplicate block" onClick={() => duplicateBlock(block.id)}>
-            <Copy className="size-3.5" />
-          </IconBtn>
-          <div className="relative">
-            <IconBtn
-              label="Insert block"
-              onClick={() => {
-                setMenuOpen((v) => !v);
-                setQuery('');
-              }}
-            >
-              <Plus className="size-3.5" />
-            </IconBtn>
-            <SlashMenu
-              open={menuOpen}
-              query={query}
-              onQueryChange={setQuery}
-              onClose={() => setMenuOpen(false)}
-              onSelect={(type) => {
-                addBlock(type, index + 1);
-                setMenuOpen(false);
-                setQuery('');
-              }}
-            />
-          </div>
-          <Tooltip content="Drag to reorder · click for settings" side="top">
-            <button
-              type="button"
-              className="flex size-6 shrink-0 cursor-grab items-center justify-center rounded hover:bg-black/5 hover:text-[#6b6b6b]"
-              {...attributes}
-              {...listeners}
-              onClick={(e) => {
-                e.stopPropagation();
-                openInspector(block.id);
-              }}
-            >
-              <GripVertical className="size-3.5" />
-            </button>
-          </Tooltip>
-        </div>
-        <div className="min-w-0">
-          <EditBlock block={block} />
-        </div>
-      </div>
+    <div className="group/page flex items-center gap-3 py-2 text-[12px] uppercase tracking-wide text-zinc-400" role="separator" aria-label={t(M['canvas.page_break'])}>
+      <span className="h-px flex-1 bg-zinc-200" />
+      {t(M['canvas.page_break'])}
+      <button
+        type="button"
+        aria-label={t(M['canvas.remove_page_break'])}
+        className="flex size-5 items-center justify-center rounded opacity-0 hover:bg-black/5 group-hover/page:opacity-100 focus:opacity-100"
+        onClick={(e) => {
+          e.stopPropagation();
+          removePageBreak(pageId);
+        }}
+      >
+        <X className="size-3" />
+      </button>
+      <span className="h-px flex-1 bg-zinc-200" />
     </div>
   );
 }
 
-function IconBtn({
-  children,
-  onClick,
-  label,
-  danger,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  label: string;
-  danger?: boolean;
-}) {
-  return (
-    <Tooltip content={label} side="top">
-      <button
-        type="button"
-        className={cn(
-          'flex size-6 shrink-0 items-center justify-center rounded text-[#b8b8b8]',
-          danger ? 'hover:bg-red-50 hover:text-red-500' : 'hover:bg-black/5 hover:text-[#6b6b6b]',
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
-      >
-        {children}
-      </button>
-    </Tooltip>
-  );
+function BesideDrop({ hostId }: { hostId: BlockId }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `beside-${hostId}` });
+  return <div ref={setNodeRef} className={cn('min-h-[72px] w-1/2 self-stretch rounded-md', isOver && 'bg-zinc-50')} />;
 }

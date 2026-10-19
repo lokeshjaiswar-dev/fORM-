@@ -14,7 +14,7 @@ import { useDoc } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
-import { TemplateModal } from '@/components/builder/TemplateModal';
+import { TemplateDialog } from '@/components/templates/TemplateDialog';
 import { ThemeSettings } from '@/components/builder/ThemeSettings';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -100,7 +100,7 @@ export function BuilderHeader() {
           <MoreHorizontal className="size-4" />
         </Ghost>
       </header>
-      <TemplateModal open={templates} onOpenChange={setTemplates} />
+      <TemplateDialog open={templates} onOpenChange={setTemplates} />
       <ThemeSettings open={theme} onOpenChange={setTheme} />
     </>
   );

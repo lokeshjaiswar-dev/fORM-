@@ -34,7 +34,7 @@ import '@form/renderer/styles.css';
 | `src/theme/cssVars.ts` | Theme tokens → `--fr-*` custom properties; `accentText` defaults to black or white, whichever reads better on the accent |
 | `src/signature/SignaturePad.tsx` | Drawing surface scaled by `devicePixelRatio`, Clear, a PNG `Blob` per stroke |
 | `src/answers.ts`, `src/text.ts` | Starting answers (host answers over field defaults), pipes and plain templates |
-| `src/styles.css` | Every rule scoped under `.fr-root` (as `:where(.fr-root) …`, which adds no specificity), reading only the theme variables. The renderer's rules never reach the host page; host rules that match inside `.fr-root` still apply |
+| `src/styles.css` | Every rule scoped under `.fr-root` (as `:where(.fr-root) …`, which adds no specificity), reading only the theme variables. The renderer's rules never reach the host page; host rules that match inside `.fr-root` still apply. `.fr-root` is an inline-size container (the narrow layout follows the form's width, BL-139) at `inline-size: 100%`: a block or flex-item host gives it a width, a shrink-to-fit host (inline-block, float, absolutely positioned without a width) must give itself one |
 
 ## Rules
 

@@ -3,7 +3,7 @@ import { openNewForm } from './helpers.ts';
 
 async function startWithShortAnswer(page: Page) {
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
-  await page.getByPlaceholder("Type '/' to insert blocks").fill('/short');
+  await page.getByPlaceholder('Type ‘/’ to insert blocks').fill('/short');
   await page.getByRole('option', { name: /Short answer/ }).click();
 }
 
@@ -11,7 +11,7 @@ test('reload restores the form from IndexedDB, and the forms list shows it', asy
   await openNewForm(page);
   await page.getByPlaceholder('Form title').fill('Saved form');
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
-  const insert = page.getByPlaceholder("Type '/' to insert blocks");
+  const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   await insert.fill('Persisted text');
   await insert.press('Enter');
   await expect(page.getByText('Saved', { exact: true })).toBeVisible();
@@ -34,7 +34,7 @@ test('the URL and the mode follow each other, Back and Forward included (B23)', 
 
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`/builder/${id}$`));
-  await expect(page.getByPlaceholder("Type '/' to insert blocks")).toBeVisible();
+  await expect(page.getByPlaceholder('Type ‘/’ to insert blocks')).toBeVisible();
 
   await page.goForward();
   await expect(page.getByRole('button', { name: 'Submit', exact: true })).toBeVisible();
@@ -62,10 +62,10 @@ test('a v1 import opens as a new form with its notes', async ({ page }) => {
   await expect(notes).toContainText('the redirect URL is not https');
   await expect(notes).toContainText('a missing value took its default');
 
+  /* The import was migrated once and stored as v2 (BL-143): a reload opens it as it is, with nothing left to note. */
   await page.reload();
-  const reloaded = page.getByRole('region', { name: 'Form notes' });
-  await reloaded.getByRole('button', { name: 'Show' }).click();
-  await expect(reloaded).toContainText('the redirect URL is not https');
+  await expect(page.getByPlaceholder('Form title')).toHaveValue('Imported survey');
+  await expect(page.getByRole('region', { name: 'Form notes' })).toBeHidden();
 });
 
 test('a second tab on the same form shows a warning', async ({ page, context }) => {

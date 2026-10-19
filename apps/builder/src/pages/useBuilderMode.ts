@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useMatch, useNavigate, useParams } from 'react-router-dom';
-import type { BuilderMode } from '@/types/form';
+
+export type BuilderMode = 'edit' | 'preview';
 
 export const builderPath = (id: string, mode: BuilderMode = 'edit') =>
   `/builder/${encodeURIComponent(id)}${mode === 'preview' ? '/preview' : ''}`;

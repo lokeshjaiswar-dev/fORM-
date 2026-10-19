@@ -1,17 +1,17 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 export class ErrorBoundary extends Component<{ children: ReactNode; label: string }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
+  override state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(error, info.componentStack);
   }
 
-  render() {
+  override render() {
     if (!this.state.error) return this.props.children;
     return (
       <div role="alert" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">

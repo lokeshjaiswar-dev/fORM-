@@ -48,6 +48,14 @@ jobs:
           status=$?
           if [ "$status" -eq 0 ]; then echo "::error::HTML sink found in apps or packages"; exit 1; fi
           if [ "$status" -ne 1 ]; then echo "::error::git grep failed with exit code $status"; exit "$status"; fi
+      # WP-0.11b: the v1 shape is named only by the v1 reader and the v1 to v2 migration.
+      - name: No v1 schema symbol outside the migration
+        run: |
+          set +e
+          git grep -nE 'V1\.' -- apps 'packages/*/src' ':!packages/schema/src/migrate'
+          status=$?
+          if [ "$status" -eq 0 ]; then echo "::error::V1. used outside packages/schema/src/migrate"; exit 1; fi
+          if [ "$status" -ne 1 ]; then echo "::error::git grep failed with exit code $status"; exit "$status"; fi
       - run: pnpm typecheck
       - run: pnpm i18n:extract --check
       - run: pnpm test

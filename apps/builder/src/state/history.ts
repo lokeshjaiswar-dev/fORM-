@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { FormSchema } from '@/types/form';
+import type { FormDefinition } from '@form/schema';
 import { useDocumentStore, useHistoryStore } from '@/state/documentStore';
 
 /*
@@ -11,7 +11,7 @@ import { useDocumentStore, useHistoryStore } from '@/state/documentStore';
 export const COALESCE_MS = 600;
 
 let clock: () => number = () => Date.now();
-let last: { key: string; at: number; doc: FormSchema } | null = null;
+let last: { key: string; at: number; doc: FormDefinition } | null = null;
 
 /** Tests pin the clock that decides whether typing coalesces. */
 export function setHistoryClock(now: () => number): void {
@@ -21,7 +21,7 @@ export function setHistoryClock(now: () => number): void {
 const temporal = () => useDocumentStore.temporal.getState();
 
 /** Writes a new document as one history step, or folds it into the current typing run. */
-export function commit(doc: FormSchema, key: string | null): void {
+export function commit(doc: FormDefinition, key: string | null): void {
   const before = useDocumentStore.getState().doc;
   if (doc === before) return;
   const now = clock();
@@ -44,7 +44,7 @@ export function redo(): void {
 }
 
 /** Opens a document: replaces it and starts with an empty history (loading is not an undoable change). */
-export function loadDocument(doc: FormSchema): void {
+export function loadDocument(doc: FormDefinition): void {
   last = null;
   const history = temporal();
   history.pause();

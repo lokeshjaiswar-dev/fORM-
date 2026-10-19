@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Block, BlockId } from '@form/schema';
 
 /*
  * Builder UI state: selection, panels, dialogs and session banners. None of it is part of the document, so none of
@@ -18,30 +19,32 @@ export type TabConflict = 'open_elsewhere' | 'saved_elsewhere';
 export type SaveState = { state: 'idle' } | { state: 'saving' } | { state: 'saved'; at: string } | { state: 'error'; message: string };
 
 export interface UiState {
-  activeBlockId: string | null;
+  activeBlockId: BlockId | null;
   inspectorOpen: boolean;
   inspectorWidth: number;
   sidebarOpen: boolean;
   started: boolean;
   insertFocusKey: number;
   /** A block whose delete waits for the author to choose what happens to the rules that read it. */
-  pendingDelete: string | null;
+  pendingDelete: BlockId | null;
+  /** The block copied with Mod+C (BL-144); pasting inserts a fresh copy of it. Never part of the document. */
+  clipboard: Block | null;
   notes: LoadNote[];
   conflict: TabConflict | null;
   save: SaveState;
-  setActiveBlock: (id: string | null) => void;
-  openInspector: (id: string) => void;
+  setActiveBlock: (id: BlockId | null) => void;
+  openInspector: (id: BlockId) => void;
   closeInspector: () => void;
   setInspectorWidth: (width: number) => void;
   setSidebarOpen: (open: boolean) => void;
   startBlank: () => void;
   requestInsertFocus: () => void;
-  setPendingDelete: (id: string | null) => void;
+  setPendingDelete: (id: BlockId | null) => void;
   dismissNotes: () => void;
   dismissConflict: () => void;
 }
 
-export const INITIAL_UI = {
+export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save'> = {
   activeBlockId: null,
   inspectorOpen: false,
   inspectorWidth: 400,
@@ -49,10 +52,11 @@ export const INITIAL_UI = {
   started: false,
   insertFocusKey: 0,
   pendingDelete: null,
+  clipboard: null,
   notes: [],
   conflict: null,
   save: { state: 'idle' },
-} satisfies Partial<UiState>;
+};
 
 export const useUiStore = create<UiState>()((set) => ({
   ...INITIAL_UI,
@@ -68,7 +72,7 @@ export const useUiStore = create<UiState>()((set) => ({
   dismissConflict: () => set({ conflict: null }),
 }));
 
-/** A fresh UI for a newly opened form; the sidebar width and visibility are kept. */
+/** A fresh UI for a newly opened form; the sidebar width and visibility and the copied block are kept. */
 export function resetUi(patch: Partial<Pick<UiState, 'started' | 'notes'>> = {}): void {
-  useUiStore.setState((s) => ({ ...INITIAL_UI, inspectorWidth: s.inspectorWidth, sidebarOpen: s.sidebarOpen, ...patch }));
+  useUiStore.setState((s) => ({ ...INITIAL_UI, inspectorWidth: s.inspectorWidth, sidebarOpen: s.sidebarOpen, clipboard: s.clipboard, ...patch }));
 }

@@ -2,7 +2,7 @@ import { createContext, useContext, type ComponentProps, type ReactNode } from '
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const DialogCtx = createContext<{ open: boolean; onOpenChange?: (open: boolean) => void }>({ open: false });
+const DialogCtx = createContext<{ open: boolean; onOpenChange?: ((open: boolean) => void) | undefined }>({ open: false });
 
 export function Dialog({
   open = false,
@@ -23,6 +23,8 @@ export function DialogContent({ className, children }: { className?: string; chi
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={() => onOpenChange?.(false)} />
       <div
+        role="dialog"
+        aria-modal="true"
         className={cn(
           'absolute left-1/2 top-1/2 z-10 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-[12px] border border-zinc-200 bg-white p-6 shadow-xl',
           className,

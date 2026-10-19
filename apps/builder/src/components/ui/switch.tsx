@@ -5,11 +5,13 @@ export function Switch({
   onCheckedChange,
   id,
   className,
+  'aria-label': ariaLabel,
 }: {
   checked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   id?: string;
   className?: string;
+  'aria-label'?: string;
 }) {
   return (
     <button
@@ -17,6 +19,7 @@ export function Switch({
       role="switch"
       id={id}
       aria-checked={checked}
+      aria-label={ariaLabel}
       onClick={() => onCheckedChange?.(!checked)}
       className={cn(
         'inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors',

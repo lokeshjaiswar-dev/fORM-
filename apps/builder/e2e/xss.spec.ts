@@ -12,7 +12,7 @@ test('a typed label never runs script in the builder or preview', async ({ page 
 
   await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
-  const insert = page.getByPlaceholder("Type '/' to insert blocks");
+  const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   await insert.fill(payload);
   await insert.press('Enter');
   await expect(page.getByText(payload)).toBeVisible();

@@ -1,22 +1,42 @@
 import { useMemo, useState } from 'react';
-import { Monitor } from 'lucide-react';
+import { ExternalLink, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
+import { defineMessages } from '@form/i18n';
 import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
-import type { FormDefinition, IsoInstant, Locale, RuntimeStatus } from '@form/schema';
-import type { PreviewDevice } from '@/types/form';
+import type { FormDefinition, IsoInstant, RuntimeStatus } from '@form/schema';
+import { BUILDER_LOCALE, t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
-import { DeviceFrame } from '@/components/preview/DeviceFrame';
-import { previewUploader, previewVersion } from '@/lib/preview';
+import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
+import { previewStatus, previewUploader, previewVersion } from '@/lib/preview';
+import { useDoc } from '@/state/documentStore';
+import { useOpsStore } from '@/state/opsStore';
 
-const LOCALE = 'en-IN' as Locale;
+const M = defineMessages('builder', {
+  'preview.desktop': 'Desktop',
+  'preview.tablet': 'Tablet',
+  'preview.mobile': 'Mobile',
+  'preview.wrong_password': 'Incorrect password',
+  'preview.refused': 'This form cannot be previewed yet.',
+  'preview.redirect': 'After submit, respondents go to {url}',
+  'preview.open_redirect': 'Open in a new tab',
+});
+
 const OPEN: RuntimeStatus = { state: 'open' };
 const DEVICES = [
-  ['desktop', 'Desktop', Monitor],
-  ['tablet', 'Tablet', TabletGlyph],
-  ['mobile', 'Mobile', PhoneGlyph],
+  ['desktop', M['preview.desktop'], Monitor],
+  ['tablet', M['preview.tablet'], TabletGlyph],
+  ['mobile', M['preview.mobile'], PhoneGlyph],
 ] as const;
+
+/** The preview of the open form: the store's v2 definition and the status its local FormOps give. */
+export function FormPreview() {
+  const definition = useDoc((d) => d);
+  const ops = useOpsStore();
+  const status = useMemo(() => previewStatus(ops), [ops]);
+  return <PreviewPane definition={definition} status={status} password={ops.password} />;
+}
 
 /**
  * The builder preview: a v2 draft compiled locally (compile + projectForRuntime, as publish would) and shown through
@@ -26,6 +46,7 @@ const DEVICES = [
 export function PreviewPane({ definition, status = OPEN, password }: { definition: FormDefinition; status?: RuntimeStatus; password?: string | undefined }) {
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [unlocked, setUnlocked] = useState(false);
+  const [redirect, setRedirect] = useState<string | null>(null);
   const [now] = useState(() => new Date().toISOString() as IsoInstant);
   const build = useMemo(() => previewVersion(definition, OPEN, now), [definition, now]);
   const session = useMemo(() => ({ startedAt: now, device }), [now, device]);
@@ -36,7 +57,7 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
       version={build.version}
       mode="preview"
       status={shown}
-      locale={LOCALE}
+      locale={BUILDER_LOCALE}
       uploader={previewUploader}
       session={session}
       onSubmit={(payload: SubmitPayload) => {
@@ -44,15 +65,17 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
       }}
       onUnlock={(attempt) => {
         if (attempt === password) setUnlocked(true);
-        else toast.error('Incorrect password');
+        else toast.error(t(M['preview.wrong_password']));
       }}
       onEvent={(event) => {
-        if (event.type === 'redirect') window.location.assign(event.url);
+        /* The preview never leaves the builder: it shows where a respondent would go (BL-134). */
+        if (event.type === 'redirect') setRedirect(event.url);
+        if (event.type === 'restart') setRedirect(null);
       }}
     />
   ) : (
     <div className="p-6 text-left text-[14px]" role="alert">
-      <p className="font-medium">This form cannot be previewed yet.</p>
+      <p className="font-medium">{t(M['preview.refused'])}</p>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-zinc-600">
         {build.issues.map((issue, i) => (
           <li key={i}>{issue.message}</li>
@@ -64,11 +87,11 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
       <div className="flex justify-center gap-0.5 py-1">
-        {DEVICES.map(([id, name, Icon]) => (
-          <Tooltip key={id} content={name}>
+        {DEVICES.map(([id, label, Icon]) => (
+          <Tooltip key={id} content={t(label)}>
             <button
               type="button"
-              aria-label={name}
+              aria-label={t(label)}
               aria-pressed={device === id}
               onClick={() => setDevice(id)}
               className={cn(
@@ -81,6 +104,14 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
           </Tooltip>
         ))}
       </div>
+      {redirect ? (
+        <p role="status" className="mx-4 flex items-center justify-center gap-2 rounded-md bg-sky-50 px-3 py-2 text-[13px] text-sky-950">
+          {t(M['preview.redirect'], { url: redirect })}
+          <a href={redirect} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 font-medium underline">
+            <ExternalLink className="size-3.5" /> {t(M['preview.open_redirect'])}
+          </a>
+        </p>
+      ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden px-4 py-4">
         <DeviceFrame device={device}>{screen}</DeviceFrame>
       </div>

@@ -5,8 +5,9 @@ import { z } from 'zod';
  * behind the same interface and keeps IndexedDB as the offline cache.
  */
 
-/** The stored document's shape. `v1` is the form the builder UI edits until WP-0.11b moves it to v2 definitions. */
-export const DOCUMENT_FORMAT = 'v1';
+/** The stored document's shape: a v2 `FormDefinition`. Drafts an older build saved as `v1` are migrated on load. */
+export const DOCUMENT_FORMAT = 'v2';
+export const LEGACY_FORMAT = 'v1';
 
 export interface StoredForm {
   id: string;
@@ -20,6 +21,8 @@ export interface StoredForm {
   savedAt: string;
   /** Read through `openStored`, which runs the reader for `format`: stored data is never trusted as typed. */
   doc: unknown;
+  /** The form's local FormOps (open, closed screen, password); absent on drafts saved before WP-0.11b. */
+  ops?: unknown;
 }
 
 export interface FormSummary {
@@ -42,16 +45,13 @@ export const StoredFormSchema = z.strictObject({
   rev: z.number().int().nonnegative(),
   savedAt: z.string(),
   doc: z.unknown(),
+  ops: z.unknown().optional(),
 });
 
 export function summarize(form: StoredForm): FormSummary {
   const doc = typeof form.doc === 'object' && form.doc !== null ? (form.doc as { title?: unknown; blocks?: unknown }) : {};
-  return {
-    id: form.id,
-    title: typeof doc.title === 'string' ? doc.title : '',
-    savedAt: form.savedAt,
-    blocks: Array.isArray(doc.blocks) ? doc.blocks.length : 0,
-  };
+  const blocks = Array.isArray(doc.blocks) ? doc.blocks.length : typeof doc.blocks === 'object' && doc.blocks !== null ? Object.keys(doc.blocks).length : 0;
+  return { id: form.id, title: typeof doc.title === 'string' ? doc.title : '', savedAt: form.savedAt, blocks };
 }
 
 export const newestFirst = (a: FormSummary, b: FormSummary) => (a.savedAt < b.savedAt ? 1 : a.savedAt > b.savedAt ? -1 : 0);

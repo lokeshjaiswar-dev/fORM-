@@ -28,7 +28,7 @@ test('the XSS corpus pasted into the editors never runs, in the builder or the p
 
   await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start building' }).click();
-  const insert = page.getByPlaceholder("Type '/' to insert blocks");
+  const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   await insert.fill('Paragraph');
   await insert.press('Enter');
   await insert.fill('/short');

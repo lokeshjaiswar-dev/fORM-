@@ -2,7 +2,7 @@ import type { JSONContent } from '@tiptap/core';
 import {
   PASTE_PROFILE, RICH_TEXT_PROFILE, RichDocSchema, fromHtml, normalizeInlineDoc, normalizeRichDoc, toPlain, type RichDoc,
 } from '@form/schema';
-import { toV1Html } from '@/lib/v1html';
+import { toHtml } from '@/lib/richHtml';
 
 /** Builder-internal clipboard type: copy and paste between builder editors keeps every mark and node the AST allows. */
 export const CLIPBOARD_TYPE = 'application/x-form-rich-text+json';
@@ -23,7 +23,7 @@ function plainDoc(text: string): RichDoc {
 /** A copied selection (editor JSON blocks) as clipboard entries: the AST payload for builder editors, HTML and text for other apps. */
 export function clipboardPayload(content: unknown): ClipboardData {
   const doc = normalizeRichDoc({ type: 'doc', content });
-  return { internal: JSON.stringify({ format: FORMAT, version: 1, doc }), html: toV1Html(doc), text: toPlain(doc) };
+  return { internal: JSON.stringify({ format: FORMAT, version: 1, doc }), html: toHtml(doc), text: toPlain(doc) };
 }
 
 /** The builder payload, normalized and limit-checked again: any page can write this type to the clipboard. */

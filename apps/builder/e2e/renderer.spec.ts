@@ -1,19 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { openNewForm } from './helpers.ts';
-
-async function insert(page: Page, command: string, option: RegExp) {
-  await page.getByPlaceholder("Type '/' to insert blocks").fill(command);
-  await page.getByRole('option', { name: option }).first().click();
-}
-
-/** Types a label into the last question editor. */
-async function label(page: Page, text: string) {
-  const editor = page.getByRole('textbox', { name: 'Type a question' }).last();
-  await editor.click();
-  await page.keyboard.type(text);
-  await page.evaluate('document.activeElement?.blur()');
-}
+import { insert, label, openNewForm, openSettings } from './helpers.ts';
 
 async function seriousViolations(page: Page) {
   const results = await new AxeBuilder({ page }).include('.fr-root').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
@@ -44,16 +31,16 @@ test('three pages: logic hides a required field, the form submits, and the hidde
   await insert(page, '/short', /Short answer/);
   await label(page, 'City');
 
-  await page.locator('button.size-6.cursor-grab').nth(2).click();
-  await page.getByRole('button', { name: 'Validations' }).click();
+  await openSettings(page, 1);
+  await page.getByRole('tab', { name: 'Validation' }).click();
   await page.getByRole('switch', { name: 'Required' }).click();
-  await page.getByRole('button', { name: 'Logic' }).click();
-  await page.getByRole('switch', { name: 'Conditional logic' }).click();
-  await page.getByRole('button', { name: 'Select a question' }).click();
-  await page.getByRole('button', { name: 'Attending' }).click();
-  await page.getByRole('complementary').getByRole('textbox').last().fill('yes');
-  await page.locator('button.size-6.cursor-grab').nth(4).click();
-  await page.getByRole('button', { name: 'Validations' }).click();
+  await page.getByRole('tab', { name: 'Logic' }).click();
+  await page.getByRole('button', { name: 'Add a rule' }).click();
+  await expect(page.getByRole('button', { name: 'Attending' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Value' }).fill('yes');
+  await expect(page.getByText('Hidden until a rule shows it').first()).toBeVisible();
+  await openSettings(page, 2);
+  await page.getByRole('tab', { name: 'Validation' }).click();
   await page.getByRole('switch', { name: 'Required' }).click();
 
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
@@ -94,7 +81,7 @@ test('the preview has no serious or critical axe violations, before and after va
     ['/dropdown', /Dropdown/, 'Favourite colour'],
     ['/check', /Checkboxes/, 'Interests'],
     ['/rating', /Rating/, 'Rate us'],
-    ['/nps', /NPS/, 'Recommend us'],
+    ['/nps', /Net Promoter Score/, 'Recommend us'],
     ['/rank', /Ranking/, 'Rank these'],
     ['/date', /Date/, 'Start date'],
     ['/file', /File upload/, 'Your CV'],
@@ -104,8 +91,8 @@ test('the preview has no serious or critical axe violations, before and after va
     await insert(page, command, option);
     await label(page, text);
   }
-  await page.locator('button.size-6.cursor-grab').first().click();
-  await page.getByRole('button', { name: 'Validations' }).click();
+  await openSettings(page, 0);
+  await page.getByRole('tab', { name: 'Validation' }).click();
   await page.getByRole('switch', { name: 'Required' }).click();
 
   await page.getByRole('button', { name: 'Preview', exact: true }).click();

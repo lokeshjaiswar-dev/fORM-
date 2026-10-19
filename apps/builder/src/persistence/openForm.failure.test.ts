@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IsoInstant } from '@form/schema';
-import { newStoredForm, openStored } from '@/persistence/openForm';
-import { block, formWith } from '@/test/fixtures';
+import { LEGACY_FORMAT } from '@/persistence/DocumentRepository';
+import { openStored } from '@/persistence/openForm';
+import { v1Form } from '@/test/fixtures';
 
-vi.mock('@/lib/preview', () => ({
-  migrateForBuilder: () => {
+vi.mock('@/lib/migrate', async (original) => ({
+  ...(await original<typeof import('@/lib/migrate')>()),
+  migrateDraft: () => {
     throw new Error('boom');
   },
 }));
@@ -12,9 +14,10 @@ vi.mock('@/lib/preview', () => ({
 const NOW = '2026-10-18T00:00:00.000Z';
 
 describe('openStored when the migration throws', () => {
-  it('still opens the v1 draft, with one note saying the migration failed', () => {
-    const opened = openStored({ ...newStoredForm('abc', NOW), doc: formWith([block('text', { id: 'q', label: 'Q' })]) }, NOW as IsoInstant);
-    expect(opened).toMatchObject({ ok: true, doc: { id: 'abc', blocks: [{ id: 'q' }] } });
-    expect(opened.ok && opened.notes).toEqual([{ code: 'migration_failed', path: '', detail: expect.stringContaining('boom') }]);
+  it('refuses the v1 draft with the reason instead of opening a half-converted form; the stored draft is untouched', () => {
+    const doc = v1Form([{ id: 'q', type: 'text', label: 'Q' }]);
+    const opened = openStored({ id: 'abc', format: LEGACY_FORMAT, rev: 1, savedAt: NOW, doc }, NOW as IsoInstant);
+    expect(opened).toEqual({ ok: false, error: expect.stringContaining('boom') });
+    expect(doc.blocks).toHaveLength(1);
   });
 });

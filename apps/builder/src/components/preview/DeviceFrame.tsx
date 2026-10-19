@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { PreviewDevice } from '@/types/form';
+
+export type PreviewDevice = 'desktop' | 'tablet' | 'mobile';
 
 const screenScroll =
   'absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden';

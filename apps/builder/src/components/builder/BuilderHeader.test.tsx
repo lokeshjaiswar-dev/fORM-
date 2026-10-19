@@ -29,7 +29,7 @@ function renderHeader(path = '/builder/f1') {
 
 beforeEach(() => {
   resetStore();
-  addBlock('text');
+  addBlock({ type: 'short_text', configOverrides: {} });
   undo();
 });
 

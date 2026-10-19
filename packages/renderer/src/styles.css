@@ -6,6 +6,13 @@
 
 .fr-root {
   --fr-focus: 0 0 0 3px color-mix(in srgb, var(--fr-accent) 35%, transparent);
+  /*
+   * Narrow layouts follow the form's own width, not the viewport's, so a device frame or an embed gets them too (BL-139).
+   * An inline-size container does not size from its content, so the root takes its host's width: a block or a flex
+   * item gets it from `width: 100%`; a shrink-to-fit host (inline-block, float, absolutely positioned) must set one.
+   */
+  container: fr / inline-size;
+  inline-size: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -112,7 +119,7 @@
   min-width: 0;
 }
 
-@media (max-width: 639px) {
+@container fr (max-width: 639px) {
   :where(.fr-root) .fr-row {
     flex-direction: column;
     gap: var(--fr-gap);
@@ -286,7 +293,7 @@
   display: none;
 }
 
-@media (max-width: 639px) {
+@container fr (max-width: 639px) {
   :where(.fr-root) .fr-choices {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -722,7 +729,7 @@
   text-align: start;
 }
 
-@media (max-width: 639px) {
+@container fr (max-width: 639px) {
   :where(.fr-root) .fr-form,
   :where(.fr-root) .fr-screen {
     padding: 28px 16px;

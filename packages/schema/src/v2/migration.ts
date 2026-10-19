@@ -5,13 +5,12 @@ import type { FormDefinition } from './definition.ts';
 import type { CountryCode, IsoInstant, Locale, TimeZone } from './ids.ts';
 import type { FormOps } from './ops.ts';
 import type { InlineNode } from './rich-text.ts';
-import type * as V1 from '../v1.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §18  VERSIONING AND MIGRATION
  * ═════════════════════════════════════════════════════════════════════════ */
 
-export type AnyFormDocument = V1.FormSchema | FormDefinition;
+export type { AnyFormDocument } from '../migrate/document.ts';
 
 export interface MigrationNote {
   path: string;

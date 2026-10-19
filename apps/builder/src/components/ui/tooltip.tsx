@@ -13,7 +13,7 @@ export function Tooltip({
   className,
 }: {
   content: string;
-  shortcut?: string;
+  shortcut?: string | undefined;
   side?: Side;
   children: ReactNode;
   delay?: number;

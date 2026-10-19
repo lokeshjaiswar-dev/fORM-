@@ -258,6 +258,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.3.0)
+      '@form/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       '@form/logic':
         specifier: workspace:*
         version: link:../../packages/logic
@@ -337,6 +340,9 @@ importers:
       '@axe-core/playwright':
         specifier: 4.13.0
         version: 4.13.0(playwright-core@1.63.0)
+      '@form/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.63.0

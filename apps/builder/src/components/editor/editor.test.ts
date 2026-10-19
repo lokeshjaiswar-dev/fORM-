@@ -1,11 +1,16 @@
 import { Editor } from '@tiptap/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { InlineDocSchema, RichDocSchema, normalizeInlineDoc, normalizeRichDoc } from '@form/schema';
+import { InlineDocSchema, RichDocSchema, fromHtml, fromHtmlInline, normalizeInlineDoc, normalizeRichDoc } from '@form/schema';
 import { editorExtensions, type EditorKind } from '@/components/editor/extensions';
-import { CLIPBOARD_TYPE } from '@/components/editor/paste';
-import { editorContent, editorDoc, editorHtml } from '@/components/editor/useV1Editor';
+import { CLIPBOARD_TYPE, clipboardPayload } from '@/components/editor/paste';
+import { editorAst, editorContent } from '@/components/editor/useRichTextEditor';
+import { toHtml } from '@/lib/richHtml';
 import { RICH_TEXT_FIXTURES } from '@/test/richtext-fixtures';
 import { GOOGLE_DOCS, WORD } from '@form/schema/test-fixtures';
+
+/* HTML is how these tests write and read documents compactly: in through the `fromHtml` allowlist, out through the clipboard serializer. */
+const editorDoc = (kind: EditorKind, html: string) => editorContent(kind === 'inline' ? fromHtmlInline(html).doc : fromHtml(html).doc);
+const editorHtml = (kind: EditorKind, json: unknown) => toHtml(editorAst(kind, json));
 
 const editors: Editor[] = [];
 function mount(kind: EditorKind, content: unknown, onEnter = () => {}) {
@@ -38,14 +43,14 @@ describe('editor ↔ AST round trip (50+ fixtures)', () => {
   });
 });
 
-describe('AST ↔ v1 HTML boundary', () => {
+describe('AST ↔ clipboard HTML', () => {
   it.each(RICH_TEXT_FIXTURES.filter((f) => f.v1).map((f) => [f.name, f] as const))('%s', (_, { kind, doc }) => {
     const html = editorHtml(kind, doc);
     expect(normalize(kind, editorDoc(kind, html))).toEqual(doc);
     expect(editorHtml(kind, editorDoc(kind, html))).toBe(html);
   });
 
-  it('reads legacy v1 labels', () => {
+  it('reads labels from HTML through the allowlist only', () => {
     expect(editorHtml('inline', editorDoc('inline', 'Name <b>please</b>&nbsp;<span style="color: rgb(235, 87, 87);">now</span><br>'))).toBe(
       'Name <b>please</b> <span style="color: #eb5757">now</span>',
     );
@@ -200,6 +205,29 @@ describe('builder clipboard (copy and paste between builder editors)', () => {
     other.commands.focus('end');
     clipboardEvent(other, 'paste', labelStore);
     expect(editorHtml('inline', other.getJSON())).toBe('Hi:Name <s>old</s> <span style="color: #eb5757">red</span>');
+  });
+
+  it('BL-063: a copy of unsafe editor JSON puts nothing unsafe in any of the three clipboard entries', () => {
+    const unsafe = [
+      { type: 'paragraph', attrs: { onclick: 'alert(1)' }, content: [
+        { type: 'text', text: 'bad', marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)', onmouseover: 'alert(2)' } }] },
+        { type: 'text', text: '<img src=x onerror=alert(3)>' },
+        { type: 'script', content: [{ type: 'text', text: 'alert(4)' }] },
+      ] },
+      { type: 'iframe', attrs: { src: 'https://evil.example' } },
+    ];
+    const payload = clipboardPayload(unsafe);
+    expect(payload.html).not.toMatch(/<[^>]*\son[a-z]+\s*=|javascript:|<img|<script|<iframe/i);
+    expect(payload.internal).not.toMatch(/"on[a-z]+"\s*:|javascript:|"(script|iframe)"/i);
+    expect(payload.html).toBe('bad&lt;img src=x onerror=alert(3)&gt;');
+    expect(payload.text).toBe('bad<img src=x onerror=alert(3)>');
+    expect(JSON.parse(payload.internal).doc).toEqual({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'bad<img src=x onerror=alert(3)>' }] }] });
+  });
+
+  it('BL-053: clipboard HTML keeps an empty first paragraph in a list item and line breaks inside text', () => {
+    const list = normalizeRichDoc({ type: 'doc', content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph' }, { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'inner' }] }] }] }] }] }] });
+    expect(toHtml(list)).toBe('<ul><li><p><br></p><ul><li>inner</li></ul></li></ul>');
+    expect(toHtml({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'one' + String.fromCharCode(10) + 'two' }] }] })).toBe('one<br>two');
   });
 
   it('cut removes the selection', () => {

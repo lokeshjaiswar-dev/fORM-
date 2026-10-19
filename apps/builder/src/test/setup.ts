@@ -10,6 +10,14 @@ Range.prototype.getBoundingClientRect = () => rect;
 Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
 document.elementFromPoint = () => null;
 
+/* cmdk (the slash menu) measures its list and scrolls the active item into view. */
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+Element.prototype.scrollIntoView ??= () => {};
+
 afterEach(() => {
   cleanup();
 });

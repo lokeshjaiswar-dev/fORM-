@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { isSafeHref, type ColorValue } from '@form/schema';
 import { Tooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { themeVars } from '@/lib/blockStyle';
+import { themeCssVars } from '@form/renderer';
 import { useDoc } from '@/state/documentStore';
 import { colorCss } from '@/components/editor/extensions';
 
@@ -47,7 +47,7 @@ const HIGHLIGHT_SWATCHES: Swatch[] = [
 const MARKS = ['bold', 'italic', 'underline', 'textColor', 'highlight', 'link'] as const;
 
 export function FormatMenu({ editor }: { editor: Editor }) {
-  const settings = useDoc((d) => d.settings);
+  const tokens = useDoc((d) => d.theme.tokens);
   const [colorOpen, setColorOpen] = useState<'textColor' | 'highlight' | null>(null);
   const state = useEditorState({
     editor,
@@ -95,7 +95,7 @@ export function FormatMenu({ editor }: { editor: Editor }) {
       role="toolbar"
       aria-label="Text formatting"
       className="fixed z-50 flex -translate-x-1/2 -translate-y-[calc(100%+8px)] items-center gap-0.5 rounded-xl border border-zinc-200 bg-white px-1 py-1 shadow-[0_8px_24px_rgba(15,15,15,0.12)]"
-      style={{ ...themeVars(settings), left, top: Math.min(start.top, end.top) }}
+      style={{ ...themeCssVars(tokens), left, top: Math.min(start.top, end.top) }}
       onMouseDown={(e) => e.preventDefault()}
     >
       <Tool onClick={() => editor.chain().focus().toggleMark('bold').run()} label="Bold" shortcut="⌘B" active={state.active.bold}>

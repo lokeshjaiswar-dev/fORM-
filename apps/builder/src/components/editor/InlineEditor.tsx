@@ -1,21 +1,27 @@
 import { useMemo } from 'react';
 import { EditorContent } from '@tiptap/react';
+import { toPlain, type InlineDoc, type RichDoc } from '@form/schema';
 import { cn } from '@/lib/utils';
-import { isEmptyLabel } from '@/lib/v1html';
 import { FormatMenu } from '@/components/editor/FormatMenu';
-import { useV1Editor, type V1EditorProps } from '@/components/editor/useV1Editor';
+import { useRichTextEditor, type RichTextEditorProps } from '@/components/editor/useRichTextEditor';
 import type { EditorKind } from '@/components/editor/extensions';
 
-export interface EditorFrameProps extends V1EditorProps {
+interface FrameOptions {
   /** Grow to the row width; labels next to a required marker do not. */
   fill?: boolean;
   /** Classes for the editable element itself. */
   editorClassName?: string;
 }
 
-export function EditorFrame({ kind, fill = true, editorClassName, ...props }: EditorFrameProps & { kind: EditorKind }) {
-  const editor = useV1Editor(kind, props, cn('min-h-[1em] w-full outline-none', editorClassName));
-  const empty = useMemo(() => isEmptyLabel(props.value), [props.value]);
+export type InlineEditorProps = RichTextEditorProps<InlineDoc> & FrameOptions;
+export type RichEditorProps = RichTextEditorProps<RichDoc> & FrameOptions;
+
+/** Nothing to show: only empty paragraphs. */
+const isEmpty = (doc: InlineDoc | RichDoc) => doc.content.every((node) => node.type === 'paragraph') && !toPlain(doc).trim();
+
+export function EditorFrame({ kind, fill = true, editorClassName, ...props }: RichTextEditorProps<InlineDoc | RichDoc> & FrameOptions & { kind: EditorKind }) {
+  const editor = useRichTextEditor(kind, props, cn('min-h-[1em] w-full outline-none', editorClassName));
+  const empty = useMemo(() => isEmpty(props.value), [props.value]);
   return (
     <>
       <div className={cn('relative flex min-h-8 min-w-0 items-center', fill ? 'flex-1' : 'max-w-[calc(100%-1.25rem)]')}>
@@ -31,7 +37,7 @@ export function EditorFrame({ kind, fill = true, editorClassName, ...props }: Ed
   );
 }
 
-/** One-paragraph label editor (questions, headings, endings). Enter moves on; Shift+Enter breaks the line. */
-export function InlineEditor(props: EditorFrameProps) {
-  return <EditorFrame kind="inline" {...props} />;
+/** One-paragraph label editor (questions, headings). Enter moves on; Shift+Enter breaks the line. */
+export function InlineEditor(props: InlineEditorProps) {
+  return <EditorFrame kind="inline" {...(props as RichTextEditorProps<InlineDoc | RichDoc> & FrameOptions)} />;
 }

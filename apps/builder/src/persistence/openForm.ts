@@ -1,75 +1,103 @@
-import { NOTE_MEANINGS, parseV1, type IsoInstant, type MigrationNote, type V1 } from '@form/schema';
-import { migrateForBuilder } from '@/lib/preview';
-import type { FormSchema } from '@/types/form';
-import { emptyForm } from '@/state/documentStore';
+import { defineMessages } from '@form/i18n';
+import { FormDefinitionSchema, NOTE_MEANINGS, type FormDefinition, type FormId, type IsoInstant, type MigrationNote, type RichDoc } from '@form/schema';
+import { t } from '@/i18n';
+import { blankDefinition } from '@/lib/definition';
+import { migrateDraft, readV1, type V1Read } from '@/lib/migrate';
+import { LocalOpsSchema, defaultOps, type LocalOps } from '@/state/opsStore';
 import type { LoadNote } from '@/state/uiStore';
-import { DOCUMENT_FORMAT, type StoredForm } from '@/persistence/DocumentRepository';
+import { DOCUMENT_FORMAT, LEGACY_FORMAT, type StoredForm } from '@/persistence/DocumentRepository';
 
-export type Opened = { ok: true; doc: FormSchema; notes: LoadNote[] } | { ok: false; error: string };
+/**
+ * An opened form: the v2 definition, its local FormOps and the notes to show. `migrated` says the stored draft was
+ * v1 and has just been converted; the session saves the result once (BL-143).
+ */
+export type Opened = { ok: true; doc: FormDefinition; ops: LocalOps; notes: LoadNote[]; migrated: boolean } | { ok: false; error: string };
 
-const REPAIRS: Record<V1.V1Repair['reason'], string> = {
-  not_an_object: 'an entry that is not an object was skipped',
-  missing_id: 'a block without an id was skipped',
-  duplicate_id: 'a block with a repeated id was skipped',
-  unknown_type: 'a block of an unknown type was skipped',
-  unknown_key: 'an unknown key was dropped',
-  invalid_value: 'a value of the wrong type was removed',
-  defaulted: 'a missing value took its default',
+const M = defineMessages('builder', {
+  'load.unknown_format': 'This form was saved in the ‘{format}’ format, which this builder cannot read.',
+  'load.unreadable': 'This form cannot be read: {reason}.',
+  'load.not_v1': 'This file is not a v1 form: {reason}.',
+  'load.migration_failed': 'This form could not be converted to the current format: {reason}.',
+  'load.converted': 'This form was saved by an older version of the builder; it now uses the current format and was saved again.',
+  'load.repaired_not_an_object': 'an entry that is not an object was skipped',
+  'load.repaired_missing_id': 'a block without an id was skipped',
+  'load.repaired_duplicate_id': 'a block with a repeated id was skipped',
+  'load.repaired_unknown_type': 'a block of an unknown type was skipped',
+  'load.repaired_unknown_key': 'an unknown key was dropped',
+  'load.repaired_invalid_value': 'a value of the wrong type was removed',
+  'load.repaired_defaulted': 'a missing value took its default',
+  'load.password_kept': 'The password stays in this browser for the preview; the server hashes it when forms are saved there.',
+});
+
+const REPAIRS: Readonly<Record<string, string>> = {
+  not_an_object: M['load.repaired_not_an_object'],
+  missing_id: M['load.repaired_missing_id'],
+  duplicate_id: M['load.repaired_duplicate_id'],
+  unknown_type: M['load.repaired_unknown_type'],
+  unknown_key: M['load.repaired_unknown_key'],
+  invalid_value: M['load.repaired_invalid_value'],
+  defaulted: M['load.repaired_defaulted'],
 };
 
-/* The builder's v1 types name the `customize` keys it writes; the v1 reader keeps `customize` free-form, as v1 did. */
-const asBuilderForm = (form: V1.FormSchema, id: string): FormSchema => ({ ...(form as FormSchema), id });
+const repairNotes = (repairs: V1Read['repairs']): LoadNote[] =>
+  repairs.map((r) => ({ code: `repaired_${r.reason}`, path: r.path, detail: REPAIRS[r.reason] ? t(REPAIRS[r.reason] as never) : r.reason }));
 
-const repairNotes = (repairs: V1.V1Repair[]): LoadNote[] => repairs.map((r) => ({ code: `repaired_${r.reason}`, path: r.path, detail: REPAIRS[r.reason] }));
-
-/** A new, empty stored form. */
-export function newStoredForm(id: string, savedAt: string): StoredForm {
-  return { id, format: DOCUMENT_FORMAT, rev: 0, savedAt, doc: emptyForm(id) };
+/** A new stored form: the blank definition, or `doc` (a form made from a template) under the id `id`. */
+export function newStoredForm(id: string, savedAt: string, doc: FormDefinition = blankDefinition(id)): StoredForm {
+  return { id, format: DOCUMENT_FORMAT, rev: 0, savedAt, doc: { ...doc, formId: id as FormId }, ops: defaultOps() };
 }
 
 /**
  * Notes `migrateV1ToV2` adds to every form whatever its content: the default purpose, default compliance and a key
- * made from each field's label. They describe v2 defaults, not a change to what the author built, so a load leaves them
+ * made from each field's label. They describe v2 defaults, not a change to what the author built, so they are left
  * out; a generated block id (`key_generated` at `/blocks/<n>/id`) is still shown.
  */
 const ROUTINE = new Set(['default_purpose_added', 'compliance_defaulted']);
 const routine = (n: MigrationNote) => ROUTINE.has(n.code) || (n.code === 'key_generated' && n.path.endsWith('/key'));
 
-/**
- * What the v2 migration changes in this form (schema §4.1: builder load goes through `migrateV1ToV2`). The draft
- * itself stays the v1 form the UI edits until WP-0.11b (BL-143), so the result is shown, not stored.
- */
-function migrationNotes(form: V1.FormSchema, now: IsoInstant): LoadNote[] {
+const EMPTY: RichDoc = { type: 'doc', content: [] };
+
+/** A v1 form as a v2 draft (schema §4.1): the definition, the FormOps it carried, and every note worth showing. */
+function fromV1(read: V1Read, id: string, now: IsoInstant): Opened {
+  let result;
   try {
-    return migrateForBuilder(form, now).notes
-      .filter((n) => !routine(n))
-      .map((n): LoadNote => ({ code: n.code, path: n.path, detail: `${NOTE_MEANINGS[n.code]}: ${n.detail}` }));
+    result = migrateDraft(read.form, id, now);
   } catch (e) {
-    /* The draft does not depend on the migration result, so a migration bug must not lock the author out of the form. */
-    const reason = e instanceof Error ? e.message : String(e);
-    return [{ code: 'migration_failed', path: '', detail: `The v2 migration failed on this form, so its preview may be wrong: ${reason}` }];
+    return { ok: false, error: t(M['load.migration_failed'], { reason: e instanceof Error ? e.message : String(e) }) };
   }
+  const notes = result.notes.filter((n) => !routine(n)).map((n): LoadNote => ({ code: n.code, path: n.path, detail: `${NOTE_MEANINGS[n.code]}: ${n.detail}` }));
+  const access = result.ops.access;
+  const password = result.plaintextPasswordToHash ?? '';
+  const ops: LocalOps = { open: access.enabled, closedMessage: access.screens.closed?.content ?? (access.enabled ? defaultOps().closedMessage : EMPTY), password };
+  if (password) notes.push({ code: 'password_kept', path: '/settings/password', detail: t(M['load.password_kept']) });
+  return { ok: true, doc: { ...result.definition, formId: id as FormId }, ops, notes: [...repairNotes(read.repairs), ...notes], migrated: true };
 }
 
 /**
- * Reads a stored form through the reader for its format, then runs the v1 → v2 migration over it. Every repair the
- * reader makes and every change the migration makes is a note, so a document an older build saved never changes
- * silently. The URL's id is the form's id (B23).
+ * Reads a stored form through the reader for its format. A v2 draft is checked against the strict definition twin;
+ * a v1 draft goes through the v1 reader and `migrateV1ToV2` once, with every repair and change as a note, so a
+ * document an older build saved never changes silently. The URL's id is the form's id (B23).
  */
 export function openStored(form: StoredForm, now: IsoInstant): Opened {
-  if (form.format !== DOCUMENT_FORMAT) return { ok: false, error: `This form was saved in the '${form.format}' format, which this builder cannot read.` };
-  const parsed = parseV1(form.doc);
-  if (!parsed.success) return { ok: false, error: `This form cannot be read: ${parsed.error}.` };
-  return { ok: true, doc: asBuilderForm(parsed.data, form.id), notes: [...repairNotes(parsed.repairs), ...migrationNotes({ ...parsed.data, id: form.id }, now)] };
+  if (form.format === LEGACY_FORMAT) {
+    const read = readV1(form.doc);
+    if (!read.ok) return { ok: false, error: t(M['load.unreadable'], { reason: read.error }) };
+    const opened = fromV1(read.read, form.id, now);
+    return opened.ok ? { ...opened, notes: [{ code: 'converted_to_v2', path: '', detail: t(M['load.converted']) }, ...opened.notes] } : opened;
+  }
+  if (form.format !== DOCUMENT_FORMAT) return { ok: false, error: t(M['load.unknown_format'], { format: form.format }) };
+  const parsed = FormDefinitionSchema.safeParse(form.doc);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { ok: false, error: t(M['load.unreadable'], { reason: issue ? `${issue.path.join('/')}: ${issue.message}` : 'invalid' }) };
+  }
+  const ops = LocalOpsSchema.safeParse(form.ops);
+  return { ok: true, doc: { ...(parsed.data as FormDefinition), formId: form.id as FormId }, ops: ops.success ? ops.data : defaultOps(), notes: [], migrated: false };
 }
 
-/**
- * A v1 JSON export as a new form `id`, read by the lenient v1 reader. Its repairs are the import's notes; the
- * migration notes come from `openStored` when the imported form opens. The password, closed state and logo and cover
- * URLs stay in the v1 document, so nothing the migration leaves to its caller is lost (BL-107).
- */
-export function importV1(input: unknown, id: string): Opened {
-  const parsed = parseV1(input);
-  if (!parsed.success) return { ok: false, error: `This file is not a v1 form: ${parsed.error}.` };
-  return { ok: true, doc: asBuilderForm(parsed.data, id), notes: repairNotes(parsed.repairs) };
+/** A v1 JSON export as a new form `id`: read by the lenient v1 reader and migrated once; its repairs and changes are the notes. */
+export function importV1(input: unknown, id: string, now: IsoInstant): Opened {
+  const read = readV1(input);
+  if (!read.ok) return { ok: false, error: t(M['load.not_v1'], { reason: read.error }) };
+  return fromV1(read.read, id, now);
 }
