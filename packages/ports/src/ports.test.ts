@@ -99,6 +99,7 @@ describe('job contracts', () => {
     expect(JOB_POLICIES['org.delete'].retryLimit).toBe(0);
     expect(JOB_POLICIES['partitions.maintain']).toEqual({ ...DEFAULT_JOB_POLICY, exclusive: true });
     expect(JOB_POLICIES['templates.seed'].exclusive).toBe(true);
+    expect(JOB_POLICIES['audit.chain']).toMatchObject({ exclusive: false, coalesceQueued: true, concurrency: 4 });
   });
 
   it('lets an AbortSignal stand in for a JobSignal', () => {

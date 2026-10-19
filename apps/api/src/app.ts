@@ -19,6 +19,8 @@ import { metaRoutes } from './routes/meta.ts';
 export interface AppDeps {
   /** Defaults to a pool on `config.database.url`, closed with the app. */
   db?: DbHandle;
+  /** The small separate pool for denied and failed audit records (ADR-0006, BL-036); defaults like `db`. */
+  auditDb?: DbHandle;
   clock?: () => Promise<ClockStatus>;
   /** Log destination (tests); stdout by default. */
   logStream?: DestinationStream;
@@ -43,9 +45,27 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     },
   });
 
+  const handle =
+    deps.db ??
+    createDb(config.database.url, {
+      max: config.database.poolMax,
+      applicationName: 'fr-api',
+      onError: (err) => app.log.error({ err }, 'idle database connection failed'),
+    });
+  if (!deps.db) app.addHook('onClose', () => handle.close());
+  const auditHandle =
+    deps.auditDb ??
+    createDb(config.database.url, {
+      max: config.database.auditPoolMax,
+      applicationName: 'fr-api-audit',
+      connectionTimeoutMs: 5000,
+      onError: (err) => app.log.error({ err }, 'idle audit database connection failed'),
+    });
+  if (!deps.auditDb) app.addHook('onClose', () => auditHandle.close());
+
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
-  registerErrorHandling(app);
+  registerErrorHandling(app, { auditWriter: auditHandle.db });
   app.addHook('onSend', async (request, reply) => {
     reply.header('x-request-id', request.id);
   });
@@ -88,15 +108,6 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     },
     transform: jsonSchemaTransform,
   });
-
-  const handle =
-    deps.db ??
-    createDb(config.database.url, {
-      max: config.database.poolMax,
-      applicationName: 'fr-api',
-      onError: (err) => app.log.error({ err }, 'idle database connection failed'),
-    });
-  if (!deps.db) app.addHook('onClose', () => handle.close());
 
   registerAuth(app, { db: handle.db, devHeaders: config.authDevHeaders });
   healthRoutes(app, {

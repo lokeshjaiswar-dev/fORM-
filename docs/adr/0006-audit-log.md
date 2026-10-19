@@ -21,6 +21,7 @@ The audit log must be append-only, tamper-evident and complete, including every 
 - Audited actions in one org do not serialise; chain lag is a metric with an alert at 1 minute.
 - WP-0.14 already uses the separate-connection rule: a rejected job envelope gets a `job.rejected` denied record on its own connection.
 - Retention is 13 months online, then NDJSON.zst exports with checkpoints into the WORM bucket (7 years by default).
+- **As built (WP-1.04):** decision 3's "singleton consumer per org key" is a pg-boss `short` queue (one queued job per key) plus `audit_chain_begin()` taking the head with `FOR UPDATE SKIP LOCKED`, so one chainer per org works while other orgs chain side by side; a dispatcher polls `audit_pending_keys()` instead of LISTEN/NOTIFY. `audit.verify` walks each chain in one repeatable-read snapshot. Each archive object ends with the month's signed checkpoints, and production archives only into a store with Object Lock. Details in architecture §2.7.
 
 ## Links
 

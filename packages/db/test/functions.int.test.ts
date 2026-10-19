@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  appendAudit,
-  appendAuditDetached,
+  audit,
   createPartitions,
   listUserOrgs,
   membershipFor,
@@ -89,13 +88,28 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
               has_function_privilege('fr_template_seeder', p.oid, 'execute') as seeder
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef order by 1`,
     );
-    expect(rows.map((r) => r.fn)).toEqual(['create_partitions', 'list_user_orgs', 'membership_for', 'orgs_due_for', 'resolve_job_org']);
+    expect(rows.map((r) => r.fn)).toEqual([
+      'audit_archive_detach',
+      'audit_chain_begin',
+      'audit_chain_keys',
+      'audit_checkpoint_names_a_link',
+      'audit_log_append',
+      'audit_log_continue_chain',
+      'audit_pending_keys',
+      'audit_pending_take',
+      'create_partitions',
+      'list_user_orgs',
+      'membership_for',
+      'orgs_due_for',
+      'resolve_job_org',
+    ]);
     expect(rows.every((r) => !r.public && !r.seeder)).toBe(true);
   });
 });
 
 describe('audit_pending', () => {
-  const event = { actorKind: 'user' as const, action: 'org.access', resourceType: 'org', outcome: 'denied' as const, reason: 'not a member' };
+  const event = { actorKind: 'user' as const, action: 'request.authorize' as const, resourceType: 'route', outcome: 'denied' as const, reason: 'not_a_member' };
+  const success = { actorKind: 'system' as const, action: 'system.heartbeat' as const, resourceType: 'org', outcome: 'success' as const };
 
   async function pendingFor(orgKey: string): Promise<number> {
     const { rows } = await t.owner.query<{ n: number }>('select count(*)::int as n from audit_pending where org_key = $1', [orgKey]);
@@ -106,7 +120,7 @@ describe('audit_pending', () => {
     const before = await pendingFor(seed.b.orgId);
     const err = await failure(
       withTenant(t.app.db, { orgId: seed.b.orgId, actor: 'user', userId: seed.b.editorId, requestId: 'r' }, async () => {
-        await appendAuditDetached(t.app.db, seed.b.orgId, { ...event, actorId: seed.b.editorId });
+        await audit.appendDetached(t.app.db, seed.b.orgId, { ...event, actorId: seed.b.editorId });
         throw new Error('forbidden');
       }),
     );
@@ -118,7 +132,7 @@ describe('audit_pending', () => {
     const before = await pendingFor(seed.b.orgId);
     await failure(
       withTenant(t.app.db, { orgId: seed.b.orgId, actor: 'system', requestId: 'r' }, async (tx) => {
-        await appendAudit(tx, seed.b.orgId, { ...event, actorKind: 'system', outcome: 'success' });
+        await audit.append(tx, seed.b.orgId, success);
         throw new Error('later failure');
       }),
     );
@@ -127,10 +141,10 @@ describe('audit_pending', () => {
 
   it('files events without a tenant under the platform key, and refuses other orgs’ keys', async () => {
     const before = await pendingFor(PLATFORM_ORG_KEY);
-    await appendAuditDetached(t.app.db, null, { ...event, actorKind: 'none' });
+    await audit.appendDetached(t.app.db, null, { ...event, actorKind: 'none' });
     expect(await pendingFor(PLATFORM_ORG_KEY)).toBe(before + 1);
     const err = await failure(
-      withTenant(t.app.db, { orgId: seed.b.orgId, actor: 'system', requestId: 'r' }, (tx) => appendAudit(tx, seed.a.orgId, event)),
+      withTenant(t.app.db, { orgId: seed.b.orgId, actor: 'system', requestId: 'r' }, (tx) => audit.append(tx, seed.a.orgId, success)),
     );
     expect(pgCode(err)).toBe('42501');
   });

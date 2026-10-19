@@ -30,4 +30,7 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     erase: 'ttl',
     retainBasis: '13 months online, then exported to the WORM bucket (7 years by default); never edited (CMP-02)',
   },
+  audit_heads: { columns: [], erase: 'ttl', retainBasis: 'chain lifetime: seq and hash of the last link' },
+  audit_checkpoints: { columns: [], erase: 'ttl', retainBasis: 'with the chain: signed heads, also anchored in the WORM bucket or the SIEM' },
+  audit_archives: { columns: [], erase: 'ttl', retainBasis: 'with the archived object (7 years by default)' },
 };

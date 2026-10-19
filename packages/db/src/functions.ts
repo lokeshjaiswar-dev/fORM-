@@ -16,7 +16,8 @@ export const ORG_SPANNING_JOBS = [
 ] as const;
 export type OrgSpanningJob = (typeof ORG_SPANNING_JOBS)[number];
 
-export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft'] as const;
+/** `audit_chain` resolves to its own org key (the zero key for the platform chain). */
+export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft', 'audit_chain'] as const;
 export type JobResourceType = (typeof JOB_RESOURCE_TYPES)[number];
 
 export const PARTITIONED_TABLES = ['audit_log'] as const;

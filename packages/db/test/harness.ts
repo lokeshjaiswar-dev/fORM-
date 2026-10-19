@@ -83,6 +83,14 @@ async function seedOrg(owner: pg.Pool, slug: string): Promise<OrgSeed> {
      values ($1, 1, now(), 'user', $2, 'form.created', 'form', $3, 'success', $4, $4)`,
     [s.orgId, s.ownerId, s.formIds[0], HASH],
   );
+  await owner.query(
+    `insert into audit_checkpoints (org_key, seq, hash, signed_at, key_id, alg, signature) values ($1, 1, $2, now(), 'test', 'ed25519', $3)`,
+    [s.orgId, HASH, Buffer.alloc(64)],
+  );
+  await owner.query(
+    `insert into audit_archives (org_key, month, object_key, row_count, min_seq, max_seq, sha256) values ($1, '2020-01', 'archive/x', 1, 1, 1, $2)`,
+    [s.orgId, HASH],
+  );
   return s;
 }
 

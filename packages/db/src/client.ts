@@ -1,8 +1,8 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import { auditLog, auditPending, formDrafts, forms, memberships, orgs, users } from './schema/index.ts';
+import { auditArchives, auditCheckpoints, auditHeads, auditLog, auditPending, formDrafts, forms, memberships, orgs, users } from './schema/index.ts';
 
-export const tables = { orgs, users, memberships, forms, formDrafts, auditPending, auditLog };
+export const tables = { orgs, users, memberships, forms, formDrafts, auditPending, auditLog, auditHeads, auditCheckpoints, auditArchives };
 
 export type Tables = typeof tables;
 export type Db = NodePgDatabase<Tables>;
@@ -15,6 +15,8 @@ export interface DbOptions {
   applicationName?: string;
   /** Per-statement limit on the server, in ms. */
   statementTimeoutMs?: number;
+  /** How long a checkout waits for a free or new connection before failing (default 10 s; BL-036). */
+  connectionTimeoutMs?: number;
   /** Errors on idle pooled connections (server restarts, network); unhandled they would crash the process. */
   onError?: (err: Error) => void;
 }
@@ -30,6 +32,7 @@ export function createDb(url: string, options: DbOptions = {}): DbHandle {
     connectionString: url,
     max: options.max ?? 10,
     application_name: options.applicationName ?? 'form',
+    connectionTimeoutMillis: options.connectionTimeoutMs ?? 10_000,
     ...(options.statementTimeoutMs ? { statement_timeout: options.statementTimeoutMs } : {}),
   });
   pool.on('error', (err) => options.onError?.(err));

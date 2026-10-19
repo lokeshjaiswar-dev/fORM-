@@ -29,6 +29,8 @@ export interface JobDefinition<N extends JobName> {
   perms: readonly string[];
   /** UTC cron the worker schedules for this queue (system and `any` jobs, which then run without a tenant). */
   cron?: JobScopeOf<N> extends 'org' ? never : string;
+  /** Idle polling of this queue, when it must react faster than the worker default. */
+  pollIntervalMs?: number;
   run(ctx: JobContext<N>): Promise<void>;
 }
 

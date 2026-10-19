@@ -103,11 +103,52 @@ isolation(
   env,
 );
 
+isolation(
+  'audit_heads',
+  {
+    foreign: (s) => sql`org_key = ${s.a.orgId}`,
+    own: (s) => sql`org_key = ${s.b.orgId}`,
+    update: (s) => sql`update audit_heads set seq = 0 where org_key = ${s.a.orgId}`,
+    insertForeign: (s) => sql`insert into audit_heads (org_key, seq, hash) values (${s.a.orgId}, 0, ${Buffer.alloc(32)})`,
+    expect: { select: 0, update: 'denied' },
+  },
+  env,
+);
+
+isolation(
+  'audit_checkpoints',
+  {
+    foreign: (s) => sql`org_key = ${s.a.orgId}`,
+    own: (s) => sql`org_key = ${s.b.orgId}`,
+    update: (s) => sql`update audit_checkpoints set key_id = 'x' where org_key = ${s.a.orgId}`,
+    // seq 1 with the zero hash is a real link of org A, so only RLS stands in the way.
+    insertForeign: (s) =>
+      sql`insert into audit_checkpoints (org_key, seq, hash, signed_at, key_id, alg, signature)
+          values (${s.a.orgId}, 1, ${Buffer.alloc(32)}, now(), 'k2', 'ed25519', ${Buffer.alloc(64)})`,
+    expect: { select: 0, update: 'denied' },
+  },
+  env,
+);
+
+isolation(
+  'audit_archives',
+  {
+    foreign: (s) => sql`org_key = ${s.a.orgId}`,
+    own: (s) => sql`org_key = ${s.b.orgId}`,
+    update: (s) => sql`update audit_archives set object_key = 'x' where org_key = ${s.a.orgId}`,
+    insertForeign: (s) =>
+      sql`insert into audit_archives (org_key, month, object_key, row_count, min_seq, max_seq, sha256)
+          values (${s.a.orgId}, '2020-02', 'x', 1, 1, 1, ${Buffer.alloc(32)})`,
+    expect: { select: 0, update: 'denied' },
+  },
+  env,
+);
+
 const userCtx = (): TenantCtx => ({ orgId: seed.b.orgId, actor: 'user', userId: seed.b.editorId, perms: ['forms.read'], requestId: 'r1' });
 
 describe('tenant context', () => {
   it('sees zero rows outside withTenant, without raising', async () => {
-    for (const table of ['orgs', 'users', 'memberships', 'forms', 'form_drafts', 'audit_log']) {
+    for (const table of ['orgs', 'users', 'memberships', 'forms', 'form_drafts', 'audit_log', 'audit_heads', 'audit_checkpoints', 'audit_archives']) {
       const { rows } = await t.app.pool.query<{ n: number }>(`select count(*)::int as n from ${table}`);
       expect(rows[0]!.n, table).toBe(0);
     }

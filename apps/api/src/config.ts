@@ -22,6 +22,8 @@ export const apiEnvSchema = z
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, 'expected a postgres:// URL for the fr_app role'),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(500).default(20),
+    /** The separate pool for denied and failed audit records, so a saturated main pool cannot hold them up. */
+    DATABASE_AUDIT_POOL_MAX: z.coerce.number().int().min(1).max(20).default(2),
     /** CORS allows this origin only (architecture §3.1). */
     PUBLIC_BUILDER_URL: z.url().optional(),
     TRUST_PROXY: flag.default(false),
@@ -46,7 +48,7 @@ export interface ApiConfig {
   host: string;
   port: number;
   logLevel: LogLevel;
-  database: { url: string; poolMax: number };
+  database: { url: string; poolMax: number; auditPoolMax: number };
   corsOrigins: string[];
   trustProxy: boolean;
   telemetry: { endpoint: string | undefined; serviceName: string; sampleRatio: number };
@@ -92,7 +94,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
       host: e.HOST,
       port: e.PORT,
       logLevel: e.LOG_LEVEL,
-      database: { url: e.DATABASE_URL, poolMax: e.DATABASE_POOL_MAX },
+      database: { url: e.DATABASE_URL, poolMax: e.DATABASE_POOL_MAX, auditPoolMax: e.DATABASE_AUDIT_POOL_MAX },
       corsOrigins: e.PUBLIC_BUILDER_URL ? [new URL(e.PUBLIC_BUILDER_URL).origin] : [],
       trustProxy: e.TRUST_PROXY,
       telemetry: { endpoint: e.OTEL_EXPORTER_OTLP_ENDPOINT, serviceName: e.OTEL_SERVICE_NAME, sampleRatio: e.OTEL_TRACES_SAMPLER_ARG },

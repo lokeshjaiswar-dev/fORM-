@@ -5,3 +5,4 @@ export * from './scan/noop.ts';
 export * from './guardian/manual.ts';
 export * from './queue/envelope.ts';
 export * from './queue/pgboss.ts';
+export * from './audit/syslog.ts';

@@ -550,6 +550,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@form/schema':
+        specifier: workspace:*
+        version: link:../schema
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)

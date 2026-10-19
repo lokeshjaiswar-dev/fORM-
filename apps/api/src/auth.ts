@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { appendAuditDetached, isUuid, membershipFor, type Db, type TenantCtx } from '@form/db';
+import { isUuid, membershipFor, type Db, type TenantCtx } from '@form/db';
 import { ROLE_PERMISSIONS, type Permission } from './authz/roles.ts';
 import { ProblemError } from './errors.ts';
 
@@ -33,23 +33,16 @@ function header(request: FastifyRequest, name: string): string | undefined {
   return typeof v === 'string' ? v.trim() : undefined;
 }
 
-/** Request context: caller, active org (validated with membership_for), permissions. Denials are audited. */
+/**
+ * Request context: caller, active org (validated with membership_for), permissions. A refusal is a 403 that the
+ * error handler audits: a non-member under the platform chain (with the org they named), a missing permission
+ * under the member's org.
+ */
 export function registerAuth(app: FastifyInstance, options: AuthOptions): void {
   app.decorateRequest('tenant', null);
 
-  const deny = async (request: FastifyRequest, orgId: string | null, userId: string, reason: string, detail: string): Promise<never> => {
-    await appendAuditDetached(options.db, orgId, {
-      actorKind: 'user',
-      actorId: userId,
-      action: 'request.authorize',
-      resourceType: 'route',
-      resourceId: `${request.method} ${request.routeOptions.url ?? ''}`,
-      outcome: 'denied',
-      reason,
-      requestId: request.id,
-      ...(orgId ? {} : { metadata: { claimedOrgId: header(request, ORG_HEADER) } }),
-    });
-    throw new ProblemError('FORBIDDEN', detail);
+  const deny = (request: FastifyRequest, orgId: string | null, userId: string, reason: string, detail: string): never => {
+    throw new ProblemError('FORBIDDEN', detail, { orgId, actorId: userId, reason, claimedOrgId: orgId ? undefined : header(request, ORG_HEADER) });
   };
 
   app.addHook('preHandler', async (request, reply) => {

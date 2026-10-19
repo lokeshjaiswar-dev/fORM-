@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { appendAudit } from '@form/db';
+import { audit } from '@form/db';
 import { defineJob } from './define.ts';
 
 /**
@@ -18,7 +18,7 @@ export const heartbeat = defineJob({
     }
     const { rows } = await ctx.tx.execute<{ id: string }>(sql`select id from orgs`);
     if (rows.length !== 1 || rows[0]!.id !== ctx.orgId) throw new Error(`system.heartbeat: the tenant context shows ${rows.length} orgs`);
-    await appendAudit(ctx.tx, ctx.orgId, {
+    await audit.append(ctx.tx, ctx.orgId, {
       actorKind: 'system',
       action: 'system.heartbeat',
       resourceType: 'org',

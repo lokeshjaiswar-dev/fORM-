@@ -1,6 +1,8 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } from 'fastify-type-provider-zod';
+import type { Db } from '@form/db';
 import { scrubUrl } from '@form/observability';
+import { auditProblem, type DenialAudit } from './audit.ts';
 
 /** The closed code enum of problem+json errors (architecture §3.2). Later work packages add their codes here. */
 export const PROBLEMS = {
@@ -45,12 +47,15 @@ export interface Problem {
 export class ProblemError extends Error {
   readonly code: ProblemCode;
   readonly detail: string | undefined;
+  /** For a 403 raised before the tenant context exists: who to file the denied record under. */
+  readonly denial: DenialAudit | undefined;
 
-  constructor(code: ProblemCode, detail?: string) {
+  constructor(code: ProblemCode, detail?: string, denial?: DenialAudit) {
     super(detail ?? PROBLEMS[code].title);
     this.name = 'ProblemError';
     this.code = code;
     this.detail = detail;
+    this.denial = denial;
   }
 }
 
@@ -87,24 +92,47 @@ const BY_STATUS: Record<number, ProblemCode> = {
   503: 'SERVICE_UNAVAILABLE',
 };
 
-/** Every error leaves as problem+json; 5xx details are logged, never returned. */
-export function registerErrorHandling(app: FastifyInstance): void {
-  app.setErrorHandler((err: FastifyError, request, reply) => {
-    if (err instanceof ProblemError) return sendProblem(reply, err.code, err.detail);
-    if (hasZodFastifySchemaValidationErrors(err)) {
-      const issues = err.validation.map((v) => ({ path: `${err.validationContext ?? ''}${v.instancePath}`, message: v.message ?? 'invalid' }));
-      return sendProblem(reply, 'VALIDATION_FAILED', undefined, issues);
+interface Outcome {
+  code: ProblemCode;
+  detail?: string | undefined;
+  errors?: FieldIssue[];
+  denial?: DenialAudit | undefined;
+}
+
+function classify(err: FastifyError, request: FastifyRequest): Outcome {
+  if (err instanceof ProblemError) return { code: err.code, detail: err.detail, denial: err.denial };
+  if (hasZodFastifySchemaValidationErrors(err)) {
+    const errors = err.validation.map((v) => ({ path: `${err.validationContext ?? ''}${v.instancePath}`, message: v.message ?? 'invalid' }));
+    return { code: 'VALIDATION_FAILED', errors };
+  }
+  if (isResponseSerializationError(err)) {
+    request.log.error({ err }, 'response did not match its schema');
+    return { code: 'INTERNAL' };
+  }
+  const status = typeof err.statusCode === 'number' ? err.statusCode : 500;
+  if (status >= 500) {
+    request.log.error({ err }, 'request failed');
+    return { code: BY_STATUS[status] ?? 'INTERNAL' };
+  }
+  return { code: BY_STATUS[status] ?? 'BAD_REQUEST', detail: err.message };
+}
+
+/**
+ * Every error leaves as problem+json; 5xx details are logged, never returned. A 403 is audited as denied and a
+ * 5xx as an error through `auditWriter`, the separate audit pool (ADR-0006, C-M7).
+ */
+export function registerErrorHandling(app: FastifyInstance, o: { auditWriter: Db }): void {
+  app.setErrorHandler(async (err: FastifyError, request, reply) => {
+    const out = classify(err, request);
+    const { status } = PROBLEMS[out.code];
+    if (status === 403 || status >= 500) {
+      try {
+        await auditProblem(o.auditWriter, request, status, out.code, out.denial);
+      } catch (auditErr) {
+        request.log.error({ err: auditErr, status, code: out.code }, 'audit record of a refused or failed request was not written');
+      }
     }
-    if (isResponseSerializationError(err)) {
-      request.log.error({ err }, 'response did not match its schema');
-      return sendProblem(reply, 'INTERNAL');
-    }
-    const status = typeof err.statusCode === 'number' ? err.statusCode : 500;
-    if (status >= 500) {
-      request.log.error({ err }, 'request failed');
-      return sendProblem(reply, BY_STATUS[status] ?? 'INTERNAL');
-    }
-    return sendProblem(reply, BY_STATUS[status] ?? 'BAD_REQUEST', err.message);
+    return sendProblem(reply, out.code, out.detail, out.errors);
   });
 
   app.setNotFoundHandler((request, reply) => sendProblem(reply, 'NOT_FOUND', `No route for ${request.method} ${scrubUrl(request.url).split('?')[0]}`));

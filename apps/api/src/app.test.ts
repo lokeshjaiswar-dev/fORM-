@@ -6,6 +6,7 @@ import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
 import { parseConfig, type ApiConfig } from './config.ts';
+import { ProblemError } from './errors.ts';
 
 function config(env: Record<string, string> = {}): ApiConfig {
   const r = parseConfig({
@@ -119,6 +120,46 @@ describe('problem+json', () => {
     expect(res.json()).toMatchObject({ code: 'INTERNAL', title: 'Internal error' });
     expect(res.body).not.toContain('10.0.0.5');
     expect(lines.some((l) => l.msg === 'request failed' && JSON.stringify(l).includes('10.0.0.5'))).toBe(true);
+  });
+
+  it('audits 5xx and 403 responses on the audit pool, and answers even when that write fails', async () => {
+    const written: Array<{ orgKey: string; event: Record<string, unknown> }> = [];
+    const settings: unknown[] = [];
+    const tx = {
+      execute: async (q: unknown) => void settings.push(q),
+      insert: () => ({ values: async (v: { orgKey: string; event: Record<string, unknown> }) => void written.push(v) }),
+    };
+    const auditDb = { db: { transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) } as unknown as Db, pool: {} as pg.Pool, close: async () => {} };
+    const { app: a, lines } = await app(config(), { auditDb });
+    a.get('/boom', { config: { auth: 'none' } }, async () => {
+      throw new Error('secret detail');
+    });
+    a.get('/nope', { config: { auth: 'none' } }, async () => {
+      throw new ProblemError('FORBIDDEN', 'not yours');
+    });
+    expect((await a.inject({ url: '/boom' })).statusCode).toBe(500);
+    expect((await a.inject({ url: '/nope', headers: { 'x-request-id': 'r-403' } })).statusCode).toBe(403);
+    expect(written).toEqual([
+      {
+        orgKey: '00000000-0000-0000-0000-000000000000',
+        event: expect.objectContaining({ actorKind: 'none', action: 'request.failed', resourceId: 'GET /boom', outcome: 'error', reason: 'INTERNAL', metadata: { status: 500, code: 'INTERNAL' } }),
+      },
+      {
+        orgKey: '00000000-0000-0000-0000-000000000000',
+        event: expect.objectContaining({ action: 'request.authorize', outcome: 'denied', reason: 'forbidden', requestId: 'r-403' }),
+      },
+    ]);
+    expect(JSON.stringify(written)).not.toContain('secret detail');
+    expect(settings).toHaveLength(2);
+
+    const broken = { db: { transaction: async () => Promise.reject(new Error('audit pool exhausted')) } as unknown as Db, pool: {} as pg.Pool, close: async () => {} };
+    const { app: b, lines: bLines } = await app(config(), { auditDb: broken });
+    b.get('/nope', { config: { auth: 'none' } }, async () => {
+      throw new ProblemError('FORBIDDEN');
+    });
+    expect((await b.inject({ url: '/nope' })).statusCode).toBe(403);
+    expect(bLines.some((l) => l.msg === 'audit record of a refused or failed request was not written')).toBe(true);
+    expect(lines.some((l) => l.msg === 'audit record of a refused or failed request was not written')).toBe(false);
   });
 
   it('maps body limits to PAYLOAD_TOO_LARGE', async () => {

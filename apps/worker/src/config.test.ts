@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseConfig } from './config.ts';
 
-const base = { DATABASE_URL: 'postgres://fr_app:pw@db:5432/form', JOB_SIGNING_KEYS: 'k1:secret' };
+const base = { DATABASE_URL: 'postgres://fr_app:pw@db:5432/form', JOB_SIGNING_KEYS: 'k1:secret', KMS_KEYFILE_PATH: '/run/secrets/form-master.key', AUDIT_SYSLOG_URL: 'tcp://siem:514' };
 
 describe('parseConfig', () => {
   it('applies defaults; the queue shares the app database', () => {
@@ -16,7 +16,40 @@ describe('parseConfig', () => {
       seedTemplates: true,
       telemetry: { endpoint: undefined, serviceName: 'fr-worker', sampleRatio: 0.1 },
       ntp: { servers: [], maxOffsetMs: 1000 },
+      audit: {
+        poolMax: 2,
+        dispatchIntervalMs: 250,
+        kms: { driver: 'keyfile', keyfilePath: '/run/secrets/form-master.key' },
+        signingKeyId: 'audit-v1',
+        retiredSigningKeyIds: [],
+        syslog: { url: 'tcp://siem:514', ca: undefined },
+        retentionYears: 7,
+        requireAnchor: true,
+      },
+      storage: undefined,
     });
+  });
+
+  it('configures audit anchoring: the SIEM sink with its CA, and the development store', () => {
+    const r = parseConfig(
+      { ...base, NODE_ENV: 'development', AUDIT_SYSLOG_URL: 'tls://siem.corp.local:6514', AUDIT_SYSLOG_CA_FILE: '/ca.pem', STORAGE_DRIVER: 'filesystem', STORAGE_ROOT: '.data' },
+      () => 'PEM',
+    );
+    expect(r.ok && r.config).toMatchObject({
+      audit: { syslog: { url: 'tls://siem.corp.local:6514', ca: 'PEM' }, requireAnchor: false },
+      storage: { driver: 'filesystem', root: '.data' },
+    });
+  });
+
+  it('refuses production without a signing key or with the development store', () => {
+    const r = parseConfig({ DATABASE_URL: base.DATABASE_URL, JOB_SIGNING_KEYS: 'k1:secret', STORAGE_DRIVER: 'filesystem', AUDIT_SYSLOG_URL: 'udp://x:514' });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    const all = r.errors.join('\n');
+    expect(all).toMatch(/KMS_KEYFILE_PATH: is required in production/);
+    expect(all).toMatch(/STORAGE_DRIVER: filesystem is for development only/);
+    expect(all).toMatch(/STORAGE_ROOT/);
+    expect(all).toMatch(/AUDIT_SYSLOG_URL/);
   });
 
   it('reads queue selection, a separate queue database and secrets from files', () => {
@@ -30,6 +63,9 @@ describe('parseConfig', () => {
         WORKER_QUEUES: 'pdf.*, templates.thumbnail',
         WORKER_SHUTDOWN_GRACE_MS: '5000',
         TEMPLATES_SEED_SYSTEM_PACKS: 'false',
+        KMS_KEYFILE_PATH: '/run/secrets/form-master.key',
+        AUDIT_SYSLOG_URL: 'tls://siem:6514',
+        AUDIT_RETIRED_SIGNING_KEY_IDS: 'audit-v0, audit-old',
       },
       (p) => files[p]!,
     );
@@ -39,6 +75,7 @@ describe('parseConfig', () => {
       queues: ['pdf.*', 'templates.thumbnail'],
       shutdownGraceMs: 5000,
       seedTemplates: false,
+      audit: { retiredSigningKeyIds: ['audit-v0', 'audit-old'] },
     });
   });
 
@@ -56,6 +93,14 @@ describe('parseConfig', () => {
     expect(all).toMatch(/DATABASE_URL: expected a postgres/);
     expect(all).toMatch(/WORKER_QUEUES/);
     expect(all).toMatch(/WORKER_SHUTDOWN_GRACE_MS/);
+  });
+
+  it('refuses production with no checkpoint anchor', () => {
+    const { AUDIT_SYSLOG_URL: _, ...noSink } = base;
+    const r = parseConfig(noSink);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toEqual([expect.stringMatching(/^AUDIT_SYSLOG_URL: is required in production/)]);
+    expect(parseConfig({ ...noSink, NODE_ENV: 'development' }).ok).toBe(true);
   });
 
   it('requires signing keys', () => {

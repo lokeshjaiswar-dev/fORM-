@@ -12,12 +12,15 @@ export const auditPending = pgTable('audit_pending', {
   occurredAt: ts('occurred_at'),
 });
 
-/** Partitioned by month on `occurred_at`; partitions live in schema `parts`. RLS: `audit_log_tenant`. */
+/**
+ * Partitioned by month on `occurred_at`; partitions live in schema `parts`. RLS: `audit_log_tenant` (SELECT only for
+ * fr_app; rows arrive through `audit_log_append()`). Platform events carry the zero org key.
+ */
 export const auditLog = pgTable(
   'audit_log',
   {
     id: bigint('id', { mode: 'number' }).generatedAlwaysAsIdentity(),
-    orgId: uuid('org_id'),
+    orgId: uuid('org_id').notNull(),
     seq: bigint('seq', { mode: 'number' }).notNull(),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     actorKind: text('actor_kind').notNull(),
@@ -40,4 +43,47 @@ export const auditLog = pgTable(
     hash: bytea('hash').notNull(),
   },
   (t) => [primaryKey({ columns: [t.id, t.occurredAt] })],
+);
+
+export const CHECKPOINT_ALGS = ['ed25519', 'es256'] as const;
+export type CheckpointAlg = (typeof CHECKPOINT_ALGS)[number];
+
+/** The last link of each chain; changed only by the continuity trigger. RLS: `audit_heads_tenant` (SELECT). */
+export const auditHeads = pgTable('audit_heads', {
+  orgKey: uuid('org_key').primaryKey(),
+  seq: bigint('seq', { mode: 'number' }).notNull(),
+  hash: bytea('hash').notNull(),
+  updatedAt: ts('updated_at'),
+});
+
+/** Signed anchors of the heads (`audit.checkpoint`). Append-only. RLS: `audit_checkpoints_tenant`. */
+export const auditCheckpoints = pgTable(
+  'audit_checkpoints',
+  {
+    orgKey: uuid('org_key').notNull(),
+    seq: bigint('seq', { mode: 'number' }).notNull(),
+    hash: bytea('hash').notNull(),
+    signedAt: timestamp('signed_at', { withTimezone: true }).notNull(),
+    keyId: text('key_id').notNull(),
+    alg: text('alg', { enum: CHECKPOINT_ALGS }).notNull(),
+    signature: bytea('signature').notNull(),
+    anchoredObject: text('anchored_object'),
+  },
+  (t) => [primaryKey({ columns: [t.orgKey, t.seq] })],
+);
+
+/** One archived month of a chain (`audit.archive`). Append-only. RLS: `audit_archives_tenant`. */
+export const auditArchives = pgTable(
+  'audit_archives',
+  {
+    orgKey: uuid('org_key').notNull(),
+    month: text('month').notNull(),
+    objectKey: text('object_key').notNull(),
+    rowCount: bigint('row_count', { mode: 'number' }).notNull(),
+    minSeq: bigint('min_seq', { mode: 'number' }).notNull(),
+    maxSeq: bigint('max_seq', { mode: 'number' }).notNull(),
+    sha256: bytea('sha256').notNull(),
+    archivedAt: ts('archived_at'),
+  },
+  (t) => [primaryKey({ columns: [t.orgKey, t.month] })],
 );

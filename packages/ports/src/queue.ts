@@ -46,11 +46,12 @@ export interface JobData {
   'org.delete': { deletionRequestId: string };
   'analytics.rollup': NoData;
   'partitions.maintain': NoData;
+  /** Resource `{ type: 'audit_chain', id: orgKey }`; the zero key (orgId) is the platform chain. */
   'audit.chain': NoData;
   'audit.checkpoint': NoData;
   'audit.verify': NoData;
-  /** `YYYY-MM` of the month to export and detach. */
-  'audit.archive': { month: string };
+  /** `YYYY-MM` of the month to export and detach; the cron run takes the newest month outside the 13-month window. */
+  'audit.archive': { month?: string };
   'kms.rotate': NoData;
   'payment.reconcile': { paymentId?: string };
   'billing.meter': NoData;
@@ -131,8 +132,13 @@ export interface JobPolicy {
   retryDelayMaxSeconds: number;
   /** An attempt still running after this long is failed, and retried while retries remain. */
   expireInSeconds: number;
-  /** At most one job of the queue is active at a time: cron sweeps, seeding, the audit chain. */
+  /** At most one job of the queue (per singleton key) is active at a time: cron sweeps, seeding. */
   exclusive: boolean;
+  /**
+   * At most one queued job per singleton key; a send while one waits is a no-op (pg-boss `short`, or `stately`
+   * with `exclusive`). The audit chain dispatcher sends one per org key on every tick and relies on this.
+   */
+  coalesceQueued: boolean;
   /** Handlers per worker process. */
   concurrency: number;
 }
@@ -144,6 +150,7 @@ export const DEFAULT_JOB_POLICY: JobPolicy = {
   retryDelayMaxSeconds: 3600,
   expireInSeconds: 900,
   exclusive: false,
+  coalesceQueued: false,
   concurrency: 1,
 };
 
@@ -179,7 +186,8 @@ const POLICY_OVERRIDES: { readonly [N in JobName]?: Partial<JobPolicy> } = {
   'org.delete': { retryLimit: 0, expireInSeconds: 4 * HOUR, exclusive: true },
   'analytics.rollup': CRON,
   'partitions.maintain': CRON,
-  'audit.chain': { exclusive: true, retryDelaySeconds: 5, retryDelayMaxSeconds: MINUTE },
+  // One chainer per org holds the head (skip-locked), so jobs of different orgs run side by side.
+  'audit.chain': { coalesceQueued: true, retryDelaySeconds: 5, retryDelayMaxSeconds: MINUTE, expireInSeconds: 5 * MINUTE, concurrency: 4 },
   'audit.checkpoint': CRON,
   'audit.verify': { ...CRON, expireInSeconds: 4 * HOUR },
   'audit.archive': { ...CRON, expireInSeconds: 4 * HOUR },
@@ -219,6 +227,7 @@ export type JobResourceType =
   | 'template_version'
   | 'template_import'
   | 'form'
+  | 'audit_chain'
   | 'system';
 
 export interface JobResource {
@@ -276,6 +285,8 @@ export type JobHandler<N extends JobName> = (job: ReceivedJob<N>) => Promise<voi
 export interface WorkOptions {
   /** Defaults to the queue's `JOB_POLICIES` concurrency. */
   concurrency?: number;
+  /** How often an idle handler polls this queue; defaults to the queue adapter's interval (at least 500 ms). */
+  pollIntervalMs?: number;
 }
 
 export interface Worker {

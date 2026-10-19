@@ -12,7 +12,7 @@ describe('parseConfig', () => {
       host: '127.0.0.1',
       port: 8080,
       logLevel: 'info',
-      database: { url: base.DATABASE_URL, poolMax: 20 },
+      database: { url: base.DATABASE_URL, poolMax: 20, auditPoolMax: 2 },
       corsOrigins: [],
       trustProxy: false,
       telemetry: { endpoint: undefined, serviceName: 'fr-api', sampleRatio: 0.1 },
