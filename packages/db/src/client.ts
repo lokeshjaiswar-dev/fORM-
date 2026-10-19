@@ -1,8 +1,38 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import { auditArchives, auditCheckpoints, auditHeads, auditLog, auditPending, formDrafts, forms, memberships, orgs, users } from './schema/index.ts';
+import {
+  auditArchives,
+  auditCheckpoints,
+  auditHeads,
+  auditLog,
+  auditPending,
+  authThrottle,
+  authTokens,
+  formDrafts,
+  forms,
+  memberships,
+  orgs,
+  sessions,
+  userIdentities,
+  users,
+} from './schema/index.ts';
 
-export const tables = { orgs, users, memberships, forms, formDrafts, auditPending, auditLog, auditHeads, auditCheckpoints, auditArchives };
+export const tables = {
+  orgs,
+  users,
+  memberships,
+  sessions,
+  userIdentities,
+  authTokens,
+  authThrottle,
+  forms,
+  formDrafts,
+  auditPending,
+  auditLog,
+  auditHeads,
+  auditCheckpoints,
+  auditArchives,
+};
 
 export type Tables = typeof tables;
 export type Db = NodePgDatabase<Tables>;

@@ -61,7 +61,8 @@ beforeAll(async () => {
     LOG_LEVEL: 'silent',
   });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
-  app = await buildApp(parsed.config);
+  // Back-pressure off: a loaded machine running the int suites in parallel would see 503s that say nothing about RLS.
+  app = await buildApp(parsed.config, { underPressure: false });
   app.get('/v1/test-only/members', { config: { auth: 'user', perm: 'members.manage' } }, async () => ({ ok: true }));
   // A write, then a refusal inside the same transaction: the change rolls back, the denied record must not.
   app.post('/v1/test-only/rename-then-refuse', { config: { auth: 'user', perm: 'forms.read' } }, async (request) =>

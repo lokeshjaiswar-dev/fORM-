@@ -143,8 +143,13 @@ JOB_SIGNING_KEYS_FILE=/run/secrets/job_keys           # ADR-0016 HMAC keys, `id:
 WORKER_QUEUES=pdf.*,templates.thumbnail               # worker: queues to serve (default: all with a handler)
 WORKER_SHUTDOWN_GRACE_MS=25000                        # worker: SIGTERM grace before running jobs are failed back for a retry
 DATABASE_POOL_MAX=20
+TRUST_PROXY=1                                         # api: proxy hops in front of the API, or their addresses/CIDRs; never `true` (per-IP auth limits key on the client IP)
 STORAGE_DRIVER=s3  STORAGE_ENDPOINT=  STORAGE_BUCKET_STAGING=  STORAGE_BUCKET_UPLOADS=  STORAGE_BUCKET_ASSETS=  STORAGE_BUCKET_EXPORTS=  STORAGE_BUCKET_AUDIT=
-MAILER_DRIVER=smtp|log  SMTP_URL_FILE=
+MAILER_DRIVER=smtp|log  SMTP_URL_FILE=  MAIL_FROM=no-reply@form.example  MAIL_FROM_NAME=fORM-
+AUTH_SECRET_FILE=/run/secrets/auth_secret             # api: ≥ 32 bytes base64url; daily IP-hash salt, account throttle keys, OAuth transaction cookie
+PASSWORD_BREACH_CHECK=hibp|off                        # api: HIBP k-anonymity; default hibp on SaaS with open egress, always off when air-gapped
+OIDC_GOOGLE_CLIENT_ID=  OIDC_GOOGLE_CLIENT_SECRET_FILE=  OIDC_MICROSOFT_CLIENT_ID=  OIDC_MICROSOFT_CLIENT_SECRET_FILE=   # SaaS only; ignored on-prem with a notice
+AUTH_TOTP_ISSUER=fORM-                                # api: the issuer authenticator apps show
 KMS_DRIVER=aws|gcp|azure|vault|keyfile  KMS_KEY_ID=  KMS_KEYFILE_PATH=/run/secrets/form-master.key
 AUDIT_SIGNING_KEY_ID=audit-v1  AUDIT_RETIRED_SIGNING_KEY_IDS=  AUDIT_SYSLOG_URL=tls://siem.corp.local:6514  AUDIT_SYSLOG_CA_FILE=  AUDIT_RETENTION_YEARS=7   # worker: checkpoint signing and anchoring (§2.7)
 AUDIT_CHAIN_POLL_MS=250  AUDIT_DATABASE_POOL_MAX=2  DATABASE_AUDIT_POOL_MAX=2   # worker dispatcher; separate audit pools (worker, api)
@@ -201,7 +206,8 @@ The edition factor (`@form/config` `isEditionFeatureAvailable`) gates these `Fea
 | Function | Purpose | Granted to |
 |---|---|---|
 | `resolve_slug(slug)` → `(org_id, form_id, live_version_id, status_flags)` | Runtime pre-tenant lookup | `fr_app` |
-| `auth_user_by_email(email_norm)`, `auth_session(token_hash)` | Login and session lookup | `fr_app` |
+| `auth_user_by_email(email_norm)`, `auth_session(token_hash, idle_seconds)` | Login and session lookup; `auth_session` returns the state (active, revoked, expired, user inactive) and slides the idle expiry | `fr_app` |
+| `auth_user_credentials(user_id)`, `auth_create_user(…)`, `auth_recovery_code_use(user_id, hash)`, `auth_identity_user(provider, subject)`, `auth_token_take(hash, purpose)`, `auth_token_peek(hash, purpose)`, `auth_mfa_ticket(hash)`, `auth_throttle_hit(bucket, key, window)` | WP-1.01 (ADR-0017 as built): second factor and credential reads, sign-up, single-use recovery codes, OAuth identity lookup, single-use email tokens and the account a live link is for, MFA ticket attempts, the auth rate-limit counters | `fr_app` |
 | `api_key_lookup(prefix)` | API key auth | `fr_app` |
 | `invite_by_token(token_hash)` | Invite acceptance | `fr_app` |
 | `list_user_orgs(user_id)`, `membership_for(user_id, org_id)` | `GET /v1/orgs`, `X-FR-Org` validation | `fr_app` |
@@ -337,7 +343,7 @@ export const sessions = pgTable('sessions', {   // opaque tokens; only SHA-256 s
   tokenHash: bytea('token_hash').notNull().unique(),
   userId: uuid('user_id').notNull().references(() => users.id),
   activeOrgId: uuid('active_org_id'),
-  mfaLevel: text('mfa_level').notNull(),          // pwd | pwd+totp | oauth | sso
+  mfaLevel: text('mfa_level').notNull(),          // first factor pwd | link | oauth | sso, then +totp or +recovery when used (as built)
   ipHash: bytea('ip_hash'), uaSummary: text('ua_summary'),
   createdAt: ts('created_at'), lastSeenAt: ts('last_seen_at'),
   idleExpiresAt: timestamp('idle_expires_at', { withTimezone: true }).notNull(),       // 12 h
@@ -669,7 +675,7 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 ### 3.2 Request pipeline
 
 1. `onRequest`: request id and OTel span; body limits (1 MB default, 5 MB draft PUT, 256 KB runtime submit); security headers per surface (§4.5). **URLs are scrubbed before logging and tracing:** query strings are dropped except an allowlist of parameter names (`lang`, `embed`, `utm_*` names without values), so prefill values never reach logs or traces (C-M13).
-2. `authenticate`: session (`__Host-fr_sess`, Secure, HttpOnly, SameSite=Lax, via `auth_session()`), or API key. **CSRF (ADR-0008):** unsafe methods with cookie auth need `Sec-Fetch-Site: same-origin` (the builder and API are configured same-site, the runtime is not) **and** the header `X-FR-Client: builder`; CORS denies the preflight from any other origin. No CSRF tokens. Active org from `X-FR-Org`, validated with `membership_for()`.
+2. `authenticate`: session (`__Host-fr_sess`, Secure, HttpOnly, SameSite=Lax, via `auth_session()`), or API key. **CSRF (ADR-0008):** unsafe methods with cookie auth need `Sec-Fetch-Site: same-origin` (the builder and API are configured same-site, the runtime is not) **and** the header `X-FR-Client: builder`; CORS denies the preflight from any other origin. No CSRF tokens. Active org from `X-FR-Org`, validated with `membership_for()`. *As built (WP-1.01):* `same-site` also passes when `Origin` is the configured builder origin (SaaS sibling hosts); unsafe `/v1/auth/*` requests are guarded with or without a cookie (login CSRF); see ADR-0008.
 3. `rateLimit` (§3.5).
 4. `authorize`: permission, form-level grants, `data.route` for routing endpoints, API key scope.
 5. Handler inside `withTenant(ctx)`; one transaction per request; GETs read-only unless they write an audit row.
@@ -687,6 +693,7 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 | `GET /v1/auth/oauth/:provider/start` · `…/callback` | Google, Microsoft; PKCE + state + nonce; hidden when `EGRESS_POLICY=none` |
 | `POST /v1/auth/password/forgot` · `…/reset` | Local top-100k password list everywhere; HIBP k-anonymity SaaS only |
 | `POST /v1/auth/mfa/totp/setup` · `/verify` · `/disable` · `POST /v1/auth/mfa/recovery` | |
+| *As built (WP-1.01):* `GET /v1/auth/methods` · `POST /v1/auth/link` (who an emailed link is for, before it is used) · `POST /v1/auth/verify-email` · `POST /v1/auth/mfa/totp` (TOTP for an MFA ticket) · `POST /v1/auth/mfa/recovery` (recovery code for a ticket) · `POST /v1/auth/mfa/recovery-codes` · `GET /v1/me` · `GET /v1/me/sessions` · `DELETE /v1/me/sessions/:id` | Sign-up answers 202 and emails a verification link whose redemption signs in; email tokens travel in the builder URL fragment; `/v1/me/export` and `/v1/me/delete` arrive with WP-1.31 |
 | `GET/PATCH /v1/me` · `GET/DELETE /v1/me/sessions[/:id]` · `POST /v1/me/export` · `POST /v1/me/delete` | Account self-service export and deletion (CMP-21) |
 | (P3) `GET /v1/auth/sso/:connection/start` | BoxyHQ Jackson; LDAP behind the same seam |
 
@@ -794,6 +801,9 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 |---|---|---|
 | `auth_login` | ipHash + emailNorm | 10 / 15 min, then captcha (PoW), then growing backoff |
 | `auth_any` | ipHash | 60 / min |
+| `auth_account` (as built) | emailNorm (keyed hash) across IPs, password attempts | 30 / h, then a password sign-in steps up to an emailed link (`link_sent` whatever the password; the link only when it was right), never a lockout |
+| `auth_mail` (as built) | emailNorm (keyed hash) | 10 / h links mailed to one address (sign-up, magic link, reset, step-up); failed passwords never count |
+| `auth_mfa` (as built) | user id | 30 / h second-factor checks (MFA tickets and the signed-in TOTP routes) |
 | `builder_read` / `builder_write` | userId | 600 / min · 120 / min |
 | `api_read` / `api_write` | apiKeyId | per plan; `RateLimit-*` headers |
 | `runtime_session` | ipHash + form | 300 / min (CGNAT-friendly) |

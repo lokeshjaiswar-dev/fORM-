@@ -12,6 +12,11 @@
       "passThroughEnv": ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*"]
     },
     "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
+    "e2e:stack": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "passThroughEnv": ["CI", "DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*", "FR_E2E_*"]
+    },
     "test:determinism": { "dependsOn": ["^typecheck"], "cache": false, "passThroughEnv": ["CI"] },
     "test:perf": { "cache": false, "passThroughEnv": ["FORM_PERF_SLACK"] },
     "templates:build": { "outputs": ["dist/**"], "env": ["FORM_PACK_SIGNING_KEY", "FORM_PACK_KEY_ID"] },

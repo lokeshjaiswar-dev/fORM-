@@ -53,6 +53,59 @@ isolation(
 );
 
 isolation(
+  'sessions',
+  {
+    foreign: (s) => sql`user_id in (${s.a.ownerId}, ${s.a.editorId})`,
+    own: (s) => sql`user_id = ${s.b.editorId}`,
+    update: (s) => sql`update sessions set revoked_at = now() where user_id = ${s.a.editorId}`,
+    insertForeign: (s) =>
+      sql`insert into sessions (id, token_hash, user_id, mfa_level, idle_expires_at, absolute_expires_at)
+          values (${randomUUID()}, ${Buffer.alloc(32, 1)}, ${s.a.editorId}, 'pwd', now() + interval '1 hour', now() + interval '1 day')`,
+    visibleTo: ['user'],
+    expect: { select: 0, update: 0 },
+  },
+  env,
+);
+
+isolation(
+  'user_identities',
+  {
+    foreign: (s) => sql`user_id = ${s.a.editorId}`,
+    own: (s) => sql`user_id = ${s.b.editorId}`,
+    update: (s) => sql`update user_identities set last_used_at = now() where user_id = ${s.a.editorId}`,
+    insertForeign: (s) => sql`insert into user_identities (id, user_id, provider, subject) values (${randomUUID()}, ${s.a.editorId}, 'microsoft', ${randomUUID()})`,
+    visibleTo: ['user'],
+    expect: { select: 0, update: 0 },
+  },
+  env,
+);
+
+isolation(
+  'auth_tokens',
+  {
+    foreign: (s) => sql`user_id = ${s.a.editorId}`,
+    own: (s) => sql`user_id = ${s.b.editorId}`,
+    update: (s) => sql`update auth_tokens set consumed_at = now() where user_id = ${s.a.editorId}`,
+    insertForeign: (s) =>
+      sql`insert into auth_tokens (id, token_hash, purpose, user_id, expires_at) values (${randomUUID()}, ${Buffer.alloc(32, 2)}, 'password_reset', ${s.a.editorId}, now() + interval '1 hour')`,
+    visibleTo: ['user'],
+    expect: { select: 0, update: 0 },
+  },
+  env,
+);
+
+isolation(
+  'auth_throttle',
+  {
+    foreign: () => sql`true`,
+    update: () => sql`update auth_throttle set hits = 0`,
+    insertForeign: () => sql`insert into auth_throttle (bucket, key, window_start, hits) values ('auth_any', ${Buffer.alloc(1)}, now(), 1)`,
+    expect: { select: 'denied', update: 'denied' },
+  },
+  env,
+);
+
+isolation(
   'forms',
   {
     foreign: (s) => sql`org_id = ${s.a.orgId}`,
@@ -148,7 +201,7 @@ const userCtx = (): TenantCtx => ({ orgId: seed.b.orgId, actor: 'user', userId: 
 
 describe('tenant context', () => {
   it('sees zero rows outside withTenant, without raising', async () => {
-    for (const table of ['orgs', 'users', 'memberships', 'forms', 'form_drafts', 'audit_log', 'audit_heads', 'audit_checkpoints', 'audit_archives']) {
+    for (const table of ['orgs', 'users', 'memberships', 'sessions', 'user_identities', 'auth_tokens', 'forms', 'form_drafts', 'audit_log', 'audit_heads', 'audit_checkpoints', 'audit_archives']) {
       const { rows } = await t.app.pool.query<{ n: number }>(`select count(*)::int as n from ${table}`);
       expect(rows[0]!.n, table).toBe(0);
     }

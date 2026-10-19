@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
@@ -6,15 +7,19 @@ import underPressure from '@fastify/under-pressure';
 import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { DestinationStream } from 'pino';
-import { createDb, type DbHandle } from '@form/db';
+import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
 import { cachedClockCheck, createLogger, type ClockStatus } from '@form/observability';
-import { DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
+import type { KeyProvider, Mailer } from '@form/ports';
+import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { formRoutes } from './routes/forms.ts';
 import { healthRoutes } from './routes/health.ts';
 import { metaRoutes } from './routes/meta.ts';
+import { createLogMailer, createThrottle, DEFAULT_AUTH_LIMITS, hibpBreachCheck, registerAuthModule, registerCsrfGuard } from './modules/auth/index.ts';
+import type { BreachCheck } from './modules/auth/passwords.ts';
+import type { Limit } from './modules/auth/throttle.ts';
 
 export interface AppDeps {
   /** Defaults to a pool on `config.database.url`, closed with the app. */
@@ -25,6 +30,20 @@ export interface AppDeps {
   /** Log destination (tests); stdout by default. */
   logStream?: DestinationStream;
   cspReports?: CspReportDeps;
+  /** Sign-in emails (the composition root passes the SMTP adapter); default: the log mailer. */
+  mailer?: Mailer;
+  /** Wraps TOTP secrets (the composition root passes the KMS); without it, two-factor enrolment answers 503. */
+  keys?: KeyProvider;
+  /** Overrides the HIBP lookup that `PASSWORD_BREACH_CHECK=hibp` turns on; null turns it off. */
+  breached?: BreachCheck | null;
+  /** Overrides of the auth rate limits (tests). */
+  authLimits?: Partial<Record<AuthThrottleBucket, Limit>>;
+  /**
+   * Event-loop back-pressure (503 past 1 s of loop delay); `false` turns it off for integration suites, whose
+   * argon2id hashing and parallel test files would trip it on a loaded machine.
+   */
+  underPressure?: false;
+  now?: () => Date;
 }
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -33,9 +52,11 @@ export const BODY_LIMIT = 1024 * 1024;
 /** The HTTP application without listening, so tests and the OpenAPI emitter can build it. */
 export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<FastifyInstance> {
   const logger = createLogger({ level: config.logLevel, name: 'fr-api', base: { service: config.telemetry.serviceName } }, deps.logStream);
+  const { trustProxy } = config;
   const app = Fastify({
     loggerInstance: logger as FastifyBaseLogger,
-    trustProxy: config.trustProxy,
+    // A hop count trusts that many proxies nearest the API (Fastify's number form, which its types leave out).
+    trustProxy: typeof trustProxy === 'number' ? (_addr: string, hop: number) => hop < trustProxy : trustProxy,
     bodyLimit: BODY_LIMIT,
     requestIdHeader: false,
     logController: new LogController({ requestIdLogLabel: 'requestId' }),
@@ -63,6 +84,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     });
   if (!deps.auditDb) app.addHook('onClose', () => auditHandle.close());
 
+  const now = deps.now ?? (() => new Date());
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandling(app, { auditWriter: auditHandle.db });
@@ -86,22 +108,26 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     exposedHeaders: ['x-request-id', 'etag'],
     maxAge: 600,
   });
-  await app.register(underPressure, {
-    maxEventLoopDelay: 1000,
-    maxEventLoopUtilization: 0.98,
-    retryAfter: 5,
-    pressureHandler: (_request, reply) => {
-      reply.header('retry-after', '5');
-      sendProblem(reply, 'SERVICE_UNAVAILABLE', 'The server is overloaded; retry shortly.');
-    },
-  });
+  await app.register(cookie);
+  if (deps.underPressure !== false) {
+    await app.register(underPressure, {
+      maxEventLoopDelay: 1000,
+      maxEventLoopUtilization: 0.98,
+      retryAfter: 5,
+      pressureHandler: (_request, reply) => {
+        reply.header('retry-after', '5');
+        sendProblem(reply, 'SERVICE_UNAVAILABLE', 'The server is overloaded; retry shortly.');
+      },
+    });
+  }
   await app.register(swagger, {
     openapi: {
       openapi: '3.1.0',
       info: { title: 'fORM- API', version: '0.0.0', description: 'Builder and app API (/v1). Internal until the public API ships (P2).' },
       components: {
         securitySchemes: {
-          devUser: { type: 'apiKey', in: 'header', name: 'X-FR-Dev-User', description: 'Development stub until sign-in (WP-1.01).' },
+          session: { type: 'apiKey', in: 'cookie', name: '__Host-fr_sess', description: 'Session cookie; unsafe methods also need `X-FR-Client: builder` (ADR-0008).' },
+          devUser: { type: 'apiKey', in: 'header', name: 'X-FR-Dev-User', description: 'Tests and local development only (AUTH_DEV_HEADERS); refused in production.' },
           org: { type: 'apiKey', in: 'header', name: 'X-FR-Org', description: 'Active org, validated with membership_for().' },
         },
       },
@@ -109,7 +135,40 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     transform: jsonSchemaTransform,
   });
 
-  registerAuth(app, { db: handle.db, devHeaders: config.authDevHeaders });
+  const throttle = createThrottle({ db: handle.db, auditDb: auditHandle.db, limits: { ...DEFAULT_AUTH_LIMITS, ...deps.authLimits }, now });
+  // A refused request never reaches the auth module's own count of `/v1/auth/*` requests, so it is counted here.
+  registerCsrfGuard(app, {
+    builderOrigins: config.corsOrigins,
+    devHeader: config.authDevHeaders ? DEV_USER_HEADER : null,
+    refused: async (request, reply) => {
+      const { ipHash } = clientInfo(request, config.auth.secret, now());
+      await throttle.hit(request, reply, [{ bucket: 'auth_any', key: ipHash }], { ipHash });
+    },
+  });
+  registerAuth(app, {
+    db: handle.db,
+    auditDb: auditHandle.db,
+    secret: config.auth.secret,
+    devHeaders: config.authDevHeaders,
+    // `/v1/auth/*` requests were counted on arrival already.
+    throttleRejected: async (request, reply, ipHash) => {
+      if (!request.routeOptions.url?.startsWith('/v1/auth/')) await throttle.hit(request, reply, [{ bucket: 'auth_any', key: ipHash }], { ipHash });
+    },
+    now,
+  });
+  registerAuthModule(app, {
+    db: handle.db,
+    auditDb: auditHandle.db,
+    config,
+    mailer: deps.mailer ?? createLogMailer(app.log),
+    keys: deps.keys,
+    breached:
+      deps.breached === null
+        ? undefined
+        : (deps.breached ?? (config.auth.breachCheck === 'hibp' ? hibpBreachCheck({ onError: (err) => app.log.warn({ err }, 'HIBP lookup failed') }) : undefined)),
+    throttle,
+    now,
+  });
   healthRoutes(app, {
     ping: async () => {
       await handle.pool.query('select 1');

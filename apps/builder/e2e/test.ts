@@ -25,14 +25,37 @@ export const SAAS_EDITION = editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 
  *
  * `GET /v1/meta/edition` answers with `edition` (SaaS by default); `null` makes the API unreachable.
  */
-export const test = base.extend<{ allowCspViolations: boolean; cspViolations: CspViolation[]; edition: EditionSummary | null; editionRoute: void }>({
+export const test = base.extend<{
+  allowCspViolations: boolean;
+  cspViolations: CspViolation[];
+  edition: EditionSummary | null;
+  editionRoute: void;
+  realApi: boolean;
+  authRoutes: void;
+}>({
   allowCspViolations: [false, { option: true }],
   edition: [SAAS_EDITION, { option: true }],
   editionRoute: [
-    async ({ context, edition }, use) => {
-      await context.route('**/v1/meta/edition', (route) =>
-        edition ? route.fulfill({ json: edition, headers: { 'cache-control': 'no-store' } }) : route.abort('connectionrefused'),
-      );
+    async ({ context, edition, realApi }, use) => {
+      if (!realApi) {
+        await context.route('**/v1/meta/edition', (route) =>
+          edition ? route.fulfill({ json: edition, headers: { 'cache-control': 'no-store' } }) : route.abort('connectionrefused'),
+        );
+      }
+      await use();
+    },
+    { auto: true },
+  ],
+  /* The suites without an API see a signed-out visitor; playwright.stack.config.ts sets `realApi` and mocks nothing. */
+  realApi: [false, { option: true }],
+  authRoutes: [
+    async ({ context, realApi }, use) => {
+      if (!realApi) {
+        await context.route('**/v1/me', (route) =>
+          route.fulfill({ status: 401, contentType: 'application/problem+json', json: { status: 401, code: 'UNAUTHENTICATED', title: 'Authentication required' } }),
+        );
+        await context.route('**/v1/auth/methods', (route) => route.fulfill({ json: { password: true, emailLinks: true, oauth: [] } }));
+      }
       await use();
     },
     { auto: true },

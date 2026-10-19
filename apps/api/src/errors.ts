@@ -8,18 +8,28 @@ import { auditProblem, type DenialAudit } from './audit.ts';
 export const PROBLEMS = {
   BAD_REQUEST: { status: 400, title: 'Bad request' },
   VALIDATION_FAILED: { status: 400, title: 'Validation failed' },
+  INVALID_TOKEN: { status: 400, title: 'The link or ticket is invalid or has expired' },
   UNAUTHENTICATED: { status: 401, title: 'Authentication required' },
+  INVALID_CREDENTIALS: { status: 401, title: 'The email address or password is not right' },
+  INVALID_CODE: { status: 401, title: 'The code is not right' },
+  PASSWORD_REQUIRED: { status: 401, title: 'Enter your password to continue' },
   FORBIDDEN: { status: 403, title: 'Forbidden' },
+  CSRF_REJECTED: { status: 403, title: 'Cross-site request refused' },
+  EMAIL_NOT_VERIFIED: { status: 403, title: 'The email address is not verified yet' },
+  REAUTH_REQUIRED: { status: 403, title: 'Sign in again to continue' },
   DATA_ROUTE_FORBIDDEN: { status: 403, title: 'Routing data needs the data.route permission' },
   NOT_FOUND: { status: 404, title: 'Not found' },
   METHOD_NOT_ALLOWED: { status: 405, title: 'Method not allowed' },
   DRAFT_REV_CONFLICT: { status: 409, title: 'The draft changed since it was read' },
   LOCK_VIOLATION: { status: 409, title: 'The change touches locked template content' },
+  MFA_ALREADY_ENABLED: { status: 409, title: 'Two-factor sign-in is already on' },
+  MFA_NOT_ENABLED: { status: 409, title: 'Two-factor sign-in is not on' },
   PAYLOAD_TOO_LARGE: { status: 413, title: 'Payload too large' },
   UNSUPPORTED_MEDIA_TYPE: { status: 415, title: 'Unsupported media type' },
   FEATURE_UNAVAILABLE: { status: 422, title: 'Feature unavailable in this edition or plan' },
   NOTICE_NOT_APPROVED: { status: 422, title: 'The privacy notice is not approved' },
   PLAN_LIMIT_REACHED: { status: 422, title: 'Plan limit reached' },
+  WEAK_PASSWORD: { status: 422, title: 'Choose a stronger password' },
   RATE_LIMITED: { status: 429, title: 'Too many requests' },
   INTERNAL: { status: 500, title: 'Internal error' },
   SERVICE_UNAVAILABLE: { status: 503, title: 'Service unavailable' },
@@ -49,13 +59,16 @@ export class ProblemError extends Error {
   readonly detail: string | undefined;
   /** For a 403 raised before the tenant context exists: who to file the denied record under. */
   readonly denial: DenialAudit | undefined;
+  /** The route wrote its own, more specific audit record (auth events); the error handler adds none. */
+  readonly audited: boolean;
 
-  constructor(code: ProblemCode, detail?: string, denial?: DenialAudit) {
+  constructor(code: ProblemCode, detail?: string, denial?: DenialAudit, o: { audited?: boolean } = {}) {
     super(detail ?? PROBLEMS[code].title);
     this.name = 'ProblemError';
     this.code = code;
     this.detail = detail;
     this.denial = denial;
+    this.audited = o.audited ?? false;
   }
 }
 
@@ -97,10 +110,11 @@ interface Outcome {
   detail?: string | undefined;
   errors?: FieldIssue[];
   denial?: DenialAudit | undefined;
+  audited?: boolean;
 }
 
 function classify(err: FastifyError, request: FastifyRequest): Outcome {
-  if (err instanceof ProblemError) return { code: err.code, detail: err.detail, denial: err.denial };
+  if (err instanceof ProblemError) return { code: err.code, detail: err.detail, denial: err.denial, audited: err.audited };
   if (hasZodFastifySchemaValidationErrors(err)) {
     const errors = err.validation.map((v) => ({ path: `${err.validationContext ?? ''}${v.instancePath}`, message: v.message ?? 'invalid' }));
     return { code: 'VALIDATION_FAILED', errors };
@@ -125,7 +139,7 @@ export function registerErrorHandling(app: FastifyInstance, o: { auditWriter: Db
   app.setErrorHandler(async (err: FastifyError, request, reply) => {
     const out = classify(err, request);
     const { status } = PROBLEMS[out.code];
-    if (status === 403 || status >= 500) {
+    if ((status === 403 || status >= 500) && !out.audited) {
       try {
         await auditProblem(o.auditWriter, request, status, out.code, out.denial);
       } catch (auditErr) {

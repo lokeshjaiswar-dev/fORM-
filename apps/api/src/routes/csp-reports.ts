@@ -97,7 +97,7 @@ export async function cspReportRoutes(app: FastifyInstance, deps: CspReportDeps 
       CSP_REPORT_PATH,
       {
         bodyLimit: CSP_REPORT_BODY_LIMIT,
-        config: { auth: 'none' },
+        config: { auth: 'none', csrf: false },
         schema: { tags: ['security'], summary: 'Receive Content-Security-Policy violation reports', response: { 204: z.null().describe('Accepted') } },
       },
       async (request, reply) => {

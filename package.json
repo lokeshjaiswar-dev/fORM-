@@ -15,7 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:int": "turbo run test:int",
-    "e2e": "turbo run e2e",
+    "e2e": "turbo run e2e && turbo run e2e:stack",
     "test:determinism": "turbo run test:determinism",
     "test:perf": "turbo run test:perf --concurrency=1",
     "lint": "oxlint",

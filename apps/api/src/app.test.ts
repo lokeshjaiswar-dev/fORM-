@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
+import { clientInfo } from './auth.ts';
 import { parseConfig, type ApiConfig } from './config.ts';
 import { ProblemError } from './errors.ts';
 
@@ -14,6 +15,9 @@ function config(env: Record<string, string> = {}): ApiConfig {
     DATABASE_URL: 'postgres://fr_app:x@127.0.0.1:1/form',
     LOG_LEVEL: 'info',
     PUBLIC_BUILDER_URL: 'https://app.form.test',
+    AUTH_SECRET: 'A'.repeat(43),
+    KMS_KEYFILE_PATH: '/run/secrets/form-master.key',
+    MAILER_DRIVER: 'log',
     ...env,
   });
   if (!r.ok) throw new Error(r.errors.join('\n'));
@@ -210,6 +214,21 @@ describe('security headers, CORS and logs', () => {
     expect(evil.headers['access-control-allow-origin']).toBeUndefined();
   });
 
+  it('keys the client on the hop the trusted proxy added, not a client-chosen X-Forwarded-For', async () => {
+    const cfg = config({ TRUST_PROXY: '1' });
+    const { app: a } = await app(cfg);
+    const seen: string[] = [];
+    a.addHook('onRequest', async (request) => {
+      seen.push(`${request.ip} ${Buffer.from(clientInfo(request, cfg.auth.secret, new Date('2026-10-19T00:00:00Z')).ipHash).toString('hex')}`);
+    });
+    for (const spoofed of ['198.51.100.1', '198.51.100.2, 192.0.2.9']) {
+      await a.inject({ url: '/livez', remoteAddress: '10.0.0.5', headers: { 'x-forwarded-for': `${spoofed}, 203.0.113.7` } });
+    }
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toMatch(/^203\.0\.113\.7 [0-9a-f]+$/);
+    expect(seen[1]).toBe(seen[0]);
+  });
+
   it('logs requests without query values or credentials', async () => {
     const { app: a, lines } = await app();
     await a.inject({ url: '/livez?email=asha@example.in&lang=hi&utm_source=x', headers: { authorization: 'Bearer fr_live_secret', cookie: '__Host-fr_sess=s' } });
@@ -313,14 +332,39 @@ describe('CSP violation reports', () => {
 });
 
 describe('OpenAPI', () => {
-  it('documents the routes and the dev security schemes', async () => {
+  it('documents the routes and the security schemes', async () => {
     const { app: a } = await app();
     const res = await a.inject({ url: '/v1/openapi.json' });
     expect(res.statusCode).toBe(200);
     const doc = res.json<{ openapi: string; paths: Record<string, unknown>; components: { securitySchemes: Record<string, unknown> } }>();
     expect(doc.openapi).toBe('3.1.0');
-    expect(Object.keys(doc.paths).sort()).toEqual(['/livez', '/readyz', '/v1/csp-reports', '/v1/forms', '/v1/meta/edition']);
-    expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org']);
+    expect(Object.keys(doc.paths).sort()).toEqual([
+      '/livez',
+      '/readyz',
+      '/v1/auth/link',
+      '/v1/auth/login',
+      '/v1/auth/logout',
+      '/v1/auth/magic-link',
+      '/v1/auth/magic-link/verify',
+      '/v1/auth/methods',
+      '/v1/auth/mfa/recovery',
+      '/v1/auth/mfa/recovery-codes',
+      '/v1/auth/mfa/totp',
+      '/v1/auth/mfa/totp/disable',
+      '/v1/auth/mfa/totp/setup',
+      '/v1/auth/mfa/totp/verify',
+      '/v1/auth/password/forgot',
+      '/v1/auth/password/reset',
+      '/v1/auth/signup',
+      '/v1/auth/verify-email',
+      '/v1/csp-reports',
+      '/v1/forms',
+      '/v1/me',
+      '/v1/me/sessions',
+      '/v1/me/sessions/{id}',
+      '/v1/meta/edition',
+    ]);
+    expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);
     expect(JSON.stringify(doc.paths['/v1/forms'])).toContain('"maximum":200');
   });
 });

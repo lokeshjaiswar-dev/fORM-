@@ -28,6 +28,8 @@ export interface IsolationCase {
   update?: (s: Seed) => SQL;
   /** An INSERT of a row for org A. */
   insertForeign: (s: Seed) => SQL;
+  /** Actor kinds that see rows at all; the others see none (identity tables are the user's own). Default: every kind. */
+  visibleTo?: readonly TenantCtx['actor'][];
   expect: { select: 0 | Denied; update?: 0 | Denied };
 }
 
@@ -48,6 +50,10 @@ export function isolation(table: string, c: IsolationCase, env: () => { t: TestD
           const ctx = actor.ctx(seed.b);
           if (c.expect.select === 0) {
             expect(await count(t, ctx, table, c.foreign(seed))).toBe(0);
+            if (c.visibleTo && !c.visibleTo.includes(actor.kind)) {
+              expect(await count(t, ctx, table, sql`true`)).toBe(0);
+              return;
+            }
             expect(await count(t, ctx, table, sql`true`)).toBeGreaterThan(0);
             if (c.own) expect(await count(t, ctx, table, c.own(seed))).toBeGreaterThan(0);
           } else {

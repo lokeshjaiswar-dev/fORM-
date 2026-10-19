@@ -6,3 +6,4 @@ export * from './scan.contract.ts';
 export * from './guardian.contract.ts';
 export * from './smtp-sink.ts';
 export * from './postgres.ts';
+export * from './oidc-provider.ts';

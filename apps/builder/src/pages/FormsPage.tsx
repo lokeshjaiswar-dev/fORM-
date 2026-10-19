@@ -7,6 +7,7 @@ import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
+import { AccountMenu } from '@/auth/AccountMenu';
 import { EditionBadge } from '@/edition/EditionBadge';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
 import { uid } from '@/lib/utils';
@@ -104,6 +105,9 @@ export function FormsPage() {
 
   return (
     <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-[var(--notion-text)]">
+      <div className="-mt-12 mb-6 flex justify-end">
+        <AccountMenu />
+      </div>
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
         <EditionBadge />

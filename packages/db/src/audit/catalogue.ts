@@ -23,6 +23,97 @@ export const AUDIT_EVENTS = {
     resourceType: 'route',
     description: 'An API request failed with a 5xx; the problem code is the reason.',
   },
+  'auth.signup': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'An account was created (pending email verification); denied when the address is taken or sign-up is refused.',
+  },
+  'auth.email_verified': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'An email verification link was redeemed; denied for an unknown, used or expired link, or a missing or wrong password in another browser.',
+  },
+  'auth.login': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'A session was issued (method and factors in metadata); denied for a refused password, link, OAuth answer or second factor.',
+  },
+  'auth.mfa_challenged': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description: 'The first factor passed and a 5-minute MFA ticket was issued; the session follows the second factor.',
+  },
+  'auth.logout': {
+    outcomes: ['success'],
+    resourceType: 'session',
+    description: 'The user signed out; the session was revoked (there is none with the development header).',
+  },
+  'auth.magic_link_sent': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description:
+      'A sign-in link was emailed (reason step_up after many password attempts at the account); denied when no active account has the address (the caller sees the same answer).',
+  },
+  'auth.link_checked': {
+    outcomes: ['denied'],
+    resourceType: 'user',
+    description: 'An emailed sign-in or verification link was looked up before use and is unknown, used or expired.',
+  },
+  'auth.password_reset_requested': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'A password reset link was emailed; denied when no active account has the address (the caller sees the same answer).',
+  },
+  'auth.password_reset': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'A password was reset with an emailed link and every session revoked; denied for a bad link or a refused password.',
+  },
+  'auth.totp_setup': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description: 'A new TOTP secret was issued for enrolment; it takes effect once a code from it is verified.',
+  },
+  'auth.totp_enabled': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'TOTP two-factor sign-in was turned on and 10 recovery codes issued; denied for a wrong code or a sign-in older than 15 minutes.',
+  },
+  'auth.totp_disabled': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'TOTP two-factor sign-in was turned off and the recovery codes discarded; denied for a wrong code.',
+  },
+  'auth.recovery_codes_issued': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'user',
+    description: 'A fresh set of 10 recovery codes replaced the old ones; denied for a wrong TOTP code.',
+  },
+  'auth.session_rotated': {
+    outcomes: ['success'],
+    resourceType: 'session',
+    description: 'A privilege change (second factor added or removed) replaced the session token; the old one was revoked.',
+  },
+  'auth.session_revoked': {
+    outcomes: ['success'],
+    resourceType: 'session',
+    description: 'The user revoked one of their sessions, or every other session after a credential change.',
+  },
+  'auth.session_rejected': {
+    outcomes: ['denied'],
+    resourceType: 'session',
+    description: 'A request carried a session cookie that is unknown, revoked or expired, or whose user is no longer active.',
+  },
+  'auth.oauth_linked': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description: 'A Google or Microsoft account was linked to the user at OAuth sign-in (the provider in metadata).',
+  },
+  'auth.throttled': {
+    outcomes: ['denied'],
+    resourceType: 'route',
+    description: 'An auth limit was reached (bucket in metadata): refused with 429, or for auth_account stepped up to an emailed link.',
+  },
   'job.rejected': {
     outcomes: ['denied'],
     resourceType: 'job',

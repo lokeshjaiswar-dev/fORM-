@@ -21,6 +21,14 @@ The builder authenticates to the API with a session cookie (`__Host-fr_sess`, Se
 - The guard depends on browsers that send Fetch-Metadata; WP-1.01's acceptance includes "cross-site POST without the header is rejected".
 - On-prem installs that put respondent content on subdomains of the builder's site keep only CORS between them; the Helm chart documents this and recommends a separate domain.
 
+## As built (WP-1.01)
+
+- The guard is an `onRequest` hook (`apps/api/src/modules/auth/csrf.ts`). It applies to every unsafe request that carries the `__Host-fr_sess` cookie, and to every unsafe `/v1/auth/*` request even without one, so a cross-site page cannot sign a victim into another account (login CSRF).
+- `Sec-Fetch-Site: same-origin` passes. `same-site` passes only together with an `Origin` equal to the configured builder origin (`PUBLIC_BUILDER_URL`): on SaaS the builder (`app.<domain>`) and the API (`api.<domain>`) are sibling hosts of one site, so the browser reports `same-site` for the builder's own calls, while respondent pages live on another registrable domain (ADR-0013). A missing `Sec-Fetch-Site`, `cross-site` and `none` are refused.
+- A refusal first counts against the caller's per-IP `auth_any` budget (architecture §3.5); past it the answer is `429` and nothing more is audited. Otherwise it is `403 CSRF_REJECTED`, audited by the error handler as `request.authorize` with the reason `csrf_missing_client_header`, `csrf_cross_site` or `csrf_no_fetch_metadata`. So cross-site requests and junk cookies cannot flood the audit chain.
+- Exempt: `POST /v1/csp-reports` (`config.csrf: false`; browsers send reports without custom headers) and requests authenticated by the development header `X-FR-Dev-User` without a cookie (tests and local development only; refused in production; a sign-out with it is still audited, with no session).
+- Tests: `apps/api/test/auth.int.test.ts` (cross-site POST with the cookie but without the header, with the header but cross-site, without Fetch-Metadata, same-site from a sibling that is not the builder) and `apps/builder/e2e/auth.stack.spec.ts` (a form posted from another site, and a builder fetch without the header, both refused while the session stays).
+
 ## Links
 
 - Architecture §3.1 (surfaces), §3.2 step 2, §4.2, §8 control 3

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -85,7 +86,13 @@ if (envOut) {
         'EGRESS_POLICY=allowlist',
         `DATABASE_URL=${urls.fr_app}`,
         'PUBLIC_BUILDER_URL=http://localhost:5173',
+        'PUBLIC_API_URL=http://localhost:5173',
         'AUTH_DEV_HEADERS=true',
+        `AUTH_SECRET=${randomBytes(32).toString('base64url')}`,
+        '# Sign-in emails go to Mailpit (http://127.0.0.1:8025) from deploy/docker/compose.dev.yaml.',
+        'SMTP_URL=smtp://127.0.0.1:1025',
+        '# TOTP secrets are wrapped by this key; without it they last only as long as the process.',
+        '# KMS_KEYFILE_PATH=../worker/.data/form-master.key',
         'LOG_LEVEL=info',
         '# OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318',
         '# NTP_SERVERS=time.nplindia.org',

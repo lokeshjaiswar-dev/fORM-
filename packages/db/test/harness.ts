@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { inject } from 'vitest';
 import { createTestDatabase } from '@form/testkit';
@@ -78,6 +78,17 @@ async function seedOrg(owner: pg.Pool, slug: string): Promise<OrgSeed> {
       [formId, s.orgId, s.ownerId],
     );
   }
+  await owner.query(
+    `insert into sessions (id, token_hash, user_id, mfa_level, idle_expires_at, absolute_expires_at)
+     values ($1, $2, $3, 'pwd', now() + interval '1 hour', now() + interval '1 day')`,
+    [randomUUID(), randomBytes(32), s.editorId],
+  );
+  await owner.query(`insert into user_identities (id, user_id, provider, subject) values ($1, $2, 'google', $3)`, [randomUUID(), s.editorId, `sub-${s.editorId}`]);
+  await owner.query(`insert into auth_tokens (id, token_hash, purpose, user_id, expires_at) values ($1, $2, 'magic_link', $3, now() + interval '15 minutes')`, [
+    randomUUID(),
+    randomBytes(32),
+    s.editorId,
+  ]);
   await owner.query(
     `insert into audit_log (org_id, seq, occurred_at, actor_kind, actor_id, action, resource_type, resource_id, outcome, prev_hash, hash)
      values ($1, 1, now(), 'user', $2, 'form.created', 'form', $3, 'success', $4, $4)`,
