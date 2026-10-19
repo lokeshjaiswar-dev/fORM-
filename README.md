@@ -2,7 +2,7 @@
 
 A form platform for multi-tenant SaaS and on-prem deployments, working toward feature parity with JotForm, with SOC 2 and India DPDP compliance built in. The plan, schema, architecture and delivery roadmap are in [`docs/platform/`](docs/platform/README.md).
 
-> **Status:** Phase 0 (foundation). Today the repo contains the form builder, and API and worker skeletons over Postgres with row-level security. The builder keeps forms in memory, so a page refresh starts over; builder persistence and the public runtime arrive in later work packages.
+> **Status:** Phase 0 (foundation) work packages are all merged on `dev`; see [Phase 0 exit gate](docs/platform/phase0-exit-gate.md) for what is still open. The builder edits v2 form definitions on the field registry, previews them with `@form/renderer`, keeps drafts in IndexedDB and creates forms from the signed system template pack. The API and worker are skeletons over Postgres with row-level security; the public runtime and server-side submissions arrive in Phase 1.
 
 ## Workspace
 
@@ -27,7 +27,7 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, …) arrive through the Phase 0 work packages. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `worker-pdf`, `cli`, `admin`, …) arrive in Phase 1 and later. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
 
 ## Prerequisites
 
