@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BlockId } from '@form/schema';
-import { updateBlock } from '@/state/actions';
+import { setTheme, updateBlock } from '@/state/actions';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc } from '@/lib/definition';
 import { useBlockClipboard } from '@/components/builder/useBlockClipboard';
@@ -42,6 +42,24 @@ describe('FormCanvas', () => {
     expect(screen.getByRole('separator', { name: 'Page break' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove this page break' }));
     expect(doc().pages.map((p) => p.children.length)).toEqual([3]);
+  });
+
+  it('theme tokens colour the canvas and the submit button', () => {
+    renderCanvas();
+    act(() => {
+      const theme = doc().theme;
+      setTheme({
+        ...theme,
+        tokens: {
+          ...theme.tokens,
+          colors: { ...theme.tokens.colors, accent: '#7c3aed' as never, page: '#fef3c7' as never, text: '#111827' as never },
+        },
+      });
+    });
+    const title = screen.getByLabelText('Form title');
+    const canvas = title.closest('.min-h-full');
+    expect(canvas).toHaveStyle({ '--fr-accent': '#7c3aed', '--fr-page': '#fef3c7', '--fr-text': '#111827', color: 'var(--fr-text)', backgroundColor: 'var(--fr-page)' });
+    expect(screen.getByRole('button', { name: /submit/i })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
   });
 
   it('typing text on the insert line adds a paragraph', async () => {

@@ -98,11 +98,17 @@ export function FormCanvas() {
   return (
     <div
       ref={setNodeRef}
-      className={cn('min-h-full flex-1 overflow-y-auto overflow-x-hidden bg-white', isOver && 'bg-[#fafafa]')}
-      style={themeCssVars(tokens)}
+      className="min-h-full flex-1 overflow-y-auto overflow-x-hidden"
+      style={{
+        ...themeCssVars(tokens),
+        backgroundColor: isOver ? 'color-mix(in srgb, var(--fr-text) 4%, var(--fr-page))' : 'var(--fr-page)',
+        backgroundImage: 'var(--fr-page-image, none)',
+        color: 'var(--fr-text)',
+        fontFamily: 'var(--fr-font)',
+      }}
       onClick={() => setActiveBlock(null)}
     >
-      <div className="mx-auto w-full max-w-[720px] pb-40 pl-[108px] pr-8 pt-[72px]">
+      <div className="mx-auto w-full max-w-[720px] pb-40 pl-[108px] pr-8 pt-[72px]" style={{ maxWidth: 'var(--fr-width)' }}>
         <input
           ref={titleRef}
           value={title}
@@ -116,7 +122,8 @@ export function FormCanvas() {
           }}
           placeholder={t(M['canvas.title_placeholder'])}
           aria-label={t(M['canvas.title_placeholder'])}
-          className="mb-8 w-full bg-transparent text-left text-[40px] font-bold leading-[1.15] tracking-[-0.02em] outline-none placeholder:text-[#c5c4c1]"
+          className="mb-8 w-full bg-transparent text-left text-[40px] font-bold leading-[1.15] tracking-[-0.02em] outline-none placeholder:text-[color-mix(in_srgb,var(--fr-text)_35%,transparent)]"
+          style={{ color: 'var(--fr-text)', fontFamily: 'var(--fr-heading-font)' }}
         />
 
         {showStart ? (
@@ -212,7 +219,8 @@ export function FormCanvas() {
             <button
               type="button"
               onClick={() => setMode('preview')}
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#111] px-4 py-2 text-[15px] font-medium text-white"
+              className="mt-6 inline-flex items-center gap-2 px-4 py-2 text-[15px] font-medium"
+              style={{ background: 'var(--fr-accent)', color: 'var(--fr-accentText)', borderRadius: 'var(--fr-radius)' }}
             >
               {submitLabel} <ArrowRight className="size-4" />
             </button>

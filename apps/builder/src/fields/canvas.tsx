@@ -55,7 +55,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   date: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.date'])} · ${block.config.pattern}`} />,
   time: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.time'])} · ${block.config.hourCycle === 'h12' ? '12h' : '24h'}`} />,
   rating: ({ block }) => (
-    <div className="flex gap-1 pt-1 text-zinc-300">
+    <div className="flex gap-1 pt-1 text-[var(--fr-muted)]">
       {Array.from({ length: Math.min(10, Math.max(1, block.config.max)) }, (_, i) => (
         <Star key={i} className="size-5" />
       ))}
@@ -65,17 +65,17 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   nps: ({ block }) => <Points from={0} to={10} low={block.config.lowLabel} high={block.config.highLabel} />,
   ranking: ({ block }) => <OptionList options={block.config.options} shape="square" numbered />,
   file_upload: () => (
-    <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-zinc-300 text-[13px] text-zinc-400">{t(M['canvas.upload'])}</div>
+    <div className="flex h-20 items-center justify-center border border-dashed text-[13px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)', borderRadius: 'var(--fr-radius)' }}>{t(M['canvas.upload'])}</div>
   ),
   signature: ({ block }) => (
-    <div className="flex items-center justify-center rounded-md border border-zinc-200 bg-white text-[13px] text-zinc-400" style={{ height: Math.min(400, Math.max(80, block.config.heightPx)) }}>
+    <div className="flex items-center justify-center border text-[13px] text-[var(--fr-muted)]" style={{ height: Math.min(400, Math.max(80, block.config.heightPx)), backgroundColor: 'var(--fr-inputBg)', borderColor: 'var(--fr-inputBorder)', borderRadius: 'var(--fr-radius)' }}>
       {t(M['canvas.signature'])}
     </div>
   ),
   hidden: ({ block }) => {
     const source = block.config.source;
     const text = source.kind === 'url_param' ? t(M['canvas.hidden'], { name: source.name ?? block.key }) : source.kind === 'utm' ? t(M['canvas.hidden_utm'], { param: source.param }) : t(M['canvas.hidden_other']);
-    return <p className="text-[12px] text-zinc-400">{text}</p>;
+    return <p className="text-[12px] text-[var(--fr-muted)]">{text}</p>;
   },
   heading: ({ block, focused, onEnter }) => (
     <InlineEditor
@@ -99,5 +99,5 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       placeholder={t(M['canvas.paragraph'])}
     />
   ),
-  divider: ({ block }) => <hr className={cn('border-zinc-200', SPACING[block.config.spacing], LINE[block.config.lineStyle])} />,
+  divider: ({ block }) => <hr className={cn(SPACING[block.config.spacing], LINE[block.config.lineStyle])} style={{ borderColor: 'var(--fr-inputBorder)' }} />,
 };
