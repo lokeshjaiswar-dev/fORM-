@@ -16,6 +16,9 @@ afterAll(() => t?.close());
 
 const env = () => ({ t, seed });
 
+/** Actor kinds `app_reads_templates()` admits: respondents read no template content. */
+const TEMPLATE_READERS = ['user', 'api_key', 'system', 'platform'] as const;
+
 /**
  * Every table in public, with what org B's actors may do to org A's rows (CMP-01). The suite is generated per table
  * and actor kind; a new table fails `covers every table` until it is listed here.
@@ -76,6 +79,74 @@ const TABLES: Record<string, TableSpec> = {
           values (${s.a.orgId}, 1, ${Buffer.alloc(32)}, now(), 'k2', 'ed25519', ${Buffer.alloc(64)})`,
   },
   audit_archives: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'object_key', update: 'denied', delete: 'denied' },
+  // Templates (WP-T1.1). Template content is for builder-side actors only; the system rows show in the counts of every
+  // other actor kind. Children get their org from the parent (trigger), so their foreign inserts name a parent of org A.
+  template_packs: { scope: { by: 'org' }, select: 0, touch: 'version', update: 'denied', delete: 'denied' },
+  templates: { scope: { by: 'org' }, select: 0, touch: 'tags', update: 0, delete: 'denied', visibleTo: TEMPLATE_READERS },
+  template_versions: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'changelog',
+    update: 0,
+    delete: 0,
+    visibleTo: TEMPLATE_READERS,
+    insertForeign: (s) =>
+      sql`insert into template_versions (id, template_id, version, schema_version, payload, payload_hash)
+          values (${randomUUID()}, ${s.a.tpl.orgTemplateId}, 9, 1, '{}', ${Buffer.alloc(32)})`,
+  },
+  template_localizations: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'title',
+    update: 0,
+    delete: 0,
+    visibleTo: TEMPLATE_READERS,
+    insertForeign: (s) => sql`insert into template_localizations (template_version_id, locale, title, summary) values (${s.a.tpl.orgV1Id}, 'hi-IN', 'x', 'x')`,
+  },
+  template_categories: { scope: { by: 'org' }, select: 0, touch: 'sort', update: 0, delete: 0, visibleTo: TEMPLATE_READERS },
+  template_category_links: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'category_id',
+    update: 'denied',
+    delete: 0,
+    visibleTo: TEMPLATE_READERS,
+    insertForeign: (s) => sql`insert into template_category_links (template_id, category_id) values (${s.a.tpl.teamTemplateId}, ${s.system.categoryId})`,
+  },
+  brand_kits: { scope: { by: 'org' }, select: 0, touch: 'name', update: 0, delete: 'denied' },
+  form_template_bindings: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'update_state',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into form_template_bindings (id, org_id, form_id, template_id, template_version_id, kind, id_map)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[1]}, ${s.system.templateId}, ${s.system.versionId}, 'form', '{}')`,
+  },
+  template_fork_bindings: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'update_state',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into template_fork_bindings (id, org_id, template_id, upstream_template_id, upstream_version_id, id_map)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.tpl.forkTemplateId}, ${s.system.templateId}, ${s.system.versionId}, '{}')`,
+  },
+  template_usages: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'locale',
+    update: 'denied',
+    delete: 'denied',
+    insertForeign: (s) =>
+      sql`insert into template_usages (org_id, template_id, template_version_id, action) values (${s.a.orgId}, ${s.system.templateId}, ${s.system.versionId}, 'preview')`,
+  },
+  template_stats_daily: { scope: { by: 'org' }, select: 0, touch: 'uses', update: 'denied', delete: 'denied', visibleTo: TEMPLATE_READERS },
+  template_signing_keys: { scope: { by: 'org' }, select: 0, touch: 'label', update: 0, delete: 'denied', visibleTo: TEMPLATE_READERS },
+  template_search_synonyms: { scope: { by: 'org' }, select: 0, touch: 'term', update: 0, delete: 0, visibleTo: TEMPLATE_READERS },
+  template_search_misses: { scope: { by: 'org' }, select: 0, touch: 'count', update: 0, delete: 0 },
 };
 
 isolationSuite(TABLES, env);

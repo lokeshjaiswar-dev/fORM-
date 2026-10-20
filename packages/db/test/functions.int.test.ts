@@ -119,6 +119,9 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'membership_for',
       'orgs_due_for',
       'resolve_job_org',
+      'template_delete',
+      'template_for_binding',
+      'template_rows_guard',
     ]);
     expect(rows.every((r) => !r.public && !r.seeder)).toBe(true);
   });

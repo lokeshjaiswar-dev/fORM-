@@ -20,10 +20,12 @@ import type { ThemeTokens } from './theme.ts';
 
 export const TEMPLATE_KINDS = ['form', 'theme', 'email', 'ending', 'pdf', 'snippet', 'workflow'] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
-export type TemplateScope = 'system' | 'org' | 'team' | 'personal';
+export const TEMPLATE_SCOPES = ['system', 'org', 'team', 'personal'] as const;
+export type TemplateScope = (typeof TEMPLATE_SCOPES)[number];
 export type TemplateLifecycle = 'active' | 'deprecated' | 'archived';
 /** 'rejected' is terminal for that version; the author starts a new draft (version + 1). */
-export type TemplateVersionState = 'draft' | 'in_review' | 'published' | 'rejected' | 'superseded';
+export const TEMPLATE_VERSION_STATES = ['draft', 'in_review', 'published', 'rejected', 'superseded'] as const;
+export type TemplateVersionState = (typeof TEMPLATE_VERSION_STATES)[number];
 
 /**
  * `field:payment`, `integration:google_sheets`, `capability:appointments`… checked against edition/plan.

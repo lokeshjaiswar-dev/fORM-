@@ -79,7 +79,8 @@ const CHECKS: ReadonlyArray<readonly [RlsViolation['rule'], string]> = [
      where n.nspname = 'public' and p.prosecdef and (
        not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) s where s like 'search_path=%')
        or exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                  where a.grantee = 0 and a.privilege_type = 'EXECUTE'))`,
+                  where a.grantee = 0 and a.privilege_type = 'EXECUTE'))
+     order by 1`,
   ],
   [
     'app-role-bypasses-rls',

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { keyed } from './_util.ts';
-import { TEMPLATE_KINDS } from '../templates.ts';
+import { TEMPLATE_KINDS, TEMPLATE_SCOPES, TEMPLATE_VERSION_STATES } from '../templates.ts';
 import type { TemplateKind, TemplateVersionPayload } from '../templates.ts';
 import { AnswersSchema } from './answers.ts';
 import { BlockSchema } from './blocks.ts';
@@ -25,9 +25,9 @@ const slug = z.string().regex(/^[a-z0-9][a-z0-9_/-]{0,127}$/);
 const role = z.enum(['form_owner', 'org_admins', 'team_admins']);
 
 export const TemplateKindSchema = z.enum(TEMPLATE_KINDS);
-export const TemplateScopeSchema = z.enum(['system', 'org', 'team', 'personal']);
+export const TemplateScopeSchema = z.enum(TEMPLATE_SCOPES);
 export const TemplateLifecycleSchema = z.enum(['active', 'deprecated', 'archived']);
-export const TemplateVersionStateSchema = z.enum(['draft', 'in_review', 'published', 'rejected', 'superseded']);
+export const TemplateVersionStateSchema = z.enum(TEMPLATE_VERSION_STATES);
 export const FeatureIdSchema = z.templateLiteral([z.enum(['field', 'integration', 'capability', 'plan']), ':', z.string()]);
 
 export const MsgSchema = z.string().max(2000);

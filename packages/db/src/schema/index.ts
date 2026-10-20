@@ -5,3 +5,4 @@ export * from './account.ts';
 export * from './forms.ts';
 export * from './audit.ts';
 export * from './orgs.ts';
+export * from './templates.ts';
