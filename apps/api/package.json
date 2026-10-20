@@ -44,6 +44,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@form/i18n": "workspace:*",
     "@form/testkit": "workspace:*",
     "@form/tsconfig": "workspace:*",
     "@types/node": "catalog:",

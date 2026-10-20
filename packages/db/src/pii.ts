@@ -22,6 +22,12 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     retainBasis: 'account lifetime; account deletion keeps a pseudonymous id for audit references (CMP-21)',
   },
   memberships: { columns: ['user_id'], erase: 'delete', retainBasis: 'until the member leaves or the account is deleted' },
+  org_settings: { columns: ['updated_by'], erase: 'pseudonymise', retainBasis: 'org lifetime; the user id re-pointed on account deletion' },
+  invites: {
+    columns: ['email', 'email_norm', 'invited_by', 'accepted_by'],
+    erase: 'delete',
+    retainBasis: 'open until accepted, revoked or expired (30 days at most); closed invites go with retention.sweep (WP-1.22) or an erasure of the invitee',
+  },
   sessions: {
     columns: ['user_id', 'ip_hash', 'ua_summary', 'last_seen_at'],
     erase: 'delete',

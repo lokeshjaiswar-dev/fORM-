@@ -38,6 +38,7 @@ export interface OrgSeed {
   orgId: string;
   ownerId: string;
   editorId: string;
+  viewerId: string;
   teamId: string;
   formIds: [string, string];
 }
@@ -54,13 +55,16 @@ async function seedOrg(owner: pg.Pool, slug: string): Promise<OrgSeed> {
     orgId: randomUUID(),
     ownerId: randomUUID(),
     editorId: randomUUID(),
+    viewerId: randomUUID(),
     teamId: randomUUID(),
     formIds: [randomUUID(), randomUUID()],
   };
   await owner.query('insert into orgs (id, slug, name) values ($1, $2, $3)', [s.orgId, slug, `Org ${slug}`]);
+  await owner.query('insert into org_settings (org_id) values ($1)', [s.orgId]);
   for (const [id, who] of [
     [s.ownerId, 'owner'],
     [s.editorId, 'editor'],
+    [s.viewerId, 'viewer'],
   ] as const) {
     await owner.query('insert into users (id, email, email_norm, password_hash) values ($1, $2, $2, $3)', [id, `${who}@${slug}.test`, 'argon2id$secret']);
     await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [s.orgId, id, who]);
@@ -96,6 +100,10 @@ async function seedOrg(owner: pg.Pool, slug: string): Promise<OrgSeed> {
   await owner.query(
     `insert into user_grievances (id, user_id, reference, category, message, due_at) values ($1, $2, $3, 'information', 'What do you hold?', now() + interval '90 days')`,
     [randomUUID(), s.editorId, `GRV-${randomBytes(5).toString('hex').slice(0, 8).toUpperCase().replace(/[01890]/g, 'A')}`],
+  );
+  await owner.query(
+    `insert into invites (id, org_id, email, email_norm, role, token_hash, invited_by, expires_at) values ($1, $2, $3, $3, 'viewer', $4, $5, now() + interval '7 days')`,
+    [randomUUID(), s.orgId, `invitee@${slug}.test`, randomBytes(32), s.ownerId],
   );
   await owner.query(
     `insert into audit_log (org_id, seq, occurred_at, actor_kind, actor_id, action, resource_type, resource_id, outcome, prev_hash, hash)

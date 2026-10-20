@@ -19,7 +19,10 @@ const sessionView = z.object({
   current: z.boolean(),
 });
 
-/** `GET /v1/me` and the user's own sessions (architecture §3.3). Export, deletion and the notice live in `../account` (CMP-21). */
+/**
+ * `GET /v1/me` and the user's own sessions (architecture §3.3). Export, deletion and the notice live in `../account`
+ * (CMP-21); the org switcher's `PUT /v1/me/active-org` is in the org module.
+ */
 export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tags = ['account'];
@@ -38,6 +41,8 @@ export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
             orgs: z.array(z.object({ id: z.uuid(), slug: z.string(), name: z.string(), role: z.enum(MEMBERSHIP_ROLES) })),
             /** The platform privacy notice: `current` is false until the user has read this version (CMP-21). */
             notice: z.object({ version: z.string(), acknowledgedVersion: z.string().nullable(), current: z.boolean() }),
+            /** The org the switcher chose (PUT /v1/me/active-org), while the user is still a member of it. */
+            activeOrgId: z.uuid().nullable(),
           }),
         },
       },
@@ -56,6 +61,7 @@ export function meRoutes(app: FastifyInstance, c: AuthCtx): void {
           : null,
         orgs: orgs.map((o) => ({ id: o.orgId, slug: o.slug, name: o.name, role: o.role })),
         notice: { version: c.notice.version, acknowledgedVersion: ack?.version ?? null, current: ack?.hash === c.notice.hash },
+        activeOrgId: orgs.some((o) => o.orgId === account.session?.activeOrgId) ? account.session!.activeOrgId : null,
       };
     },
   );

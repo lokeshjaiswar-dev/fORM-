@@ -18,6 +18,7 @@ import { formRoutes } from './routes/forms.ts';
 import { healthRoutes } from './routes/health.ts';
 import { metaRoutes } from './routes/meta.ts';
 import { createLogMailer, createThrottle, DEFAULT_AUTH_LIMITS, hibpBreachCheck, registerAuthModule, registerCsrfGuard } from './modules/auth/index.ts';
+import { registerOrgModule } from './modules/orgs/index.ts';
 import type { BreachCheck } from './modules/auth/passwords.ts';
 import type { Limit } from './modules/auth/throttle.ts';
 
@@ -150,13 +151,13 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     auditDb: auditHandle.db,
     secret: config.auth.secret,
     devHeaders: config.authDevHeaders,
-    // `/v1/auth/*` requests were counted on arrival already.
+    // `/v1/auth/*` and `/v1/invites/*` requests were counted on arrival already.
     throttleRejected: async (request, reply, ipHash) => {
-      if (!request.routeOptions.url?.startsWith('/v1/auth/')) await throttle.hit(request, reply, [{ bucket: 'auth_any', key: ipHash }], { ipHash });
+      if (!/^\/v1\/(auth|invites)\//.test(request.routeOptions.url ?? '')) await throttle.hit(request, reply, [{ bucket: 'auth_any', key: ipHash }], { ipHash });
     },
     now,
   });
-  registerAuthModule(app, {
+  const mail = registerAuthModule(app, {
     db: handle.db,
     auditDb: auditHandle.db,
     config,
@@ -169,6 +170,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     throttle,
     now,
   });
+  registerOrgModule(app, { db: handle.db, auditDb: auditHandle.db, config, mail, now });
   healthRoutes(app, {
     ping: async () => {
       await handle.pool.query('select 1');

@@ -3,7 +3,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertTenantCtx, forms, orgs, userPublicColumns, users, withTenant, type TenantCtx } from '../src/index.ts';
 import { failure, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
-import { isolation } from './isolation.ts';
+import { isolationSuite, publicTables, type TableSpec } from './isolation.ts';
 
 let t: TestDb;
 let seed: Seed;
@@ -16,222 +16,81 @@ afterAll(() => t?.close());
 
 const env = () => ({ t, seed });
 
-isolation(
-  'orgs',
-  {
-    foreign: (s) => sql`id = ${s.a.orgId}`,
-    own: (s) => sql`id = ${s.b.orgId}`,
-    update: (s) => sql`update orgs set name = name where id = ${s.a.orgId}`,
-    insertForeign: () => sql`insert into orgs (id, slug, name) values (${randomUUID()}, ${randomUUID()}, 'x')`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'users',
-  {
-    foreign: (s) => sql`id in (${s.a.ownerId}, ${s.a.editorId})`,
-    own: (s) => sql`id = ${s.b.ownerId}`,
-    update: (s) => sql`update users set name = 'x' where id = ${s.a.editorId}`,
-    insertForeign: () => sql`insert into users (id, email, email_norm) values (${randomUUID()}, 'x@a.test', ${randomUUID()})`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'memberships',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update memberships set role = 'viewer' where org_id = ${s.a.orgId}`,
-    insertForeign: (s) => sql`insert into memberships (org_id, user_id, role) values (${s.a.orgId}, ${s.b.editorId}, 'viewer')`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'sessions',
-  {
-    foreign: (s) => sql`user_id in (${s.a.ownerId}, ${s.a.editorId})`,
-    own: (s) => sql`user_id = ${s.b.editorId}`,
-    update: (s) => sql`update sessions set revoked_at = now() where user_id = ${s.a.editorId}`,
-    insertForeign: (s) =>
-      sql`insert into sessions (id, token_hash, user_id, mfa_level, idle_expires_at, absolute_expires_at)
-          values (${randomUUID()}, ${Buffer.alloc(32, 1)}, ${s.a.editorId}, 'pwd', now() + interval '1 hour', now() + interval '1 day')`,
+/**
+ * Every table in public, with what org B's actors may do to org A's rows (CMP-01). The suite is generated per table
+ * and actor kind; a new table fails `covers every table` until it is listed here.
+ */
+const TABLES: Record<string, TableSpec> = {
+  orgs: { scope: { by: 'org', column: 'id' }, select: 0, touch: 'name', update: 0, delete: 'denied' },
+  org_settings: { scope: { by: 'org' }, select: 0, touch: 'invite_days', update: 0, delete: 'denied' },
+  users: { scope: { by: 'user', column: 'id' }, select: 0, touch: 'name', update: 0, delete: 'denied' },
+  memberships: { scope: { by: 'org' }, select: 0, touch: 'role', update: 0, delete: 0 },
+  invites: { scope: { by: 'org' }, select: 0, touch: 'revoked_at', update: 0, delete: 'denied', visibleTo: ['system'] },
+  sessions: { scope: { by: 'user' }, select: 0, touch: 'revoked_at', update: 0, delete: 'denied', visibleTo: ['user'] },
+  user_identities: { scope: { by: 'user' }, select: 0, touch: 'last_used_at', update: 0, delete: 0, visibleTo: ['user'] },
+  auth_tokens: { scope: { by: 'user' }, select: 0, touch: 'consumed_at', update: 0, delete: 'denied', visibleTo: ['user'] },
+  user_notice_acks: {
+    scope: { by: 'user' },
+    select: 0,
+    touch: 'locale',
+    update: 'denied',
+    delete: 'denied',
     visibleTo: ['user'],
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'user_identities',
-  {
-    foreign: (s) => sql`user_id = ${s.a.editorId}`,
-    own: (s) => sql`user_id = ${s.b.editorId}`,
-    update: (s) => sql`update user_identities set last_used_at = now() where user_id = ${s.a.editorId}`,
-    insertForeign: (s) => sql`insert into user_identities (id, user_id, provider, subject) values (${randomUUID()}, ${s.a.editorId}, 'microsoft', ${randomUUID()})`,
-    visibleTo: ['user'],
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'auth_tokens',
-  {
-    foreign: (s) => sql`user_id = ${s.a.editorId}`,
-    own: (s) => sql`user_id = ${s.b.editorId}`,
-    update: (s) => sql`update auth_tokens set consumed_at = now() where user_id = ${s.a.editorId}`,
-    insertForeign: (s) =>
-      sql`insert into auth_tokens (id, token_hash, purpose, user_id, expires_at) values (${randomUUID()}, ${Buffer.alloc(32, 2)}, 'password_reset', ${s.a.editorId}, now() + interval '1 hour')`,
-    visibleTo: ['user'],
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'user_notice_acks',
-  {
-    foreign: (s) => sql`user_id = ${s.a.editorId}`,
-    own: (s) => sql`user_id = ${s.b.editorId}`,
-    update: (s) => sql`update user_notice_acks set locale = 'hi-IN' where user_id = ${s.a.editorId}`,
     insertForeign: (s) =>
       sql`insert into user_notice_acks (id, user_id, notice_version, notice_hash, locale, context)
           values (${randomUUID()}, ${s.a.editorId}, '2026-10-19', ${Buffer.alloc(32, 3)}, 'en-IN', 'settings')`,
-    visibleTo: ['user'],
-    expect: { select: 0, update: 'denied' },
   },
-  env,
-);
-
-isolation(
-  'user_grievances',
-  {
-    foreign: (s) => sql`user_id = ${s.a.editorId}`,
-    own: (s) => sql`user_id = ${s.b.editorId}`,
-    update: (s) => sql`update user_grievances set status = 'answered' where user_id = ${s.a.editorId}`,
+  user_grievances: {
+    scope: { by: 'user' },
+    select: 0,
+    touch: 'status',
+    update: 'denied',
+    delete: 'denied',
+    visibleTo: ['user'],
     insertForeign: (s) =>
       sql`insert into user_grievances (id, user_id, reference, category, message, due_at)
           values (${randomUUID()}, ${s.a.editorId}, 'GRV-AAAAAAAA', 'other', 'x', now() + interval '1 day')`,
-    visibleTo: ['user'],
-    expect: { select: 0, update: 'denied' },
   },
-  env,
-);
-
-isolation(
-  'auth_throttle',
-  {
-    foreign: () => sql`true`,
-    update: () => sql`update auth_throttle set hits = 0`,
+  auth_throttle: {
+    scope: { by: 'custom', foreign: () => sql`true` },
+    select: 'denied',
+    touch: 'hits',
+    update: 'denied',
+    delete: 'denied',
     insertForeign: () => sql`insert into auth_throttle (bucket, key, window_start, hits) values ('auth_any', ${Buffer.alloc(1)}, now(), 1)`,
-    expect: { select: 'denied', update: 'denied' },
   },
-  env,
-);
-
-isolation(
-  'forms',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update forms set title = 'pwned' where org_id = ${s.a.orgId}`,
-    insertForeign: (s) =>
-      sql`insert into forms (id, org_id, team_id, owner_user_id, title) values (${randomUUID()}, ${s.a.orgId}, ${s.a.teamId}, ${s.b.editorId}, 'x')`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'form_drafts',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update form_drafts set draft_rev = draft_rev + 1 where org_id = ${s.a.orgId}`,
-    insertForeign: (s) =>
-      sql`insert into form_drafts (form_id, org_id, draft, schema_version, size_bytes, updated_by) values (${randomUUID()}, ${s.a.orgId}, '{}', 2, 2, ${s.b.editorId})`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'audit_log',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update audit_log set reason = 'x' where org_id = ${s.a.orgId}`,
-    insertForeign: (s) =>
-      sql`insert into audit_log (org_id, seq, occurred_at, actor_kind, action, resource_type, outcome, prev_hash, hash)
-          values (${s.a.orgId}, 99, now(), 'system', 'x', 'x', 'success', '\\x00', '\\x00')`,
-    expect: { select: 0, update: 'denied' },
-  },
-  env,
-);
-
-isolation(
-  'audit_pending',
-  {
-    foreign: (s) => sql`org_key = ${s.a.orgId}`,
-    update: () => sql`update audit_pending set event = '{}'`,
-    insertForeign: (s) => sql`insert into audit_pending (org_key, event) values (${s.a.orgId}, '{}')`,
-    expect: { select: 'denied', update: 'denied' },
-  },
-  env,
-);
-
-isolation(
-  'audit_heads',
-  {
-    foreign: (s) => sql`org_key = ${s.a.orgId}`,
-    own: (s) => sql`org_key = ${s.b.orgId}`,
-    update: (s) => sql`update audit_heads set seq = 0 where org_key = ${s.a.orgId}`,
-    insertForeign: (s) => sql`insert into audit_heads (org_key, seq, hash) values (${s.a.orgId}, 0, ${Buffer.alloc(32)})`,
-    expect: { select: 0, update: 'denied' },
-  },
-  env,
-);
-
-isolation(
-  'audit_checkpoints',
-  {
-    foreign: (s) => sql`org_key = ${s.a.orgId}`,
-    own: (s) => sql`org_key = ${s.b.orgId}`,
-    update: (s) => sql`update audit_checkpoints set key_id = 'x' where org_key = ${s.a.orgId}`,
+  forms: { scope: { by: 'org' }, select: 0, touch: 'title', update: 0, delete: 0 },
+  form_drafts: { scope: { by: 'org' }, select: 0, touch: 'draft_rev', update: 0, delete: 0 },
+  audit_log: { scope: { by: 'org' }, select: 0, touch: 'reason', update: 'denied', delete: 'denied' },
+  audit_pending: { scope: { by: 'org', column: 'org_key' }, select: 'denied', touch: 'event', update: 'denied', delete: 'denied' },
+  audit_heads: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'seq', update: 'denied', delete: 'denied' },
+  audit_checkpoints: {
+    scope: { by: 'org', column: 'org_key' },
+    select: 0,
+    touch: 'key_id',
+    update: 'denied',
+    delete: 'denied',
     // seq 1 with the zero hash is a real link of org A, so only RLS stands in the way.
     insertForeign: (s) =>
       sql`insert into audit_checkpoints (org_key, seq, hash, signed_at, key_id, alg, signature)
           values (${s.a.orgId}, 1, ${Buffer.alloc(32)}, now(), 'k2', 'ed25519', ${Buffer.alloc(64)})`,
-    expect: { select: 0, update: 'denied' },
   },
-  env,
-);
+  audit_archives: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'object_key', update: 'denied', delete: 'denied' },
+};
 
-isolation(
-  'audit_archives',
-  {
-    foreign: (s) => sql`org_key = ${s.a.orgId}`,
-    own: (s) => sql`org_key = ${s.b.orgId}`,
-    update: (s) => sql`update audit_archives set object_key = 'x' where org_key = ${s.a.orgId}`,
-    insertForeign: (s) =>
-      sql`insert into audit_archives (org_key, month, object_key, row_count, min_seq, max_seq, sha256)
-          values (${s.a.orgId}, '2020-02', 'x', 1, 1, 1, ${Buffer.alloc(32)})`,
-    expect: { select: 0, update: 'denied' },
-  },
-  env,
-);
+isolationSuite(TABLES, env);
+
+describe('isolation suite', () => {
+  it('covers every table in public', async () => {
+    expect(Object.keys(TABLES).sort()).toEqual(await publicTables(t));
+  });
+});
 
 const userCtx = (): TenantCtx => ({ orgId: seed.b.orgId, actor: 'user', userId: seed.b.editorId, perms: ['forms.read'], requestId: 'r1' });
 
 describe('tenant context', () => {
   it('sees zero rows outside withTenant, without raising', async () => {
-    for (const table of ['orgs', 'users', 'memberships', 'sessions', 'user_identities', 'auth_tokens', 'forms', 'form_drafts', 'audit_log', 'audit_heads', 'audit_checkpoints', 'audit_archives']) {
+    for (const table of Object.keys(TABLES).filter((n) => TABLES[n]!.select === 0)) {
       const { rows } = await t.app.pool.query<{ n: number }>(`select count(*)::int as n from ${table}`);
       expect(rows[0]!.n, table).toBe(0);
     }
@@ -283,7 +142,7 @@ describe('tenant context', () => {
       'no draft yet',
     ]);
     const err = await failure(
-      withTenant(t.app.db, userCtx(), (tx) =>
+      withTenant(t.app.db, { ...userCtx(), perms: ['forms.read', 'forms.edit'] }, (tx) =>
         tx.execute(sql`insert into form_drafts (form_id, org_id, draft, schema_version, size_bytes, updated_by)
                        values (${formWithoutDraft}, ${seed.b.orgId}, '{}', 2, 2, ${seed.b.editorId})`),
       ),
@@ -295,13 +154,13 @@ describe('tenant context', () => {
     const err = await failure(withTenant(t.app.db, userCtx(), (tx) => tx.select().from(users)));
     expect(pgCode(err)).toBe('42501');
     const visible = await withTenant(t.app.db, userCtx(), (tx) => tx.select(userPublicColumns).from(users));
-    expect(visible.map((u) => u.id).sort()).toEqual([seed.b.ownerId, seed.b.editorId].sort());
+    expect(visible.map((u) => u.id).sort()).toEqual([seed.b.ownerId, seed.b.editorId, seed.b.viewerId].sort());
   });
 
   it('lets api-key, system and respondent actors (no user id) query users without raising', async () => {
     for (const actor of ['api_key', 'system', 'respondent'] as const) {
       const rows = await withTenant(t.app.db, { orgId: seed.b.orgId, actor, requestId: 'r' }, (tx) => tx.select({ id: users.id }).from(users));
-      expect(rows.length, actor).toBe(2);
+      expect(rows.length, actor).toBe(3);
     }
   });
 

@@ -212,6 +212,7 @@ The edition factor (`@form/config` `isEditionFeatureAvailable`) gates these `Fea
 | `api_key_lookup(prefix)` | API key auth | `fr_app` |
 | `invite_by_token(token_hash)` | Invite acceptance | `fr_app` |
 | `list_user_orgs(user_id)`, `membership_for(user_id, org_id)` | `GET /v1/orgs`, `X-FR-Org` validation | `fr_app` |
+| *As built (WP-1.02):* `membership_for(user_id, org_id)` → `(role, grants[])`, `create_org(…)`, `invite_by_token(token_hash)` (a description of the link, without using it), `invite_accept(token_hash, user_id)`, `member_sessions_revoke(user_id)`, `member_access_token(user_id, token_id, token_hash, minutes)` | `grants` are the permissions org settings add to a role (an editor approving notices, CMP-24). `create_org` and `invite_accept` run only for the signed-in user themselves (`app_user()`, actor `user`); `invite_accept` adds the membership for the invited, verified address only. `member_sessions_revoke` (after a role or status change) and `member_access_token` (BL-203: a one-time reset or verification link, without SMTP, for a member of no other org) need `members.manage` in the current org | `fr_app` |
 | `orgs_due_for(job text)` → `setof uuid` | Org-spanning jobs list the orgs with work due; the job then runs one `withTenant` per org | `fr_app` (worker connection only) |
 | `resolve_job_org(resource_type, resource_id)` → `org_id` | Job handlers re-derive the org from the resource and abort on mismatch (§5.1) | `fr_app` |
 | `create_partitions(parent regclass, months int)` | Creates partitions in schema `parts`, enables and forces RLS on each, grants nothing to `fr_app` | `fr_app` (worker) |
@@ -262,7 +263,7 @@ export async function withTenant<T>(db: Db, ctx: TenantCtx, fn: (tx: Tx) => Prom
 create policy submissions_data_access on submissions as restrictive for select to fr_app using (
      (select app_actor()) = 'system'
   or ((select app_actor()) = 'respondent' and id = any ((select app_subject_ids())))
-  or 'submissions.read' = any ((select app_perms())) );
+  or 'submissions.read' = any ((select app_perms())::text[]) );
 create policy submissions_respondent_insert on submissions for insert to fr_app
   with check (org_id = (select app_org()));
 ```
@@ -281,6 +282,7 @@ isolation('submissions', { seed: twoOrgs(), as: [orgB.editor, orgB.apiKey, syste
   - any **partition** (`pg_inherits` child) grants any privilege to a role other than its owner, or lacks forced RLS;
   - any policy text contains `current_setting(` outside the helper functions.
 - A direct `SELECT * FROM parts.submissions_2027_05` as `fr_app` must fail with "permission denied".
+- *As built (WP-1.02):* the DSL lives in `packages/db/test/isolation.ts` (testkit cannot depend on `@form/db`). `rls.int.test.ts` lists every table in `public` once (`TABLES`: how its rows belong to an org or a person, and whether SELECT, UPDATE and DELETE of the other org's rows see 0 rows or are denied), a test fails while a table is missing, and the suite is generated per table and actor kind (`user`, `api_key`, `system`, `respondent`, `platform`): SELECT, UPDATE and DELETE aimed at org A, and an INSERT of a copy of one of org B's rows re-pointed at org A (restricted to the columns fr_app may insert, so RLS's WITH CHECK, which runs before constraints, is what refuses it).
 
 ### 2.4 Tables
 
@@ -357,6 +359,7 @@ export const sessions = pgTable('sessions', {   // opaque tokens; only SHA-256 s
 `invites (id, org_id, email_norm, role, team_ids, token_hash unique, expires_at, invited_by, accepted_at)` with the tenant policy; acceptance through `invite_by_token()`.
 
 *As built (WP-1.31, migration 0007):* `users.deleted_at` (set with status `deleted`: the row is then a tombstone, `deleted-<id>@deleted.invalid`, every credential and name cleared); `user_notice_acks (id, user_id, notice_version, notice_hash, locale, context: signup|oauth_signup|settings, acknowledged_at)`, unique per user and text, append-only, kept after deletion; `user_grievances (id, user_id, reference GRV-…, category, message, status open|answered|closed, created_at, due_at ≤ 90 d, closed_at)`, the message cleared on deletion. Both tables have a `*_self` policy (a user actor's own rows, like `sessions`); fr_app may only insert and read them. `account_export_data()` and `account_delete(user, apply)` are definer functions that refuse any caller but the user in their own context (`withUser`); `account_org_plan()` behind them names the blocker per org (`last_member`, `sole_owner`, `no_owner_for_forms`) and the owner who takes the forms.
+*As built (WP-1.02, migration `0008_orgs.sql`):* `invites` also keeps `email` (as typed), `created_at`, `accepted_by` and `revoked_at`; one open invite per address and org; at most 30 days; accepted and revoked invites are final (trigger); a restrictive `invites_manage` policy needs `members.manage`; fr_app cannot read `token_hash` and may insert only the invite's own columns. `org_settings (org_id, editors_approve_notice, invite_days, updated_at, updated_by)` holds the per-org settings (writes need `org.settings`); later WPs add their columns (`templates`, `brand`). `orgs` gains format checks for the slug, locale and date format, and writes need `org.settings`. RLS repeats the role checks of the API (WSP-03): restrictive policies make member changes need `members.manage` (a member may delete their own row: leaving) and draft writes need `forms.edit`, for every actor but `system`. A trigger keeps an active owner in every org. The session's `active_org_id` is the org switcher's choice and the default when a request names no `X-FR-Org`.
 
 **Permissions** (code constant in `apps/api/src/authz/roles.ts`, loaded into `app.perms`):
 
@@ -706,6 +709,7 @@ Route plugins declare `config: { auth, perm, public, rate }`. OpenAPI is emitted
 | Method and path | Notes |
 |---|---|
 | `GET /v1/orgs` (via `list_user_orgs`) · `POST /v1/orgs` · `GET/PATCH /v1/org` | |
+| *As built (WP-1.02):* `GET/PATCH /v1/org/settings` · `PUT /v1/me/active-org` (the switcher) · `GET /v1/org/invites` · `DELETE /v1/org/invites/:id` · `POST /v1/invites/lookup` · `POST /v1/invites/accept` · `POST /v1/org/members/:userId/access-link` | Invite tokens travel in the request body and the builder URL fragment, never in a path (as for the WP-1.01 links), so `POST /v1/invites/:token/accept` became `POST /v1/invites/accept`. `DELETE /v1/org/members/:userId` with one's own id is leaving. A role or status change revokes the member's sessions bound to the org. Seat and licence checks arrive with WP-1.30 |
 | `GET /v1/org/members` · `POST /v1/org/invites` · `POST /v1/invites/:token/accept` · `PATCH/DELETE /v1/org/members/:userId` | Seat and licence checks |
 | `GET/PUT /v1/org/profile` · `GET/PUT /v1/org/settings/templates` · `GET/PUT /v1/org/security-contacts` | TPL-06, CMP-14 |
 | `GET/POST/PATCH/DELETE /v1/teams[/:id]` · `…/members` (P2) · `/v1/folders[/:id]` | |

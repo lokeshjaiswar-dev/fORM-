@@ -45,6 +45,7 @@ try {
     `insert into orgs (id, slug, name) values ($1, 'demo', 'Demo Org'), ($2, 'other', 'Other Org') on conflict (id) do nothing`,
     [DEMO.org, DEMO.otherOrg],
   );
+  await owner.query(`insert into org_settings (org_id) values ($1), ($2) on conflict (org_id) do nothing`, [DEMO.org, DEMO.otherOrg]);
   await owner.query(
     `insert into users (id, email, email_norm, name) values ($1, 'dev@form.local', 'dev@form.local', 'Dev User'),
        ($2, 'other@form.local', 'other@form.local', 'Other User') on conflict (id) do nothing`,

@@ -52,7 +52,7 @@ export const AUDIT_EVENTS = {
     outcomes: ['success', 'denied'],
     resourceType: 'user',
     description:
-      'A sign-in link was emailed (reason step_up after many password attempts at the account); denied when no active account has the address (the caller sees the same answer).',
+      'A sign-in link was emailed (reason step_up after many password attempts at the account, step_up_verify when that link is the verification link of an unconfirmed address); denied when no active account has the address (the caller sees the same answer).',
   },
   'auth.link_checked': {
     outcomes: ['denied'],
@@ -141,6 +141,57 @@ export const AUDIT_EVENTS = {
     resourceType: 'grievance',
     description:
       'A builder user sent a privacy request or grievance to the platform privacy contact (category and due date in metadata, never the message).',
+  },
+  'org.created': {
+    outcomes: ['success'],
+    resourceType: 'org',
+    description: 'A user created an org and became its owner (the defaults in metadata).',
+  },
+  'org.updated': {
+    outcomes: ['success'],
+    resourceType: 'org',
+    description: 'The org name or defaults (locale, time zone, date format) changed; the changed field names in metadata.',
+  },
+  'org.settings_updated': {
+    outcomes: ['success'],
+    resourceType: 'org',
+    description: 'Org settings changed (editors approving notices, invite lifetime); the changed field names in metadata.',
+  },
+  'org.switched': {
+    outcomes: ['success'],
+    resourceType: 'org',
+    description: 'A member chose this org in the switcher: their session now defaults to it.',
+  },
+  'member.invited': {
+    outcomes: ['success'],
+    resourceType: 'invite',
+    description: 'A member invited an email address with a role; an open invite to the same address was revoked first.',
+  },
+  'member.invite_revoked': {
+    outcomes: ['success'],
+    resourceType: 'invite',
+    description: 'An open invite was withdrawn before anyone accepted it.',
+  },
+  'member.joined': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'invite',
+    description:
+      'A user accepted an invite and became a member (already_member when they were one); denied for an unknown, used, revoked or expired invite, another address or an unverified one.',
+  },
+  'member.updated': {
+    outcomes: ['success'],
+    resourceType: 'membership',
+    description: 'A member’s role or status changed (before and after in metadata); their sessions bound to the org were revoked.',
+  },
+  'member.removed': {
+    outcomes: ['success'],
+    resourceType: 'membership',
+    description: 'A member was removed from the org, or left it (reason left).',
+  },
+  'member.access_link_issued': {
+    outcomes: ['success'],
+    resourceType: 'user',
+    description: 'Without SMTP, an admin was shown a one-time password-reset or verification link for a member (BL-203).',
   },
   'job.rejected': {
     outcomes: ['denied'],

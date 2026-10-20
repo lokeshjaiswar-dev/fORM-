@@ -33,10 +33,15 @@ export type LinkInfo = z.infer<typeof linkInfoSchema>;
 export const methodsSchema = z.object({ password: z.boolean(), emailLinks: z.boolean(), oauth: z.array(z.enum(['google', 'microsoft'])) });
 export type AuthMethods = z.infer<typeof methodsSchema>;
 
+export const userOrgSchema = z.object({ id: z.string(), slug: z.string(), name: z.string(), role: z.string() });
+export type UserOrg = z.infer<typeof userOrgSchema>;
+
 const meSchema = z.object({
   user: meUserSchema,
   session: z.object({ id: z.string(), mfaLevel: z.string(), expiresAt: z.string() }).nullable(),
-  orgs: z.array(z.object({ id: z.string(), slug: z.string(), name: z.string(), role: z.string() })),
+  orgs: z.array(userOrgSchema),
+  /** The org the switcher chose (WP-1.02), while the user is still a member of it. */
+  activeOrgId: z.string().nullable().default(null),
   /** The platform privacy notice: `current` is false until the user has read this version (CMP-21). */
   notice: z.object({ version: z.string(), acknowledgedVersion: z.string().nullable(), current: z.boolean() }).optional(),
 });
@@ -62,15 +67,22 @@ export class ApiUnreachable extends Error {
   }
 }
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-async function send(method: Method, path: string, body?: unknown): Promise<Response> {
+export const ORG_HEADER = 'x-fr-org';
+
+async function send(method: Method, path: string, body?: unknown, o: { org?: string | null } = {}): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method,
       credentials: 'include',
-      headers: { accept: 'application/json', ...(method === 'GET' ? {} : CLIENT_HEADERS), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      headers: {
+        accept: 'application/json',
+        ...(method === 'GET' ? {} : CLIENT_HEADERS),
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(o.org ? { [ORG_HEADER]: o.org } : {}),
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch {
@@ -87,8 +99,9 @@ async function send(method: Method, path: string, body?: unknown): Promise<Respo
   return res;
 }
 
-export async function api<T>(method: Method, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
-  const res = await send(method, path, body);
+/** `org`: the org the call acts in (`X-FR-Org`, validated by the API with membership_for()). */
+export async function api<T>(method: Method, path: string, schema: z.ZodType<T> | null, body?: unknown, o: { org?: string | null } = {}): Promise<T> {
+  const res = await send(method, path, body, o);
   if (schema === null) return undefined as T;
   if (!(res.headers.get('content-type') ?? '').includes('json')) throw new ApiUnreachable();
   const parsed = schema.safeParse(await res.json());
@@ -110,6 +123,25 @@ export async function loadSession(): Promise<SessionState> {
   }
   useSessionStore.setState(next, true);
   return next;
+}
+
+/** The org the builder works in: the switcher's choice, else the first org (by name). Null without any org. */
+export function activeOrgOf(me: Me): UserOrg | null {
+  return me.orgs.find((o) => o.id === me.activeOrgId) ?? me.orgs[0] ?? null;
+}
+
+export const useActiveOrg = (): UserOrg | null => useSessionStore((s) => (s.status === 'signed_in' ? activeOrgOf(s.me) : null));
+
+/** A call in the active org. */
+export function orgApi<T>(method: Method, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
+  const s = useSessionStore.getState();
+  return api(method, path, schema, body, { org: s.status === 'signed_in' ? (activeOrgOf(s.me)?.id ?? null) : null });
+}
+
+/** The org switcher: the session remembers the choice (`PUT /v1/me/active-org`). */
+export async function switchOrg(orgId: string): Promise<void> {
+  await api('PUT', '/v1/me/active-org', null, { orgId });
+  await loadSession();
 }
 
 /** Signs out here even when the server cannot be told (the session then ends with its expiry). */

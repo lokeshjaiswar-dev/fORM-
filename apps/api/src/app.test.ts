@@ -1,4 +1,6 @@
 import { Writable } from 'node:stream';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -130,9 +132,13 @@ describe('problem+json', () => {
   it('audits 5xx and 403 responses on the audit pool, and answers even when that write fails', async () => {
     const written: Array<{ orgKey: string; event: Record<string, unknown> }> = [];
     const settings: unknown[] = [];
+    const dialect = new PgDialect();
     const tx = {
-      execute: async (q: unknown) => void settings.push(q),
-      insert: () => ({ values: async (v: { orgKey: string; event: Record<string, unknown> }) => void written.push(v) }),
+      execute: async (q: SQL) => {
+        const { sql, params } = dialect.sqlToQuery(q);
+        if (sql.startsWith('insert into audit_pending')) written.push({ orgKey: params[0] as string, event: JSON.parse(params[1] as string) as Record<string, unknown> });
+        else settings.push(q);
+      },
     };
     const auditDb = { db: { transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) } as unknown as Db, pool: {} as pg.Pool, close: async () => {} };
     const { app: a, lines } = await app(config(), { auditDb });
@@ -360,7 +366,10 @@ describe('OpenAPI', () => {
       '/v1/auth/verify-email',
       '/v1/csp-reports',
       '/v1/forms',
+      '/v1/invites/accept',
+      '/v1/invites/lookup',
       '/v1/me',
+      '/v1/me/active-org',
       '/v1/me/delete',
       '/v1/me/deletion',
       '/v1/me/export',
@@ -369,6 +378,14 @@ describe('OpenAPI', () => {
       '/v1/me/sessions',
       '/v1/me/sessions/{id}',
       '/v1/meta/edition',
+      '/v1/org',
+      '/v1/org/invites',
+      '/v1/org/invites/{id}',
+      '/v1/org/members',
+      '/v1/org/members/{userId}',
+      '/v1/org/members/{userId}/access-link',
+      '/v1/org/settings',
+      '/v1/orgs',
       '/v1/privacy/notice',
     ]);
     expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);

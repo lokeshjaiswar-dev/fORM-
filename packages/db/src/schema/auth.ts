@@ -9,7 +9,7 @@ export type FirstFactor = (typeof FIRST_FACTORS)[number];
 export type SecondFactor = (typeof SECOND_FACTORS)[number];
 export type MfaLevel = FirstFactor | `${FirstFactor}+${SecondFactor}`;
 
-export const SESSION_REVOKE_REASONS = ['logout', 'rotated', 'revoked', 'password_reset', 'mfa_enabled', 'mfa_disabled'] as const;
+export const SESSION_REVOKE_REASONS = ['logout', 'rotated', 'revoked', 'password_reset', 'mfa_enabled', 'mfa_disabled', 'role_changed'] as const;
 export type SessionRevokeReason = (typeof SESSION_REVOKE_REASONS)[number];
 
 export const OAUTH_PROVIDERS = ['google', 'microsoft'] as const;

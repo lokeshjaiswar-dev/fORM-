@@ -2,18 +2,20 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { MailAddress, Mailer } from '@form/ports';
 
 export type LinkMailKind = 'verify_email' | 'magic_link' | 'password_reset' | 'account_exists';
+type TokenLinkKind = Exclude<LinkMailKind, 'account_exists'>;
 
-export const LINK_MINUTES: Record<Exclude<LinkMailKind, 'account_exists'>, number> = {
+export const LINK_MINUTES: Record<TokenLinkKind, number> = {
   verify_email: 24 * 60,
   magic_link: 15,
   password_reset: 60,
 };
 
 /** Builder pages that read the token from the fragment, so it never reaches a server log or a Referer. */
-export const LINK_PATHS: Record<Exclude<LinkMailKind, 'account_exists'>, string> = {
+export const LINK_PATHS: Record<TokenLinkKind | 'invite', string> = {
   verify_email: '/auth/verify',
   magic_link: '/auth/magic',
   password_reset: '/auth/reset',
+  invite: '/invite',
 };
 
 /** Account and privacy messages (CMP-21): the deletion confirmation, and a grievance's receipt and its copy for the privacy contact. */
@@ -28,6 +30,13 @@ export type AuthMail =
       to: MailAddress;
       /** Builder URL the message links to, the token in its fragment. */
       link: string;
+    }
+  | {
+      kind: 'invite';
+      to: MailAddress;
+      link: string;
+      /** Who invites to which org, with which role, for how many days. */
+      invite: { orgName: string; inviterName: string; role: string; days: number };
     }
   | AccountMail;
 
@@ -50,6 +59,13 @@ function body(m: AuthMail): { subject: string; text: string } {
         subject: 'Reset your password',
         text: `Use this link to choose a new fORM- password:\n\n${m.link}\n\nThe link works once and expires in 1 hour. Resetting signs you out everywhere. If you did not ask for it, ignore this message.\n`,
       };
+    case 'invite': {
+      const i = m.invite;
+      return {
+        subject: `${i.inviterName} invited you to ${i.orgName} on fORM-`,
+        text: `${i.inviterName} invited you to join ${i.orgName} on fORM- as ${/^[ao]/.test(i.role) ? 'an' : 'a'} ${i.role}. Accept here:\n\n${m.link}\n\nSign in or create an account with this email address to accept. The invitation expires in ${i.days} ${i.days === 1 ? 'day' : 'days'}. If you did not expect it, ignore this message.\n`,
+      };
+    }
     case 'account_exists':
       return {
         subject: 'You already have an account',

@@ -10,6 +10,10 @@ import { SignInPage } from '@/pages/auth/SignInPage';
 import { SignUpPage } from '@/pages/auth/SignUpPage';
 import { NoticePage } from '@/pages/privacy/NoticePage';
 import { PrivacyPage } from '@/pages/privacy/PrivacyPage';
+import { CreateOrgPage } from '@/pages/org/CreateOrgPage';
+import { InvitePage } from '@/pages/org/InvitePage';
+import { MembersPage } from '@/pages/org/MembersPage';
+import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 
 export function AppRoutes() {
@@ -27,6 +31,10 @@ export function AppRoutes() {
       <Route path="/account/security" element={<SecurityPage />} />
       <Route path="/account/privacy" element={<PrivacyPage />} />
       <Route path="/privacy" element={<NoticePage />} />
+      <Route path="/orgs/new" element={<CreateOrgPage />} />
+      <Route path="/org/members" element={<MembersPage />} />
+      <Route path="/org/settings" element={<OrgSettingsPage />} />
+      <Route path="/invite" element={<InvitePage />} />
       <Route path="*" element={<Navigate to="/forms" replace />} />
     </Routes>
   );

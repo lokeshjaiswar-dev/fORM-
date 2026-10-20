@@ -332,12 +332,13 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
    * same answer whether the password was right or not, and a sign-in link goes to the address only when it was. The
    * owner still gets in; a guesser learns nothing more.
    */
-  async function stepUp(request: FastifyRequest, cl: ClientInfo, user: AuthUser, emailNorm: string) {
+  async function stepUp(request: FastifyRequest, reply: FastifyReply, cl: ClientInfo, user: AuthUser, emailNorm: string) {
     await deniedLogin(request, { userId: user.id, reason: 'step_up_link', method: 'password', stepUp: true });
     if (await c.throttle.spent(request, mailLimit(c, emailNorm), { ipHash: cl.ipHash, userId: user.id })) return { status: 'link_sent' as const };
-    const mail = await withUser(c.db, { userId: user.id, requestId: request.id }, async (tx) => {
-      if (!user.emailVerifiedAt) return (await verificationMail(c, tx, user)).mail;
-      const token = await issueToken(tx, { userId: user.id, purpose: 'magic_link', minutes: LINK_MINUTES.magic_link, now: c.now() });
+    const { mail, proof } = await withUser(c.db, { userId: user.id, requestId: request.id }, async (tx) => {
+      // An unconfirmed address gets its verification link, bound to this browser like the one sign-up sent (BL-210).
+      const verify = user.emailVerifiedAt ? null : await verificationMail(c, tx, user);
+      const token = verify ? null : await issueToken(tx, { userId: user.id, purpose: 'magic_link', minutes: LINK_MINUTES.magic_link, now: c.now() });
       await audit.append(tx, PLATFORM_ORG_KEY, {
         actorKind: 'user',
         actorId: user.id,
@@ -347,11 +348,13 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
         resourceType: 'user',
         resourceId: user.id,
         outcome: 'success',
-        reason: 'step_up',
+        reason: verify ? 'step_up_verify' : 'step_up',
         requestId: request.id,
       });
-      return { kind: 'magic_link' as const, to: { address: user.email }, link: linkFor(c, 'magic_link', token) };
+      if (verify) return verify;
+      return { mail: { kind: 'magic_link' as const, to: { address: user.email }, link: linkFor(c, 'magic_link', token!) }, proof: null };
     });
+    if (proof) setSignupCookie(reply, proof);
     c.mail.send(mail);
     return { status: 'link_sent' as const };
   }
@@ -382,7 +385,7 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
         if (spent) return { status: 'link_sent' as const };
         throw new ProblemError('INVALID_CREDENTIALS', 'The email address or password is not right.', undefined, { audited: true });
       }
-      if (spent) return stepUp(request, cl, user, emailNorm);
+      if (spent) return stepUp(request, reply, cl, user, emailNorm);
       if (!user.emailVerifiedAt) {
         if (!(await c.throttle.spent(request, mailLimit(c, emailNorm), { ipHash: cl.ipHash, userId: user.id }))) {
           const { mail, proof } = await withUser(c.db, { userId: user.id, requestId: request.id }, (tx) => verificationMail(c, tx, user));

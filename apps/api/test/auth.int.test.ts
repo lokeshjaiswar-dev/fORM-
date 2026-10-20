@@ -636,6 +636,26 @@ describe('throttling', () => {
     );
   });
 
+  it('steps an unconfirmed account up to its verification link, bound to this browser (BL-210)', async () => {
+    const limited = await start({}, { authLimits: { ...ROOMY, auth_account: { max: 2, windowSeconds: 3600 } } });
+    const email = newEmail();
+    const signup = sink.messages.length;
+    expect((await call(new Jar(), 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, name: 'Asha' }, {}, limited)).statusCode).toBe(202);
+    await mailTo(email, '/auth/verify', signup);
+    for (let i = 0; i < 2; i++) expect((await call(null, 'POST', '/v1/auth/login', { email, password: `guess-${i}` }, {}, limited)).statusCode).toBe(401);
+    const since = sink.messages.length;
+    const owner = new Jar();
+    expect((await call(owner, 'POST', '/v1/auth/login', { email, password: PASSWORD }, {}, limited)).json()).toEqual({ status: 'link_sent' });
+    expect(owner.cookies.has('__Host-fr_signup')).toBe(true);
+    const { token } = await mailTo(email, '/auth/verify', since);
+    // The same browser redeems it without the password, as after sign-up.
+    const verified = await call(owner, 'POST', '/v1/auth/verify-email', { token }, {}, limited);
+    expect(verified.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true } });
+    expect(await events(verified.json<{ user: { id: string } }>().user.id)).toEqual(
+      expect.arrayContaining([{ action: 'auth.magic_link_sent', outcome: 'success', reason: 'step_up_verify' }]),
+    );
+  });
+
   it('caps the links mailed to one address, whoever asks for them', async () => {
     const limited = await start({}, { authLimits: { ...ROOMY, auth_mail: { max: 2, windowSeconds: 3600 } } });
     const { email } = await signedUp();

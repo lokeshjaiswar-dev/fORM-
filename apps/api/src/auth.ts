@@ -1,11 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { audit, authSession, isUuid, membershipFor, type Db, type MfaLevel, type TenantCtx } from '@form/db';
-import { ROLE_PERMISSIONS, type Permission } from './authz/roles.ts';
+import { audit, authSession, isUuid, membershipFor, type Db, type MembershipRole, type MfaLevel, type TenantCtx } from '@form/db';
+import { permissionsFor, type Permission } from './authz/roles.ts';
 import { ProblemError } from './errors.ts';
 import { hex, ipHash, TOKEN_PATTERN, tokenHash } from './modules/auth/crypto.ts';
 import { clearSessionCookie, SESSION_COOKIE, SESSION_IDLE_SECONDS, type ClientInfo } from './modules/auth/sessions.ts';
 
-/** `none`: public; `account`: a signed-in user, no org; `user`: a signed-in member of the org named in `X-FR-Org`. */
+/**
+ * `none`: public; `account`: a signed-in user, no org; `user`: a signed-in member of the org named in `X-FR-Org`
+ * (or, when the request names none, the org the session's switcher chose).
+ */
 export type RouteAuth = 'none' | 'account' | 'user';
 
 export interface RequestSession {
@@ -29,11 +32,18 @@ declare module 'fastify' {
     tenant: TenantCtx | null;
     /** Set for `account` and `user` routes. */
     account: Account | null;
+    /** Set with `tenant`: the caller's role in the active org and the permissions it carries. */
+    member: Member | null;
   }
   interface FastifyContextConfig {
     auth?: RouteAuth;
     perm?: Permission;
   }
+}
+
+export interface Member {
+  role: MembershipRole;
+  perms: readonly Permission[];
 }
 
 export const DEV_USER_HEADER = 'x-fr-dev-user';
@@ -77,6 +87,7 @@ export function clientInfo(request: FastifyRequest, secret: Uint8Array, now: Dat
 export function registerAuth(app: FastifyInstance, options: AuthOptions): void {
   app.decorateRequest('tenant', null);
   app.decorateRequest('account', null);
+  app.decorateRequest('member', null);
 
   const deny = (request: FastifyRequest, orgId: string | null, userId: string, reason: string, detail: string): never => {
     throw new ProblemError('FORBIDDEN', detail, { orgId, actorId: userId, reason, claimedOrgId: orgId ? undefined : header(request, ORG_HEADER) });
@@ -141,14 +152,16 @@ export function registerAuth(app: FastifyInstance, options: AuthOptions): void {
     if (auth === 'account') return;
 
     const { userId } = account;
-    const orgId = header(request, ORG_HEADER);
+    const named = header(request, ORG_HEADER);
+    const orgId = named === undefined ? (account.session?.activeOrgId ?? undefined) : named;
     if (!isUuid(orgId)) throw new ProblemError('BAD_REQUEST', `${ORG_HEADER} must be an org id`);
 
-    const role = await membershipFor(options.db, userId, orgId);
-    if (!role) return deny(request, null, userId, 'not_a_member', 'You are not a member of this org.');
-    const perms = ROLE_PERMISSIONS[role];
+    const membership = await membershipFor(options.db, userId, orgId);
+    if (!membership) return deny(request, null, userId, 'not_a_member', 'You are not a member of this org.');
+    const perms = permissionsFor(membership.role, membership.grants);
     if (perm && !perms.includes(perm)) return deny(request, orgId, userId, `missing_permission:${perm}`, `Requires ${perm}.`);
 
+    request.member = { role: membership.role, perms };
     request.tenant = { orgId, actor: 'user', userId, perms, teamIds: [], requestId: request.id };
     request.log = request.log.child({ orgId });
     reply.log = request.log;
@@ -159,6 +172,12 @@ export function registerAuth(app: FastifyInstance, options: AuthOptions): void {
 export function tenantOf(request: FastifyRequest): TenantCtx {
   if (!request.tenant) throw new ProblemError('UNAUTHENTICATED');
   return request.tenant;
+}
+
+/** The caller's membership in the active org, for `user` routes. */
+export function memberOf(request: FastifyRequest): Member {
+  if (!request.member) throw new ProblemError('UNAUTHENTICATED');
+  return request.member;
 }
 
 /** The signed-in caller of an `account` or `user` route. */

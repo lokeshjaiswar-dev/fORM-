@@ -36,7 +36,7 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
   });
 
   it('membership_for validates X-FR-Org', async () => {
-    expect(await membershipFor(t.app.db, seed.a.ownerId, seed.a.orgId)).toBe('owner');
+    expect(await membershipFor(t.app.db, seed.a.ownerId, seed.a.orgId)).toEqual({ role: 'owner', grants: [] });
     expect(await membershipFor(t.app.db, seed.a.ownerId, seed.b.orgId)).toBeNull();
     expect(await membershipFor(t.app.db, seed.a.editorId, seed.b.orgId)).toBeNull();
   });
@@ -109,8 +109,13 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'auth_token_take',
       'auth_user_by_email',
       'auth_user_credentials',
+      'create_org',
       'create_partitions',
+      'invite_accept',
+      'invite_by_token',
       'list_user_orgs',
+      'member_access_token',
+      'member_sessions_revoke',
       'membership_for',
       'orgs_due_for',
       'resolve_job_org',

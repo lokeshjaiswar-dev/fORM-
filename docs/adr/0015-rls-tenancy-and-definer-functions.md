@@ -31,6 +31,7 @@ See [`docs/platform/03-architecture.md` §0 principle 3 and §2.1–2.3](../plat
 - Authorisation inside a tenant (roles, teams, per-form sharing) stays in the app layer, with RLS as a second check for data access.
 - Foreign ids return 404, never 403.
 - A new cross-org need means a new, reviewed definer function, not a new privileged connection.
+- WP-1.02 as built (migration `0008_orgs.sql`): `create_org`, `invite_by_token`, `invite_accept`, `member_sessions_revoke` and `member_access_token`; `membership_for` returns the role with the permissions org settings grant on top of it. Restrictive policies repeat the API's role checks for member changes, org settings and draft writes. The isolation suite is generated per table and actor kind from one registry (`packages/db/test/rls.int.test.ts`), which must list every table in `public`.
 - Phase 0 as built (WP-0.13, migrations `0001_foundation.sql` to `0004_audit.sql`): the helpers, roles, `withTenant`, schema `parts`, `list_user_orgs`, `membership_for`, `orgs_due_for`, `resolve_job_org`, `create_partitions` and the RLS meta-tests; `pnpm test:int` runs them against Postgres 18 in Testcontainers (CI job `db`). The other functions arrive with the WPs that need them.
 
 ## Links

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Db, Tx } from '../client.ts';
-import { auditPending, PLATFORM_ORG_KEY, type AuditOutcome } from '../schema/index.ts';
+import { PLATFORM_ORG_KEY, type AuditOutcome } from '../schema/index.ts';
 import { ACTOR_KINDS, isUuid, type ActorKind, type TenantCtx } from '../tenant.ts';
 import { AUDIT_EVENTS, isAuditAction, type AuditAction } from './catalogue.ts';
 import { AUDIT_TEXT_LIMITS } from './record.ts';
@@ -61,6 +61,11 @@ export function normaliseAuditEvent(event: AuditEvent, allowed: readonly AuditOu
   return out;
 }
 
+/** fr_app may name only these two columns (BL-193): the id and occurred_at come from the database. */
+function insertPending(tx: Tx, orgKey: string, event: Record<string, unknown>) {
+  return tx.execute(sql`insert into audit_pending (org_key, event) values (${orgKey}, ${JSON.stringify(event)}::jsonb)`);
+}
+
 /**
  * Writes audit events (ADR-0006). `append` puts a success record in the business transaction, so it commits or
  * rolls back with the change; `appendDetached` puts a denied or failed record through a separate pool (the
@@ -70,14 +75,14 @@ export function normaliseAuditEvent(event: AuditEvent, allowed: readonly AuditOu
 export const audit = {
   async append(tx: Tx, orgId: string, event: AuditEvent): Promise<void> {
     const normalised = normaliseAuditEvent(event, ['success']);
-    await tx.insert(auditPending).values({ orgKey: orgId, event: normalised });
+    await insertPending(tx, orgId, normalised);
   },
 
   async appendDetached(writer: Db, orgId: string | null, event: AuditEvent): Promise<void> {
     const normalised = normaliseAuditEvent(event, ['denied', 'error']);
     await writer.transaction(async (tx) => {
       await tx.execute(sql`select set_config('app.org_id', ${orgId ?? ''}, true), set_config('app.actor_kind', ${event.actorKind}, true)`);
-      await tx.insert(auditPending).values({ orgKey: orgId ?? PLATFORM_ORG_KEY, event: normalised });
+      await insertPending(tx, orgId ?? PLATFORM_ORG_KEY, normalised);
     });
   },
 };
