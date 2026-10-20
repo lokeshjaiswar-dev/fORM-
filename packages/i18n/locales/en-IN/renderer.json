@@ -32,5 +32,6 @@
   "submit.failed": "Your response could not be sent. Try again.",
   "submit.sending": "Sending…",
   "time.end": "End time",
-  "time.start": "Start time"
+  "time.start": "Start time",
+  "title.untitled": "Form title"
 }

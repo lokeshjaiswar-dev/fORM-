@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { BuilderHeader } from '@/components/builder/BuilderHeader';
 import { FieldPicker } from '@/components/builder/FieldPicker';
 import { FormCanvas } from '@/components/builder/FormCanvas';
+import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { DeleteBlockDialog } from '@/components/builder/DeleteBlockDialog';
 import { SessionBanners } from '@/components/builder/SessionBanners';
@@ -51,15 +52,17 @@ function Builder() {
           <BuilderHeader />
           <SessionBanners />
           <div className="flex min-h-0 flex-1">
-            {mode === 'edit' ? (
-              <ErrorBoundary key="edit" label="canvas">
-                <FormCanvas />
-              </ErrorBoundary>
-            ) : (
-              <ErrorBoundary key="preview" label="preview">
-                <FormPreview key={structure} />
-              </ErrorBoundary>
-            )}
+            <FormDesignPanel>
+              {mode === 'edit' ? (
+                <ErrorBoundary key="edit" label="canvas">
+                  <FormCanvas />
+                </ErrorBoundary>
+              ) : (
+                <ErrorBoundary key="preview" label="preview">
+                  <FormPreview key={structure} />
+                </ErrorBoundary>
+              )}
+            </FormDesignPanel>
             {mode === 'edit' && <BlockInspector />}
           </div>
         </div>

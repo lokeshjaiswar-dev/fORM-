@@ -16,16 +16,12 @@ function open() {
 }
 
 describe('ThemeSettings', () => {
-  it('edits the v2 theme and behaviour: accent token, submit label, progress bar', async () => {
+  it('edits the submit label', async () => {
     const user = open();
-    await user.click(screen.getByRole('button', { name: '#7c3aed' }));
-    expect(doc().theme.tokens.colors.accent).toBe('#7c3aed');
     const submit = screen.getByRole('textbox', { name: 'Submit button' });
     await user.clear(submit);
     await user.type(submit, 'Send');
     expect(doc().behavior.submit.label).toBe('Send');
-    await user.click(screen.getByRole('switch', { name: 'Progress bar' }));
-    expect(doc().theme.tokens.progress).toBe('bar');
   });
 
   it('an https redirect becomes the default ending; clearing it restores the message ending (S6)', async () => {

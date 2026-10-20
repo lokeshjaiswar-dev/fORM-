@@ -65,6 +65,7 @@ export function FormCanvas() {
   const title = useDoc((d) => d.title);
   const key = useDoc(layoutKey);
   const tokens = useDoc((d) => d.theme.tokens);
+  const layout = useDoc((d) => d.theme.layout);
   const submitLabel = useDoc((d) => labelString(d.behavior.submit.label));
   const pages = useMemo(() => parseLayout(key), [key]);
   const ids = useMemo(() => pages.flatMap((p) => p.rows.flat().map((b) => b.id)), [pages]);
@@ -98,17 +99,28 @@ export function FormCanvas() {
   return (
     <div
       ref={setNodeRef}
-      className="min-h-full flex-1 overflow-y-auto overflow-x-hidden"
+      data-layout={layout}
+      className="h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
       style={{
         ...themeCssVars(tokens),
         backgroundColor: isOver ? 'color-mix(in srgb, var(--fr-text) 4%, var(--fr-page))' : 'var(--fr-page)',
         backgroundImage: 'var(--fr-page-image, none)',
+        backgroundSize: 'cover',
         color: 'var(--fr-text)',
         fontFamily: 'var(--fr-font)',
+        fontSize: 'var(--fr-size)',
       }}
       onClick={() => setActiveBlock(null)}
     >
-      <div className="mx-auto w-full max-w-[720px] pb-40 pl-[108px] pr-8 pt-[72px]" style={{ maxWidth: 'var(--fr-width)' }}>
+      <div className="flex min-h-full justify-center px-[72px] py-16 pb-24">
+        <div
+          className="w-full px-10 py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
+          style={{
+            maxWidth: 'var(--fr-width)',
+            backgroundColor: 'var(--fr-surface)',
+            borderRadius: layout === 'cards' ? '24px' : 'min(24px, calc(var(--fr-radius) + 10px))',
+          }}
+        >
         <input
           ref={titleRef}
           value={title}
@@ -131,7 +143,7 @@ export function FormCanvas() {
         ) : (
           <>
             <SortableContext items={ids} strategy={rectSortingStrategy}>
-              <div className="space-y-1">
+              <div className="flex flex-col" style={{ gap: 'var(--fr-gap)' }}>
                 {pages.map((page, p) => (
                   <Fragment key={page.id}>
                     {p > 0 ? <PageBreak pageId={page.id} /> : null}
@@ -226,6 +238,7 @@ export function FormCanvas() {
             </button>
           </>
         )}
+        </div>
       </div>
     </div>
   );

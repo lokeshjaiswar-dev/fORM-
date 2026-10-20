@@ -25,13 +25,13 @@ export function EmptyStart() {
         <StartRow icon={<FileText className="size-4" />} label={t(M['start.blank'])} onClick={startBlank} />
         <StartRow icon={<LayoutTemplate className="size-4" />} label={t(M['start.template'])} onClick={() => setTemplates(true)} />
       </div>
-      <p className="max-w-[520px] text-[15px] leading-7 text-[rgba(55,53,47,0.85)]">
+      <p className="max-w-[520px] text-[15px] leading-7" style={{ color: 'var(--fr-text)' }}>
         {before}
-        <span className="rounded-[4px] bg-[#e8f0fe] px-1 py-0.5 font-medium text-[#1a73e8]">{t(M['start.intro_em'])}</span>
+        <span className="rounded-[4px] px-1 py-0.5 font-medium" style={{ background: 'color-mix(in srgb, var(--fr-accent) 16%, transparent)', color: 'var(--fr-accent)' }}>{t(M['start.intro_em'])}</span>
         {after}
         <br />
         {slashBefore}
-        <span className="rounded-[4px] bg-[#e8f0fe] px-1.5 py-0.5 font-medium text-[#1a73e8]">/</span>
+        <span className="rounded-[4px] px-1.5 py-0.5 font-medium" style={{ background: 'color-mix(in srgb, var(--fr-accent) 16%, transparent)', color: 'var(--fr-accent)' }}>/</span>
         {slashAfter}
       </p>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
@@ -44,9 +44,10 @@ function StartRow({ icon, label, onClick }: { icon: ReactNode; label: string; on
     <button
       type="button"
       onClick={onClick}
-      className="-ml-2 flex w-full items-center gap-3 rounded-[6px] px-2 py-2 text-left text-[15px] text-[rgba(55,53,47,0.55)] hover:bg-[rgba(55,53,47,0.05)] hover:text-[rgba(55,53,47,0.85)]"
+      className="-ml-2 flex w-full items-center gap-3 rounded-[6px] px-2 py-2 text-left text-[15px] hover:bg-black/5"
+      style={{ color: 'var(--fr-muted)' }}
     >
-      <span className="flex size-5 items-center justify-center text-[rgba(55,53,47,0.45)]">{icon}</span>
+      <span className="flex size-5 items-center justify-center">{icon}</span>
       {label}
     </button>
   );

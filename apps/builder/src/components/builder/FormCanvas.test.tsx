@@ -57,7 +57,7 @@ describe('FormCanvas', () => {
       });
     });
     const title = screen.getByLabelText('Form title');
-    const canvas = title.closest('.min-h-full');
+    const canvas = title.closest('[data-layout]');
     expect(canvas).toHaveStyle({ '--fr-accent': '#7c3aed', '--fr-page': '#fef3c7', '--fr-text': '#111827', color: 'var(--fr-text)', backgroundColor: 'var(--fr-page)' });
     expect(screen.getByRole('button', { name: /submit/i })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
   });

@@ -51,11 +51,22 @@
 
 :where(.fr-root) .fr-form,
 :where(.fr-root) .fr-screen {
-  width: 100%;
+  width: calc(100% - 48px);
   max-width: var(--fr-width);
-  margin: 0 auto;
-  padding: 40px 24px;
+  margin: 48px auto;
+  padding: 40px 32px 48px;
   outline: none;
+  overflow: visible;
+  color: var(--fr-text);
+  background: var(--fr-surface);
+  border-radius: min(24px, calc(var(--fr-radius) + 10px));
+  box-shadow: 0 16px 48px color-mix(in srgb, #000 10%, transparent);
+}
+
+.fr-root[data-layout='cards'] .fr-form,
+.fr-root[data-layout='cards'] .fr-screen {
+  border-radius: 24px;
+  padding: 52px 36px 56px;
 }
 
 :where(.fr-root) .fr-header {
@@ -64,11 +75,16 @@
 
 :where(.fr-root) .fr-title {
   margin: 0;
+  color: var(--fr-text);
   font-family: var(--fr-heading-font);
   font-size: 2.25em;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.02em;
+}
+
+:where(.fr-root) .fr-title-placeholder {
+  color: color-mix(in srgb, var(--fr-text) 40%, transparent);
 }
 
 :where(.fr-root) .fr-header .fr-description {
@@ -143,7 +159,7 @@
   display: block;
   margin: 0 0 6px;
   padding: 0;
-  color: var(--fr-label-color, inherit);
+  color: var(--fr-label-color, var(--fr-text));
   font-size: var(--fr-label-size, 1em);
   font-weight: var(--fr-label-weight, 500);
 }
@@ -732,6 +748,8 @@
 @container fr (max-width: 639px) {
   :where(.fr-root) .fr-form,
   :where(.fr-root) .fr-screen {
+    width: calc(100% - 24px);
+    margin: 20px auto;
     padding: 28px 16px;
   }
 

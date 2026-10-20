@@ -52,7 +52,7 @@ interface PageViewProps {
 
 /** The current page: header on the first page, progress, rows of blocks, form-level errors and navigation. */
 function PageView({ current, first, canGoBack, sending, busy, formErrors, failure, onBack }: PageViewProps) {
-  const { def, t, tokens } = useRenderer();
+  const { def, t, tokens, mode } = useRenderer();
   const { state } = useEvaluation();
   const { text, resolve } = usePipes();
   const page = def.pages.find((p) => p.id === current);
@@ -75,9 +75,13 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
           </p>
         )
       ) : null}
-      {first && (def.title || def.description) ? (
+      {first && (def.title || def.description || mode === 'preview') ? (
         <header className="fr-header">
-          {def.title ? <h1 className="fr-title">{def.title}</h1> : null}
+          {def.title ? (
+            <h1 className="fr-title">{def.title}</h1>
+          ) : mode === 'preview' ? (
+            <h1 className="fr-title fr-title-placeholder">{t(MESSAGES['title.untitled'])}</h1>
+          ) : null}
           {def.description ? <div className="fr-description fr-rich"><RichTextView doc={def.description} resolve={resolve} /></div> : null}
         </header>
       ) : null}
@@ -431,6 +435,7 @@ export function FormRenderer(props: FormRendererProps) {
       data-input-style={tokens.inputStyle}
       data-label-align={tokens.labelAlign}
       data-density={tokens.density}
+      data-layout={(theme ?? def.theme).layout}
       data-mode={mode}
     >
       {status.state === 'open' ? (

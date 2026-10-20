@@ -34,6 +34,7 @@ export const MESSAGES = defineMessages('renderer', {
   'password.submit': 'Continue',
   'submit.sending': 'Sending…',
   'submit.failed': 'Your response could not be sent. Try again.',
+  'title.untitled': 'Form title',
   'ending.fill_again': 'Submit another response',
   'ending.redirecting': 'Taking you to the next page…',
 });

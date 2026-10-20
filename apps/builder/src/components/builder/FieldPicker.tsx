@@ -29,8 +29,8 @@ export function FieldPicker() {
   const tiles = matchTiles(q);
 
   return (
-    <aside className={cn('shrink-0 overflow-hidden bg-[var(--notion-sidebar)] transition-[width] duration-300 ease-out', sidebarOpen ? 'w-[252px]' : 'w-0')}>
-      <div className="flex h-full w-[252px] flex-col">
+    <aside className={cn('min-h-0 shrink-0 overflow-hidden bg-[var(--notion-sidebar)] transition-[width] duration-300 ease-out', sidebarOpen ? 'w-[252px]' : 'w-0')}>
+      <div className="flex h-full min-h-0 w-[252px] flex-col">
         <div className="flex items-center gap-1 px-2 pt-2.5">
           <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-[6px] px-1.5 py-1">
             <span className="flex size-5 items-center justify-center rounded-[4px] bg-[#2383e2] text-[11px] font-bold text-white">F</span>
@@ -62,7 +62,7 @@ export function FieldPicker() {
           </label>
         </div>
 
-        <div className="mt-3 flex-1 overflow-y-auto px-2 pb-4">
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
           <p className="mb-1 px-2 text-[11px] font-medium text-[var(--notion-text-faint)]">{t(M['picker.this_form'])}</p>
           <div className="mb-3 flex items-center gap-2 rounded-[6px] bg-[var(--notion-hover)] px-2 py-1">
             <span className="flex size-5 items-center justify-center rounded-[4px] bg-white text-[11px] font-semibold shadow-sm ring-1 ring-[var(--notion-border)]">F</span>

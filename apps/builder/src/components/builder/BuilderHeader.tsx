@@ -6,7 +6,6 @@ import {
   Redo2,
   Undo2,
   LayoutTemplate,
-  Palette,
   Star,
   PanelLeft,
 } from 'lucide-react';
@@ -15,7 +14,6 @@ import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
-import { ThemeSettings } from '@/components/builder/ThemeSettings';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Tooltip, modKey } from '@/components/ui/tooltip';
@@ -29,7 +27,6 @@ export function BuilderHeader() {
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
   const [templates, setTemplates] = useState(false);
-  const [theme, setTheme] = useState(false);
 
   return (
     <>
@@ -78,9 +75,6 @@ export function BuilderHeader() {
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>
-        <Ghost onClick={() => setTheme(true)} label="Customize form">
-          <Palette className="size-4" />
-        </Ghost>
         <Tooltip content="Copy share link">
           <button
             type="button"
@@ -101,7 +95,6 @@ export function BuilderHeader() {
         </Ghost>
       </header>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
-      <ThemeSettings open={theme} onOpenChange={setTheme} />
     </>
   );
 }

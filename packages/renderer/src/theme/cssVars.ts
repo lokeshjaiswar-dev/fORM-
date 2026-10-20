@@ -9,7 +9,7 @@ import { tokenVar, type ColorValue, type FontId, type ThemeColorToken, type Them
 const HEX = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 export const DEFAULT_COLORS: Readonly<Record<ThemeColorToken, string>> = {
-  page: '#ffffff',
+  page: '#ebe6da',
   surface: '#ffffff',
   text: '#37352f',
   muted: '#6b6a66',
@@ -73,7 +73,10 @@ export function themeCssVars(tokens: ThemeTokens): CSSProperties {
   vars['--fr-gap'] = GAP[tokens.density] ?? GAP.comfortable;
   vars['--fr-width'] = WIDTH[tokens.formWidth] ?? WIDTH.normal;
   const background = tokens.background;
-  if (background?.kind === 'color' && typeof background.color === 'string' && HEX.test(background.color)) vars['--fr-page'] = background.color;
+  if (background?.kind === 'color' && typeof background.color === 'string' && HEX.test(background.color)) {
+    vars['--fr-page'] = background.color;
+    vars['--fr-page-image'] = 'none';
+  }
   if (background?.kind === 'gradient' && typeof background.from === 'string' && typeof background.to === 'string' && HEX.test(background.from) && HEX.test(background.to)) {
     vars['--fr-page-image'] = `linear-gradient(${Math.round(background.angle) % 360}deg, ${background.from}, ${background.to})`;
   }
