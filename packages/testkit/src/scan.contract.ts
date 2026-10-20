@@ -13,7 +13,12 @@ export interface ScannerContractOptions {
   inspectsContent: boolean;
 }
 
-export function runAVScannerContract(label: string, setup: ContractSetup<ContractSubject<AVScanner>>, o: ScannerContractOptions): void {
+export interface ScannerContractSubject extends ContractSubject<AVScanner> {
+  /** The same scanner with its engine down; omit for a scanner without one. */
+  unreachable?: () => AVScanner;
+}
+
+export function runAVScannerContract(label: string, setup: ContractSetup<ScannerContractSubject>, o: ScannerContractOptions): void {
   describe(`AVScanner contract: ${label}`, () => {
     const subject = useSubject(setup);
     const scanner = () => subject().impl;
@@ -44,6 +49,16 @@ export function runAVScannerContract(label: string, setup: ContractSetup<Contrac
       } else {
         expect(r.verdict).toBe('skipped');
       }
+    });
+
+    it('answers error, never clean, when the engine is down, and still drains the stream', async (ctx) => {
+      const down = subject().unreachable;
+      if (!down) return ctx.skip();
+      const { stream, consumed } = trackedStream([utf8('a'), utf8('b'), utf8('c')]);
+      const r = await down().scan(stream, meta(3));
+      expect(r.verdict).toBe('error');
+      expect(consumed()).toBe(3);
+      expect((await down().health()).ok).toBe(false);
     });
 
     it('scans an empty file', async () => {

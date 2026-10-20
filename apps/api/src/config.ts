@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
-import { parseEditionConfig, type EditionConfig } from '@form/config';
+import { KMS_DRIVERS, parseEditionConfig, parseKmsConfig, type EditionConfig, type KmsConfig } from '@form/config';
 import { LOG_LEVELS, type LogLevel } from '@form/observability';
 import { z } from 'zod';
 
@@ -81,8 +81,8 @@ export const apiEnvSchema = z
     SMTP_URL: z.string().regex(/^smtps?:\/\/[^/]+/, 'expected smtp://host:port or smtps://user:pass@host:port').optional(),
     MAIL_FROM: z.email().default('no-reply@form.local'),
     MAIL_FROM_NAME: z.string().min(1).max(100).default('fORM-'),
-    /** Wraps the data keys of TOTP secrets; keyfile until WP-1.03 brings the cloud KMS and Vault. */
-    KMS_DRIVER: z.enum(['keyfile']).default('keyfile'),
+    /** Wraps the data keys of TOTP secrets; the other KMS_* keys are parsed by @form/config. */
+    KMS_DRIVER: z.enum(KMS_DRIVERS).default('keyfile'),
     KMS_KEYFILE_PATH: z.string().min(1).optional(),
     /** Have I Been Pwned (k-anonymity) at sign-up and reset. Default: on for SaaS with EGRESS_POLICY=open. */
     PASSWORD_BREACH_CHECK: z.enum(['hibp', 'off']).optional(),
@@ -106,7 +106,7 @@ export const apiEnvSchema = z
     const production = env.NODE_ENV === 'production';
     if (env.AUTH_DEV_HEADERS && production) issue('AUTH_DEV_HEADERS', 'is refused when NODE_ENV=production');
     if (production && !env.AUTH_SECRET) issue('AUTH_SECRET', 'is required in production');
-    if (production && !env.KMS_KEYFILE_PATH) issue('KMS_KEYFILE_PATH', 'is required in production: TOTP secrets are encrypted');
+    if (production && env.KMS_DRIVER === 'keyfile' && !env.KMS_KEYFILE_PATH) issue('KMS_KEYFILE_PATH', 'is required in production: TOTP secrets are encrypted');
     if (production && !env.PUBLIC_BUILDER_URL) issue('PUBLIC_BUILDER_URL', 'is required in production: sign-in emails link to the builder');
     if (production && env.MAILER_DRIVER === 'smtp' && !env.SMTP_URL) issue('SMTP_URL', 'is required in production with MAILER_DRIVER=smtp');
     if (production && !env.PRIVACY_CONTACT_EMAIL) issue('PRIVACY_CONTACT_EMAIL', 'is required in production: the privacy notice names it as the contact for builder users');
@@ -130,7 +130,7 @@ export interface ApiConfig {
   authDevHeaders: boolean;
   auth: AuthConfig;
   mailer: { driver: 'smtp' | 'log'; smtpUrl: string | undefined; from: { address: string; name: string } };
-  kms: { driver: 'keyfile'; keyfilePath: string | undefined };
+  kms: KmsConfig;
   /** The platform's own privacy notice for builder users (CMP-21). */
   privacy: PrivacyConfig;
   edition: EditionConfig;
@@ -193,9 +193,11 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
   const { env, errors } = resolveFiles(rawEnv, read);
   const api = apiEnvSchema.safeParse(env);
   const edition = parseEditionConfig(env);
+  const kms = parseKmsConfig(env);
   if (!api.success) errors.push(...api.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`));
   if (!edition.ok) errors.push(...edition.errors);
-  if (!api.success || !edition.ok || errors.length > 0) return { ok: false, errors };
+  if (!kms.ok) errors.push(...kms.errors);
+  if (!api.success || !edition.ok || !kms.ok || errors.length > 0) return { ok: false, errors };
   const e = api.data;
   const ed = edition.config;
   const notices: string[] = [];
@@ -236,7 +238,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
         oidcAllowInsecure: e.NODE_ENV !== 'production',
       },
       mailer: { driver: e.MAILER_DRIVER, smtpUrl: e.SMTP_URL, from: { address: e.MAIL_FROM, name: e.MAIL_FROM_NAME } },
-      kms: { driver: e.KMS_DRIVER, keyfilePath: e.KMS_KEYFILE_PATH },
+      kms: kms.config,
       privacy: { fiduciaryName: e.PRIVACY_FIDUCIARY_NAME, contactEmail: e.PRIVACY_CONTACT_EMAIL ?? 'privacy@form.local', contactName: e.PRIVACY_CONTACT_NAME ?? null },
       edition: ed,
       notices,

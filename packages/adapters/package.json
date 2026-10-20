@@ -4,14 +4,33 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    "./audit-sink": "./src/audit-sink/index.ts",
+    "./captcha": "./src/captcha/index.ts",
+    "./egress": "./src/egress/index.ts",
+    "./geoip": "./src/geoip/index.ts",
+    "./guardian": "./src/guardian/index.ts",
+    "./kms": "./src/kms/index.ts",
+    "./mailer": "./src/mailer/index.ts",
+    "./queue": "./src/queue/index.ts",
+    "./scan": "./src/scan/index.ts",
+    "./search": "./src/search/index.ts",
+    "./storage": "./src/storage/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "test:int": "vitest run -c vitest.int.config.ts",
+    "test:cloud": "vitest run -c vitest.cloud.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1146.0",
+    "@aws-sdk/client-s3": "3.1146.0",
+    "@aws-sdk/lib-storage": "3.1146.0",
+    "@aws-sdk/s3-presigned-post": "3.1146.0",
+    "@aws-sdk/s3-request-presigner": "3.1146.0",
+    "@form/config": "workspace:*",
     "@form/ports": "workspace:*",
+    "mmdb-lib": "3.0.3",
     "nodemailer": "10.0.13",
     "pg-boss": "catalog:"
   },

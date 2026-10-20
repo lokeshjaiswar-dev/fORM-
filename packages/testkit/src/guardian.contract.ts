@@ -4,12 +4,13 @@ import { expectPortError, useSubject, type ContractSetup, type ContractSubject }
 
 export interface GuardianContractSubject extends ContractSubject<GuardianVerifier> {
   /** Method-specific payloads that approve or refuse a started verification. */
-  approve(start: GuardianStart): unknown;
-  refuse(start: GuardianStart): unknown;
+  approve(start: GuardianStart): unknown | Promise<unknown>;
+  refuse(start: GuardianStart): unknown | Promise<unknown>;
   invalidPayload: unknown;
 }
 
-const input = (n: number) => ({ orgId: 'org-1', submissionId: `sub-${n}`, guardianEmail: `parent${n}@example.in` });
+const ORG = 'org-1';
+const input = (n: number) => ({ orgId: ORG, submissionId: `sub-${n}`, guardianEmail: `parent${n}@example.in` });
 
 export function runGuardianVerifierContract(label: string, setup: ContractSetup<GuardianContractSubject>): void {
   describe(`GuardianVerifier contract: ${label}`, () => {
@@ -36,32 +37,38 @@ export function runGuardianVerifierContract(label: string, setup: ContractSetup<
 
     it('verifies an approved guardian with evidence', async () => {
       const s = await v().start(input(3));
-      const r = await v().complete({ verificationId: s.verificationId, payload: subject().approve(s) });
+      const r = await v().complete({ orgId: ORG, verificationId: s.verificationId, payload: await subject().approve(s) });
       expect(r.verified).toBe(true);
       expect(r.evidenceRef.length).toBeGreaterThan(0);
     });
 
     it('records a refusal as unverified', async () => {
       const s = await v().start(input(4));
-      const r = await v().complete({ verificationId: s.verificationId, payload: subject().refuse(s) });
+      const r = await v().complete({ orgId: ORG, verificationId: s.verificationId, payload: await subject().refuse(s) });
       expect(r.verified).toBe(false);
       expect(r.evidenceRef.length).toBeGreaterThan(0);
     });
 
     it('cannot be completed twice', async () => {
       const s = await v().start(input(5));
-      await v().complete({ verificationId: s.verificationId, payload: subject().approve(s) });
-      await expectPortError(v().complete({ verificationId: s.verificationId, payload: subject().approve(s) }), 'conflict');
+      await v().complete({ orgId: ORG, verificationId: s.verificationId, payload: await subject().approve(s) });
+      await expectPortError(v().complete({ orgId: ORG, verificationId: s.verificationId, payload: await subject().approve(s) }), 'conflict');
     });
 
     it('rejects unknown ids', async () => {
-      await expectPortError(v().complete({ verificationId: 'does-not-exist', payload: {} }), 'not_found');
+      await expectPortError(v().complete({ orgId: ORG, verificationId: 'does-not-exist', payload: {} }), 'not_found');
+    });
+
+    it('hides a verification from another org', async () => {
+      const s = await v().start(input(7));
+      await expectPortError(v().complete({ orgId: 'org-2', verificationId: s.verificationId, payload: await subject().approve(s) }), 'not_found');
+      expect((await v().complete({ orgId: ORG, verificationId: s.verificationId, payload: await subject().approve(s) })).verified).toBe(true);
     });
 
     it('rejects an invalid payload without consuming the verification', async () => {
       const s = await v().start(input(6));
-      await expectPortError(v().complete({ verificationId: s.verificationId, payload: subject().invalidPayload }), 'invalid_argument');
-      expect((await v().complete({ verificationId: s.verificationId, payload: subject().approve(s) })).verified).toBe(true);
+      await expectPortError(v().complete({ orgId: ORG, verificationId: s.verificationId, payload: subject().invalidPayload }), 'invalid_argument');
+      expect((await v().complete({ orgId: ORG, verificationId: s.verificationId, payload: await subject().approve(s) })).verified).toBe(true);
     });
   });
 }

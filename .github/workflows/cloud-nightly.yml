@@ -1,0 +1,73 @@
+name: Cloud nightly
+
+# WP-1.03: the KeyProvider and Storage contracts against real AWS KMS, Cloud KMS, Azure Key Vault and an S3 bucket
+# with Object Lock (packages/adapters/test/cloud.cloud.test.ts). Disabled by default: the job runs only when the
+# repository variable FORM_CLOUD_NIGHTLY is 'true', after the accounts, keys and secrets below exist (backlog BL-254).
+#
+# Repository variables: AWS_REGION, FORM_CLOUD_AWS_ROLE_ARN (OIDC-trusted role), FORM_CLOUD_AWS_KMS_KEY_ID,
+#   FORM_CLOUD_AWS_SIGNING_KEYS (audit-platform=<arn>,templates-system=<arn>; ECC_NIST_P256 SIGN_VERIFY keys),
+#   FORM_CLOUD_S3_BUCKET_PREFIX (<prefix>-staging … <prefix>-packs; <prefix>-audit with Object Lock),
+#   FORM_CLOUD_S3_SSE_KMS_KEY_ID, FORM_CLOUD_GCP_KMS_KEY, FORM_CLOUD_GCP_SIGNING_KEYS, FORM_CLOUD_AZURE_KEY_URL,
+#   FORM_CLOUD_AZURE_TENANT_ID, FORM_CLOUD_AZURE_CLIENT_ID, FORM_CLOUD_AZURE_SIGNING_KEYS.
+# Secrets: FORM_CLOUD_GCP_SERVICE_ACCOUNT_JSON, FORM_CLOUD_AZURE_CLIENT_SECRET.
+
+on:
+  schedule:
+    - cron: '30 21 * * *' # 03:00 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cloud-nightly
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    if: vars.FORM_CLOUD_NIGHTLY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TURBO_TELEMETRY_DISABLED: 1
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      FORM_CLOUD_AWS_KMS_KEY_ID: ${{ vars.FORM_CLOUD_AWS_KMS_KEY_ID }}
+      FORM_CLOUD_AWS_SIGNING_KEYS: ${{ vars.FORM_CLOUD_AWS_SIGNING_KEYS }}
+      FORM_CLOUD_S3_BUCKET_PREFIX: ${{ vars.FORM_CLOUD_S3_BUCKET_PREFIX }}
+      FORM_CLOUD_S3_SSE_KMS_KEY_ID: ${{ vars.FORM_CLOUD_S3_SSE_KMS_KEY_ID }}
+      FORM_CLOUD_GCP_KMS_KEY: ${{ vars.FORM_CLOUD_GCP_KMS_KEY }}
+      FORM_CLOUD_GCP_SIGNING_KEYS: ${{ vars.FORM_CLOUD_GCP_SIGNING_KEYS }}
+      FORM_CLOUD_AZURE_KEY_URL: ${{ vars.FORM_CLOUD_AZURE_KEY_URL }}
+      FORM_CLOUD_AZURE_TENANT_ID: ${{ vars.FORM_CLOUD_AZURE_TENANT_ID }}
+      FORM_CLOUD_AZURE_CLIENT_ID: ${{ vars.FORM_CLOUD_AZURE_CLIENT_ID }}
+      FORM_CLOUD_AZURE_SIGNING_KEYS: ${{ vars.FORM_CLOUD_AZURE_SIGNING_KEYS }}
+      FORM_CLOUD_AZURE_CLIENT_SECRET: ${{ secrets.FORM_CLOUD_AZURE_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # AWS: the SDK assumes the role with the job's OIDC token (web identity); no long-lived keys and no third-party action.
+      - name: AWS web identity
+        if: vars.FORM_CLOUD_AWS_ROLE_ARN != ''
+        env:
+          AUDIENCE: sts.amazonaws.com
+          ROLE_ARN: ${{ vars.FORM_CLOUD_AWS_ROLE_ARN }}
+        run: |
+          token_file="$RUNNER_TEMP/aws-web-identity"
+          curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value > "$token_file"
+          echo "AWS_WEB_IDENTITY_TOKEN_FILE=$token_file" >> "$GITHUB_ENV"
+          echo "AWS_ROLE_ARN=$ROLE_ARN" >> "$GITHUB_ENV"
+          echo "AWS_ROLE_SESSION_NAME=form-cloud-nightly" >> "$GITHUB_ENV"
+      - name: GCP service account
+        if: vars.FORM_CLOUD_GCP_KMS_KEY != ''
+        env:
+          SA_JSON: ${{ secrets.FORM_CLOUD_GCP_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/gcp-sa.json"
+          echo "FORM_CLOUD_GCP_CREDENTIALS_FILE=$RUNNER_TEMP/gcp-sa.json" >> "$GITHUB_ENV"
+      - run: pnpm --filter @form/adapters test:cloud

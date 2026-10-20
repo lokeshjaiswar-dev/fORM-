@@ -1,6 +1,7 @@
 import { createServer, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { expectPortError, mailpitInbox, runMailerContract, startSmtpSink, type SmtpSink } from '@form/testkit';
+import { createEgressGuard } from '../egress/guard.ts';
 import { createSmtpMailer } from './smtp.ts';
 
 runMailerContract('SMTP → in-process sink', async () => {
@@ -54,16 +55,60 @@ describe('SMTP mailer', () => {
     await expectPortError(mailer.send({ ...message, from: { address: 'noreply@localhost' } }), 'invalid_argument');
   });
 
+  it('never sends credentials to a server that does not offer STARTTLS', async () => {
+    const before = sink.messages.length;
+    const mailer = createSmtpMailer({ url: `smtp://relay-user:s3cret@${sink.host}:${sink.port}`, timeoutMs: 2000 });
+    await expectPortError(mailer.send(message), 'unavailable');
+    expect(await mailer.verify()).toEqual({ ok: false, error: expect.any(String) });
+    expect(sink.messages.length).toBe(before);
+  });
+
   it('reports an unreachable server', async () => {
     const mailer = createSmtpMailer({ url: `smtp://127.0.0.1:${await closedPort()}`, timeoutMs: 2000 });
     await expectPortError(mailer.send(message), 'unavailable');
     expect(await mailer.verify()).toEqual({ ok: false, error: expect.any(String) });
   });
 
-  it('does not pretend to verify per-org senders', async () => {
-    expect(await createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}` }).verify('org-smtp-secret')).toEqual({
-      ok: false,
-      error: 'per-org senders are not supported by the dev SMTP mailer',
+  describe('per-org senders', () => {
+    let orgSink: SmtpSink;
+    beforeAll(async () => {
+      orgSink = await startSmtpSink();
     });
+    afterAll(() => orgSink.close());
+
+    const senders = (egress = createEgressGuard({ policy: 'allowlist', allowlist: ['127.0.0.1'] })) => ({
+      resolve: async (ref: string) => (ref === 'secret-acme' ? `smtp://${orgSink.host}:${orgSink.port}` : undefined),
+      egress,
+    });
+
+    it('delivers through the org relay its secret names, and verifies it', async () => {
+      const mailer = createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}`, senders: senders() });
+      const { messageId } = await mailer.send({ ...message, senderSecretRef: 'secret-acme' });
+      expect(await orgSink.find(messageId)).toBeDefined();
+      expect(await sink.find(messageId)).toBeUndefined();
+      expect(await mailer.verify('secret-acme')).toEqual({ ok: true });
+    });
+
+    it('refuses an unknown sender', async () => {
+      const mailer = createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}`, senders: senders() });
+      await expectPortError(mailer.send({ ...message, senderSecretRef: 'secret-other' }), 'not_found');
+      expect(await mailer.verify('secret-other')).toEqual({ ok: false, error: 'no such SMTP sender' });
+      await expectPortError(createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}` }).send({ ...message, senderSecretRef: 'secret-acme' }), 'not_found');
+    });
+
+    it('never connects to an org relay the egress guard denies (an internal address on SaaS)', async () => {
+      const before = orgSink.messages.length;
+      const mailer = createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}`, senders: senders(createEgressGuard({ policy: 'open' })) });
+      await expectPortError(mailer.send({ ...message, senderSecretRef: 'secret-acme' }), 'egress_denied');
+      expect(orgSink.messages.length).toBe(before);
+    });
+  });
+
+  it('holds the platform relay to the guard it is given', async () => {
+    const trusted = createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}`, egress: createEgressGuard({ policy: 'open', trusted: [sink.host] }) });
+    await expect(trusted.send(message)).resolves.toBeDefined();
+    const airGapped = createSmtpMailer({ url: 'smtp://smtp.provider.example:587', egress: createEgressGuard({ policy: 'none', resolve: async () => [{ address: '203.0.113.9', family: 4 }] }) });
+    await expectPortError(airGapped.send(message), 'egress_denied');
+    expect(() => createSmtpMailer({ url: 'http://smtp.example' })).toThrow(/smtp:\/\//);
   });
 });

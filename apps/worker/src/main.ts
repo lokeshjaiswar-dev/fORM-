@@ -24,7 +24,11 @@ if (clock.status === 'failed') {
 
 const [
   { createDb },
-  { createFilesystemStorage, createPgBossQueue, createSyslogAuditSink, loadKeyfileKeyProvider, parseJobKeyring },
+  { createPgBossQueue, parseJobKeyring },
+  { openKeyProvider },
+  { openStorage },
+  { createOtlpAuditSink, createSyslogAuditSink, createWormBucketAuditSink },
+  { createInfrastructureEgressGuard, infrastructureHosts },
   { jobGuard },
   { startWorker },
   { onShutdownSignal },
@@ -33,7 +37,11 @@ const [
   { randomBytes },
 ] = await Promise.all([
   import('@form/db'),
-  import('@form/adapters'),
+  import('@form/adapters/queue'),
+  import('@form/adapters/kms'),
+  import('@form/adapters/storage'),
+  import('@form/adapters/audit-sink'),
+  import('@form/adapters/egress'),
   import('./guard.ts'),
   import('./runtime.ts'),
   import('./signals.ts'),
@@ -63,18 +71,43 @@ const auditHandle = createDb(config.database.url, {
   onError: (err) => log.error({ err }, 'idle audit database connection failed'),
 });
 
+// Every connection to the KMS, the store and the SIEM passes EGRESS_POLICY; the configured hosts are trusted endpoints.
+const egress = createInfrastructureEgressGuard(
+  config.edition,
+  infrastructureHosts({ kms: config.kms, storage: config.storage, urls: [config.audit.syslog?.url, config.audit.otlp?.url] }),
+);
+
 let keys;
 try {
-  keys = config.audit.kms.keyfilePath ? await loadKeyfileKeyProvider(config.audit.kms.keyfilePath) : undefined;
+  keys = config.kms.driver === 'keyfile' && !config.kms.keyfilePath ? undefined : await openKeyProvider(config.kms, { egress });
 } catch (err) {
-  log.fatal({ err }, 'KMS_KEYFILE_PATH is unreadable or invalid');
+  log.fatal({ err, driver: config.kms.driver }, 'the KMS is unreachable or misconfigured');
   process.exit(1);
 }
 if (!keys) log.warn('KMS_KEYFILE_PATH is not set: audit.checkpoint, audit.verify and audit.archive are not served (development only)');
 const storage = config.storage
-  ? createFilesystemStorage({ root: config.storage.root, publicUrl: 'http://127.0.0.1/_dev/storage', signingKey: randomBytes(32) })
+  ? await openStorage(config.storage, { egress, filesystem: { publicUrl: 'http://127.0.0.1/_dev/storage', signingKey: randomBytes(32) } })
   : undefined;
-const sink = config.audit.syslog ? createSyslogAuditSink({ url: config.audit.syslog.url, ca: config.audit.syslog.ca }) : undefined;
+const sink = config.audit.syslog
+  ? createSyslogAuditSink({ url: config.audit.syslog.url, ca: config.audit.syslog.ca, egress })
+  : config.audit.otlp
+    ? createOtlpAuditSink({ url: config.audit.otlp.url, headers: config.audit.otlp.headers, egress, serviceName: config.telemetry.serviceName })
+    : undefined;
+const worm = storage ? createWormBucketAuditSink({ storage, retentionYears: config.audit.retentionYears }) : undefined;
+// Production anchors every checkpoint: without a SIEM sink the audit bucket must really have Object Lock.
+if (keys && config.audit.requireAnchor && !sink) {
+  let locked = false;
+  try {
+    locked = (await worm?.available()) ?? false;
+  } catch (err) {
+    log.fatal({ err }, 'cannot read the capabilities of the audit bucket');
+    process.exit(1);
+  }
+  if (!locked) {
+    log.fatal('the audit bucket has no Object Lock and neither AUDIT_SYSLOG_URL nor AUDIT_OTLP_URL is set: checkpoints would have no anchor');
+    process.exit(1);
+  }
+}
 const jobs = [
   ...JOB_DEFINITIONS,
   ...(keys
@@ -83,6 +116,7 @@ const jobs = [
         signingKeyId: config.audit.signingKeyId,
         retiredSigningKeyIds: config.audit.retiredSigningKeyIds,
         storage,
+        worm,
         sink,
         requireAnchor: config.audit.requireAnchor,
         auditWriter: auditHandle.db,

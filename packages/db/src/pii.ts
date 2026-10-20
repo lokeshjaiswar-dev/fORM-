@@ -83,4 +83,10 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
   template_signing_keys: { columns: ['added_by'], erase: 'pseudonymise', retainBasis: 'trust store lifetime; the user id keeps the pseudonymous id' },
   template_search_synonyms: { columns: [], erase: 'delete', retainBasis: 'org lifetime, or the system pack' },
   template_search_misses: { columns: ['q_norm'], erase: 'ttl', retainBasis: '90 days, then purged by retention.sweep; normalised queries may echo what a member typed' },
+  captcha_redemptions: { columns: [], erase: 'ttl', retainBasis: 'until the challenge expires (10 minutes by default); hashes of server-made challenges only' },
+  submission_search: {
+    columns: ['doc'],
+    erase: 'delete',
+    retainBasis: 'with the submission: answer text of non-sensitive fields, removed with the submission or its erasure (dsr.execute)',
+  },
 };

@@ -325,6 +325,11 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
     `insert into audit_archives (org_key, month, object_key, row_count, min_seq, max_seq, sha256) values ($1, '2020-01', 'archive/x', 1, 1, 1, $2)`,
     [s.orgId, HASH],
   );
+  await owner.query(`insert into captcha_redemptions (org_id, challenge_hash, expires_at) values ($1, $2, now() + interval '10 minutes')`, [s.orgId, randomBytes(32)]);
+  await owner.query(
+    `insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc) values ($1, now(), $2, $3, 'en-IN', to_tsvector('simple', $4))`,
+    [randomUUID(), s.orgId, s.formIds[0], `answers of ${slug}`],
+  );
   return { ...s, tpl: await seedOrgTemplates(owner, s, slug, system) };
 }
 

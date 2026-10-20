@@ -1,13 +1,16 @@
 import net from 'node:net';
 import { hostname as osHostname } from 'node:os';
 import tls from 'node:tls';
-import { PortError, type AuditCheckpoint, type AuditSink } from '@form/ports';
+import { PortError, type AuditCheckpoint, type AuditSink, type EgressGuard } from '@form/ports';
+import { checkCheckpoint } from './checkpoint.ts';
 
 export interface SyslogAuditSinkOptions {
   /** `tcp://host:port` or `tls://host:port` (RFC 5425; the customer's SIEM usually listens on 6514). */
   url: string;
   /** PEM CA bundle for `tls://` when the SIEM's certificate is not publicly trusted. */
   ca?: string | undefined;
+  /** Holds the SIEM to EGRESS_POLICY (a trusted endpoint: operator configuration) and pins the connection to the vetted address. */
+  egress: EgressGuard;
   appName?: string;
   hostname?: string;
   timeoutMs?: number;
@@ -44,13 +47,14 @@ export function createSyslogAuditSink(o: SyslogAuditSinkOptions): AuditSink {
 
   return {
     kind: 'syslog',
-    forward(cp) {
-      const frame = syslogFrame(cp, { appName, hostname, now: now() });
+    async forward(cp) {
+      const frame = syslogFrame(checkCheckpoint(cp), { appName, hostname, now: now() });
+      const address = (await o.egress.assertAllowed(u)).pinnedIp;
       return new Promise<void>((resolve, reject) => {
         const socket =
           u.protocol === 'tls:'
-            ? tls.connect({ host, port, servername: net.isIP(host) ? undefined : host, ...(o.ca ? { ca: o.ca } : {}) })
-            : net.connect({ host, port });
+            ? tls.connect({ host: address, port, servername: net.isIP(host) ? undefined : host, ...(o.ca ? { ca: o.ca } : {}) })
+            : net.connect({ host: address, port });
         let settled = false;
         const fail = (err: Error) => {
           if (settled) return;

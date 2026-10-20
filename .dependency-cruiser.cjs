@@ -124,10 +124,10 @@ module.exports = {
     },
     {
       name: 'no-deep-import',
-      comment: 'Import @form/* packages through their exports, never their src/ files. A package stylesheet export (@form/renderer/styles.css) and the lazy validation entry (@form/validation/lazy) are entry points too.',
+      comment: 'Import @form/* packages through their exports, never their src/ files. A package stylesheet export (@form/renderer/styles.css) the lazy validation entry (@form/validation/lazy) and the per-family adapter entries (@form/adapters/<family>) are entry points too.',
       severity: 'error',
       from: { path: '^(?:apps|packages)/([^/]+)/' },
-      to: { path: '^packages/[^/]+/src/', pathNot: ['^packages/$1/', '^packages/[^/]+/src/index\\.ts$', '^packages/[^/]+/src/styles\\.css$', '^packages/validation/src/lazy\\.ts$'] },
+      to: { path: '^packages/[^/]+/src/', pathNot: ['^packages/$1/', '^packages/[^/]+/src/index\\.ts$', '^packages/[^/]+/src/styles\\.css$', '^packages/validation/src/lazy\\.ts$', '^packages/adapters/src/[^/]+/index\\.ts$'] },
     },
     {
       name: 'no-deep-import-unresolved',
@@ -156,6 +156,13 @@ module.exports = {
         pathNot: ['^apps/api/src/main\\.ts$', '^apps/worker/src/main\\.ts$', '^apps/worker/scripts/', '^apps/[^/]+/test/', '^apps/cli/', '^packages/adapters/'],
       },
       to: { path: '^packages/adapters/' },
+    },
+    {
+      name: 'adapter-families-apart',
+      comment: 'Each adapter family (@form/adapters/<family>) stands alone: it may use the egress family (every outbound call passes the guard) and the shared helpers at the package root, never another family.',
+      severity: 'error',
+      from: { path: '^packages/adapters/src/([^/]+)/' },
+      to: { path: '^packages/adapters/src/', pathNot: ['^packages/adapters/src/$1/', '^packages/adapters/src/egress/', '^packages/adapters/src/[^/]+\\.ts$'] },
     },
     {
       name: 'ports-zero-deps',

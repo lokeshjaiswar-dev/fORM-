@@ -4,7 +4,7 @@ import { eq, sql } from 'drizzle-orm';
 import pg from 'pg';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { createPgBossQueue, installQueueSchema, parseJobKeyring, verifyJob, type JobKeyring, type PgBossQueue } from '@form/adapters';
+import { createPgBossQueue, installQueueSchema, parseJobKeyring, verifyJob, type JobKeyring, type PgBossQueue } from '@form/adapters/queue';
 import { createDb, forms, partitionsOf, provision, rlsViolations, txExecutor, withTenant, type DbHandle, type RoleName } from '@form/db';
 import { JOBS, toIsoInstant, type JobName, type JobRequest } from '@form/ports';
 import { createTestDatabase } from '@form/testkit';

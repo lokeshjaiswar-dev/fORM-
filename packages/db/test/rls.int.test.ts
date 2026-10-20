@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { assertTenantCtx, forms, orgs, userPublicColumns, users, withTenant, type TenantCtx } from '../src/index.ts';
+import { assertTenantCtx, forms, orgs, userPublicColumns, users, withTenant, type TenantCtx, type Tx } from '../src/index.ts';
 import { failure, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
 import { isolationSuite, publicTables, type TableSpec } from './isolation.ts';
 
@@ -147,6 +147,26 @@ const TABLES: Record<string, TableSpec> = {
   template_signing_keys: { scope: { by: 'org' }, select: 0, touch: 'label', update: 0, delete: 'denied', visibleTo: TEMPLATE_READERS },
   template_search_synonyms: { scope: { by: 'org' }, select: 0, touch: 'term', update: 0, delete: 0, visibleTo: TEMPLATE_READERS },
   template_search_misses: { scope: { by: 'org' }, select: 0, touch: 'count', update: 0, delete: 0 },
+  captcha_redemptions: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'expires_at',
+    update: 'denied',
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into captcha_redemptions (org_id, challenge_hash, expires_at) values (${s.a.orgId}, ${randomBytes(32)}, now())`,
+  },
+  submission_search: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'locale',
+    update: 0,
+    delete: 0,
+    visibleTo: ['system'],
+    insertForeign: (s) =>
+      sql`insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc)
+          values (${randomUUID()}, now(), ${s.a.orgId}, ${s.a.formIds[0]}, 'en-IN', to_tsvector('simple', 'x'))`,
+  },
 };
 
 isolationSuite(TABLES, env);
@@ -257,5 +277,58 @@ describe('tenant context', () => {
     expect(() => assertTenantCtx({ ...base, subjectIds: [randomUUID()] })).toThrow(/respondent/);
     expect(() => assertTenantCtx({ ...base, actor: 'respondent', subjectIds: ['x'] })).toThrow(/subjectIds/);
     expect(() => assertTenantCtx({ ...base, requestId: '' })).toThrow(/requestId/);
+  });
+});
+
+describe('submission_search data access (architecture §2.2, C-M8)', () => {
+  const doc = (submissionId: string, text: string) =>
+    sql`insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc)
+        values (${submissionId}, now(), ${seed.b.orgId}, ${seed.b.formIds[0]}, 'en-IN', to_tsvector('simple', ${text}))`;
+  const as = <T>(ctx: Omit<TenantCtx, 'requestId' | 'orgId'>, fn: (tx: Tx) => Promise<T>) =>
+    withTenant(t.app.db, { orgId: seed.b.orgId, requestId: 'search-access', ...ctx }, fn);
+  const visible = async (ctx: Omit<TenantCtx, 'requestId' | 'orgId'>) =>
+    as(ctx, async (tx) => (await tx.execute<{ id: string }>(sql`select submission_id::text as id from submission_search`)).rows.map((r) => r.id));
+  const ownCount = async () =>
+    (await t.owner.query<{ n: number }>('select count(*)::int as n from submission_search where org_id = $1', [seed.b.orgId])).rows[0]!.n;
+
+  it('lets the respondent submit transaction insert a document it then cannot read, change or delete', async () => {
+    const id = randomUUID();
+    const before = await ownCount();
+    // As the SearchIndex adapter inserts. An arbiter (`on conflict (cols)`) needs read access, so it would be refused.
+    await as({ actor: 'respondent', subjectIds: [randomUUID()] }, (tx) => tx.execute(sql`${doc(id, 'my answers')} on conflict do nothing`));
+    const arbiter = as({ actor: 'respondent', subjectIds: [randomUUID()] }, (tx) =>
+      tx.execute(sql`${doc(randomUUID(), 'x')} on conflict (submission_id, received_at) do nothing`),
+    );
+    expect(pgCode(await failure(arbiter))).toBe('42501');
+    expect(await ownCount()).toBe(before + 1);
+    const respondent = { actor: 'respondent', subjectIds: [randomUUID()] } as const;
+    expect(await visible(respondent)).toEqual([]);
+    const changed = await as(respondent, (tx) => tx.execute(sql`update submission_search set locale = 'hi-IN' returning 1`));
+    expect(changed.rows).toEqual([]);
+    const removed = await as(respondent, (tx) => tx.execute(sql`delete from submission_search returning 1`));
+    expect(removed.rows).toEqual([]);
+    expect(await ownCount()).toBe(before + 1);
+  });
+
+  it('shows a respondent only the documents of submissions whose token was verified', async () => {
+    const id = randomUUID();
+    await as({ actor: 'system' }, (tx) => tx.execute(doc(id, 'edited later')));
+    expect(await visible({ actor: 'respondent', subjectIds: [id] })).toEqual([id]);
+  });
+
+  it('hides the documents from users and API keys without submissions.read', async () => {
+    expect(await visible({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit', 'submissions.export'] })).toEqual([]);
+    expect(await visible({ actor: 'api_key', perms: ['forms.read'] })).toEqual([]);
+    const before = await ownCount();
+    const removed = await as({ actor: 'user', userId: seed.b.editorId, perms: ['forms.edit'] }, (tx) => tx.execute(sql`delete from submission_search returning 1`));
+    expect(removed.rows).toEqual([]);
+    expect(await ownCount()).toBe(before);
+  });
+
+  it('shows them to system jobs and to readers with submissions.read', async () => {
+    const all = await visible({ actor: 'system' });
+    expect(all.length).toBe(await ownCount());
+    expect((await visible({ actor: 'user', userId: seed.b.viewerId, perms: ['submissions.read'] })).sort()).toEqual(all.sort());
+    expect((await visible({ actor: 'api_key', perms: ['submissions.read'] })).sort()).toEqual(all.sort());
   });
 });

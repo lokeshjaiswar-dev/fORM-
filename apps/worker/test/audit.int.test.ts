@@ -1,12 +1,16 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
 import pg from 'pg';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { createKeyfileKeyProvider, createPgBossQueue, installQueueSchema, parseJobKeyring, type JobKeyring, type PgBossQueue } from '@form/adapters';
+import { createSyslogAuditSink, createWormBucketAuditSink } from '@form/adapters/audit-sink';
+import { createEgressGuard } from '@form/adapters/egress';
+import { createKeyfileKeyProvider } from '@form/adapters/kms';
+import { createS3Storage, type S3Storage } from '@form/adapters/storage';
+import { createPgBossQueue, installQueueSchema, parseJobKeyring, type JobKeyring, type PgBossQueue } from '@form/adapters/queue';
 import { audit, createDb, PLATFORM_ORG_KEY, provision, verifyChain, withTenant, type DbHandle, type RoleName } from '@form/db';
 import { PortError, toIsoInstant, type AuditCheckpoint, type AuditSink, type BucketName, type JobName, type PutOptions, type ReceivedJob, type Storage } from '@form/ports';
-import { createTestDatabase } from '@form/testkit';
+import { collectBytes, createTestDatabase, startSeaweedFs, startSyslogReceiver, type SeaweedFs } from '@form/testkit';
 import { auditChainRequest, startAuditChainDispatcher, type AuditDispatcher } from '../src/audit/dispatcher.ts';
 import { checkpointSigner } from '../src/audit/signatures.ts';
 import { jobGuard } from '../src/guard.ts';
@@ -44,7 +48,7 @@ function memoryStorage(objectLock: boolean): Storage & { puts: Put[] } {
     puts,
     async put(bucket, key, body, o) {
       if (o.objectLock && !objectLock) throw new PortError('unsupported', 'no Object Lock');
-      puts.push({ bucket, key, body: body as Uint8Array, o });
+      puts.push({ bucket, key, body: body instanceof Uint8Array ? body : await collectBytes(body), o });
     },
     capabilities: async () => ({ objectLock, versioning: objectLock, sse: false }),
     presignPost: unsupported,
@@ -89,7 +93,8 @@ function systemJob<N extends JobName>(name: N, data: ReceivedJob<N>['envelope'][
 }
 
 function auditJobs(o: Partial<AuditJobDeps>): Record<string, JobDefinition<JobName>> {
-  const defs = createAuditJobs({ keys, signingKeyId: 'audit-test', requireAnchor: true, auditWriter: app.db, ...o });
+  const worm = o.storage ? createWormBucketAuditSink({ storage: o.storage }) : undefined;
+  const defs = createAuditJobs({ keys, signingKeyId: 'audit-test', requireAnchor: true, auditWriter: app.db, worm, ...o });
   return Object.fromEntries(defs.map((d) => [d.name, d as JobDefinition<JobName>]));
 }
 
@@ -339,5 +344,97 @@ describe('audit.archive', () => {
     expect(attached).toEqual([]);
     await chainAll();
     expect(await verifyAll(org)).toMatchObject({ ok: true, archivedRows: 4, rowsChecked: 2 });
+  });
+
+  it('archives and detaches every attached month outside the window on a cron run, oldest first (BL-196)', async () => {
+    const org = await newOrg();
+    for (const month of ['2023_11', '2023_12']) {
+      const [y, m] = month.split('_').map(Number) as [number, number];
+      const from = `${y}-${String(m).padStart(2, '0')}-01`;
+      const to = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+      await owner.query(`create table parts.audit_log_${month} partition of audit_log for values from ('${from} 00:00:00+00') to ('${to} 00:00:00+00');
+        alter table parts.audit_log_${month} enable row level security, force row level security; revoke all on parts.audit_log_${month} from public`);
+      await owner.query(`insert into audit_pending (org_key, event, occurred_at) values ($1, $2, $3::timestamptz + interval '3 days')`, [
+        org,
+        { actorKind: 'system', action: 'system.heartbeat', resourceType: 'org', outcome: 'success' },
+        `${from} 00:00:00+00`,
+      ]);
+    }
+    await chainAll();
+    const storage = memoryStorage(false);
+    await runJob(auditJobs({ storage, requireAnchor: false })['audit.archive']!, systemJob('audit.archive', {}), { db: app.db, log });
+    expect(storage.puts.map((p) => p.key)).toEqual([`archive/${org}/2023-11.ndjson.zst`, `archive/${org}/2023-12.ndjson.zst`]);
+    const { rows } = await owner.query(`select 1 from pg_inherits where inhrelid in ('parts.audit_log_2023_11'::regclass, 'parts.audit_log_2023_12'::regclass)`);
+    expect(rows).toEqual([]);
+    expect(await verifyAll(org)).toMatchObject({ ok: true, archivedRows: 2 });
+  });
+});
+
+/** BL-179 and the WP-1.03 acceptance: the same jobs against the S3 adapter on SeaweedFS, with and without Object Lock. */
+describe('audit anchoring on S3 (SeaweedFS)', () => {
+  let s3: SeaweedFs;
+  const egress = createEgressGuard({ policy: 'allowlist', allowlist: ['127.0.0.1', 'localhost'] });
+
+  beforeAll(async () => {
+    s3 = await startSeaweedFs();
+  });
+  afterAll(() => s3?.stop());
+
+  async function bucketStore(objectLockAudit: boolean): Promise<S3Storage> {
+    const prefix = `fr${randomBytes(4).toString('hex')}`;
+    const storage = createS3Storage({
+      region: 'us-east-1',
+      endpoint: s3.endpoint,
+      credentials: { accessKeyId: s3.accessKeyId, secretAccessKey: s3.secretAccessKey },
+      buckets: { staging: `${prefix}-staging`, uploads: `${prefix}-uploads`, assets: `${prefix}-assets`, exports: `${prefix}-exports`, audit: `${prefix}-audit`, packs: `${prefix}-packs` },
+      egress,
+    });
+    await storage.ensureBuckets({ objectLockAudit });
+    return storage;
+  }
+
+  it('anchors checkpoints and archives in a compliance-locked bucket, and the archive hashes to what was recorded', async () => {
+    await owner.query(`create table parts.audit_log_2024_05 partition of audit_log for values from ('2024-05-01 00:00:00+00') to ('2024-06-01 00:00:00+00');
+      alter table parts.audit_log_2024_05 enable row level security, force row level security; revoke all on parts.audit_log_2024_05 from public`);
+    const org = await newOrg();
+    await owner.query(
+      `insert into audit_pending (org_key, event, occurred_at) select $1, $2, timestamptz '2024-05-10 08:00:00+00' + make_interval(mins => i) from generate_series(1, 3) i`,
+      [org, { actorKind: 'system', action: 'system.heartbeat', resourceType: 'org', outcome: 'success' }],
+    );
+    await chainAll();
+    const storage = await bucketStore(true);
+    expect((await storage.capabilities()).objectLock).toBe(true);
+    const jobs = auditJobs({ storage });
+    await runJob(jobs['audit.checkpoint']!, systemJob('audit.checkpoint', {}), { db: app.db, log });
+    const checkpoint = JSON.parse(new TextDecoder().decode(await collectBytes(await storage.get('audit', `checkpoints/${org}/${'3'.padStart(20, '0')}.json`))));
+    expect(checkpoint).toMatchObject({ orgKey: org, seq: 3, keyId: 'audit-test', alg: 'ed25519' });
+
+    await runJob(jobs['audit.archive']!, systemJob('audit.archive', { month: '2024-05' }), { db: app.db, log });
+    const body = await collectBytes(await storage.get('audit', `archive/${org}/2024-05.ndjson.zst`));
+    const { rows } = await owner.query<{ sha256: Buffer; row_count: string }>('select sha256, row_count from audit_archives where org_key = $1', [org]);
+    expect(rows[0]?.row_count).toBe('3');
+    expect(createHash('sha256').update(body).digest().equals(rows[0]!.sha256)).toBe(true);
+    expect(zstdDecompressSync(body).toString('utf8').trim().split('\n')).toHaveLength(4);
+    await chainAll();
+    expect(await verifyAll(org)).toMatchObject({ ok: true, archivedRows: 3 });
+  });
+
+  it('sends checkpoints to the syslog sink when the bucket has no Object Lock, and writes none to the bucket', async () => {
+    const org = await newOrg();
+    await heartbeat(org, 1);
+    await chainAll();
+    const storage = await bucketStore(false);
+    expect((await storage.capabilities()).objectLock).toBe(false);
+    const siem = await startSyslogReceiver();
+    try {
+      const sink = createSyslogAuditSink({ url: siem.url, egress: createEgressGuard({ policy: 'none', trusted: ['127.0.0.1'] }) });
+      await runJob(auditJobs({ storage, sink })['audit.checkpoint']!, systemJob('audit.checkpoint', {}), { db: app.db, log });
+      expect((await siem.received()).filter((c) => c.orgKey === org)).toEqual([expect.objectContaining({ orgKey: org, seq: 1, keyId: 'audit-test' })]);
+      expect(await storage.head('audit', `checkpoints/${org}/${'1'.padStart(20, '0')}.json`)).toBeNull();
+      const { rows } = await owner.query<{ anchored_object: string }>('select anchored_object from audit_checkpoints where org_key = $1', [org]);
+      expect(rows).toEqual([{ anchored_object: `syslog:${org}/1` }]);
+    } finally {
+      await siem.close();
+    }
   });
 });

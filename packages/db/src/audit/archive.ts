@@ -70,6 +70,20 @@ export async function isMonthArchived(tx: Executor, month: string): Promise<bool
   return rows.length > 0;
 }
 
+/**
+ * The months whose `audit_log` partition is still attached and lies wholly outside the online window at `now`, oldest
+ * first: what a cron `audit.archive` run must archive and detach, so a month whose run failed is not left behind (BL-196).
+ * Read from the current catalog.
+ */
+export async function archivableAttachedMonths(db: Executor, now: Date): Promise<string[]> {
+  const { rows } = await db.execute<{ month: string }>(sql`
+    select substr(c.relname, 11, 4) || '-' || substr(c.relname, 16, 2) as month
+    from pg_partition_tree('public.audit_log'::regclass) t join pg_class c on c.oid = t.relid join pg_namespace n on n.oid = c.relnamespace
+    where t.isleaf and n.nspname = 'parts' and c.relname ~ '^audit_log_[0-9]{4}_(0[1-9]|1[0-2])$'
+    order by 1`);
+  return rows.map((r) => r.month).filter((m) => isArchivable(m, now));
+}
+
 /** Detaches the month's partition once every chain in it is archived (`audit_archive_detach()`); null when not attached. */
 export async function detachArchivedMonth(db: Db, month: string): Promise<string | null> {
   const { rows } = await asPlatformSystem(db, 'audit.archive', (tx) => tx.execute<{ name: string | null }>(sql`select audit_archive_detach(${month}) as name`));

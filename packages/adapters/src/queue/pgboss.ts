@@ -151,6 +151,10 @@ export function createPgBossQueue(o: PgBossQueueOptions): PgBossQueue {
     },
 
     async send(name, job, s = {}) {
+      const policy = JOB_POLICIES[name];
+      if (s.singletonKey !== undefined && !policy.coalesceQueued && !policy.exclusive) {
+        throw new PortError('unsupported', `${name} neither coalesces nor is exclusive: a singleton key would not de-duplicate`);
+      }
       return boss.send(name, signJob(o.keyring, name, job), {
         ...(s.singletonKey !== undefined ? { singletonKey: s.singletonKey } : {}),
         ...(s.startAfter !== undefined ? { startAfter: s.startAfter } : {}),

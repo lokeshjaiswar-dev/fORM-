@@ -9,6 +9,7 @@ import {
   authThrottle,
   authTokens,
   brandKits,
+  captchaRedemptions,
   formDrafts,
   formTemplateBindings,
   forms,
@@ -29,6 +30,7 @@ import {
   templateUsages,
   templateVersions,
   templates,
+  submissionSearch,
   userGrievances,
   userIdentities,
   userNoticeAcks,
@@ -68,6 +70,8 @@ export const tables = {
   templateSigningKeys,
   templateSearchSynonyms,
   templateSearchMisses,
+  captchaRedemptions,
+  submissionSearch,
 };
 
 export type Tables = typeof tables;

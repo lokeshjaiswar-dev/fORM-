@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
-import { createKeyfileKeyProvider, createSmtpMailer } from '@form/adapters';
+import { createKeyfileKeyProvider } from '@form/adapters/kms';
+import { createSmtpMailer } from '@form/adapters/mailer';
 import { bootstrapRoles, provision } from '@form/db';
 import { createTestDatabase, startMailpit, startMockOidcProvider, startPostgres } from '@form/testkit';
 import { buildApp } from '../src/app.ts';

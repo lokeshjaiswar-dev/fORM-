@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { generateKeyfileContent, installQueueSchema } from '@form/adapters';
+import { generateKeyfileContent } from '@form/adapters/kms';
+import { installQueueSchema } from '@form/adapters/queue';
 import { ROLES, roleUrl } from '@form/db';
 
 /**
@@ -35,13 +36,14 @@ const envOut = values['env-out'];
 if (envOut) {
   const target = path.resolve(envOut);
   if (existsSync(target)) {
-    process.stdout.write(`env: ${target} exists, left unchanged (audit checkpoints need KMS_KEYFILE_PATH=${keyfile})\n`);
+    process.stdout.write(`env: ${target} exists, left unchanged (the worker needs DEPLOYMENT_MODE, and KMS_KEYFILE_PATH=${keyfile} for audit checkpoints)\n`);
   } else {
     writeFileSync(
       target,
       [
         '# Written by pnpm dev:setup. Development only.',
         'NODE_ENV=development',
+        'DEPLOYMENT_MODE=onprem',
         `DATABASE_URL=${appUrl}`,
         `JOB_SIGNING_KEYS=dev:${randomBytes(32).toString('base64url')}`,
         'LOG_LEVEL=info',
@@ -49,6 +51,7 @@ if (envOut) {
         'STORAGE_DRIVER=filesystem',
         `STORAGE_ROOT=${path.resolve('.data/storage')}`,
         '# AUDIT_SYSLOG_URL=tcp://127.0.0.1:5514',
+        '# The dev stack S3 API (SeaweedFS): STORAGE_DRIVER=s3 STORAGE_ENDPOINT=http://127.0.0.1:8333 STORAGE_REGION=us-east-1',
         '# OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318',
         '',
       ].join('\n'),

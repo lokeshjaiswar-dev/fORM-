@@ -163,13 +163,15 @@ export async function verifyChain(tx: Executor, orgKey: string, o: VerifyOptions
 
   const head = await auditHead(tx);
   const headSeq = head?.seq ?? 0;
-  // A detach takes an exclusive lock on audit_log, which this transaction's reads block, so attachment cannot
-  // change during the walk.
+  // A detach takes an exclusive lock on audit_log, which this statement's lock on it blocks from here to commit, so
+  // attachment cannot change during the walk. It may have changed between the snapshot and this statement (BL-191),
+  // and scans of audit_log follow the current partitions, not the snapshot's: so attachment comes from the current
+  // catalog (pg_partition_tree), never from pg_inherits as the snapshot saw it.
   const { rows: archives } = await tx.execute<ArchiveRow>(sql`
     select a.month, a.min_seq, a.max_seq, a.row_count,
       exists (
-        select 1 from pg_inherits i join pg_class c on c.oid = i.inhrelid join pg_namespace n on n.oid = c.relnamespace
-        where i.inhparent = 'public.audit_log'::regclass and n.nspname = 'parts' and c.relname = 'audit_log_' || replace(a.month, '-', '_')
+        select 1 from pg_partition_tree('public.audit_log'::regclass) t join pg_class c on c.oid = t.relid join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'parts' and c.relname = 'audit_log_' || replace(a.month, '-', '_')
       ) as attached,
       (select count(*) from audit_log l where l.org_id = app_org()
         and l.occurred_at >= (a.month || '-01')::timestamp at time zone 'UTC'

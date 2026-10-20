@@ -190,7 +190,8 @@ const POLICY_OVERRIDES: { readonly [N in JobName]?: Partial<JobPolicy> } = {
   'audit.chain': { coalesceQueued: true, retryDelaySeconds: 5, retryDelayMaxSeconds: MINUTE, expireInSeconds: 5 * MINUTE, concurrency: 4 },
   'audit.checkpoint': CRON,
   'audit.verify': { ...CRON, expireInSeconds: 4 * HOUR },
-  'audit.archive': { ...CRON, expireInSeconds: 4 * HOUR },
+  // The detach gives up after a 1 s lock_timeout (BL-197) rather than stall the chainers, so it gets more tries.
+  'audit.archive': { ...CRON, retryLimit: 6, retryDelaySeconds: 2 * MINUTE, retryDelayMaxSeconds: HOUR, expireInSeconds: 4 * HOUR },
   'kms.rotate': CRON,
   'payment.reconcile': { retryLimit: 10, retryDelaySeconds: MINUTE, retryDelayMaxSeconds: HOUR },
   'billing.meter': CRON,
@@ -257,7 +258,11 @@ export interface SqlExecutor {
 }
 
 export interface SendOptions {
-  /** At most one queued job per key; a duplicate send returns null. */
+  /**
+   * On a queue that coalesces (`coalesceQueued`) at most one job per key waits and a duplicate send returns null; on an
+   * `exclusive` queue at most one job per key runs at a time. On any other queue a key is PortError('unsupported'), so
+   * a de-duplication the queue cannot give is never silently dropped (queue contract).
+   */
   singletonKey?: string;
   startAfter?: IsoInstant;
   /** Enqueue inside this transaction instead of on a pooled connection of the queue. */

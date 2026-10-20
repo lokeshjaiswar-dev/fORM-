@@ -355,6 +355,7 @@ describe('audit.archive', () => {
     for (const [name, from, to] of [
       [partition, '2024-01-01', '2024-02-01'],
       ['audit_log_2024_02', '2024-02-01', '2024-03-01'],
+      ['audit_log_2024_03', '2024-03-01', '2024-04-01'],
     ]) {
       await t.owner.query(`create table parts.${name} partition of audit_log for values from ('${from} 00:00:00+00') to ('${to} 00:00:00+00');
         alter table parts.${name} enable row level security, force row level security; revoke all on parts.${name} from public`);
@@ -413,6 +414,19 @@ describe('audit.archive', () => {
     for (const key of [org, other]) expect(await verifyOrg(key)).toMatchObject({ ok: true, headSeq: 5, rowsChecked: 2, archivedRows: 3 });
     expect(pgCode(await failure(detachArchivedMonth(t.app.db, '2999-01')))).toBe('22023');
     expect(pgCode(await failure(detachArchivedMonth(t.app.db, 'May')))).toBe('22023');
+  });
+
+  it('sees a detach that commits after its snapshot but before it reads audit_log (BL-191)', async () => {
+    const org = await orgWithMonth('2024-03-05 09:00:00+00');
+    await withTenant(t.app.db, system(org), (tx) =>
+      recordArchive(tx, { orgKey: org, month: '2024-03', objectKey: `archive/${org}/2024-03.ndjson.zst`, rowCount: 3, minSeq: 1, maxSeq: 3, sha256: new Uint8Array(32) }),
+    );
+    const report = await withTenant(t.app.db, snapshot(org), async (tx) => {
+      // withTenant's first statement took the snapshot and holds no lock on audit_log, so the detach goes through.
+      expect(await detachArchivedMonth(t.app.db, '2024-03')).toBe('parts.audit_log_2024_03');
+      return verifyChain(tx, org, { verifySignature, pageSize: 7 });
+    });
+    expect(report).toMatchObject({ ok: true, problems: [], headSeq: 5, rowsChecked: 2, archivedRows: 3 });
   });
 
   it('reports rows deleted from an archived month that is still attached', async () => {

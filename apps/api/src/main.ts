@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { createKeyfileKeyProvider, createSmtpMailer, loadKeyfileKeyProvider, MAILPIT_SMTP_URL } from '@form/adapters';
+import { createInfrastructureEgressGuard, infrastructureHosts } from '@form/adapters/egress';
+import { createKeyfileKeyProvider, openKeyProvider } from '@form/adapters/kms';
+import { createSmtpMailer, MAILPIT_SMTP_URL } from '@form/adapters/mailer';
 import { checkClock, startTelemetry } from '@form/observability';
 import type { KeyProvider } from '@form/ports';
 import { parseConfig } from './config.ts';
@@ -24,23 +26,28 @@ if (clock.status === 'failed') {
   process.exit(1);
 }
 
+// The KMS and the SMTP relay are operator configuration: trusted endpoints of the EGRESS_POLICY guard.
+const smtpUrl = config.mailer.smtpUrl ?? MAILPIT_SMTP_URL;
+const egress = createInfrastructureEgressGuard(config.edition, infrastructureHosts({ kms: config.kms, urls: config.mailer.driver === 'smtp' ? [smtpUrl] : [] }));
+
 // TOTP secrets are wrapped by the KMS. Outside production a missing keyfile means a random key for this process:
 // two-factor enrolments made now do not survive a restart.
+const devKeys = config.kms.driver === 'keyfile' && !config.kms.keyfilePath;
 let keys: KeyProvider;
 try {
-  keys = config.kms.keyfilePath ? await loadKeyfileKeyProvider(config.kms.keyfilePath) : createKeyfileKeyProvider({ masterKey: randomBytes(32) });
+  keys = devKeys ? createKeyfileKeyProvider({ masterKey: randomBytes(32) }) : await openKeyProvider(config.kms, { egress });
 } catch (err) {
-  process.stderr.write(`kms: KMS_KEYFILE_PATH is unreadable or invalid (${err instanceof Error ? err.message : String(err)})
+  process.stderr.write(`kms: the ${config.kms.driver} KMS is unreachable or misconfigured (${err instanceof Error ? err.message : String(err)})
 `);
   process.exit(1);
 }
-const mailer = config.mailer.driver === 'smtp' ? createSmtpMailer({ url: config.mailer.smtpUrl ?? MAILPIT_SMTP_URL }) : undefined;
+const mailer = config.mailer.driver === 'smtp' ? createSmtpMailer({ url: smtpUrl, egress }) : undefined;
 
 const { buildApp } = await import('./app.ts');
 const app = await buildApp(config, { keys, ...(mailer ? { mailer } : {}) });
 for (const notice of config.edition.notices) app.log.warn({ notice }, 'edition notice');
 for (const notice of config.notices) app.log.warn({ notice }, 'config notice');
-if (!config.kms.keyfilePath) app.log.warn('KMS_KEYFILE_PATH is not set: TOTP secrets use a key that ends with this process (development only)');
+if (devKeys) app.log.warn('KMS_KEYFILE_PATH is not set: TOTP secrets use a key that ends with this process (development only)');
 
 let closing = false;
 async function shutdown(signal: string): Promise<void> {

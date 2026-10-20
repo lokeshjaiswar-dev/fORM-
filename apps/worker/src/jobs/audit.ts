@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { zstdCompressSync } from 'node:zlib';
+import { Readable } from 'node:stream';
+import { createZstdCompress } from 'node:zlib';
 import {
-  archivableMonth,
+  archivableAttachedMonths,
   archiveLines,
   audit,
   auditChainKeys,
@@ -19,9 +20,11 @@ import {
   withTenant,
   type Db,
   type StoredCheckpoint,
+  type Tx,
   type VerifyReport,
 } from '@form/db';
-import { toIsoInstant, type AuditCheckpoint, type AuditSink, type KeyProvider, type Storage } from '@form/ports';
+import type { Logger } from 'pino';
+import { toIsoInstant, type AuditCheckpoint, type AuditSink, type KeyProvider, type ReceivedJob, type Storage } from '@form/ports';
 import { checkpointSigner } from '../audit/signatures.ts';
 import { defineJob, type AnyJobDefinition } from './define.ts';
 
@@ -33,6 +36,8 @@ export interface AuditJobDeps {
   retiredSigningKeyIds?: readonly string[] | undefined;
   /** The `audit` bucket: checkpoints go there when it has Object Lock, archives always (absent: no archive job). */
   storage?: Storage | undefined;
+  /** The WORM bucket sink over `storage` (`createWormBucketAuditSink`), used while the bucket has Object Lock. */
+  worm?: (AuditSink & { objectKey(cp: Pick<AuditCheckpoint, 'orgKey' | 'seq'>): string }) | undefined;
   /** syslog/SIEM fallback for checkpoints when the bucket has no Object Lock. */
   sink?: AuditSink | undefined;
   /** Production refuses a checkpoint it cannot anchor anywhere and an archive outside a WORM bucket; development warns. */
@@ -45,7 +50,44 @@ export interface AuditJobDeps {
 }
 
 const ctxFor = (orgKey: string, jobId: string) => ({ orgId: orgKey, actor: 'system' as const, requestId: `job:${jobId}` });
-const pad = (seq: number) => String(seq).padStart(20, '0');
+
+interface ArchiveStats {
+  rows: number;
+  checkpoints: number;
+  minSeq: number;
+  maxSeq: number;
+}
+
+/**
+ * One org-month as NDJSON, row by row from the database, closed by the month's signed checkpoints; null when the month
+ * has no rows. Read lazily, so the object streams through zstd into a multipart upload instead of building in memory.
+ */
+async function archiveBody(tx: Tx, month: string, stats: ArchiveStats): Promise<AsyncIterable<string> | null> {
+  const rows = archiveLines(tx, month)[Symbol.asyncIterator]();
+  const first = await rows.next();
+  if (first.done) return null;
+  return (async function* () {
+    for (let r: IteratorResult<{ line: string; seq: number }> = first; !r.done; r = await rows.next()) {
+      if (stats.rows === 0) stats.minSeq = r.value.seq;
+      stats.maxSeq = r.value.seq;
+      stats.rows += 1;
+      yield `${r.value.line}\n`;
+    }
+    for (const cp of await listCheckpoints(tx)) {
+      if (cp.seq < stats.minSeq || cp.seq > stats.maxSeq) continue;
+      stats.checkpoints += 1;
+      yield `${JSON.stringify({ checkpoint: toWireCheckpoint(cp) })}\n`;
+    }
+  })();
+}
+
+/** zstd-compressed bytes of `lines`, hashing them on the way out. */
+async function* compressed(lines: AsyncIterable<string>, hash: ReturnType<typeof createHash>): AsyncGenerator<Uint8Array> {
+  for await (const chunk of Readable.from(lines).pipe(createZstdCompress()) as AsyncIterable<Buffer>) {
+    hash.update(chunk);
+    yield new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+}
 
 export function toWireCheckpoint(cp: StoredCheckpoint, anchoredObject?: string): AuditCheckpoint {
   return {
@@ -72,11 +114,9 @@ export function createAuditJobs(deps: AuditJobDeps): AnyJobDefinition[] {
 
   /** WORM bucket when the store has Object Lock, else the SIEM sink; returns where the checkpoint went. */
   async function anchor(cp: StoredCheckpoint, worm: boolean): Promise<string | null> {
-    if (worm && deps.storage) {
-      const key = `checkpoints/${cp.orgKey}/${pad(cp.seq)}.json`;
-      const body = new TextEncoder().encode(JSON.stringify(toWireCheckpoint(cp)));
-      await deps.storage.put('audit', key, body, { contentType: 'application/json', objectLock: { mode: 'compliance', retainUntil: retainUntil() } });
-      return `bucket:audit/${key}`;
+    if (worm && deps.worm) {
+      await deps.worm.forward(toWireCheckpoint(cp));
+      return `bucket:audit/${deps.worm.objectKey(cp)}`;
     }
     if (deps.sink) {
       await deps.sink.forward(toWireCheckpoint(cp));
@@ -163,55 +203,63 @@ export function createAuditJobs(deps: AuditJobDeps): AnyJobDefinition[] {
     perms: [],
     cron: '0 3 2 * *',
     async run({ db, log, job }) {
-      const month = job.envelope.data.month ?? archivableMonth(now());
-      if (!isAuditMonth(month)) throw new Error(`audit.archive: month must be YYYY-MM, got ${JSON.stringify(month)}`);
-      if (!isArchivable(month, now())) throw new Error(`audit.archive: ${month} is inside the 13-month online window`);
+      const asked = job.envelope.data.month;
+      if (asked !== undefined && !isAuditMonth(asked)) throw new Error(`audit.archive: month must be YYYY-MM, got ${JSON.stringify(asked)}`);
+      if (asked !== undefined && !isArchivable(asked, now())) throw new Error(`audit.archive: ${asked} is inside the 13-month online window`);
       const worm = await objectLock();
       if (!worm && deps.requireAnchor) throw new Error('audit.archive: the audit bucket has no Object Lock; archives go only to a WORM bucket');
-      let archived = 0;
-      for (const key of await auditChainKeys(db)) {
-        job.signal.throwIfAborted();
-        await withTenant(db, ctxFor(key, job.id), async (tx) => {
-          if (await isMonthArchived(tx, month)) return;
-          const lines: string[] = [];
-          let minSeq = 0;
-          let maxSeq = 0;
-          for await (const l of archiveLines(tx, month)) {
-            lines.push(l.line);
-            if (minSeq === 0) minSeq = l.seq;
-            maxSeq = l.seq;
-          }
-          if (lines.length === 0) return;
-          const rowCount = lines.length;
-          // The month's signed checkpoints close the object, so the archive verifies against signatures on its own.
-          for (const cp of await listCheckpoints(tx)) {
-            if (cp.seq >= minSeq && cp.seq <= maxSeq) lines.push(JSON.stringify({ checkpoint: toWireCheckpoint(cp) }));
-          }
-          const body = new Uint8Array(zstdCompressSync(Buffer.from(`${lines.join('\n')}\n`, 'utf8')));
-          const objectKey = `archive/${key}/${month}.ndjson.zst`;
-          await storage.put('audit', objectKey, body, {
-            contentType: 'application/zstd',
-            ...(worm ? { objectLock: { mode: 'compliance' as const, retainUntil: retainUntil() } } : {}),
-          });
-          const sha256 = new Uint8Array(createHash('sha256').update(body).digest());
-          await recordArchive(tx, { orgKey: key, month, objectKey, rowCount, minSeq, maxSeq, sha256 });
-          await audit.append(tx, key, {
-            actorKind: 'system',
-            action: 'audit.archived',
-            resourceType: 'audit_chain',
-            resourceId: key,
-            outcome: 'success',
-            requestId: `job:${job.id}`,
-            metadata: { month, objectKey, rowCount, checkpoints: lines.length - rowCount, minSeq, maxSeq, sha256: toHex(sha256), objectLock: worm },
-          });
-          archived += 1;
-        });
+      // The cron run takes every attached month outside the window, oldest first, so a month whose run gave up (a
+      // detach that kept missing its lock) is picked up again instead of staying online for good (BL-196).
+      const months = asked !== undefined ? [asked] : await archivableAttachedMonths(db, now());
+      const failed: string[] = [];
+      for (const month of months) {
+        try {
+          await archiveMonth(db, log, job, month, worm);
+        } catch (err) {
+          if (months.length === 1) throw err;
+          failed.push(month);
+          log.error({ err, month }, 'audit month not archived; it stays attached until the next run');
+        }
       }
-      const detached = await detachArchivedMonth(db, month);
-      log.info({ month, archived, detached, objectLock: worm }, 'audit month archived');
-      if (!worm) log.warn('audit archives written without Object Lock (development: the store does not support it)');
+      if (failed.length > 0) throw new Error(`audit.archive: ${failed.join(', ')} still attached after this run`);
+      if (!worm && months.length > 0) log.warn('audit archives written without Object Lock (development: the store does not support it)');
     },
   });
+
+  async function archiveMonth(db: Db, log: Logger, job: ReceivedJob<'audit.archive'>, month: string, worm: boolean): Promise<void> {
+    let archived = 0;
+    for (const key of await auditChainKeys(db)) {
+      job.signal.throwIfAborted();
+      await withTenant(db, ctxFor(key, job.id), async (tx) => {
+        if (await isMonthArchived(tx, month)) return;
+        // The month's signed checkpoints close the object, so the archive verifies against signatures on its own.
+        const stats: ArchiveStats = { rows: 0, checkpoints: 0, minSeq: 0, maxSeq: 0 };
+        const lines = await archiveBody(tx, month, stats);
+        if (!lines) return;
+        const hash = createHash('sha256');
+        const objectKey = `archive/${key}/${month}.ndjson.zst`;
+        await storage.put('audit', objectKey, compressed(lines, hash), {
+          contentType: 'application/zstd',
+          ...(worm ? { objectLock: { mode: 'compliance' as const, retainUntil: retainUntil() } } : {}),
+        });
+        const sha256 = new Uint8Array(hash.digest());
+        const { rows: rowCount, minSeq, maxSeq } = stats;
+        await recordArchive(tx, { orgKey: key, month, objectKey, rowCount, minSeq, maxSeq, sha256 });
+        await audit.append(tx, key, {
+          actorKind: 'system',
+          action: 'audit.archived',
+          resourceType: 'audit_chain',
+          resourceId: key,
+          outcome: 'success',
+          requestId: `job:${job.id}`,
+          metadata: { month, objectKey, rowCount, checkpoints: stats.checkpoints, minSeq, maxSeq, sha256: toHex(sha256), objectLock: worm },
+        });
+        archived += 1;
+      });
+    }
+    const detached = await detachArchivedMonth(db, month);
+    log.info({ month, archived, detached, objectLock: worm }, 'audit month archived');
+  }
 
   return [checkpoint, verify, archive];
 }

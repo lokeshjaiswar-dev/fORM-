@@ -20,7 +20,7 @@ export type OrgSpanningJob = (typeof ORG_SPANNING_JOBS)[number];
 export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft', 'audit_chain'] as const;
 export type JobResourceType = (typeof JOB_RESOURCE_TYPES)[number];
 
-export const PARTITIONED_TABLES = ['audit_log'] as const;
+export const PARTITIONED_TABLES = ['audit_log', 'submission_search'] as const;
 export type PartitionedTable = (typeof PARTITIONED_TABLES)[number];
 
 export interface UserOrg {

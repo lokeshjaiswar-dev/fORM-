@@ -1,7 +1,10 @@
 import net from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isPortError, type AuditCheckpoint } from '@form/ports';
+import { createEgressGuard } from '../egress/guard.ts';
 import { createSyslogAuditSink, syslogFrame } from './syslog.ts';
+
+const egress = createEgressGuard({ policy: 'none', trusted: ['127.0.0.1'] });
 
 const cp: AuditCheckpoint = {
   orgKey: '00000000-0000-0000-0000-000000000000',
@@ -47,7 +50,7 @@ describe('syslog audit sink', () => {
   it('delivers a checkpoint over TCP', async () => {
     let got = '';
     const port = await listen((b) => (got = b.toString('utf8')));
-    const sink = createSyslogAuditSink({ url: `tcp://127.0.0.1:${port}`, hostname: 'h', now: () => new Date(0) });
+    const sink = createSyslogAuditSink({ url: `tcp://127.0.0.1:${port}`, egress, hostname: 'h', now: () => new Date(0) });
     expect(sink.kind).toBe('syslog');
     await sink.forward(cp);
     expect(got).toMatch(/^\d+ <109>1 1970-01-01T00:00:00\.000Z h form - fr\.audit\.checkpoint - \{/);
@@ -57,14 +60,14 @@ describe('syslog audit sink', () => {
   it('fails as unavailable when nobody listens or the peer hangs', async () => {
     const closed = await listen(() => {});
     await new Promise((r) => servers.pop()!.close(r));
-    const err = await createSyslogAuditSink({ url: `tcp://127.0.0.1:${closed}` }).forward(cp).catch((e: unknown) => e);
+    const err = await createSyslogAuditSink({ url: `tcp://127.0.0.1:${closed}`, egress }).forward(cp).catch((e: unknown) => e);
     expect(isPortError(err, 'unavailable')).toBe(true);
     const hang = await listen(() => {}, { hang: true });
-    const slow = await createSyslogAuditSink({ url: `tcp://127.0.0.1:${hang}`, timeoutMs: 200 }).forward(cp).catch((e: unknown) => e);
+    const slow = await createSyslogAuditSink({ url: `tcp://127.0.0.1:${hang}`, egress, timeoutMs: 200 }).forward(cp).catch((e: unknown) => e);
     expect(isPortError(slow, 'unavailable')).toBe(true);
   });
 
   it('refuses other schemes', () => {
-    expect(() => createSyslogAuditSink({ url: 'udp://127.0.0.1:514' })).toThrow(/tcp:\/\/ or tls:\/\//);
+    expect(() => createSyslogAuditSink({ url: 'udp://127.0.0.1:514', egress })).toThrow(/tcp:\/\/ or tls:\/\//);
   });
 });
