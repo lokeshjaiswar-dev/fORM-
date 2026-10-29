@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { defineMessages, formatDate, type MessageId } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, download, loadSession, signOut, useSessionStore } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input, Textarea } from '@/components/ui/input';
+import { Button, Input, Textarea, TextLink } from '@dmacq/ui';
+import { NiceSelect } from '@/components/ui/select';
 import { AuthLayout, Field, FormError, Notice } from '../auth/AuthLayout';
 import { problemText, submit } from '../auth/util';
 import { PrivacyNotice } from './PrivacyNotice';
@@ -122,7 +122,7 @@ const istDate = (iso: string) => formatDate(new Date(new Date(iso).getTime() + I
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section aria-label={title} className="space-y-3 border-t border-[var(--notion-border)] pt-5 first:border-t-0 first:pt-0">
+    <section aria-label={title} className="space-y-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
       <h2 className="text-[16px] font-semibold">{title}</h2>
       {children}
     </section>
@@ -150,9 +150,9 @@ export function PrivacyPage() {
       <AuthLayout
         title={t(M['account_privacy.deleted_title'])}
         footer={
-          <Link to="/auth/sign-up" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-            {t(M['account_privacy.sign_up'])}
-          </Link>
+          <TextLink asChild>
+            <Link to="/auth/sign-up">{t(M['account_privacy.sign_up'])}</Link>
+          </TextLink>
         }
       >
         <Notice>{t(M['account_privacy.deleted'], { date: istDate(deleted) })}</Notice>
@@ -162,19 +162,19 @@ export function PrivacyPage() {
 
   const footer = (
     <span className="space-x-3">
-      <Link to="/forms" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-        {t(M['account_privacy.back'])}
-      </Link>
-      <Link to="/account/security" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-        {t(M['account_privacy.security'])}
-      </Link>
+      <TextLink asChild>
+        <Link to="/forms">{t(M['account_privacy.back'])}</Link>
+      </TextLink>
+      <TextLink asChild>
+        <Link to="/account/security">{t(M['account_privacy.security'])}</Link>
+      </TextLink>
     </span>
   );
 
   if (session.status !== 'signed_in') {
     return (
       <AuthLayout wide title={t(M['account_privacy.title'])} footer={footer}>
-        <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['account_privacy.loading'])}</p>
+        <p className="text-[14px] text-muted-foreground">{t(M['account_privacy.loading'])}</p>
       </AuthLayout>
     );
   }
@@ -200,7 +200,7 @@ export function PrivacyPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['account_privacy.loading'])}</p>
+            <p className="text-[13px] text-muted-foreground">{t(M['account_privacy.loading'])}</p>
           )}
         </Section>
         <DataSection name={me.user.name} />
@@ -285,7 +285,7 @@ function DataSection({ name: current }: { name: string | null }) {
         </Button>
       </form>
       {saved ? <Notice>{t(M['account_privacy.name_saved'])}</Notice> : null}
-      <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['account_privacy.export_text'])}</p>
+      <p className="text-[13px] text-muted-foreground">{t(M['account_privacy.export_text'])}</p>
       <FormError message={error} />
       <Button variant="outline" disabled={busy} onClick={() => void run()}>
         {busy ? t(M['account_privacy.exporting']) : t(M['account_privacy.export'])}
@@ -332,20 +332,15 @@ function RequestsSection({ contact }: { contact: { name: string | null; email: s
 
   return (
     <Section title={t(M['account_privacy.requests_title'])}>
-      {contact ? <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['account_privacy.requests_text'], { contact: contact.name ?? contact.email, email: contact.email })}</p> : null}
+      {contact ? <p className="text-[13px] text-muted-foreground">{t(M['account_privacy.requests_text'], { contact: contact.name ?? contact.email, email: contact.email })}</p> : null}
       <form className="space-y-3" onSubmit={submit(() => void send())}>
         <Field label={t(M['account_privacy.category'])}>
-          <select
-            className="flex h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
+          <NiceSelect
+            aria-label={t(M['account_privacy.category'])}
             value={category}
-            onChange={(e) => setCategory(e.target.value as Category)}
-          >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {t(CATEGORY_LABEL[c])}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setCategory(v as Category)}
+            options={CATEGORIES.map((c) => ({ value: c, label: t(CATEGORY_LABEL[c]) }))}
+          />
         </Field>
         <Field label={t(M['account_privacy.message'])}>
           <Textarea required maxLength={5000} value={message} onChange={(e) => setMessage(e.target.value)} />
@@ -403,7 +398,7 @@ function DeleteSection({ email, onDeleted }: { email: string; onDeleted: (backup
   const blocked = plan?.orgs.filter((o) => o.blocker !== null) ?? [];
   return (
     <Section title={t(M['account_privacy.delete_title'])}>
-      <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['account_privacy.delete_text'])}</p>
+      <p className="text-[13px] text-muted-foreground">{t(M['account_privacy.delete_text'])}</p>
       {plan === null ? (
         <>
           <FormError message={error} />

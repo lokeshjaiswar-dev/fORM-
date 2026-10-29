@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, loadSession, userOrgSchema, useSessionStore } from '@/auth/client';
-import { Button } from '@/components/ui/button';
+import { Button, TextLink } from '@dmacq/ui';
 import { AuthLayout, FormError } from '@/pages/auth/AuthLayout';
 import { useFragment } from '@/pages/auth/useFinishSignIn';
 import { problemText } from '@/pages/auth/util';
@@ -104,9 +104,9 @@ export function InvitePage() {
   };
 
   const footer = (
-    <Link to="/forms" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-      {t(M['invite.back'])}
-    </Link>
+    <TextLink asChild>
+      <Link to="/forms">{t(M['invite.back'])}</Link>
+    </TextLink>
   );
   const role = info ? roleLabel(info.role) : '';
 
@@ -140,7 +140,7 @@ export function InvitePage() {
       ) : error ? (
         <FormError message={error} />
       ) : (
-        <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['invite.loading'])}</p>
+        <p className="text-[14px] text-muted-foreground">{t(M['invite.loading'])}</p>
       )}
     </AuthLayout>
   );

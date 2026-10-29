@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Toaster } from 'sonner';
+import { Toaster, TooltipProvider } from '@dmacq/ui';
 import { BuilderPage } from '@/pages/BuilderPage';
 import { FormsPage } from '@/pages/FormsPage';
 import { MagicLinkPage, VerifyEmailPage } from '@/pages/auth/LinkPages';
@@ -43,10 +43,12 @@ export function AppRoutes() {
 export default function App() {
   return (
     <RepositoryProvider>
-      <BrowserRouter>
-        <Toaster position="bottom-right" />
-        <AppRoutes />
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <Toaster position="bottom-right" />
+          <AppRoutes />
+        </BrowserRouter>
+      </TooltipProvider>
     </RepositoryProvider>
   );
 }

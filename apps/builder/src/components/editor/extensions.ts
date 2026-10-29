@@ -77,7 +77,7 @@ const Pipe = Node.create({
     return [];
   },
   renderHTML({ node }) {
-    return ['span', { 'data-type': 'pipe', class: 'rounded bg-zinc-100 px-1 text-zinc-500' }, chip(node.attrs, 'answer')];
+    return ['span', { 'data-type': 'pipe', class: 'rounded bg-surface-subtle px-1 text-muted-foreground' }, chip(node.attrs, 'answer')];
   },
   renderText({ node }) {
     return chip(node.attrs, '');
@@ -97,7 +97,7 @@ const Var = Node.create({
     return [];
   },
   renderHTML({ node }) {
-    return ['span', { 'data-type': 'var', class: 'rounded bg-zinc-100 px-1 text-zinc-500' }, `{${String(node.attrs.name)}}`];
+    return ['span', { 'data-type': 'var', class: 'rounded bg-surface-subtle px-1 text-muted-foreground' }, `{${String(node.attrs.name)}}`];
   },
   renderText({ node }) {
     return chip(node.attrs, `{${String(node.attrs.name)}}`);
@@ -116,7 +116,7 @@ const Image = Node.create({
     return [];
   },
   renderHTML() {
-    return ['div', { 'data-type': 'image', class: 'rounded border border-dashed border-zinc-300 p-2 text-[12px] text-zinc-400' }, 'Image'];
+    return ['div', { 'data-type': 'image', class: 'rounded border border-dashed border-border p-2 text-[12px] text-muted-foreground' }, 'Image'];
   },
 });
 

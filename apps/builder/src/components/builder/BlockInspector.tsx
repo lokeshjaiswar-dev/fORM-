@@ -13,7 +13,7 @@ import { setBlockWidth, updateBlock } from '@/state/actions';
 import { currentDoc, useBlock } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { Tooltip } from '@/components/ui/tooltip';
-import { Input, Label } from '@/components/ui/input';
+import { Button, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { Field, SectionTitle, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
@@ -105,8 +105,8 @@ export function BlockInspector() {
     <aside
       aria-label={t(M['inspector.title'])}
       className={cn(
-        'relative flex shrink-0 flex-col overflow-hidden border-l bg-white',
-        open ? 'border-[var(--notion-border)]' : 'border-transparent',
+        'relative flex shrink-0 flex-col overflow-hidden border-l bg-background',
+        open ? 'border-border' : 'border-transparent',
         !resizing && 'transition-[width,border-color] duration-300 ease-out',
       )}
       style={{ width: open ? inspectorWidth : 0 }}
@@ -114,7 +114,7 @@ export function BlockInspector() {
       <button
         type="button"
         aria-label={t(M['inspector.resize'])}
-        className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-zinc-300"
+        className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-state-hover"
         onMouseDown={(e) => {
           e.preventDefault();
           setResizing(true);
@@ -136,40 +136,31 @@ export function BlockInspector() {
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <h2 className="text-[14px] font-semibold">{t(M['inspector.title'])}</h2>
-            <p className="text-[12px] text-[var(--notion-text-muted)]">{typeName}</p>
+            <p className="text-[12px] text-muted-foreground">{typeName}</p>
           </div>
           <Tooltip content={t(M['inspector.close'])}>
-            <button type="button" aria-label={t(M['inspector.close'])} className="flex size-6 items-center justify-center rounded-[4px] hover:bg-[var(--notion-hover)]" onClick={closeInspector}>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['inspector.close'])} onClick={closeInspector}>
               <X className="size-4" />
-            </button>
+            </Button>
           </Tooltip>
         </div>
 
-        <div className="flex gap-1 border-b border-[var(--notion-border)] px-3" role="tablist">
-          {tabs.map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={shown === id}
-              onClick={() => setTab(id)}
-              className={cn(
-                '-mb-px border-b-2 px-2 py-2 text-[12px] font-medium',
-                shown === id ? 'border-[#111] text-[#111]' : 'border-transparent text-[var(--notion-text-muted)] hover:text-[#111]',
-              )}
-            >
-              {t(TAB_LABELS[id])}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4" role="tabpanel">
-          {shown === 'general' ? <GeneralTab block={block} /> : null}
-          {shown === 'options' ? <Registered block={block} section="options" /> : null}
-          {shown === 'validation' && isField(block) ? <ValidationTab block={block} /> : null}
-          {shown === 'logic' ? <LogicTab blockId={block.id} /> : null}
-          {shown === 'privacy' && isField(block) ? <PrivacySection block={block} /> : null}
-        </div>
+        <Tabs value={shown} onValueChange={(id) => setTab(id as Tab)} size="sm" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="px-3">
+            {tabs.map((id) => (
+              <TabsTrigger key={id} value={id}>
+                {t(TAB_LABELS[id])}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value={shown} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+            {shown === 'general' ? <GeneralTab block={block} /> : null}
+            {shown === 'options' ? <Registered block={block} section="options" /> : null}
+            {shown === 'validation' && isField(block) ? <ValidationTab block={block} /> : null}
+            {shown === 'logic' ? <LogicTab blockId={block.id} /> : null}
+            {shown === 'privacy' && isField(block) ? <PrivacySection block={block} /> : null}
+          </TabsContent>
+        </Tabs>
       </div>
     </aside>
   );
@@ -205,9 +196,9 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
   const [text, setText] = useDraft(typeof value === 'string' ? value : '');
   return (
     <div className="flex items-center justify-between gap-2">
-      <Label className="text-[12px] text-[var(--notion-text-muted)]">{label}</Label>
+      <Label className="text-[12px] text-muted-foreground">{label}</Label>
       <div className="flex items-center gap-1.5">
-        <input type="color" aria-label={label} value={hex} onChange={(e) => onChange(e.target.value as HexColor)} className="size-7 cursor-pointer rounded border border-zinc-200" />
+        <input type="color" aria-label={label} value={hex} onChange={(e) => onChange(e.target.value as HexColor)} className="size-7 cursor-pointer rounded border border-border" />
         <Input
           className="w-[92px]"
           aria-label={t(M['inspector.color_code'], { label })}
@@ -245,19 +236,18 @@ function Look({ block }: { block: Exclude<StoredBlock, { type: 'unsupported' }> 
           <ColorField label={t(M['inspector.placeholder_color'])} value={style.placeholderColor} fallback="#a1a1aa" onChange={(placeholderColor) => set({ placeholderColor })} />
         </>
       ) : null}
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1" role="group" aria-label={t(M['inspector.align'])}>
-        {(['left', 'center'] as const).map((a) => (
-          <button
-            key={a}
-            type="button"
-            aria-pressed={(style.align ?? 'left') === a}
-            className={cn('rounded-md px-2 py-1.5 text-[13px] font-medium', (style.align ?? 'left') === a ? 'bg-white shadow-sm' : 'text-zinc-500 hover:text-[#111]')}
-            onClick={() => set({ align: a === 'left' ? undefined : a })}
-          >
-            {t(a === 'left' ? M['inspector.align_left'] : M['inspector.align_center'])}
-          </button>
-        ))}
-      </div>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        appearance="tinted"
+        className="w-full"
+        aria-label={t(M['inspector.align'])}
+        value={style.align ?? 'left'}
+        onValueChange={(a) => a && set({ align: a === 'left' ? undefined : (a as 'center') })}
+      >
+        <ToggleGroupItem value="left" className="flex-1">{t(M['inspector.align_left'])}</ToggleGroupItem>
+        <ToggleGroupItem value="center" className="flex-1">{t(M['inspector.align_center'])}</ToggleGroupItem>
+      </ToggleGroup>
     </>
   );
 }
@@ -272,7 +262,7 @@ function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupporte
           {block.type !== 'hidden' ? (
             <>
               <Field label={t(M['inspector.description'])}>
-                <div className="rounded-md border border-zinc-200 px-2">
+                <div className="rounded-md border border-border px-2">
                   <RichEditor
                     value={block.description ?? richDoc('')}
                     onChange={(description) => updateBlock(block.id, { description: description.content.some((n) => n.type !== 'paragraph' || n.content?.length) ? description : undefined })}
@@ -288,19 +278,18 @@ function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupporte
       ) : null}
       <Registered block={block} section="general" />
       <Field label={t(M['inspector.width'])} hint={t(M['inspector.width_hint'])}>
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1" role="group" aria-label={t(M['inspector.width'])}>
-          {(['full', 'half'] as const).map((w) => (
-            <button
-              key={w}
-              type="button"
-              aria-pressed={width === w}
-              className={cn('rounded-md px-2 py-1.5 text-[13px] font-medium', width === w ? 'bg-white shadow-sm' : 'text-zinc-500 hover:text-[#111]')}
-              onClick={() => setBlockWidth(block.id, w)}
-            >
-              {t(w === 'full' ? M['inspector.width_full'] : M['inspector.width_half'])}
-            </button>
-          ))}
-        </div>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          appearance="tinted"
+          className="w-full"
+          aria-label={t(M['inspector.width'])}
+          value={width}
+          onValueChange={(w) => w && setBlockWidth(block.id, w as 'full' | 'half')}
+        >
+          <ToggleGroupItem value="full" className="flex-1">{t(M['inspector.width_full'])}</ToggleGroupItem>
+          <ToggleGroupItem value="half" className="flex-1">{t(M['inspector.width_half'])}</ToggleGroupItem>
+        </ToggleGroup>
       </Field>
       {block.type !== 'divider' ? <Look block={block} /> : null}
     </>
@@ -319,7 +308,7 @@ function ValidationTab({ block }: { block: FieldBlock }) {
   return (
     <>
       {hidden ? (
-        <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['inspector.hidden_never_required'])}</p>
+        <p className="text-[13px] text-muted-foreground">{t(M['inspector.hidden_never_required'])}</p>
       ) : (
         <>
           <ToggleRow label={t(M['inspector.required'])} checked={block.required} onChange={(required) => updateBlock(block.id, { required })} />
@@ -335,7 +324,7 @@ function ValidationTab({ block }: { block: FieldBlock }) {
         </>
       )}
       <Registered block={block} section="validation" />
-      {!sectionOf(block, 'validation') && hidden ? <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['inspector.no_validation'])}</p> : null}
+      {!sectionOf(block, 'validation') && hidden ? <p className="text-[13px] text-muted-foreground">{t(M['inspector.no_validation'])}</p> : null}
     </>
   );
 }

@@ -6,8 +6,7 @@ import { deleteBlock } from '@/state/actions';
 import { rulesReading } from '@/state/commands/rules';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@dmacq/ui';
 
 const M = defineMessages('builder', {
   'delete.title': 'Delete “{name}”?',
@@ -49,17 +48,17 @@ export function DeleteBlockDialog() {
 
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-md">
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>{t(M['delete.title'], { name: blockText(target) || t(M['delete.untitled']) })}</DialogTitle>
           <DialogDescription>{t(M['delete.readers'], { count: readers.length })}</DialogDescription>
         </DialogHeader>
-        <ul className="mb-5 list-disc space-y-1 pl-5 text-[14px]">
+        <ul className="list-disc space-y-1 pl-5 text-[14px]">
           {readers.map((rule) => (
             <li key={rule.id}>{def ? describe(rule, def) : null}</li>
           ))}
         </ul>
-        <div className="flex justify-end gap-2">
+        <DialogFooter stack="normal">
           <Button variant="ghost" onClick={close}>
             {t(M['delete.cancel'])}
           </Button>
@@ -69,7 +68,7 @@ export function DeleteBlockDialog() {
           <Button variant="destructive" onClick={() => pending && deleteBlock(pending, 'remove')}>
             {t(M['delete.remove'])}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

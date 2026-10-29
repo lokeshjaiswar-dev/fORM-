@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { RESTRICTED_EDITION, editionSummary, loadEditionConfig } from '@form/config';
 import { AVAILABLE_TYPES, REGISTRY, STUB_AVAILABILITY } from '@form/registry';
 import { CONTROLS } from '@form/renderer';
@@ -74,7 +75,7 @@ describe('registry views (FND-03)', () => {
   });
 
   const CONTENT = ['heading', 'paragraph', 'divider'];
-  it.each(AVAILABLE_TYPES)('%s opens in the inspector with its sections, and each section renders', (type) => {
+  it.each(AVAILABLE_TYPES)('%s opens in the inspector with its sections, and each section renders', async (type) => {
     resetStore(AVAILABLE_TYPES.map((t) => block(t, `b_${t}`, CONTENT.includes(t) ? {} : { label: `Label ${t}` })));
     useUiStore.getState().openInspector(`b_${type}` as BlockId);
     render(<BlockInspector />);
@@ -82,8 +83,9 @@ describe('registry views (FND-03)', () => {
     const field = !CONTENT.includes(type);
     const expected = ['General', ...(view.options ? ['Options'] : []), ...(field ? ['Validation'] : []), 'Logic', ...(field ? ['Privacy'] : [])];
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(expected);
+    const user = userEvent.setup();
     for (const name of expected) {
-      fireEvent.click(screen.getByRole('tab', { name }));
+      await user.click(screen.getByRole('tab', { name }));
       expect(screen.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
       expect(within(screen.getByRole('tabpanel')).queryAllByText(/./).length, name).toBeGreaterThan(0);
     }

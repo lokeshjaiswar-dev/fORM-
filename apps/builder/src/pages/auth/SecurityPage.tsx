@@ -5,8 +5,7 @@ import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, loadSession, signOut, useSessionStore } from '@/auth/client';
 import { QrCode } from '@/auth/QrCode';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, Separator, TextLink } from '@dmacq/ui';
 import { AuthLayout, Field, FormError, Notice } from './AuthLayout';
 import { problemText, submit } from './util';
 
@@ -94,15 +93,15 @@ export function SecurityPage() {
     });
 
   const footer = (
-    <Link to="/forms" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-      {t(M['security.back'])}
-    </Link>
+    <TextLink asChild>
+      <Link to="/forms">{t(M['security.back'])}</Link>
+    </TextLink>
   );
 
   if (session.status !== 'signed_in') {
     return (
       <AuthLayout title={t(M['security.title'])} footer={footer}>
-        <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['security.loading'])}</p>
+        <p className="text-[14px] text-muted-foreground">{t(M['security.loading'])}</p>
       </AuthLayout>
     );
   }
@@ -115,8 +114,8 @@ export function SecurityPage() {
         {step.kind === 'codes' ? (
           <div className="space-y-3">
             <h2 className="text-[15px] font-semibold">{t(M['security.codes_title'])}</h2>
-            <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['security.codes'])}</p>
-            <ul aria-label={t(M['security.codes_list'])} className="grid grid-cols-2 gap-1.5 rounded-md bg-[var(--notion-hover)] p-3 font-mono text-[13px]">
+            <p className="text-[13px] text-muted-foreground">{t(M['security.codes'])}</p>
+            <ul aria-label={t(M['security.codes_list'])} className="grid grid-cols-2 gap-1.5 rounded-md bg-state-hover p-3 font-mono text-[13px]">
               {step.codes.map((c) => (
                 <li key={c}>{c}</li>
               ))}
@@ -133,7 +132,7 @@ export function SecurityPage() {
           </div>
         ) : step.kind === 'setup' ? (
           <form className="space-y-3" onSubmit={submit(() => void confirm())}>
-            <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['security.scan'])}</p>
+            <p className="text-[13px] text-muted-foreground">{t(M['security.scan'])}</p>
             <QrCode value={step.uri} label={t(M['security.qr'])} className="mx-auto size-44" />
             <Field label={t(M['security.key'])}>
               <Input readOnly value={step.secret.replace(/(.{4})/g, '$1 ').trim()} className="font-mono" />
@@ -164,14 +163,14 @@ export function SecurityPage() {
           </form>
         ) : (
           <div className="space-y-3">
-            <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['security.totp_off'])}</p>
+            <p className="text-[14px] text-muted-foreground">{t(M['security.totp_off'])}</p>
             <FormError message={error} />
             <Button className="w-full" disabled={busy} onClick={() => void start()}>
               {t(M['security.enable'])}
             </Button>
           </div>
         )}
-        <hr className="border-[var(--notion-border)]" />
+        <Separator />
         <Button
           variant="outline"
           className="w-full"

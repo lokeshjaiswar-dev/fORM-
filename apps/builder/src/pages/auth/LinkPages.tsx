@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, linkInfoSchema, signInResultSchema, type LinkInfo } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, TextLink } from '@dmacq/ui';
 import { AuthLayout, Field, FormError } from './AuthLayout';
 import { useFinishSignIn, useFragment } from './useFinishSignIn';
 import { problemText, submit } from './util';
@@ -76,9 +75,9 @@ function LinkPage({ title, purpose }: { title: string; purpose: Purpose }) {
   }
 
   const back = (
-    <Link to="/auth/sign-in" className="text-[13px] font-medium underline-offset-2 hover:underline">
-      {t(M['link.back'])}
-    </Link>
+    <TextLink asChild size="small">
+      <Link to="/auth/sign-in">{t(M['link.back'])}</Link>
+    </TextLink>
   );
 
   if (!info) {
@@ -90,7 +89,7 @@ function LinkPage({ title, purpose }: { title: string; purpose: Purpose }) {
             {back}
           </div>
         ) : (
-          <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['link.working'])}</p>
+          <p className="text-[14px] text-muted-foreground">{t(M['link.working'])}</p>
         )}
       </AuthLayout>
     );
@@ -101,7 +100,7 @@ function LinkPage({ title, purpose }: { title: string; purpose: Purpose }) {
       <form className="space-y-3" onSubmit={submit(() => void redeem())}>
         {info.passwordRequired ? (
           <>
-            <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['link.password_hint'])}</p>
+            <p className="text-[13px] text-muted-foreground">{t(M['link.password_hint'])}</p>
             <Field label={t(M['link.password'])}>
               <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
@@ -112,9 +111,9 @@ function LinkPage({ title, purpose }: { title: string; purpose: Purpose }) {
           {busy ? t(M['link.busy']) : t(M['link.continue'], { email: info.email })}
         </Button>
         {info.passwordRequired ? (
-          <Link to="/auth/forgot" className="block text-[13px] text-zinc-700 underline-offset-2 hover:underline">
-            {t(M['link.not_mine'])}
-          </Link>
+          <TextLink asChild size="small" color="neutral">
+            <Link to="/auth/forgot">{t(M['link.not_mine'])}</Link>
+          </TextLink>
         ) : null}
       </form>
     </AuthLayout>

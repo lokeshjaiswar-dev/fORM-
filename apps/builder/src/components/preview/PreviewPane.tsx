@@ -7,7 +7,7 @@ import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
 import type { FormDefinition, IsoInstant, RuntimeStatus } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
-import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, Button, TextLink } from '@dmacq/ui';
 import { Tooltip } from '@/components/ui/tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
 import { useEdition } from '@/edition/edition';
@@ -79,7 +79,7 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
   ) : (
     <div className="p-6 text-left text-[14px]" role="alert">
       <p className="font-medium">{t(M['preview.refused'])}</p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-zinc-600">
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
         {build.issues.map((issue, i) => (
           <li key={i}>{issue.message}</li>
         ))}
@@ -92,28 +92,21 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
       <div className="flex justify-center gap-0.5 py-1">
         {DEVICES.map(([id, label, Icon]) => (
           <Tooltip key={id} content={t(label)}>
-            <button
-              type="button"
-              aria-label={t(label)}
-              aria-pressed={device === id}
-              onClick={() => setDevice(id)}
-              className={cn(
-                'flex size-8 items-center justify-center rounded-[4px]',
-                device === id ? 'bg-zinc-100' : 'text-zinc-400 hover:bg-zinc-100',
-              )}
-            >
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t(label)} pressed={device === id} onClick={() => setDevice(id)}>
               <Icon className="size-4" />
-            </button>
+            </Button>
           </Tooltip>
         ))}
       </div>
       {redirect ? (
-        <p role="status" className="mx-4 flex items-center justify-center gap-2 rounded-md bg-sky-50 px-3 py-2 text-[13px] text-sky-950">
-          {t(M['preview.redirect'], { url: redirect })}
-          <a href={redirect} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center gap-1 font-medium underline">
-            <ExternalLink className="size-3.5" /> {t(M['preview.open_redirect'])}
-          </a>
-        </p>
+        <Alert variant="info" icon className="mx-4">
+          <AlertDescription className="flex items-center justify-center gap-2">
+            {t(M['preview.redirect'], { url: redirect })}
+            <TextLink href={redirect} size="small" icon={<ExternalLink className="size-3.5" />} target="_blank" rel="noopener noreferrer nofollow">
+              {t(M['preview.open_redirect'])}
+            </TextLink>
+          </AlertDescription>
+        </Alert>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden px-4 py-4">
         <DeviceFrame device={device}>{screen}</DeviceFrame>

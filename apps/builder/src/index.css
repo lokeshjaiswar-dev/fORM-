@@ -1,16 +1,6 @@
 @import "tailwindcss";
-
-:root {
-  --notion-text: #37352f;
-  --notion-text-muted: rgba(55, 53, 47, 0.65);
-  --notion-text-faint: rgba(55, 53, 47, 0.45);
-  --notion-hover: rgba(55, 53, 47, 0.08);
-  --notion-hover-strong: rgba(55, 53, 47, 0.12);
-  --notion-sidebar: #f7f6f3;
-  --notion-border: rgba(55, 53, 47, 0.09);
-  --notion-accent: #2383e2;
-  --notion-ui: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji";
-}
+@import "@dmacq/ui/styles.css";
+@import "@dmacq/ui/fonts.css";
 
 html,
 body,
@@ -20,9 +10,9 @@ body,
 }
 
 body {
-  font-family: var(--notion-ui);
-  background: #fff;
-  color: var(--notion-text);
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -50,7 +40,7 @@ button {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(55, 53, 47, 0.16);
+  background: var(--border-default);
   border-radius: 20px;
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -145,9 +135,9 @@ img.ProseMirror-separator {
 }
 .fr-rich blockquote,
 .ProseMirror blockquote {
-  border-left: 3px solid #e4e4e7;
+  border-left: 3px solid var(--border-subtle);
   padding-left: 0.75em;
-  color: #787774;
+  color: var(--text-muted);
 }
 .fr-rich h1,
 .ProseMirror h1 {
@@ -167,7 +157,7 @@ img.ProseMirror-separator {
 .fr-rich hr,
 .ProseMirror hr {
   margin: 0.5em 0;
-  border-color: #e4e4e7;
+  border-color: var(--border-faded);
 }
 .fr-rich a,
 .ProseMirror a,
@@ -178,7 +168,7 @@ img.ProseMirror-separator {
 .fr-rich code,
 .fr-label code {
   border-radius: 4px;
-  background: #f4f4f5;
+  background: var(--surface-subtle);
   padding: 0 0.25em;
   font-size: 0.9em;
 }

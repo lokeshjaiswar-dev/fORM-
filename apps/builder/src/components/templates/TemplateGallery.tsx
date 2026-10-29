@@ -8,9 +8,8 @@ import { useEdition } from '@/edition/edition';
 import { t } from '@/i18n';
 import { GALLERY_LOCALE, formFromTemplate, loadSystemPack, type VariableAnswers } from '@/lib/systemPack';
 import { uid } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { Button, Field, Input, Label, Switch, TextLink } from '@dmacq/ui';
+import { NiceSelect } from '@/components/ui/select';
 
 const M = defineMessages('builder', {
   'gallery.loading': 'Loading templates…',
@@ -70,11 +69,11 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
     };
   }, [attempt]);
 
-  if (status.state === 'loading') return <p className="text-sm text-[var(--notion-text-muted)]">{t(M['gallery.loading'])}</p>;
+  if (status.state === 'loading') return <p className="text-sm text-muted-foreground">{t(M['gallery.loading'])}</p>;
   if (status.state === 'failed') {
     return (
       <div className="space-y-3">
-        <p role="alert" className="text-sm text-[var(--notion-text-muted)]">
+        <p role="alert" className="text-sm text-muted-foreground">
           {t(M['gallery.failed'])}
         </p>
         <Button size="sm" variant="outline" onClick={() => {
@@ -106,17 +105,19 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
     };
     return (
       <div className="space-y-4">
-        <button type="button" className="inline-flex items-center gap-1 text-[13px] text-[var(--notion-text-muted)] hover:underline" onClick={() => setPicked(null)}>
-          <ArrowLeft className="size-3.5" /> {t(M['gallery.back'])}
-        </button>
+        <TextLink asChild size="small" color="neutral" icon={<ArrowLeft className="size-3.5" />}>
+          <button type="button" onClick={() => setPicked(null)}>
+            {t(M['gallery.back'])}
+          </button>
+        </TextLink>
         <div>
           <h3 className="text-[18px] font-semibold">{title}</h3>
-          {text?.summary ? <p className="mt-1 text-sm text-[var(--notion-text-muted)]">{text.summary}</p> : null}
-          {payload.kind === 'form' ? <p className="mt-1 text-[12px] text-[var(--notion-text-faint)]">{t(M['gallery.minutes'], { n: payload.estimatedMinutes })}</p> : null}
+          {text?.summary ? <p className="mt-1 text-sm text-muted-foreground">{text.summary}</p> : null}
+          {payload.kind === 'form' ? <p className="mt-1 text-[12px] text-text-subtle">{t(M['gallery.minutes'], { n: payload.estimatedMinutes })}</p> : null}
         </div>
         {variables.length ? (
           <fieldset className="space-y-3">
-            <legend className="text-[12px] font-medium uppercase tracking-wide text-zinc-400">{t(M['gallery.answers'])}</legend>
+            <legend className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['gallery.answers'])}</legend>
             {variables.map((v) => (
               <VariableInput key={v.name} variable={v} value={answers[v.name]} parts={parts.filter((p) => p.when.variable === v.name).map((p) => p.label)} onChange={(value) => setAnswers((a) => ({ ...a, [v.name]: value }))} />
             ))}
@@ -141,18 +142,18 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {usable.length < forms.length ? (
-        <p className="text-[12px] text-[var(--notion-text-faint)] sm:col-span-2">{t(M['gallery.hidden'], { n: forms.length - usable.length })}</p>
+        <p className="text-[12px] text-text-subtle sm:col-span-2">{t(M['gallery.hidden'], { n: forms.length - usable.length })}</p>
       ) : null}
       {usable.map((tpl) => {
         const text = localizationOf(tpl.file, GALLERY_LOCALE);
         const payload = tpl.file.payload;
         const fields = payload.kind === 'form' ? Object.values(payload.document.blocks).filter((b) => b !== undefined && 'compliance' in b).length : 0;
         return (
-          <button key={tpl.entry.slug} type="button" onClick={() => pick(tpl)} className="rounded-[6px] border border-[var(--notion-border)] p-4 text-left hover:bg-[var(--notion-hover)]">
-            <div className="font-medium">{text?.title ?? tpl.entry.slug}</div>
-            <p className="mt-1 text-sm text-[var(--notion-text-muted)]">{text?.summary}</p>
-            {fields ? <p className="mt-2 text-[12px] text-[var(--notion-text-faint)]">{t(M['gallery.fields'], { n: fields })}</p> : null}
-          </button>
+          <Button key={tpl.entry.slug} type="button" variant="outline" onClick={() => pick(tpl)} className="h-auto flex-col items-start gap-1 whitespace-normal p-4 text-left">
+            <span className="font-medium">{text?.title ?? tpl.entry.slug}</span>
+            <span className="text-sm font-normal text-muted-foreground">{text?.summary}</span>
+            {fields ? <span className="mt-1 text-[12px] font-normal text-text-subtle">{t(M['gallery.fields'], { n: fields })}</span> : null}
+          </Button>
         );
       })}
     </div>
@@ -169,35 +170,30 @@ function VariableInput({ variable, value, parts, onChange }: { variable: Templat
           <Label>{label}</Label>
           <Switch checked={value === true} onCheckedChange={onChange} aria-label={label} />
         </div>
-        {hint ? <p className="text-[12px] text-[var(--notion-text-muted)]">{hint}</p> : null}
+        {hint ? <p className="text-[12px] text-muted-foreground">{hint}</p> : null}
       </div>
     );
   }
   if (variable.type === 'select' && variable.options) {
     return (
-      <label className="block space-y-1">
-        <span className="text-sm font-medium text-zinc-800">{label}</span>
-        <select className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm" value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
-          <option value="" />
-          {variable.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        {hint ? <span className="block text-[12px] text-[var(--notion-text-muted)]">{hint}</span> : null}
-      </label>
+      <Field label={label} hint={hint}>
+        <NiceSelect
+          aria-label={label}
+          value={String(value ?? '')}
+          onChange={onChange}
+          options={variable.options.map((o) => ({ value: o.value, label: o.label }))}
+          placeholder=" "
+        />
+      </Field>
     );
   }
   return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium text-zinc-800">{label}</span>
+    <Field label={label} hint={hint}>
       <Input
         type={variable.type === 'number' ? 'number' : variable.type === 'date' ? 'date' : variable.type === 'email' ? 'email' : variable.type === 'url' ? 'url' : 'text'}
         value={value === undefined ? '' : String(value)}
         onChange={(e) => onChange(variable.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value)}
       />
-      {hint ? <span className="block text-[12px] text-[var(--notion-text-muted)]">{hint}</span> : null}
-    </label>
+    </Field>
   );
 }

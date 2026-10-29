@@ -9,9 +9,8 @@ import { labelString } from '@/fields/style';
 import { APP_IDS, blockOrder, blockText, isField } from '@/lib/definition';
 import { removeRule, setRule } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Input, Label } from '@/components/ui/input';
+import { Button, Input, Label, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { COUNT, UNARY, choiceOptions, condition, firstOperator, kindOf, literal, localToday, operatorsFor, retarget, type Defaults } from '@/components/builder/inspector/conditions';
 
 const M = defineMessages('builder', {
@@ -115,7 +114,7 @@ function OperandEditor({ group, source, op, right, onChange }: { group: string; 
     };
     return (
       <fieldset className="space-y-1">
-        <legend className="text-[12px] text-[var(--notion-text-muted)]">{t(M['logic.options'])}</legend>
+        <legend className="text-[12px] text-muted-foreground">{t(M['logic.options'])}</legend>
         {choiceOptions(source).map((o) => (
           <label key={o.id} className="flex items-center gap-2 text-[13px]">
             <input type={kind === 'choice' && (op === 'eq' || op === 'neq') ? 'radio' : 'checkbox'} name={`logic-${group}`} checked={chosen.includes(o.id)} onChange={() => toggle(o.id)} />
@@ -128,9 +127,9 @@ function OperandEditor({ group, source, op, right, onChange }: { group: string; 
   const type = COUNT.has(op) ? 'number' : kind === 'date' ? 'date' : kind === 'time' ? 'time' : 'text';
   return (
     <div className="space-y-1">
-      <Label className="text-[12px] text-[var(--notion-text-muted)]">{t(M['logic.value'])}</Label>
+      <Label className="text-[12px] text-muted-foreground">{t(M['logic.value'])}</Label>
       <Input
-        type={type}
+        type={type === 'date' || type === 'time' ? 'text' : type}
         aria-label={t(M['logic.value'])}
         value={text}
         onChange={(e) => {
@@ -159,29 +158,31 @@ function RuleEditor({ n, item, target, sources, defaults }: { n: number; item: S
     write({ condition: retarget(cond.id, source, op as LogicOperator, cond.right, defaults) });
   };
   return (
-    <li className="space-y-3 rounded-md border border-[var(--notion-border)] p-3">
+    <li className="space-y-3 rounded-md border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium text-[var(--notion-text-muted)]">{t(M['logic.rule'], { n })}</span>
+        <span className="text-[12px] font-medium text-muted-foreground">{t(M['logic.rule'], { n })}</span>
         <div className="flex items-center gap-1">
           <Switch checked={rule.enabled} onCheckedChange={(enabled) => write({ enabled })} aria-label={t(M['logic.enabled'], { n })} />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             aria-label={t(M['logic.remove'], { n })}
-            className="flex size-7 items-center justify-center rounded-[4px] text-[var(--notion-text-muted)] hover:bg-red-50 hover:text-red-500"
             onClick={() => removeRule(rule.id)}
           >
             <Trash2 className="size-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
       <div className="space-y-1">
-        <Label className="text-[12px] text-[var(--notion-text-muted)]">{t(M['logic.action'])}</Label>
-        <NiceSelect size="sm" value={action} onChange={(v) => write({ action: v === 'hide' ? 'hide' : 'show' })} options={[{ value: 'show', label: t(M['logic.show']) }, { value: 'hide', label: t(M['logic.hide']) }]} />
+        <Label className="text-[12px] text-muted-foreground">{t(M['logic.action'])}</Label>
+        <NiceSelect size="sm" aria-label={t(M['logic.action'])} value={action} onChange={(v) => write({ action: v === 'hide' ? 'hide' : 'show' })} options={[{ value: 'show', label: t(M['logic.show']) }, { value: 'hide', label: t(M['logic.hide']) }]} />
       </div>
       <div className="space-y-1">
-        <Label className="text-[12px] text-[var(--notion-text-muted)]">{t(M['logic.when'])}</Label>
+        <Label className="text-[12px] text-muted-foreground">{t(M['logic.when'])}</Label>
         <NiceSelect
           size="sm"
+          aria-label={t(M['logic.when'])}
           value={sourceId ?? ''}
           onChange={pickSource}
           placeholder={t(M['logic.source_placeholder'])}
@@ -191,8 +192,8 @@ function RuleEditor({ n, item, target, sources, defaults }: { n: number; item: S
       {source ? (
         <>
           <div className="space-y-1">
-            <Label className="text-[12px] text-[var(--notion-text-muted)]">{t(M['logic.operator'])}</Label>
-            <NiceSelect size="sm" value={cond.op} onChange={pickOp} options={operatorsFor(source).map((op) => ({ value: op, label: opLabel(op) }))} />
+            <Label className="text-[12px] text-muted-foreground">{t(M['logic.operator'])}</Label>
+            <NiceSelect size="sm" aria-label={t(M['logic.operator'])} value={cond.op} onChange={pickOp} options={operatorsFor(source).map((op) => ({ value: op, label: opLabel(op) }))} />
           </div>
           <OperandEditor group={`${rule.id}-${cond.id}`} source={source} op={cond.op} right={cond.right} onChange={(right) => write({ condition: condition(cond.id, source, cond.op, right) })} />
         </>
@@ -225,7 +226,7 @@ export function LogicTab({ blockId }: { blockId: BlockId }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] leading-relaxed text-[var(--notion-text-muted)]">{t(M['logic.intro'])}</p>
+      <p className="text-[13px] leading-relaxed text-muted-foreground">{t(M['logic.intro'])}</p>
       {hidden ? <p className="text-[12px] font-medium text-amber-700">{t(M['logic.hidden_until'])}</p> : null}
       <ul className="space-y-2">
         {mine.map((rule, i) => {
@@ -233,18 +234,18 @@ export function LogicTab({ blockId }: { blockId: BlockId }) {
           return item ? (
             <RuleEditor key={rule.id} n={i + 1} item={item} target={blockId} sources={sources} defaults={defaults} />
           ) : (
-            <li key={rule.id} className="rounded-md border border-[var(--notion-border)] p-3 text-[13px] text-[var(--notion-text-muted)]">
+            <li key={rule.id} className="rounded-md border border-border p-3 text-[13px] text-muted-foreground">
               {t(M['logic.complex'], { count: rule.when.children.length })}
             </li>
           );
         })}
       </ul>
       {sources.length ? (
-        <button type="button" className="inline-flex items-center gap-1 rounded-[4px] px-1.5 py-1 text-[13px] text-[var(--notion-text-muted)] hover:bg-[var(--notion-hover)]" onClick={add}>
+        <Button type="button" variant="ghost" size="sm" onClick={add}>
           <Plus className="size-3.5" /> {t(M['logic.add'])}
-        </button>
+        </Button>
       ) : (
-        <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['logic.no_sources'])}</p>
+        <p className="text-[13px] text-muted-foreground">{t(M['logic.no_sources'])}</p>
       )}
     </div>
   );

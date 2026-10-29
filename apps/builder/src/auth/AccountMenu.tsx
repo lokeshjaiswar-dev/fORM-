@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Lock, Plus, ShieldCheck, Users } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
-import { Button } from '@/components/ui/button';
+import { Button, TextLink } from '@dmacq/ui';
+import { NiceSelect } from '@/components/ui/select';
 import { activeOrgOf, loadSession, signOut, switchOrg, useSessionStore } from './client';
 
 const M = defineMessages('builder', {
@@ -29,36 +30,33 @@ export function OrgSwitcher() {
   const active = activeOrgOf(me);
   if (!active) {
     return (
-      <Link to="/orgs/new" className="inline-flex items-center gap-1 font-medium text-zinc-700 underline-offset-2 hover:underline">
-        <Plus className="size-3.5" /> {t(M['account.create_org'])}
-      </Link>
+      <TextLink asChild size="small" color="neutral" icon={<Plus className="size-3.5" />}>
+        <Link to="/orgs/new">{t(M['account.create_org'])}</Link>
+      </TextLink>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5">
-      <select
+      <NiceSelect
+        size="sm"
         aria-label={t(M['account.org'])}
         value={active.id}
-        onChange={(e) => {
+        onChange={(id) => {
           setFailed(false);
-          switchOrg(e.target.value).catch(() => setFailed(true));
+          switchOrg(id).catch(() => setFailed(true));
         }}
-        className="h-8 max-w-[180px] truncate rounded-md border border-zinc-200 bg-white px-2 text-[13px]"
-      >
-        {me.orgs.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
-          </option>
-        ))}
-      </select>
-      <Link to="/orgs/new" aria-label={t(M['account.new_org'])} title={t(M['account.new_org'])} className="text-zinc-500 hover:text-zinc-900">
-        <Plus className="size-4" />
-      </Link>
-      <Link to="/org/members" className="inline-flex items-center gap-1 font-medium text-zinc-700 underline-offset-2 hover:underline">
-        <Users className="size-3.5" /> {t(M['account.members'])}
-      </Link>
+        options={me.orgs.map((o) => ({ value: o.id, label: o.name }))}
+      />
+      <Button variant="ghost" size="icon-sm" asChild>
+        <Link to="/orgs/new" aria-label={t(M['account.new_org'])} title={t(M['account.new_org'])}>
+          <Plus className="size-4" />
+        </Link>
+      </Button>
+      <TextLink asChild size="small" color="neutral" icon={<Users className="size-3.5" />}>
+        <Link to="/org/members">{t(M['account.members'])}</Link>
+      </TextLink>
       {failed ? (
-        <span role="alert" className="text-red-600">
+        <span role="alert" className="text-destructive">
           {t(M['account.switch_failed'])}
         </span>
       ) : null}
@@ -76,27 +74,31 @@ export function AccountMenu() {
 
   if (session.status === 'signed_out') {
     return (
-      <Link to="/auth/sign-in" className="text-[13px] font-medium text-zinc-700 underline-offset-2 hover:underline">
-        {t(M['account.sign_in'])}
-      </Link>
+      <TextLink asChild size="small">
+        <Link to="/auth/sign-in">{t(M['account.sign_in'])}</Link>
+      </TextLink>
     );
   }
   if (session.status !== 'signed_in') return null;
   return (
     <nav aria-label={t(M['account.label'])} className="flex flex-wrap items-center justify-end gap-2 text-[13px]">
       <OrgSwitcher />
-      <span className="max-w-[200px] truncate text-[var(--notion-text-muted)]">{session.me.user.email}</span>
-      <Link to="/account/security" className="inline-flex items-center gap-1 font-medium text-zinc-700 underline-offset-2 hover:underline">
-        <ShieldCheck className="size-3.5" /> {t(M['account.security'])}
-      </Link>
-      <Link
-        to="/account/privacy"
-        className="inline-flex items-center gap-1 font-medium text-zinc-700 underline-offset-2 hover:underline"
+      <span className="max-w-[200px] truncate text-muted-foreground">{session.me.user.email}</span>
+      <TextLink asChild size="small" color="neutral" icon={<ShieldCheck className="size-3.5" />}>
+        <Link to="/account/security">{t(M['account.security'])}</Link>
+      </TextLink>
+      <TextLink
+        asChild
+        size="small"
+        color="neutral"
+        icon={<Lock className="size-3.5" />}
         {...(session.me.notice?.current === false ? { title: t(M['account.notice_updated']) } : {})}
       >
-        <Lock className="size-3.5" /> {t(M['account.privacy'])}
-        {session.me.notice?.current === false ? <span role="img" aria-label={t(M['account.notice_updated'])} className="size-1.5 rounded-full bg-amber-500" /> : null}
-      </Link>
+        <Link to="/account/privacy">
+          {t(M['account.privacy'])}
+          {session.me.notice?.current === false ? <span role="img" aria-label={t(M['account.notice_updated'])} className="size-1.5 rounded-full bg-notice" /> : null}
+        </Link>
+      </TextLink>
       <Button variant="ghost" size="sm" onClick={() => void signOut()}>
         {t(M['account.sign_out'])}
       </Button>

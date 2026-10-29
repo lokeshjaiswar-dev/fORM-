@@ -1,3 +1,4 @@
+import { Badge } from '@dmacq/ui';
 import { useEditionStore } from '@/edition/edition';
 import { editionHint, editionLabel, editionName } from '@/edition/labels';
 import { cn } from '@/lib/utils';
@@ -7,13 +8,15 @@ export function EditionBadge({ className }: { className?: string }) {
   const state = useEditionStore();
   const hint = editionHint(state);
   return (
-    <p
-      role="note"
-      aria-label={editionName()}
-      title={hint}
-      className={cn('inline-flex shrink-0 items-center rounded-[4px] bg-[var(--notion-hover)] px-1.5 py-0.5 text-[12px] text-[var(--notion-text-muted)]', className)}
+    <Badge
+      asChild
+      variant="secondary"
+      size="sm"
+      className={cn('shrink-0 font-normal', className)}
     >
-      {editionLabel(state.summary)}
-    </p>
+      <p role="note" aria-label={editionName()} title={hint}>
+        {editionLabel(state.summary)}
+      </p>
+    </Badge>
   );
 }

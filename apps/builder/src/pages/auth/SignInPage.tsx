@@ -4,8 +4,7 @@ import { z } from 'zod';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, fetchMethods, oauthStartUrl, signInResultSchema, type AuthMethods } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, Separator, TextLink } from '@dmacq/ui';
 import { useEdition } from '@/edition/edition';
 import { useNotice } from '../privacy/useNotice';
 import { AuthLayout, Field, FormError, Notice } from './AuthLayout';
@@ -116,9 +115,9 @@ export function SignInPage() {
       footer={
         <>
           {t(M['signin.no_account'])}{' '}
-          <Link to="/auth/sign-up" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-            {t(M['signin.sign_up'])}
-          </Link>
+          <TextLink asChild size="small">
+            <Link to="/auth/sign-up">{t(M['signin.sign_up'])}</Link>
+          </TextLink>
         </>
       }
     >
@@ -136,32 +135,31 @@ export function SignInPage() {
         </Button>
         {emailLinks ? (
           <div className="flex items-center justify-between text-[13px]">
-            <button type="button" className="text-zinc-700 underline-offset-2 hover:underline" onClick={() => void magicLink()}>
+            <Button type="button" variant="link" size="sm" onClick={() => void magicLink()}>
               {t(M['signin.magic'])}
-            </button>
-            <Link to="/auth/forgot" className="text-zinc-700 underline-offset-2 hover:underline">
-              {t(M['signin.forgot'])}
-            </Link>
+            </Button>
+            <TextLink asChild size="small">
+              <Link to="/auth/forgot">{t(M['signin.forgot'])}</Link>
+            </TextLink>
           </div>
         ) : null}
       </form>
       {providers.length > 0 && notice.status === 'ready' ? (
         <div className="mt-5 space-y-2">
-          <p className="text-center text-[12px] uppercase tracking-wide text-zinc-400">{t(M['signin.or'])}</p>
+          <Separator className="my-1" />
+          <p className="text-center text-[12px] uppercase tracking-wide text-muted-foreground">{t(M['signin.or'])}</p>
           {providers.map((p) => (
-            <a
-              key={p}
-              href={oauthStartUrl(p, notice.notice.version)}
-              className="flex h-9 w-full items-center justify-center rounded-md border border-zinc-200 bg-white text-sm font-medium hover:bg-zinc-50"
-            >
-              {t(M[p === 'google' ? 'signin.google' : 'signin.microsoft'])}
-            </a>
+            <Button key={p} variant="outline" className="w-full" asChild>
+              <a href={oauthStartUrl(p, notice.notice.version)}>
+                {t(M[p === 'google' ? 'signin.google' : 'signin.microsoft'])}
+              </a>
+            </Button>
           ))}
-          <p className="text-center text-[12px] text-[var(--notion-text-muted)]">
+          <p className="text-center text-[12px] text-muted-foreground">
             {t(M['signin.oauth_notice_note'])}{' '}
-            <Link to="/privacy" className="font-medium text-zinc-800 underline underline-offset-2">
-              {t(M['signin.privacy_notice'])}
-            </Link>
+            <TextLink asChild size="small">
+              <Link to="/privacy">{t(M['signin.privacy_notice'])}</Link>
+            </TextLink>
           </p>
         </div>
       ) : null}

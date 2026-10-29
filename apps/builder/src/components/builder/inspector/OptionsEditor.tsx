@@ -5,7 +5,7 @@ import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { APP_IDS } from '@/lib/definition';
 import { updateBlock } from '@/state/actions';
-import { Input, Label } from '@/components/ui/input';
+import { Button, Input, Label } from '@dmacq/ui';
 import { ToggleRow } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
@@ -77,24 +77,20 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>{t(M['options.title'])}</Label>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[12px] text-[var(--notion-text-muted)] hover:bg-[var(--notion-hover)]"
-          onClick={add}
-        >
+        <Button type="button" variant="ghost" size="xs" onClick={add}>
           <Plus className="size-3" /> {t(M['options.add'])}
-        </button>
+        </Button>
       </div>
       <ul className="space-y-1.5">
         {options.map((opt, i) => (
           <li key={opt.id} className="flex items-center gap-1">
             <div className="flex flex-col">
-              <button type="button" aria-label={t(M['options.up'], { n: i + 1 })} onClick={() => move(i, i - 1)}>
+              <Button type="button" variant="ghost" size="icon-xs" aria-label={t(M['options.up'], { n: i + 1 })} onClick={() => move(i, i - 1)}>
                 <ChevronUp className="size-3" />
-              </button>
-              <button type="button" aria-label={t(M['options.down'], { n: i + 1 })} onClick={() => move(i, i + 1)}>
+              </Button>
+              <Button type="button" variant="ghost" size="icon-xs" aria-label={t(M['options.down'], { n: i + 1 })} onClick={() => move(i, i + 1)}>
                 <ChevronDown className="size-3" />
-              </button>
+              </Button>
             </div>
             <Input aria-label={t(M['options.label'], { n: i + 1 })} value={labelString(opt.label)} onChange={(e) => edit(i, { label: e.target.value })} />
             <Input
@@ -104,19 +100,20 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
               value={opt.code ?? ''}
               onChange={(e) => edit(i, { code: e.target.value.slice(0, 200) })}
             />
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               aria-label={t(M['options.remove'], { n: i + 1 })}
               disabled={options.length <= 1}
-              className="flex size-7 shrink-0 items-center justify-center rounded-[4px] text-[var(--notion-text-muted)] hover:bg-red-50 hover:text-red-500 disabled:opacity-30"
               onClick={() => remove(opt.id)}
             >
               <Trash2 className="size-3.5" />
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
-      <p className="text-[12px] text-[var(--notion-text-muted)]">{t(M['options.codes_hint'])}</p>
+      <p className="text-[12px] text-muted-foreground">{t(M['options.codes_hint'])}</p>
       {block.type !== 'ranking' ? (
         <ToggleRow
           label={t(M['options.other'])}

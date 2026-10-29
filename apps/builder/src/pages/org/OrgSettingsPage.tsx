@@ -3,9 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { defineMessages, SUPPORTED_DATE_PATTERNS } from '@form/i18n';
 import { t } from '@/i18n';
 import { loadSession, orgApi, useActiveOrg, useSessionStore } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { Button, Input, Switch, TextLink } from '@dmacq/ui';
+import { NiceSelect } from '@/components/ui/select';
 import { AuthLayout, Field, FormError, Notice } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
 import { orgSchema, settingsSchema } from './orgApi';
@@ -92,9 +91,9 @@ export function OrgSettingsPage() {
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
   const footer = (
-    <Link to="/org/members" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-      {t(M['org_settings.back'])}
-    </Link>
+    <TextLink asChild>
+      <Link to="/org/members">{t(M['org_settings.back'])}</Link>
+    </TextLink>
   );
 
   return (
@@ -105,7 +104,7 @@ export function OrgSettingsPage() {
           <Field label={t(M['org_settings.name'])}>
             <Input value={form.name} onChange={(e) => set('name', e.target.value)} required maxLength={100} />
           </Field>
-          <p className="text-[13px] text-[var(--notion-text-muted)]">{t(M['org_settings.defaults_hint'])}</p>
+          <p className="text-[13px] text-muted-foreground">{t(M['org_settings.defaults_hint'])}</p>
           <Field label={t(M['org_settings.locale'])}>
             <Input value={form.locale} onChange={(e) => set('locale', e.target.value)} required maxLength={35} />
           </Field>
@@ -113,15 +112,14 @@ export function OrgSettingsPage() {
             <Input value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} required maxLength={64} />
           </Field>
           <Field label={t(M['org_settings.date_format'])}>
-            <select value={form.dateFormat} onChange={(e) => set('dateFormat', e.target.value)} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm">
-              {SUPPORTED_DATE_PATTERNS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+            <NiceSelect
+              aria-label={t(M['org_settings.date_format'])}
+              value={form.dateFormat}
+              onChange={(v) => set('dateFormat', v)}
+              options={SUPPORTED_DATE_PATTERNS.map((p) => ({ value: p, label: p }))}
+            />
           </Field>
-          <label className="flex items-center justify-between gap-3 text-[13px] font-medium text-zinc-800">
+          <label className="flex items-center justify-between gap-3 text-[13px] font-medium text-foreground">
             {t(M['org_settings.editors_notice'])}
             <Switch checked={form.editorsApproveNotice} onCheckedChange={(v) => set('editorsApproveNotice', v)} aria-label={t(M['org_settings.editors_notice'])} />
           </label>
@@ -136,7 +134,7 @@ export function OrgSettingsPage() {
       ) : error ? (
         <FormError message={error} />
       ) : (
-        <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['org_settings.loading'])}</p>
+        <p className="text-[14px] text-muted-foreground">{t(M['org_settings.loading'])}</p>
       )}
     </AuthLayout>
   );

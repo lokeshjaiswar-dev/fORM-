@@ -10,6 +10,11 @@ import { block, doc, resetStore, rule, text } from '@/test/fixtures';
 const get = (id: string) => doc().blocks[id as BlockId] as unknown as { config: Record<string, unknown> } & Record<string, unknown>;
 const options = () => get('color').config['options'] as ChoiceOption[];
 
+async function pick(user: ReturnType<typeof userEvent.setup>, combobox: string, option: string) {
+  await user.click(screen.getByRole('combobox', { name: combobox }));
+  fireEvent.click(await screen.findByRole('option', { name: option }));
+}
+
 function open(id: string) {
   useUiStore.getState().openInspector(id as BlockId);
   render(<BlockInspector />);
@@ -162,10 +167,10 @@ describe('BlockInspector validation', () => {
   it('B28: the rating point count is a choice of 1 to 10', async () => {
     resetStore([block('rating', 'stars', { label: 'Stars' })]);
     const user = open('stars');
-    await user.click(screen.getByRole('button', { name: '5' }));
-    expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '11' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '10' }));
+    await user.click(screen.getByRole('combobox', { name: 'Number of points' }));
+    expect(screen.getByRole('option', { name: '1' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '11' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: '10' }));
     expect(get('stars').config['max']).toBe(10);
   });
 });
@@ -211,10 +216,10 @@ describe('BlockInspector logic', () => {
     await user.click(screen.getByRole('button', { name: 'Add a rule' }));
     await user.type(screen.getByRole('textbox', { name: 'Value' }), 'IN');
     expect(doc().logic.rules[0]?.when.children[0]).toMatchObject({ op: 'eq', right: text('IN') });
-    await user.click(screen.getByRole('button', { name: 'Country' }));
-    expect(screen.getAllByRole('button', { name: 'Country' })).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: 'Later' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'State' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: 'When' }));
+    expect(screen.getByRole('option', { name: 'Country' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Later' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'State' })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -228,8 +233,7 @@ describe('BlockInspector logic', () => {
     await user.click(screen.getByRole('button', { name: 'Add a rule' }));
     expect(doc().logic.rules[0]?.when.children[0]).toMatchObject({ op: 'eq', right: { kind: 'literal', value: { type } } });
     expect(previews().ok).toBe(true);
-    await user.click(screen.getByRole('button', { name: 'is' }));
-    await user.click(screen.getByRole('button', { name: opName }));
+    await pick(user, 'Condition', opName);
     expect(previews().ok).toBe(true);
     fireEvent.change(screen.getByLabelText('Value'), { target: { value: typed } });
     expect(doc().logic.rules[0]?.when.children[0]).toMatchObject({ right: { kind: 'literal', value } });

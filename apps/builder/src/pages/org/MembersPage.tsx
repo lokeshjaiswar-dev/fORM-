@@ -5,8 +5,8 @@ import { defineMessages } from '@form/i18n';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { loadSession, orgApi, useActiveOrg, useSessionStore } from '@/auth/client';
 import { AccountMenu } from '@/auth/AccountMenu';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Badge, Button, Field, Input, TextLink } from '@dmacq/ui';
+import { NiceSelect } from '@/components/ui/select';
 import { FormError, Notice } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
 import {
@@ -120,9 +120,9 @@ export function MembersPage() {
   }
 
   const footer = (
-    <Link to="/forms" className="text-[13px] font-medium text-zinc-900 underline-offset-2 hover:underline">
-      {t(M['members.back'])}
-    </Link>
+    <TextLink asChild size="small">
+      <Link to="/forms">{t(M['members.back'])}</Link>
+    </TextLink>
   );
 
   if (session.status === 'signed_in' && !active) {
@@ -130,9 +130,9 @@ export function MembersPage() {
       <Page footer={footer}>
         <p className="mt-6 text-[15px]">
           {t(M['members.no_org'])}{' '}
-          <Link to="/orgs/new" className="font-medium underline">
-            {t(M['members.create_org'])}
-          </Link>
+          <TextLink asChild>
+            <Link to="/orgs/new">{t(M['members.create_org'])}</Link>
+          </TextLink>
         </p>
       </Page>
     );
@@ -141,7 +141,7 @@ export function MembersPage() {
     return (
       <Page footer={footer}>
         <FormError message={error} />
-        {error ? null : <p className="mt-6 text-[14px] text-[var(--notion-text-muted)]">{t(M['members.loading'])}</p>}
+        {error ? null : <p className="mt-6 text-[14px] text-muted-foreground">{t(M['members.loading'])}</p>}
       </Page>
     );
   }
@@ -197,9 +197,9 @@ export function MembersPage() {
       <div className="mt-2 flex items-center justify-between gap-4">
         <h2 className="text-[15px] font-semibold">{t(M['members.list'], { org: orgName })}</h2>
         {data.info.permissions.includes('org.settings') ? (
-          <Link to="/org/settings" className="inline-flex items-center gap-1 text-[13px] font-medium text-zinc-700 underline-offset-2 hover:underline">
-            <Settings className="size-3.5" /> {t(M['members.settings'])}
-          </Link>
+          <TextLink asChild size="small" color="neutral" icon={<Settings className="size-3.5" />}>
+            <Link to="/org/settings">{t(M['members.settings'])}</Link>
+          </TextLink>
         ) : null}
       </div>
       {notice ? (
@@ -207,7 +207,7 @@ export function MembersPage() {
           {notice.text}
           {notice.link ? (
             <span className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-[12px] text-zinc-800">{notice.link}</code>
+              <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-[12px] text-foreground">{notice.link}</code>
               <Button type="button" size="sm" variant="outline" onClick={() => copy(notice.link!)}>
                 <Copy /> {copied ? t(M['members.copied']) : t(M['members.copy'])}
               </Button>
@@ -218,7 +218,7 @@ export function MembersPage() {
       <div className="mt-3">
         <FormError message={error} />
       </div>
-      <ul className="mt-3 divide-y divide-[var(--notion-border)]">
+      <ul className="mt-3 divide-y divide-border">
         {data.members.items.map((m) => {
           const self = m.userId === me;
           const editable = manage && !self && canManage(actor, m.role);
@@ -226,27 +226,22 @@ export function MembersPage() {
             <li key={m.userId} className="flex flex-wrap items-center gap-3 py-3 text-[14px]">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">
-                  {m.name ?? m.email} {self ? <span className="font-normal text-[var(--notion-text-muted)]">{t(M['members.you'])}</span> : null}
+                  {m.name ?? m.email} {self ? <span className="font-normal text-muted-foreground">{t(M['members.you'])}</span> : null}
                 </span>
-                <span className="block truncate text-[13px] text-[var(--notion-text-muted)]">{m.email}</span>
+                <span className="block truncate text-[13px] text-muted-foreground">{m.email}</span>
               </span>
-              {m.status === 'suspended' ? <span className="rounded bg-amber-50 px-2 py-0.5 text-[12px] text-amber-800">{t(M['members.suspended'])}</span> : null}
+              {m.status === 'suspended' ? <Badge variant="warning" size="sm">{t(M['members.suspended'])}</Badge> : null}
               {editable ? (
-                <select
+                <NiceSelect
+                  size="sm"
                   aria-label={t(M['members.role_of'], { email: m.email })}
                   value={m.role}
                   disabled={busy}
-                  onChange={(e) => void change(m.userId, { role: e.target.value })}
-                  className="h-8 rounded-md border border-zinc-200 bg-white px-2 text-[13px]"
-                >
-                  {[...new Set([m.role, ...assignable(actor)])].map((r) => (
-                    <option key={r} value={r}>
-                      {roleLabel(r)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(role) => void change(m.userId, { role })}
+                  options={[...new Set([m.role, ...assignable(actor)])].map((r) => ({ value: r, label: roleLabel(r) }))}
+                />
               ) : (
-                <span className="text-[13px] text-zinc-700">{roleLabel(m.role)}</span>
+                <span className="text-[13px] text-muted-foreground">{roleLabel(m.role)}</span>
               )}
               {editable ? (
                 <Button size="sm" variant="ghost" disabled={busy} onClick={() => void change(m.userId, { status: m.status === 'suspended' ? 'active' : 'suspended' })}>
@@ -271,39 +266,33 @@ export function MembersPage() {
         <>
           <h2 className="mt-8 text-[15px] font-semibold">{t(M['members.invite'])}</h2>
           <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={submit(() => void invite())}>
-            <label className="min-w-[220px] flex-1">
-              <span className="mb-1 block text-[13px] font-medium text-zinc-800">{t(M['members.invite_email'])}</span>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" />
-            </label>
-            <label>
-              <span className="mb-1 block text-[13px] font-medium text-zinc-800">{t(M['members.invite_role'])}</span>
-              <select
+            <div className="min-w-[220px] flex-1">
+              <Field label={t(M['members.invite_email'])}>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" />
+              </Field>
+            </div>
+            <Field label={t(M['members.invite_role'])}>
+              <NiceSelect
                 aria-label={t(M['members.invite_role'])}
                 value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="h-9 rounded-md border border-zinc-200 bg-white px-2 text-sm"
-              >
-                {assignable(actor).map((r) => (
-                  <option key={r} value={r}>
-                    {roleLabel(r)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setRole}
+                options={assignable(actor).map((r) => ({ value: r, label: roleLabel(r) }))}
+              />
+            </Field>
             <Button type="submit" disabled={busy}>
               {t(M['members.invite_send'])}
             </Button>
           </form>
           <h2 className="mt-8 text-[15px] font-semibold">{t(M['members.invites'])}</h2>
           {data.invites.length === 0 ? (
-            <p className="mt-2 text-[14px] text-[var(--notion-text-muted)]">{t(M['members.invites_none'])}</p>
+            <p className="mt-2 text-[14px] text-muted-foreground">{t(M['members.invites_none'])}</p>
           ) : (
-            <ul className="mt-2 divide-y divide-[var(--notion-border)]">
+            <ul className="mt-2 divide-y divide-border">
               {data.invites.map((i) => (
                 <li key={i.id} className="flex flex-wrap items-center gap-3 py-2.5 text-[14px]">
                   <span className="min-w-0 flex-1 truncate">{i.email}</span>
-                  <span className="text-[13px] text-zinc-700">{roleLabel(i.role)}</span>
-                  <span className="text-[13px] text-[var(--notion-text-muted)]">
+                  <span className="text-[13px] text-muted-foreground">{roleLabel(i.role)}</span>
+                  <span className="text-[13px] text-muted-foreground">
                     {i.state === 'expired' ? t(M['members.invite_expired']) : t(M['members.invite_expires'], { date: date.format(new Date(i.expiresAt)) })}
                   </span>
                   <Button size="sm" variant="outline" disabled={busy} onClick={() => void withdraw(i.id)}>
@@ -321,7 +310,7 @@ export function MembersPage() {
 
 function Page({ children, footer }: { children: ReactNode; footer: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-[var(--notion-text)]">
+    <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
       <div className="-mt-12 mb-6 flex justify-end">
         <AccountMenu />
       </div>

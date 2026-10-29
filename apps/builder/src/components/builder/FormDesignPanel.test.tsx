@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { doc, resetStore } from '@/test/fixtures';
@@ -21,11 +21,11 @@ describe('FormDesignPanel', () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form design' }));
-    await user.click(screen.getByRole('button', { name: 'Themes' }));
+    await user.click(screen.getByRole('tab', { name: 'Themes' }));
     await user.click(screen.getByRole('button', { name: /Midnight/ }));
     expect(doc().theme.tokens.colors.page).toBe('#0f172a');
     expect(doc().theme.tokens.inputStyle).toBe('filled');
-    await user.click(screen.getByRole('button', { name: 'Layout' }));
+    await user.click(screen.getByRole('tab', { name: 'Layout' }));
     await user.click(screen.getByRole('button', { name: /Cards/ }));
     expect(doc().theme.layout).toBe('cards');
   });
@@ -34,12 +34,12 @@ describe('FormDesignPanel', () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form design' }));
-    await user.click(screen.getByRole('button', { name: 'Styles' }));
-    await user.click(screen.getByRole('button', { name: 'Form width' }));
-    await user.click(screen.getByRole('button', { name: 'Wide' }));
+    await user.click(screen.getByRole('tab', { name: 'Styles' }));
+    await user.click(screen.getByRole('combobox', { name: 'Form width' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Wide' }));
     expect(doc().theme.tokens.formWidth).toBe('wide');
-    await user.click(screen.getByRole('button', { name: 'Input style' }));
-    await user.click(screen.getByRole('button', { name: 'Filled' }));
+    await user.click(screen.getByRole('combobox', { name: 'Input style' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Filled' }));
     expect(doc().theme.tokens.inputStyle).toBe('filled');
     await user.click(screen.getByRole('button', { name: 'Progress bar: Off' }));
     expect(doc().theme.tokens.progress).toBe('bar');
@@ -56,7 +56,7 @@ describe('FormDesignPanel', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Form design' }));
     expect(screen.getByRole('dialog', { name: 'Form design' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await user.click(screen.getByRole('tab', { name: 'Submit' }));
     expect(screen.getByLabelText('Password (optional)')).toHaveValue('');
     await user.click(screen.getByRole('button', { name: 'Outside' }));
     expect(screen.queryByRole('dialog', { name: 'Form design' })).not.toBeInTheDocument();

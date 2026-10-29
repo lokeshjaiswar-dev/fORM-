@@ -12,6 +12,7 @@ import { useUiStore } from '@/state/uiStore';
 import { insertTile } from '@/components/builder/insert';
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { SlashMenu } from '@/components/builder/SlashMenu';
+import { Button } from '@dmacq/ui';
 import { Tooltip } from '@/components/ui/tooltip';
 
 const M = defineMessages('builder', {
@@ -107,20 +108,19 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
 function IconBtn({ children, onClick, label, danger }: { children: ReactNode; onClick: () => void; label: string; danger?: boolean }) {
   return (
     <Tooltip content={label} side="top">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         aria-label={label}
-        className={cn(
-          'flex size-6 shrink-0 items-center justify-center rounded text-[#b8b8b8]',
-          danger ? 'hover:bg-red-50 hover:text-red-500' : 'hover:bg-black/5 hover:text-[#6b6b6b]',
-        )}
+        className={danger ? 'text-icon-muted hover:text-destructive' : 'text-icon-muted'}
         onClick={(e) => {
           e.stopPropagation();
           onClick();
         }}
       >
         {children}
-      </button>
+      </Button>
     </Tooltip>
   );
 }

@@ -5,7 +5,7 @@ import { Bold, Highlighter, Italic, Link, Type, Underline } from 'lucide-react';
 import { toast } from 'sonner';
 import { isSafeHref, type ColorValue } from '@form/schema';
 import { Tooltip } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Button } from '@dmacq/ui';
 import { themeCssVars } from '@form/renderer';
 import { useDoc } from '@/state/documentStore';
 import { colorCss } from '@/components/editor/extensions';
@@ -94,7 +94,7 @@ export function FormatMenu({ editor }: { editor: Editor }) {
     <div
       role="toolbar"
       aria-label="Text formatting"
-      className="fixed z-50 flex -translate-x-1/2 -translate-y-[calc(100%+8px)] items-center gap-0.5 rounded-xl border border-zinc-200 bg-white px-1 py-1 shadow-[0_8px_24px_rgba(15,15,15,0.12)]"
+      className="fixed z-50 flex -translate-x-1/2 -translate-y-[calc(100%+8px)] items-center gap-0.5 rounded-xl border border-input bg-background px-1 py-1 shadow-[0_8px_24px_rgba(15,15,15,0.12)]"
       style={{ ...themeCssVars(tokens), left, top: Math.min(start.top, end.top) }}
       onMouseDown={(e) => e.preventDefault()}
     >
@@ -107,20 +107,20 @@ export function FormatMenu({ editor }: { editor: Editor }) {
       <Tool onClick={() => editor.chain().focus().toggleMark('underline').run()} label="Underline" shortcut="⌘U" active={state.active.underline}>
         <Underline className="size-3.5" />
       </Tool>
-      <span className="mx-0.5 h-4 w-px bg-zinc-200" />
+      <span className="mx-0.5 h-4 w-px bg-border" />
       {(['textColor', 'highlight'] as const).map((type) => (
         <div key={type} className="relative">
           <Tool onClick={() => setColorOpen((v) => (v === type ? null : type))} label={type === 'textColor' ? 'Text color' : 'Highlight'} active={state.active[type]}>
             {type === 'textColor' ? <Type className="size-3.5" /> : <Highlighter className="size-3.5" />}
           </Tool>
           {colorOpen === type ? (
-            <div className="absolute left-1/2 top-full z-10 mt-1 flex -translate-x-1/2 gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-md">
+            <div className="absolute left-1/2 top-full z-10 mt-1 flex -translate-x-1/2 gap-1 rounded-lg border border-input bg-background p-1.5 shadow-md">
               {(type === 'textColor' ? TEXT_SWATCHES : HIGHLIGHT_SWATCHES).map((swatch) => (
                 <Tooltip key={swatch.label} content={swatch.label} side="bottom" delay={200}>
                   <button
                     type="button"
                     aria-label={swatch.label}
-                    className="size-5 rounded-full border border-zinc-200"
+                    className="size-5 rounded-full border border-border"
                     style={{ background: swatch.value ? colorCss(swatch.value) : '#fff' }}
                     onClick={() => setColor(type, swatch.value)}
                   />
@@ -141,15 +141,16 @@ export function FormatMenu({ editor }: { editor: Editor }) {
 function Tool({ children, onClick, label, shortcut, active }: { children: ReactNode; onClick: () => void; label: string; shortcut?: string; active?: boolean }) {
   return (
     <Tooltip content={label} shortcut={shortcut} side="top" delay={200}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         aria-label={label}
-        aria-pressed={active}
-        className={cn('flex size-7 items-center justify-center rounded-md text-zinc-700 hover:bg-zinc-100', active && 'bg-zinc-100')}
+        pressed={active}
         onClick={onClick}
       >
         {children}
-      </button>
+      </Button>
     </Tooltip>
   );
 }

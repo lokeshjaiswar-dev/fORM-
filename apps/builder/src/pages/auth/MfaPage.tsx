@@ -4,8 +4,7 @@ import { toast } from 'sonner';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, signInResultSchema } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, TextLink } from '@dmacq/ui';
 import { AuthLayout, Field, FormError } from './AuthLayout';
 import { useFinishSignIn, useFragment } from './useFinishSignIn';
 import { problemText, submit } from './util';
@@ -42,9 +41,9 @@ export function MfaPage() {
       <AuthLayout title={t(M['mfa.title'])}>
         <div className="space-y-3">
           <FormError message={t(M['mfa.expired'])} />
-          <Link to="/auth/sign-in" className="text-[13px] font-medium underline-offset-2 hover:underline">
-            {t(M['mfa.back'])}
-          </Link>
+          <TextLink asChild size="small">
+            <Link to="/auth/sign-in">{t(M['mfa.back'])}</Link>
+          </TextLink>
         </div>
       </AuthLayout>
     );
@@ -81,17 +80,23 @@ export function MfaPage() {
         <Button type="submit" className="w-full" disabled={busy}>
           {busy ? t(M['mfa.busy']) : t(M['mfa.submit'])}
         </Button>
-        <button
-          type="button"
-          className="text-[13px] text-zinc-700 underline-offset-2 hover:underline"
-          onClick={() => {
-            setMode(mode === 'totp' ? 'recovery' : 'totp');
-            setCode('');
-            setError(null);
-          }}
+        <TextLink
+          asChild
+          size="small"
+          color="neutral"
+          className="justify-center"
         >
-          {t(M[mode === 'totp' ? 'mfa.use_recovery' : 'mfa.use_totp'])}
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === 'totp' ? 'recovery' : 'totp');
+              setCode('');
+              setError(null);
+            }}
+          >
+            {t(M[mode === 'totp' ? 'mfa.use_recovery' : 'mfa.use_totp'])}
+          </button>
+        </TextLink>
       </form>
     </AuthLayout>
   );

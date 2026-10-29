@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Alert, AlertDescription, AlertTitle, Button } from '@dmacq/ui';
 
 export class ErrorBoundary extends Component<{ children: ReactNode; label: string }, { error: Error | null }> {
   override state: { error: Error | null } = { error: null };
@@ -14,16 +15,14 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label: strin
   override render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div role="alert" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-        <p className="text-[15px] font-medium">The {this.props.label} hit an error and could not be shown.</p>
-        <p className="max-w-md text-[13px] text-zinc-500">{this.state.error.message}</p>
-        <button
-          type="button"
-          className="h-8 rounded-[4px] border border-zinc-200 px-3 text-[14px] hover:bg-zinc-100"
-          onClick={() => this.setState({ error: null })}
-        >
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <Alert variant="destructive" icon className="max-w-md text-left">
+          <AlertTitle>The {this.props.label} hit an error and could not be shown.</AlertTitle>
+          <AlertDescription>{this.state.error.message}</AlertDescription>
+        </Alert>
+        <Button type="button" variant="outline" onClick={() => this.setState({ error: null })}>
           Try again
-        </button>
+        </Button>
       </div>
     );
   }

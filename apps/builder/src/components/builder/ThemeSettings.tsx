@@ -8,9 +8,7 @@ import { APP_IDS, blankDefinition, richDoc } from '@/lib/definition';
 import { setBehavior, setEndings } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { updateOps, useOpsStore } from '@/state/opsStore';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input, Label } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Switch } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { cn } from '@/lib/utils';
 
@@ -92,9 +90,9 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
   const setConfetti = (on: boolean) =>
     setEndings(def.endings.map((e) => (e.id === message?.id ? { ...message, confetti: on } : e)), def.defaultEndingId, { ...def.behavior, successAnimation: on });
 
-  const field = dark ? 'border-white/10 bg-white/5 text-white' : undefined;
-  const labelCls = dark ? 'text-zinc-300' : undefined;
-  const hintCls = redirectValid ? (dark ? 'text-[12px] text-zinc-400' : 'text-[12px] text-[var(--notion-text-muted)]') : 'text-[12px] text-[#eb5757]';
+  const field = dark ? 'border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground' : undefined;
+  const labelCls = dark ? 'text-sidebar-foreground/80' : undefined;
+  const hintCls = redirectValid ? 'text-[12px] text-muted-foreground' : 'text-[12px] text-destructive';
 
   return (
     <div className="space-y-4">
@@ -113,7 +111,7 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
       {message ? (
         <div className="space-y-1.5">
           <Label className={labelCls}>{t(M['settings.thanks'])}</Label>
-          <div className={cn('rounded-md border px-2', dark ? 'border-white/10 bg-white/5' : 'border-zinc-200')}>
+          <div className={cn('rounded-md border px-2', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border')}>
             <RichEditor value={message.content} onChange={setThanks} className="text-sm leading-6" placeholder={t(M['settings.thanks'])} />
           </div>
         </div>
@@ -141,7 +139,7 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
       {!ops.open ? (
         <div className="space-y-1.5">
           <Label className={labelCls}>{t(M['settings.closed_message'])}</Label>
-          <div className={cn('rounded-md border px-2', dark ? 'border-white/10 bg-white/5' : 'border-zinc-200')}>
+          <div className={cn('rounded-md border px-2', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border')}>
             <RichEditor value={ops.closedMessage.content.length ? ops.closedMessage : richDoc('')} onChange={(closedMessage) => updateOps({ closedMessage })} className="text-sm leading-6" />
           </div>
         </div>
@@ -149,7 +147,7 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
       <div className="space-y-1.5">
         <Label htmlFor="password" className={labelCls}>{t(M['settings.password'])}</Label>
         <Input id="password" type="password" autoComplete="new-password" className={field} value={ops.password} placeholder="" onChange={(e) => updateOps({ password: e.target.value.slice(0, 200) })} />
-        <p className={dark ? 'text-[12px] text-zinc-400' : 'text-[12px] text-[var(--notion-text-muted)]'}>{t(M['settings.password_hint'])}</p>
+        <p className="text-[12px] text-muted-foreground">{t(M['settings.password_hint'])}</p>
       </div>
     </div>
   );
@@ -158,8 +156,8 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
 function Toggle({ id, label, checked, onChange, dark }: { id: string; label: string; checked: boolean; onChange: (on: boolean) => void; dark?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <Label htmlFor={id} className={dark ? 'text-zinc-300' : undefined}>{label}</Label>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} className={dark && checked ? 'bg-orange-400' : undefined} />
+      <Label htmlFor={id} className={dark ? 'text-sidebar-foreground/80' : undefined}>{label}</Label>
+      <Switch id={id} checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

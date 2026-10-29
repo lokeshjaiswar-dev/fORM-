@@ -76,7 +76,7 @@ export function BuilderDnd({ children }: { children: ReactNode }) {
       {children}
       <DragOverlay dropAnimation={null}>
         {active?.tile ? (
-          <div className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm shadow-lg">
+          <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-lg">
             <FieldTile tile={active.tile} />
             {active.tile.label}
           </div>

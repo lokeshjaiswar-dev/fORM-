@@ -2,8 +2,7 @@ import { useId, type ReactNode } from 'react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
-import { Input, Label } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { Field as DsField, Input, Label, Switch } from '@dmacq/ui';
 import { NiceSelect, type SelectOption } from '@/components/ui/select';
 
 /* Inspector controls: each writes through a builder action as the author types, so every edit is one command. */
@@ -14,23 +13,14 @@ const M = defineMessages('builder', {
 
 export function Field({ label, error, hint, htmlFor, children }: { label: string; error?: string | null | undefined; hint?: string | undefined; htmlFor?: string; children: ReactNode }) {
   return (
-    <div className="space-y-1">
-      <Label htmlFor={htmlFor} className="text-[12px] text-[var(--notion-text-muted)]">
-        {label}
-      </Label>
+    <DsField label={label} error={error ?? undefined} hint={hint} {...(htmlFor ? { htmlFor } : {})}>
       {children}
-      {hint ? <p className="text-[12px] text-[var(--notion-text-muted)]">{hint}</p> : null}
-      {error ? (
-        <p role="alert" className="text-[12px] text-[#eb5757]">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    </DsField>
   );
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return <p className="pt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-400">{children}</p>;
+  return <p className="pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</p>;
 }
 
 export function TextField({ label, value, onChange, placeholder, error, hint }: {
@@ -91,7 +81,7 @@ export function ToggleRow({ label, checked, onChange, hint }: { label: string; c
         <Label htmlFor={id}>{label}</Label>
         <Switch id={id} checked={checked} onCheckedChange={onChange} />
       </div>
-      {hint ? <p className="text-[12px] text-[var(--notion-text-muted)]">{hint}</p> : null}
+      {hint ? <p className="text-[12px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
@@ -99,7 +89,7 @@ export function ToggleRow({ label, checked, onChange, hint }: { label: string; c
 export function SelectField({ label, value, options, onChange, placeholder }: { label: string; value: string; options: SelectOption[]; onChange: (value: string) => void; placeholder?: string }) {
   return (
     <Field label={label}>
-      <NiceSelect size="sm" value={value} onChange={onChange} options={options} {...(placeholder !== undefined ? { placeholder } : {})} />
+      <NiceSelect size="sm" value={value} onChange={onChange} options={options} aria-label={label} {...(placeholder !== undefined ? { placeholder } : {})} />
     </Field>
   );
 }

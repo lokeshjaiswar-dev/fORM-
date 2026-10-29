@@ -4,8 +4,7 @@ import { z } from 'zod';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, ApiProblem } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, TextLink } from '@dmacq/ui';
 import { PrivacyNotice } from '../privacy/PrivacyNotice';
 import { useNotice } from '../privacy/useNotice';
 import { AuthLayout, Field, FormError, Notice } from './AuthLayout';
@@ -65,9 +64,9 @@ export function SignUpPage() {
   const footer = (
     <>
       {t(M['signup.have_account'])}{' '}
-      <Link to="/auth/sign-in" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-        {t(M['signup.sign_in'])}
-      </Link>
+      <TextLink asChild size="small">
+        <Link to="/auth/sign-in">{t(M['signup.sign_in'])}</Link>
+      </TextLink>
     </>
   );
 
@@ -91,20 +90,20 @@ export function SignUpPage() {
         <Field label={t(M['signup.password'])}>
           <Input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
-        <p className="text-[12px] text-[var(--notion-text-muted)]">{t(M['signup.password_hint'])}</p>
-        <div className="space-y-2 rounded-md bg-[var(--notion-hover)] px-3 py-2 text-[12px] text-[var(--notion-text-muted)]">
+        <p className="text-[12px] text-muted-foreground">{t(M['signup.password_hint'])}</p>
+        <div className="space-y-2 rounded-md bg-state-hover px-3 py-2 text-[12px] text-muted-foreground">
           <p>{t(M['signup.notice'])}</p>
           {notice.status === 'ready' ? (
             <>
               <details>
-                <summary className="cursor-pointer font-medium text-zinc-800">{t(M['signup.notice_read'])}</summary>
-                <PrivacyNotice notice={notice.notice} headingLevel={3} className="mt-2 max-h-72 overflow-y-auto rounded border border-[var(--notion-border)] bg-white p-3" />
+                <summary className="cursor-pointer font-medium text-foreground">{t(M['signup.notice_read'])}</summary>
+                <PrivacyNotice notice={notice.notice} headingLevel={3} className="mt-2 max-h-72 overflow-y-auto rounded border border-input bg-background p-3" />
               </details>
               <p>{t(M['signup.notice_accept'], { version: notice.notice.version })}</p>
             </>
           ) : notice.status === 'failed' ? (
             <div className="flex items-center justify-between gap-2">
-              <span role="alert" className="text-red-600">
+              <span role="alert" className="text-destructive">
                 {t(M['signup.notice_failed'])}
               </span>
               <Button type="button" variant="outline" size="sm" onClick={reload}>

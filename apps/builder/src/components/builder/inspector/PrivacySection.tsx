@@ -33,7 +33,7 @@ const SHARE: Record<'include' | 'mask' | 'omit', MessageId> = { include: M['priv
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3 text-[13px]">
-      <dt className="text-[var(--notion-text-muted)]">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="text-right">{value}</dd>
     </div>
   );
@@ -54,7 +54,7 @@ export function PrivacySection({ block }: { block: FieldBlock }) {
         <Row label={t(M['privacy.notifications'])} value={t(SHARE[c.inNotifications])} />
         <Row label={t(M['privacy.exports'])} value={t(SHARE[c.inExports])} />
       </dl>
-      <p className="text-[12px] leading-relaxed text-[var(--notion-text-muted)]">{t(M['privacy.p1'])}</p>
+      <p className="text-[12px] leading-relaxed text-muted-foreground">{t(M['privacy.p1'])}</p>
     </div>
   );
 }

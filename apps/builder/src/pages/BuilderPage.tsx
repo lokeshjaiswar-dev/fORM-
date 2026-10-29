@@ -16,6 +16,7 @@ import { useFormSession } from '@/persistence/useFormSession';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { useHistoryShortcuts } from '@/state/history';
 import { useDoc } from '@/state/documentStore';
+import { TextLink } from '@dmacq/ui';
 
 /** `/builder/:id` and `/builder/:id/preview`: the form the URL names, loaded from the repository. */
 export function BuilderPage() {
@@ -23,16 +24,16 @@ export function BuilderPage() {
   const session = useFormSession(id);
 
   if (session.status === 'ready') return <Builder />;
-  if (session.status === 'loading') return <main className="h-svh bg-white" aria-busy="true" />;
+  if (session.status === 'loading') return <main className="h-svh bg-background" aria-busy="true" />;
   return (
-    <main className="mx-auto max-w-[720px] px-8 pt-[72px] text-[var(--notion-text)]">
+    <main className="mx-auto max-w-[720px] px-8 pt-[72px] text-foreground">
       <h1 className="text-[28px] font-bold">{session.status === 'missing' ? 'Form not found' : 'This form cannot be opened'}</h1>
-      <p className="mt-2 text-[15px] text-[var(--notion-text-muted)]">
+      <p className="mt-2 text-[15px] text-muted-foreground">
         {session.status === 'missing' ? 'No form with this address is saved in this browser.' : session.message}
       </p>
-      <Link to="/forms" className="mt-6 inline-block text-[15px] font-medium text-[#2383e2] hover:underline">
-        Back to forms
-      </Link>
+      <TextLink asChild className="mt-6">
+        <Link to="/forms">Back to forms</Link>
+      </TextLink>
     </main>
   );
 }
@@ -46,7 +47,7 @@ function Builder() {
 
   return (
     <BuilderDnd>
-      <div className="flex h-svh bg-white text-[var(--notion-text)]">
+      <div className="flex h-svh bg-background text-foreground">
         <FieldPicker />
         <div className="flex min-w-0 flex-1 flex-col">
           <BuilderHeader />

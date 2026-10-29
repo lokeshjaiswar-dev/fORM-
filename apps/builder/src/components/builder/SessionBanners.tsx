@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { Alert, AlertActions, AlertButton, AlertDescription, AlertTitle } from '@dmacq/ui';
 import { discardPending } from '@/persistence/autosave';
 import { useUiStore } from '@/state/uiStore';
 
@@ -18,39 +18,41 @@ export function SessionBanners() {
   if (!notes.length && !conflict) return null;
 
   return (
-    <div className="space-y-px">
+    <div className="space-y-1 p-2">
       {conflict ? (
-        <div role="alert" className="flex items-center gap-3 bg-amber-50 px-4 py-2 text-[14px] text-amber-900">
-          <span className="min-w-0 flex-1">{CONFLICT[conflict]}</span>
+        <Alert variant="warning" icon onClose={dismissConflict} closeLabel="Dismiss tab warning">
+          <AlertDescription>{CONFLICT[conflict]}</AlertDescription>
           {conflict === 'saved_elsewhere' ? (
-            <button type="button" className="rounded-[4px] px-1.5 py-0.5 font-medium hover:bg-amber-100" onClick={reload}>
-              Reload
-            </button>
+            <AlertActions>
+              <AlertButton type="button" onClick={reload}>
+                Reload
+              </AlertButton>
+            </AlertActions>
           ) : null}
-          <Dismiss label="Dismiss tab warning" onClick={dismissConflict} />
-        </div>
+        </Alert>
       ) : null}
       {notes.length ? (
-        <section aria-label="Form notes" className="bg-sky-50 px-4 py-2 text-[14px] text-sky-950">
-          <div className="flex items-center gap-3">
-            <span className="min-w-0 flex-1">
-              {notes.length === 1 ? '1 note' : `${notes.length} notes`} about how this form was read.
-            </span>
-            <button type="button" className="rounded-[4px] px-1.5 py-0.5 font-medium hover:bg-sky-100" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Hide' : 'Show'}
-            </button>
-            <Dismiss label="Dismiss notes" onClick={dismissNotes} />
-          </div>
-          {expanded ? (
-            <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-[13px]">
-              {notes.map((note, i) => (
-                <li key={i}>
-                  {note.detail} <code className="text-sky-800">{note.path}</code>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
+        <div role="region" aria-label="Form notes">
+          <Alert variant="info" icon onClose={dismissNotes} closeLabel="Dismiss notes">
+            <AlertTitle>{notes.length === 1 ? '1 note' : `${notes.length} notes`} about how this form was read.</AlertTitle>
+            <AlertActions>
+              <AlertButton type="button" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+                {expanded ? 'Hide' : 'Show'}
+              </AlertButton>
+            </AlertActions>
+            {expanded ? (
+              <AlertDescription>
+                <ul className="mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-[13px]">
+                  {notes.map((note, i) => (
+                    <li key={i}>
+                      {note.detail} <code>{note.path}</code>
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            ) : null}
+          </Alert>
+        </div>
       ) : null}
     </div>
   );
@@ -60,12 +62,4 @@ export function SessionBanners() {
 function reload() {
   discardPending();
   window.location.reload();
-}
-
-function Dismiss({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button type="button" aria-label={label} className="rounded-[4px] p-1 hover:bg-black/5" onClick={onClick}>
-      <X className="size-3.5" />
-    </button>
-  );
 }

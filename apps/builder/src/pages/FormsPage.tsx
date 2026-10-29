@@ -4,8 +4,7 @@ import { FileText, Plus, Upload } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import type { FormDefinition, IsoInstant } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { AccountMenu } from '@/auth/AccountMenu';
 import { EditionBadge } from '@/edition/EditionBadge';
@@ -104,7 +103,7 @@ export function FormsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-[var(--notion-text)]">
+    <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
       <div className="-mt-12 mb-6 flex justify-end">
         <AccountMenu />
       </div>
@@ -133,20 +132,20 @@ export function FormsPage() {
         />
       </div>
       {error ? (
-        <p role="alert" className="mt-4 text-[14px] text-red-600">
+        <p role="alert" className="mt-4 text-[14px] text-destructive">
           {error}
         </p>
       ) : null}
       {forms === null ? null : forms.length === 0 ? (
-        <p className="mt-10 text-[15px] text-[var(--notion-text-muted)]">{t(M['forms.empty'])}</p>
+        <p className="mt-10 text-[15px] text-muted-foreground">{t(M['forms.empty'])}</p>
       ) : (
-        <ul className="mt-8 divide-y divide-[var(--notion-border)]">
+        <ul className="mt-8 divide-y divide-border">
           {forms.map((form) => (
             <li key={form.id}>
-              <Link to={builderPath(form.id)} className="-mx-2 flex items-center gap-3 rounded-[6px] px-2 py-3 hover:bg-[var(--notion-hover)]">
-                <FileText className="size-4 shrink-0 text-[var(--notion-text-faint)]" />
+              <Link to={builderPath(form.id)} className="-mx-2 flex items-center gap-3 rounded-[6px] px-2 py-3 hover:bg-state-hover">
+                <FileText className="size-4 shrink-0 text-text-subtle" />
                 <span className="min-w-0 flex-1 truncate text-[15px]">{form.title || t(M['forms.untitled'])}</span>
-                <span className="shrink-0 text-[13px] text-[var(--notion-text-muted)]">
+                <span className="shrink-0 text-[13px] text-muted-foreground">
                   {t(M['forms.blocks'], { n: form.blocks })}
                   {savedWhen(form.savedAt)}
                 </span>
@@ -161,18 +160,19 @@ export function FormsPage() {
             <DialogTitle>{t(M['new.title'])}</DialogTitle>
             <DialogDescription>{t(M['new.description'])}</DialogDescription>
           </DialogHeader>
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => void create()}
-            className="mb-4 flex w-full items-center gap-3 rounded-[6px] border border-[var(--notion-border)] p-4 text-left hover:bg-[var(--notion-hover)]"
+            className="mb-4 h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-left"
           >
             <Plus className="size-4 shrink-0" />
             <span>
               <span className="block font-medium">{t(M['new.blank'])}</span>
-              <span className="block text-sm text-[var(--notion-text-muted)]">{t(M['new.blank_hint'])}</span>
+              <span className="block text-sm font-normal text-muted-foreground">{t(M['new.blank_hint'])}</span>
             </span>
-          </button>
-          <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-zinc-400">{t(M['new.templates'])}</p>
+          </Button>
+          <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['new.templates'])}</p>
           <Suspense fallback={<GalleryFallback />}>
             <TemplateGallery onCancel={() => setCreating(false)} onUse={(definition) => void create(definition)} />
           </Suspense>

@@ -4,8 +4,7 @@ import { z } from 'zod';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { api } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, TextLink } from '@dmacq/ui';
 import { AuthLayout, Field, FormError, Notice } from './AuthLayout';
 import { useFragment } from './useFinishSignIn';
 import { problemText, submit } from './util';
@@ -27,9 +26,9 @@ const M = defineMessages('builder', {
 
 function Back() {
   return (
-    <Link to="/auth/sign-in" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-      {t(M['password.back'])}
-    </Link>
+    <TextLink asChild>
+      <Link to="/auth/sign-in">{t(M['password.back'])}</Link>
+    </TextLink>
   );
 }
 

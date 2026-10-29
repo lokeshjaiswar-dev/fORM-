@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
-import { Button } from '@/components/ui/button';
+import { Button, TextLink } from '@dmacq/ui';
 import { AuthLayout, FormError } from '../auth/AuthLayout';
 import { PrivacyNotice } from './PrivacyNotice';
 import { useNotice } from './useNotice';
@@ -20,12 +20,12 @@ export function NoticePage() {
   const { state, reload } = useNotice();
   const footer = (
     <span className="space-x-3">
-      <Link to="/auth/sign-up" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-        {t(M['notice_page.sign_up'])}
-      </Link>
-      <Link to="/auth/sign-in" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-        {t(M['notice_page.sign_in'])}
-      </Link>
+      <TextLink asChild>
+        <Link to="/auth/sign-up">{t(M['notice_page.sign_up'])}</Link>
+      </TextLink>
+      <TextLink asChild>
+        <Link to="/auth/sign-in">{t(M['notice_page.sign_in'])}</Link>
+      </TextLink>
     </span>
   );
   return (
@@ -40,7 +40,7 @@ export function NoticePage() {
           </Button>
         </div>
       ) : (
-        <p className="text-[14px] text-[var(--notion-text-muted)]">{t(M['notice_page.loading'])}</p>
+        <p className="text-[14px] text-muted-foreground">{t(M['notice_page.loading'])}</p>
       )}
     </AuthLayout>
   );

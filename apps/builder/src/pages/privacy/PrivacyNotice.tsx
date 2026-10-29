@@ -11,11 +11,11 @@ const M = defineMessages('builder', {
 export function PrivacyNotice({ notice, headingLevel = 2, className }: { notice: PlatformNotice; headingLevel?: 2 | 3; className?: string }) {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   return (
-    <div className={cn('space-y-4 text-[13px] leading-relaxed text-zinc-800', className)}>
-      <p className="text-[12px] text-[var(--notion-text-muted)]">{t(M['notice.version'], { version: notice.version })}</p>
+    <div className={cn('space-y-4 text-[13px] leading-relaxed text-foreground', className)}>
+      <p className="text-[12px] text-muted-foreground">{t(M['notice.version'], { version: notice.version })}</p>
       {notice.sections.map((s) => (
         <section key={s.id} aria-labelledby={`notice-${s.id}`}>
-          <Heading id={`notice-${s.id}`} className="mb-1 text-[14px] font-semibold text-zinc-900">
+          <Heading id={`notice-${s.id}`} className="mb-1 text-[14px] font-semibold text-foreground">
             {s.heading}
           </Heading>
           {s.paragraphs.map((p) => (

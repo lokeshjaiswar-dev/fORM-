@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { replaceDocument } from '@/state/actions';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { TemplateGallery } from '@/components/templates/gallery';
 
 const M = defineMessages('builder', {
@@ -17,7 +17,7 @@ const M = defineMessages('builder', {
 });
 
 export function GalleryFallback() {
-  return <p className="text-sm text-[var(--notion-text-muted)]">{t(M['templates.loading'])}</p>;
+  return <p className="text-sm text-muted-foreground">{t(M['templates.loading'])}</p>;
 }
 
 /** Templates for the open form: the chosen template replaces it as one undoable step. */

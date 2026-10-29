@@ -25,7 +25,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
 
   if (block.type === 'unsupported' || !isAvailable(block.type)) {
     const type = block.type === 'unsupported' ? block.originalType : block.type;
-    return <p className="rounded-md border border-dashed border-zinc-300 px-3 py-2 text-[13px] text-zinc-500">{t(M['block.unavailable'], { type })}</p>;
+    return <p className="rounded-md border border-dashed border-border px-3 py-2 text-[13px] text-muted-foreground">{t(M['block.unavailable'], { type })}</p>;
   }
   const View = CANVAS[block.type] as ComponentType<CanvasProps<AvailableType>>;
   const hidden = block.initiallyHidden ? (
@@ -63,7 +63,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
           {block.required && <span className="shrink-0 text-[22px] font-semibold leading-8 text-black">*</span>}
         </div>
       )}
-      {block.description ? <p className="text-left text-[13px] text-zinc-500">{plainText(block.description)}</p> : null}
+      {block.description ? <p className="text-left text-[13px] text-muted-foreground">{plainText(block.description)}</p> : null}
       <View {...props} />
     </div>
   );

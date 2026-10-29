@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { defineMessages, SUPPORTED_DATE_PATTERNS } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, loadSession, useSessionStore } from '@/auth/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, TextLink } from '@dmacq/ui';
+import { NiceSelect } from '@/components/ui/select';
 import { AuthLayout, Field, FormError } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
 
@@ -59,9 +59,9 @@ export function CreateOrgPage() {
   };
 
   const footer = (
-    <Link to="/forms" className="font-medium text-zinc-900 underline-offset-2 hover:underline">
-      {t(M['org_new.back'])}
-    </Link>
+    <TextLink asChild size="small">
+      <Link to="/forms">{t(M['org_new.back'])}</Link>
+    </TextLink>
   );
 
   return (
@@ -70,8 +70,8 @@ export function CreateOrgPage() {
         <Field label={t(M['org_new.name'])}>
           <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} autoFocus />
         </Field>
-        <fieldset className="space-y-3 rounded-md border border-[var(--notion-border)] p-3">
-          <legend className="px-1 text-[12px] font-medium uppercase tracking-wide text-zinc-500">{t(M['org_new.defaults'])}</legend>
+        <fieldset className="space-y-3 rounded-md border border-border p-3">
+          <legend className="px-1 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['org_new.defaults'])}</legend>
           <Field label={t(M['org_new.locale'])}>
             <Input value={locale} onChange={(e) => setLocale(e.target.value)} required maxLength={35} />
           </Field>
@@ -79,13 +79,12 @@ export function CreateOrgPage() {
             <Input value={timeZone} onChange={(e) => setTimeZone(e.target.value)} required maxLength={64} />
           </Field>
           <Field label={t(M['org_new.date_format'])}>
-            <select value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm">
-              {SUPPORTED_DATE_PATTERNS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+            <NiceSelect
+              aria-label={t(M['org_new.date_format'])}
+              value={dateFormat}
+              onChange={setDateFormat}
+              options={SUPPORTED_DATE_PATTERNS.map((p) => ({ value: p, label: p }))}
+            />
           </Field>
         </fieldset>
         <FormError message={error} />

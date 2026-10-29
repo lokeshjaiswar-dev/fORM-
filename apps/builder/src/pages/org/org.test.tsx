@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { roleLabel } from './roles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { useSessionStore } from '@/auth/client';
 import { AccountMenu } from '@/auth/AccountMenu';
@@ -88,12 +90,14 @@ describe('org switcher', () => {
   it('lists the user’s orgs, starts on the session’s choice and switches through the API', async () => {
     answers['PUT /v1/me/active-org'] = () => ({ status: 204, body: null });
     at('/forms');
-    const select = await screen.findByLabelText('Organisation');
-    expect((select as HTMLSelectElement).value).toBe('o1');
-    expect([...(select as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(['Acme', 'Globex']);
+    const user = userEvent.setup();
+    const select = await screen.findByRole('combobox', { name: 'Organisation' });
+    expect(select).toHaveTextContent('Acme');
+    await user.click(select);
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Acme', 'Globex']);
     answers['GET /v1/me'] = () => ({ status: 200, body: me('o2') });
-    fireEvent.change(select, { target: { value: 'o2' } });
-    await waitFor(() => expect((screen.getByLabelText('Organisation') as HTMLSelectElement).value).toBe('o2'));
+    await user.click(screen.getByRole('option', { name: 'Globex' }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Organisation' })).toHaveTextContent('Globex'));
     expect(sent('PUT', '/v1/me/active-org')).toEqual([expect.objectContaining({ body: { orgId: 'o2' }, headers: expect.objectContaining({ 'x-fr-client': 'builder' }) })]);
   });
 
@@ -113,7 +117,7 @@ describe('create org', () => {
     at('/orgs/new');
     expect(await screen.findByLabelText('Language')).toHaveValue('en-IN');
     expect(screen.getByLabelText('Time zone')).toHaveValue('Asia/Kolkata');
-    expect(screen.getByLabelText('Date format')).toHaveValue('DD-MM-YYYY');
+    expect(screen.getByRole('combobox', { name: 'Date format' })).toHaveTextContent('DD-MM-YYYY');
     fireEvent.change(screen.getByLabelText('Organisation name'), { target: { value: 'Initech' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create organisation' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create organisation' }));
@@ -150,12 +154,15 @@ describe('members', () => {
     expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument();
     expect(screen.getByText('expired')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Role of ravi@example.test'), { target: { value: 'viewer' } });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: 'Role of ravi@example.test' }));
+    await user.click(screen.getByRole('option', { name: roleLabel('viewer') }));
     await waitFor(() => expect(sent('PATCH', '/v1/org/members/u2')).toHaveLength(1));
     expect(sent('PATCH', '/v1/org/members/u2')[0]).toMatchObject({ body: { role: 'viewer' }, headers: { 'x-fr-org': 'o1', 'x-fr-client': 'builder' } });
 
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'new@example.test' } });
-    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'admin' } });
+    await user.click(screen.getByRole('combobox', { name: 'Role' }));
+    await user.click(screen.getByRole('option', { name: roleLabel('admin') }));
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     expect(await screen.findByText(/This server sends no email: give new@example.test this link yourself./)).toBeInTheDocument();
     expect(screen.getByText('https://app.form.test/invite#token=abc')).toBeInTheDocument();
@@ -181,10 +188,13 @@ describe('members', () => {
     answers['GET /v1/me'] = () => ({ status: 200, body: { ...me('o1'), user: { ...USER, id: 'u3', email: 'admin@example.test' } } });
     answers['GET /v1/org'] = () => ({ status: 200, body: ORG('admin', OWNER_PERMS) });
     at('/org/members');
-    const ravi = await screen.findByLabelText('Role of ravi@example.test');
-    expect([...(ravi as HTMLSelectElement).options].map((o) => o.value)).toEqual(['editor', 'admin', 'viewer']);
-    expect(screen.queryByLabelText('Role of asha@example.test')).toBeNull();
-    expect([...(screen.getByLabelText('Role') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['admin', 'editor', 'viewer']);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Role of ravi@example.test' }));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['editor', 'admin', 'viewer'].map(roleLabel));
+    expect(screen.queryByRole('combobox', { name: 'Role of asha@example.test' })).toBeNull();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('combobox', { name: 'Role' }));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['admin', 'editor', 'viewer'].map(roleLabel));
   });
 });
 

@@ -8,6 +8,7 @@ import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS } from '@/lib/definition';
 import { updateBlock } from '@/state/actions';
+import { Button } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
 
@@ -118,7 +119,7 @@ function ConfigProblem({ block }: { block: AnyBlock }) {
   if (parsed.success) return null;
   const issues = (parsed.error as { issues?: Array<{ message: string }> }).issues ?? [];
   return (
-    <p role="alert" className="text-[12px] text-[#eb5757]">
+    <p role="alert" className="text-[12px] text-destructive">
       {t(M['inspector.config_problem'], { problem: issues.map((i) => i.message).join('; ') })}
     </p>
   );
@@ -484,13 +485,15 @@ function LabelList({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium">{title}</span>
-        <button
+        <Button
           type="button"
-          className="text-[12px] text-[#2383e2]"
+          variant="ghost"
+          size="sm"
+          className="h-auto px-1 py-0 text-[12px] text-primary"
           onClick={() => onChange([...items, { id: APP_IDS.newId(), label: `${title.replace(/s$/, '')} ${items.length + 1}` }])}
         >
           {addLabel}
-        </button>
+        </Button>
       </div>
       {items.map((item, i) => (
         <div key={item.id} className="flex gap-1">
@@ -500,9 +503,9 @@ function LabelList({
             onChange={(label) => onChange(items.map((row, j) => (j === i ? { ...row, label } : row)))}
           />
           {items.length > 1 ? (
-            <button type="button" className="px-1 text-[12px] text-[#eb5757]" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+            <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => onChange(items.filter((_, j) => j !== i))}>
               ×
-            </button>
+            </Button>
           ) : null}
         </div>
       ))}

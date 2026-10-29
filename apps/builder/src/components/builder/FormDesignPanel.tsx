@@ -8,7 +8,7 @@ import { useDraft } from '@/lib/useDraft';
 import { cn } from '@/lib/utils';
 import { setTheme } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Input, Label } from '@/components/ui/input';
+import { Button, Input, Label, SearchInput, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
 import { NiceSelect } from '@/components/ui/select';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
 import { applyPreset, applyScheme, COLOR_SCHEMES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
@@ -73,7 +73,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
       const node = event.target as Node;
       if (panelRef.current?.contains(node)) return;
       const el = node instanceof Element ? node : node.parentElement;
-      if (el?.closest('[data-nice-select]')) return;
+      if (el?.closest('[data-nice-select],[data-slot="select-content"],[data-slot="select-trigger"],[role="listbox"]')) return;
       setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
@@ -99,14 +99,15 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {children}
         {!open ? (
-          <button
+          <Button
             type="button"
+            size="icon-lg"
             aria-label={t(M['design.open'])}
             onClick={() => setOpen(true)}
-            className="absolute right-5 top-5 z-20 flex size-12 items-center justify-center rounded-full bg-[#2563eb] text-white shadow-lg shadow-blue-900/20 hover:bg-[#1d4ed8]"
+            className="absolute right-5 top-5 z-20 rounded-full shadow-lg"
           >
             <Paintbrush className="size-5" />
-          </button>
+          </Button>
         ) : null}
       </div>
       <aside className={cn('min-h-0 shrink-0 overflow-hidden transition-[width] duration-300 ease-out', open ? 'w-[min(100%,380px)]' : 'w-0')}>
@@ -115,15 +116,16 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
             ref={panelRef}
             role="dialog"
             aria-label={t(M['design.title'])}
-            className="flex h-full w-[380px] max-w-[100vw] flex-col bg-[#2b2a33] text-zinc-100 shadow-2xl"
+            className="ov-theme-dark flex h-full w-[380px] max-w-[100vw] flex-col bg-sidebar text-sidebar-foreground shadow-2xl"
           >
             <div className="flex items-center justify-between px-4 pt-4">
               <h2 className="text-[16px] font-semibold">{t(M['design.title'])}</h2>
-              <button type="button" aria-label={t(M['design.close'])} className="rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-white" onClick={() => setOpen(false)}>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['design.close'])} onClick={() => setOpen(false)}>
                 <X className="size-4" />
-              </button>
+              </Button>
             </div>
-            <div className="mt-3 flex gap-1 px-3">
+            <Tabs value={tab} onValueChange={(id) => setTab(id as Tab)} size="sm" fullWidth className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="px-3">
               {TABS.map((id) => {
                 const label =
                   id === 'colors' ? t(M['design.colors'])
@@ -132,39 +134,33 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   : id === 'layout' ? t(M['design.layout'])
                   : t(M['design.submit']);
                 return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className={cn(
-                      'flex-1 border-b-2 px-0.5 py-2 text-[10px] font-medium uppercase tracking-wide',
-                      tab === id ? 'border-orange-400 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-200',
-                    )}
-                  >
+                  <TabsTrigger key={id} value={id} className="text-[10px] uppercase tracking-wide">
                     {label}
-                  </button>
+                  </TabsTrigger>
                 );
               })}
-            </div>
+            </TabsList>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <TabsContent value={tab} className="mt-0">
               {tab === 'colors' ? (
                 <div className="space-y-5">
                   <section>
-                    <p className="mb-3 text-[12px] font-medium uppercase tracking-wide text-zinc-400">{t(M['design.schemes'])}</p>
+                    <p className="mb-3 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.schemes'])}</p>
                     <div className="grid grid-cols-6 gap-2">
                       {schemes.map((scheme) => (
-                        <button
+                        <Button
                           key={scheme.id}
                           type="button"
+                          variant="outline"
                           aria-label={scheme.name}
-                          aria-pressed={schemeId === scheme.id}
+                          pressed={schemeId === scheme.id}
                           onClick={() => patch(applyScheme(theme, scheme))}
-                          className={cn('flex aspect-square items-center justify-center rounded-lg border-2 text-[13px] font-semibold', schemeId === scheme.id ? 'border-orange-400' : 'border-white/10')}
+                          className={cn('aspect-square h-auto rounded-lg border-2 text-[13px] font-semibold', schemeId === scheme.id ? 'border-sidebar-primary' : 'border-sidebar-border')}
                           style={{ background: scheme.surface, color: scheme.accent }}
                         >
                           A
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   </section>
@@ -202,24 +198,24 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                     />
                   </Pair>
                   <SelectField label={t(M['design.inputs'])} value={tokens.inputStyle} options={INPUTS} onChange={(inputStyle) => patchTokens({ inputStyle: inputStyle as ThemeTokens['inputStyle'] })} />
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    className="w-full justify-start"
                     onClick={() => patchTokens({ progress: tokens.progress === 'none' ? 'bar' : 'none' })}
-                    className="w-full rounded-md bg-white/10 px-3 py-2 text-left text-[13px] hover:bg-white/15"
                   >
                     {t(M['design.progress'])}: {tokens.progress === 'none' ? 'Off' : 'On'}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
 
               {tab === 'themes' ? (
                 <div className="space-y-3">
-                  <input
+                  <SearchInput
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onValueChange={setQuery}
                     placeholder={t(M['design.search'])}
                     aria-label={t(M['design.search'])}
-                    className="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-[13px] text-white outline-none placeholder:text-zinc-500"
                   />
                   <div className="grid grid-cols-2 gap-3">
                     {themes.map((preset) => {
@@ -228,23 +224,24 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                       const accent = hexOf(preset.tokens.colors.accent, DEFAULT_COLORS.accent);
                       const selected = presetId === preset.id;
                       return (
-                        <button
+                        <Button
                           key={preset.id}
                           type="button"
-                          aria-pressed={selected}
+                          variant="outline"
+                          pressed={selected}
                           onClick={() => patch(applyPreset(theme, preset))}
-                          className={cn('overflow-hidden rounded-xl border-2 text-left', selected ? 'border-orange-400' : 'border-white/10')}
+                          className={cn('h-auto overflow-hidden rounded-xl border-2 p-0 text-left whitespace-normal', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
                         >
                           <div className="relative h-24 p-3" style={{ background: page }}>
-                            {selected ? <span className="absolute left-2 top-2 rounded bg-[#2563eb] px-1.5 py-0.5 text-[10px] font-medium text-white">{t(M['design.current'])}</span> : null}
+                            {selected ? <span className="absolute left-2 top-2 rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">{t(M['design.current'])}</span> : null}
                             <div className="ml-auto h-full w-[58%] rounded-md p-2 shadow-sm" style={{ background: surface }}>
                               <div className="mb-1 h-1.5 w-2/3 rounded" style={{ background: hexOf(preset.tokens.colors.text, '#111') }} />
                               <div className="mb-1 h-4 rounded border" style={{ borderColor: '#d4d4d8' }} />
                               <div className="h-3 w-10 rounded" style={{ background: accent }} />
                             </div>
                           </div>
-                          <p className="bg-[#34333d] px-2 py-2 text-[12px] font-medium">{preset.name}</p>
-                        </button>
+                          <p className="bg-sidebar-accent/50 px-2 py-2 text-[12px] font-medium">{preset.name}</p>
+                        </Button>
                       );
                     })}
                   </div>
@@ -257,27 +254,30 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                     ['classic', M['design.classic'], M['design.classic_hint'], '#f59e0b'],
                     ['cards', M['design.cards'], M['design.cards_hint'], '#60a5fa'],
                   ] as const).map(([id, title, hint, tint]) => (
-                    <button
+                    <Button
                       key={id}
                       type="button"
-                      aria-pressed={theme.layout === id}
+                      variant="outline"
+                      pressed={theme.layout === id}
                       onClick={() => patch({ ...theme, layout: id })}
-                      className={cn('overflow-hidden rounded-xl border-2 text-left', theme.layout === id ? 'border-orange-400' : 'border-white/10')}
+                      className={cn('h-auto overflow-hidden rounded-xl border-2 p-0 text-left whitespace-normal', theme.layout === id ? 'border-sidebar-primary' : 'border-sidebar-border')}
                     >
                       <div className="flex h-28 items-center justify-center p-4" style={{ background: tint }}>
                         <div className={cn('bg-white shadow-md', id === 'cards' ? 'h-20 w-24 rounded-2xl' : 'h-[88px] w-28 rounded-md')} />
                       </div>
-                      <div className="bg-[#34333d] px-3 py-2">
+                      <div className="bg-sidebar-accent/50 px-3 py-2">
                         <p className="text-[13px] font-semibold">{t(title)}</p>
-                        <p className="text-[12px] text-zinc-400">{t(hint)}</p>
+                        <p className="text-[12px] text-sidebar-muted">{t(hint)}</p>
                       </div>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               ) : null}
 
               {tab === 'submit' ? <SubmissionSettings dark /> : null}
+              </TabsContent>
             </div>
+            </Tabs>
           </div>
         ) : null}
       </aside>
@@ -294,10 +294,10 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
   const [text, setText] = useDraft(hex);
   return (
     <div className="space-y-1.5">
-      <Label className="text-zinc-300">{label}</Label>
+      <Label className="text-sidebar-foreground/80">{label}</Label>
       <div className="flex items-center gap-2">
-        <input type="color" aria-label={label} value={hex} onChange={(e) => onChange(e.target.value)} className="size-9 cursor-pointer rounded-md border border-white/10 bg-transparent" />
-        <Input className="border-white/10 bg-white/5 text-white" value={text} onChange={(e) => { setText(e.target.value); onChange(e.target.value); }} />
+        <input type="color" aria-label={label} value={hex} onChange={(e) => onChange(e.target.value)} className="size-9 cursor-pointer rounded-md border border-sidebar-border bg-transparent" />
+        <Input className="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground" value={text} onChange={(e) => { setText(e.target.value); onChange(e.target.value); }} />
       </div>
     </div>
   );
@@ -306,7 +306,7 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: readonly (readonly [string, string])[]; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-zinc-300">{label}</Label>
+      <Label className="text-sidebar-foreground/80">{label}</Label>
       <NiceSelect size="sm" aria-label={label} value={value} onChange={onChange} options={options.map(([v, l]) => ({ value: v, label: l }))} />
     </div>
   );
@@ -315,13 +315,13 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 function NumberField({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-zinc-300">{label}</Label>
+      <Label className="text-sidebar-foreground/80">{label}</Label>
       <Input
         type="number"
         min={min}
         max={max}
         value={value}
-        className="border-white/10 bg-white/5 text-white"
+        className="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground"
         onChange={(e) => {
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.round(n))));

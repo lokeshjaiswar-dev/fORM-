@@ -17,6 +17,7 @@ import { SlashMenu } from '@/components/builder/SlashMenu';
 import { EmptyStart } from '@/components/builder/EmptyStart';
 import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
+import { Button } from '@dmacq/ui';
 
 const M = defineMessages('builder', {
   'canvas.title_placeholder': 'Form title',
@@ -173,22 +174,24 @@ export function FormCanvas() {
             <div className="relative mt-2" onClick={(e) => e.stopPropagation()}>
               <div className="absolute right-full top-0 flex h-8 items-center text-[#b8b8b8]">
                 <Tooltip content={t(M['canvas.delete'])} side="top">
-                  <button type="button" aria-label={t(M['canvas.delete'])} className="flex size-6 items-center justify-center rounded hover:bg-red-50 hover:text-red-500" disabled>
+                  <Button type="button" variant="ghost" size="icon-xs" aria-label={t(M['canvas.delete'])} className="text-icon-muted hover:text-destructive" disabled>
                     <Trash2 className="size-3.5" />
-                  </button>
+                  </Button>
                 </Tooltip>
                 <Tooltip content={t(M['canvas.insert'])} shortcut="/" side="top">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     aria-label={t(M['canvas.insert'])}
-                    className="flex size-6 items-center justify-center rounded hover:bg-black/5 hover:text-[#6b6b6b]"
+                    className="text-icon-muted"
                     onClick={() => {
                       setSlashOpen(true);
                       insertRef.current?.focus();
                     }}
                   >
                     <Plus className="size-3.5" />
-                  </button>
+                  </Button>
                 </Tooltip>
                 <Tooltip content={t(M['canvas.drag'])} side="top">
                   <span className="flex size-6 items-center justify-center">
@@ -257,26 +260,28 @@ export function FormCanvas() {
 /** The break before page `pageId`; removing it merges the page into the one before. */
 function PageBreak({ pageId }: { pageId: PageId }) {
   return (
-    <div className="group/page flex items-center gap-3 py-2 text-[12px] uppercase tracking-wide text-zinc-400" role="separator" aria-label={t(M['canvas.page_break'])}>
-      <span className="h-px flex-1 bg-zinc-200" />
+    <div className="group/page flex items-center gap-3 py-2 text-[12px] uppercase tracking-wide text-muted-foreground" role="separator" aria-label={t(M['canvas.page_break'])}>
+      <span className="h-px flex-1 bg-border" />
       {t(M['canvas.page_break'])}
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         aria-label={t(M['canvas.remove_page_break'])}
-        className="flex size-5 items-center justify-center rounded opacity-0 hover:bg-black/5 group-hover/page:opacity-100 focus:opacity-100"
+        className="opacity-0 group-hover/page:opacity-100 focus:opacity-100"
         onClick={(e) => {
           e.stopPropagation();
           removePageBreak(pageId);
         }}
       >
         <X className="size-3" />
-      </button>
-      <span className="h-px flex-1 bg-zinc-200" />
+      </Button>
+      <span className="h-px flex-1 bg-border" />
     </div>
   );
 }
 
 function BesideDrop({ hostId }: { hostId: BlockId }) {
   const { setNodeRef, isOver } = useDroppable({ id: `beside-${hostId}` });
-  return <div ref={setNodeRef} className={cn('min-h-[72px] w-1/2 self-stretch rounded-md', isOver && 'bg-zinc-50')} />;
+  return <div ref={setNodeRef} className={cn('min-h-[72px] w-1/2 self-stretch rounded-md', isOver && 'bg-state-hover')} />;
 }

@@ -16,7 +16,7 @@ import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
 import { EditionBadge } from '@/edition/EditionBadge';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { Button } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/ui/tooltip';
 
 export function BuilderHeader() {
@@ -31,41 +31,32 @@ export function BuilderHeader() {
 
   return (
     <>
-      <header className="flex h-[45px] shrink-0 items-center gap-0.5 px-3">
+      <header className="flex h-[45px] shrink-0 items-center gap-0.5 border-b border-border bg-background px-3">
         {!sidebarOpen && (
           <Ghost onClick={() => setSidebarOpen(true)} label="Open sidebar">
             <PanelLeft className="size-4" />
           </Ghost>
         )}
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 text-[14px] text-[var(--notion-text-muted)]">
-          <Link to="/forms" className="truncate rounded-[4px] px-1.5 py-0.5 hover:bg-[var(--notion-hover)]">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 text-[14px] text-muted-foreground">
+          <Link to="/forms" className="truncate rounded-[4px] px-1.5 py-0.5 hover:bg-state-hover">
             Forms
           </Link>
-          <ChevronRight className="size-3.5 shrink-0 text-[var(--notion-text-faint)]" />
-          <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-[var(--notion-text)] hover:bg-[var(--notion-hover)]">
+          <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+          <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-foreground hover:bg-state-hover">
             <span className="truncate">{title || 'Form title'}</span>
           </span>
-          <span role="status" title={save.state === 'error' ? save.message : undefined} className="ml-1 shrink-0 text-[13px] text-[var(--notion-text-faint)]">
+          <span role="status" title={save.state === 'error' ? save.message : undefined} className="ml-1 shrink-0 text-[13px] text-text-subtle">
             {saveLabel(save)}
           </span>
         </div>
 
         <EditionBadge className="mr-1" />
 
-        <div className="flex items-center">
+        <div className="flex items-center gap-0.5">
           {(['edit', 'preview'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={mode === m}
-              onClick={() => setMode(m)}
-              className={cn(
-                'rounded-[6px] px-2 py-1 text-[14px] capitalize',
-                mode === m ? 'bg-[var(--notion-hover)] text-[var(--notion-text)]' : 'text-[var(--notion-text-muted)] hover:bg-[var(--notion-hover)]',
-              )}
-            >
+            <Button key={m} type="button" variant="ghost" size="sm" pressed={mode === m} onClick={() => setMode(m)}>
               {m === 'edit' ? 'Edit' : 'Preview'}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -79,16 +70,17 @@ export function BuilderHeader() {
           <LayoutTemplate className="size-4" />
         </Ghost>
         <Tooltip content="Copy share link">
-          <button
+          <Button
             type="button"
-            className="rounded-[6px] px-2 py-1 text-[14px] text-[var(--notion-text-muted)] hover:bg-[var(--notion-hover)]"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               void navigator.clipboard.writeText(window.location.href);
               toast.success('Share link copied');
             }}
           >
             Share
-          </button>
+          </Button>
         </Tooltip>
         <Ghost label="Add to favorites">
           <Star className="size-4" />
@@ -130,15 +122,9 @@ function Ghost({
 }) {
   return (
     <Tooltip content={label} shortcut={shortcut}>
-      <button
-        type="button"
-        aria-label={label}
-        disabled={disabled}
-        onClick={onClick}
-        className="flex size-[28px] items-center justify-center rounded-[6px] text-[var(--notion-text-muted)] hover:bg-[var(--notion-hover)] disabled:opacity-30"
-      >
+      <Button type="button" variant="ghost" size="icon-sm" aria-label={label} disabled={disabled} onClick={onClick}>
         {children}
-      </button>
+      </Button>
     </Tooltip>
   );
 }
