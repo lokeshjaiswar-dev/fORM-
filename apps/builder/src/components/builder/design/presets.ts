@@ -37,7 +37,7 @@ const backgroundOf = (scheme: ColorScheme): NonNullable<ThemeTokens['background'
     : { kind: 'color', color: scheme.page };
 
 export const COLOR_SCHEMES: readonly ColorScheme[] = [
-  { id: 'paper', name: 'Paper', accent: hex('#2563eb'), page: hex('#ebe6da'), surface: hex('#ffffff'), text: hex('#1c1917') },
+  { id: 'paper', name: 'Paper', accent: hex('#2563eb'), page: hex('#e8eefc'), surface: hex('#ffffff'), text: hex('#1c1917') },
   { id: 'ocean', name: 'Ocean', accent: hex('#0f766e'), page: hex('#ccfbf1'), surface: hex('#ffffff'), text: hex('#134e4a') },
   { id: 'sunset', name: 'Sunset', accent: hex('#ea580c'), page: hex('#ffedd5'), surface: hex('#fff7ed'), text: hex('#7c2d12'), gradient: { from: hex('#fdba74'), to: hex('#fed7aa'), angle: 160 } },
   { id: 'sand', name: 'Sand', accent: hex('#b45309'), page: hex('#f5e6c8'), surface: hex('#fffaf0'), text: hex('#44403c') },

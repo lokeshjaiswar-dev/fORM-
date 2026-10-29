@@ -9,7 +9,7 @@ import { tokenVar, type ColorValue, type FontId, type ThemeColorToken, type Them
 const HEX = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 export const DEFAULT_COLORS: Readonly<Record<ThemeColorToken, string>> = {
-  page: '#ebe6da',
+  page: '#e8eefc',
   surface: '#ffffff',
   text: '#37352f',
   muted: '#6b6a66',
