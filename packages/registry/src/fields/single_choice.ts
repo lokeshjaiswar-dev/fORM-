@@ -1,3 +1,4 @@
+import type { OptionId } from '@form/schema';
 import { graphemeLength } from '@form/i18n';
 import { configTexts, defineField, headerOf } from '../define.ts';
 import { PALETTE_LABELS } from '../messages.ts';
@@ -13,6 +14,21 @@ import {
 export const singleChoice = defineField({
   type: 'single_choice',
   palette: [
+    entry('single_choice', 'gender', 'basic', PALETTE_LABELS['palette.single_choice.gender'], 'users', ['gender', 'sex', 'female', 'male'], {
+      display: 'radio',
+      options: [
+        { id: 'female' as OptionId, label: 'Female' },
+        { id: 'male' as OptionId, label: 'Male' },
+        { id: 'prefer_not' as OptionId, label: 'Prefer not to say' },
+      ],
+    }),
+    entry('single_choice', 'yes_no', 'choice', PALETTE_LABELS['palette.single_choice.yes_no'], 'circle-dot', ['yes', 'no', 'boolean', 'confirm'], {
+      display: 'radio',
+      options: [
+        { id: 'yes' as OptionId, label: 'Yes' },
+        { id: 'no' as OptionId, label: 'No' },
+      ],
+    }),
     entry('single_choice', 'radio', 'choice', PALETTE_LABELS['palette.single_choice.radio'], 'circle-dot', ['choice', 'radio', 'single', 'option', 'multiple choice'], { display: 'radio' }),
     entry('single_choice', 'dropdown', 'choice', PALETTE_LABELS['palette.single_choice.dropdown'], 'chevron-down', ['dropdown', 'select', 'list', 'single'], { display: 'dropdown' }),
   ],

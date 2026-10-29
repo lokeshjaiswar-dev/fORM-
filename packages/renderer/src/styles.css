@@ -265,6 +265,24 @@
   appearance: auto;
 }
 
+:where(.fr-root) .fr-name {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+:where(.fr-root) .fr-name-part {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:where(.fr-root) .fr-name-part > span {
+  color: var(--fr-muted);
+  font-size: 0.875em;
+}
+
 :where(.fr-root) .fr-affix,
 :where(.fr-root) .fr-phone,
 :where(.fr-root) .fr-range {
@@ -412,6 +430,34 @@
 }
 
 :where(.fr-root) .fr-point-label {
+  color: var(--fr-muted);
+  font-size: 0.8125em;
+}
+
+:where(.fr-root) .fr-matrix-wrap {
+  overflow-x: auto;
+}
+
+:where(.fr-root) .fr-matrix {
+  width: 100%;
+  min-width: 16rem;
+  border-collapse: collapse;
+}
+
+:where(.fr-root) .fr-matrix th,
+:where(.fr-root) .fr-matrix td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--fr-inputBorder);
+  text-align: center;
+  font-weight: 500;
+}
+
+:where(.fr-root) .fr-matrix th[scope='row'] {
+  text-align: start;
+  font-weight: 500;
+}
+
+:where(.fr-root) .fr-matrix thead th {
   color: var(--fr-muted);
   font-size: 0.8125em;
 }

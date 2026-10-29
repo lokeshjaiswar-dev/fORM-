@@ -9,7 +9,7 @@ const NOON = 12 * 60;
 /** FLD-19. `end` is present exactly when the block asks for a range. */
 export const time = defineField({
   type: 'time',
-  palette: [entry('time', null, 'date_time', PALETTE_LABELS['palette.time'], 'clock', ['time', 'hour', 'clock', 'slot'])],
+  palette: [entry('time', null, 'basic', PALETTE_LABELS['palette.time'], 'clock', ['time', 'hour', 'clock', 'slot'])],
   defaultConfig: (locale) => ({ hourCycle: hourCycleFor(locale), minuteStep: 5 }),
   checkConfig: (config, report) => {
     const range = config.range;

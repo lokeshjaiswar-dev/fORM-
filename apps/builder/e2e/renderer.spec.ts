@@ -21,7 +21,7 @@ async function recordSubmissions(page: Page) {
 
 test('three pages: logic hides a required field, the form submits, and the hidden answer is absent from onSubmit', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await insert(page, '/short', /Short answer/);
   await label(page, 'Attending');
   await insert(page, '/page', /Page break/);
@@ -72,7 +72,7 @@ test('the preview has no serious or critical axe violations, before and after va
   /* About 13 s alone and close to the default 30 s under six workers (BL-146). */
   test.slow();
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   const fields: Array<[string, RegExp, string]> = [
     ['/short', /Short answer/, 'Full name'],
     ['/email', /Email/, 'Email address'],

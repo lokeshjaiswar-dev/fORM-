@@ -123,3 +123,33 @@ button {
   padding: 0 0.25em;
   font-size: 0.9em;
 }
+
+[data-label-align='left'] [data-canvas-field],
+[data-label-align='right'] [data-canvas-field] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  column-gap: 16px;
+  align-items: start;
+}
+
+[data-label-align='left'] [data-canvas-field] > :not([data-canvas-label]),
+[data-label-align='right'] [data-canvas-field] > :not([data-canvas-label]) {
+  grid-column: 2;
+}
+
+[data-label-align='right'] [data-canvas-field] > [data-canvas-label] {
+  justify-content: flex-end;
+  text-align: end;
+}
+
+[data-input-style='filled'] [data-canvas-input] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg));
+}
+
+[data-input-style='underlined'] [data-canvas-input] {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding-inline: 0;
+  background: transparent;
+}

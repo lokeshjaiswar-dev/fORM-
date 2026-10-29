@@ -1,7 +1,7 @@
 import { RichTextView } from '../richtext/RichTextView.tsx';
 import { usePipes, type ControlProps } from './hooks.ts';
 
-/** FLD-44. The form title is the page's h1, so heading levels 1–3 render as h2–h4. */
+/** FLD-44. The form title is the page's h1, so heading sizes 1–3 render as h2–h4. */
 export function Heading({ block }: ControlProps<'heading'>) {
   const { resolve } = usePipes();
   const c = block.config;

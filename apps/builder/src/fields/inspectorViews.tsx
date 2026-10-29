@@ -1,11 +1,12 @@
 import { defineMessages } from '@form/i18n';
 import { REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
-import { DATE_PATTERNS, type BlockOf, type DecimalString, type SchemaLike } from '@form/schema';
+import { DATE_PATTERNS, type BlockOf, type DecimalString, type MatrixColumnId, type MatrixRowId, type SchemaLike } from '@form/schema';
 import { patternProblem } from '@form/validation';
 import { t } from '@/i18n';
 import { NumberField, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
+import { APP_IDS } from '@/lib/definition';
 import { updateBlock } from '@/state/actions';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
@@ -73,8 +74,10 @@ const M = defineMessages('builder', {
   'inspector.param_name': 'URL parameter name',
   'inspector.param_name_hint': 'Defaults to the field key',
   'inspector.static_value': 'Value',
-  'inspector.level': 'Level',
-  'inspector.level_n': 'Heading {n}',
+  'inspector.size': 'Size',
+  'inspector.size_large': 'Large',
+  'inspector.size_medium': 'Medium',
+  'inspector.size_small': 'Small',
   'inspector.line': 'Line',
   'inspector.line_solid': 'Solid',
   'inspector.line_dashed': 'Dashed',
@@ -85,6 +88,16 @@ const M = defineMessages('builder', {
   'inspector.spacing_md': 'Medium',
   'inspector.spacing_lg': 'Large',
   'inspector.config_problem': 'Check this setting: {problem}',
+  'inspector.matrix_mode': 'Answer type',
+  'inspector.matrix_mode_single': 'One choice per row',
+  'inspector.matrix_mode_multi': 'Several choices per row',
+  'inspector.matrix_mode_grid': 'Text in each cell',
+  'inspector.matrix_rows': 'Rows',
+  'inspector.matrix_columns': 'Columns',
+  'inspector.matrix_add_row': 'Add row',
+  'inspector.matrix_add_column': 'Add column',
+  'inspector.matrix_row_n': 'Row {n}',
+  'inspector.matrix_column_n': 'Column {n}',
 });
 
 const MIB = 1024 * 1024;
@@ -421,9 +434,13 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
 export function HeadingGeneral({ block }: InspectorProps<'heading'>) {
   return (
     <SelectField
-      label={t(M['inspector.level'])}
+      label={t(M['inspector.size'])}
       value={String(block.config.level)}
-      options={[1, 2, 3].map((n) => ({ value: String(n), label: t(M['inspector.level_n'], { n }) }))}
+      options={[
+        { value: '1', label: t(M['inspector.size_large']) },
+        { value: '2', label: t(M['inspector.size_medium']) },
+        { value: '3', label: t(M['inspector.size_small']) },
+      ]}
       onChange={(v) => setConfig(block, { level: Number(v) })}
     />
   );
@@ -450,4 +467,87 @@ export function DividerGeneral({ block }: InspectorProps<'divider'>) {
 
 export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking'> }) {
   return <OptionsEditor block={block} />;
+}
+
+function LabelList({
+  title,
+  addLabel,
+  items,
+  onChange,
+}: {
+  title: string;
+  addLabel: string;
+  items: Array<{ id: string; label: string }>;
+  onChange: (next: Array<{ id: string; label: string }>) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-medium">{title}</span>
+        <button
+          type="button"
+          className="text-[12px] text-[#2383e2]"
+          onClick={() => onChange([...items, { id: APP_IDS.newId(), label: `${title.replace(/s$/, '')} ${items.length + 1}` }])}
+        >
+          {addLabel}
+        </button>
+      </div>
+      {items.map((item, i) => (
+        <div key={item.id} className="flex gap-1">
+          <TextField
+            label=""
+            value={item.label}
+            onChange={(label) => onChange(items.map((row, j) => (j === i ? { ...row, label } : row)))}
+          />
+          {items.length > 1 ? (
+            <button type="button" className="px-1 text-[12px] text-[#eb5757]" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+              ×
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
+  const mode = block.config.mode;
+  const inputFor = (next: typeof mode) => (next === 'single' ? 'choice' as const : next === 'multi' ? 'checkbox' as const : 'text' as const);
+  return (
+    <>
+      <SelectField
+        label={t(M['inspector.matrix_mode'])}
+        value={mode}
+        options={[
+          { value: 'single', label: t(M['inspector.matrix_mode_single']) },
+          { value: 'multi', label: t(M['inspector.matrix_mode_multi']) },
+          { value: 'grid', label: t(M['inspector.matrix_mode_grid']) },
+        ]}
+        onChange={(next) => {
+          const input = inputFor(next);
+          setConfig(block, {
+            mode: next,
+            columns: block.config.columns.map((col) => ({ id: col.id, label: col.label, input })),
+          });
+        }}
+      />
+      <LabelList
+        title={t(M['inspector.matrix_rows'])}
+        addLabel={t(M['inspector.matrix_add_row'])}
+        items={block.config.rows.map((row) => ({ id: row.id, label: typeof row.label === 'string' ? row.label : '' }))}
+        onChange={(rows) => setConfig(block, { rows: rows.map((row) => ({ id: row.id as MatrixRowId, label: row.label || t(M['inspector.matrix_row_n'], { n: 1 }) })) })}
+      />
+      <LabelList
+        title={t(M['inspector.matrix_columns'])}
+        addLabel={t(M['inspector.matrix_add_column'])}
+        items={block.config.columns.map((col) => ({ id: col.id, label: col.label }))}
+        onChange={(columns) =>
+          setConfig(block, {
+            columns: columns.map((col) => ({ id: col.id as MatrixColumnId, label: col.label || t(M['inspector.matrix_column_n'], { n: 1 }), input: inputFor(mode) })),
+          })
+        }
+      />
+      <ConfigProblem block={block} />
+    </>
+  );
 }

@@ -23,7 +23,7 @@ const controlStyle = {
 
 export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: { style?: BlockStyle }; placeholder?: string | undefined; prefix?: string | undefined; suffix?: string | undefined; tall?: boolean }) {
   return (
-    <div className={cn(box, tall && 'h-24 items-start py-2')} style={{ ...controlStyle, ...inputStyle(block.style) }}>
+    <div data-canvas-input="" className={cn(box, tall && 'h-24 items-start py-2')} style={{ ...controlStyle, ...inputStyle(block.style) }}>
       {prefix ? <span className="mr-1 text-[var(--fr-muted)]">{prefix}</span> : null}
       <span className="truncate" style={{ color: css(block.style?.placeholderColor) ?? 'var(--fr-muted)' }}>
         {placeholder || t(M['canvas.answer'])}
@@ -55,7 +55,7 @@ export function OptionList({ options, shape, numbered, other }: { options: reado
 
 export function Select({ block, placeholder }: { block: { style?: BlockStyle }; placeholder?: string | undefined }) {
   return (
-    <div className={cn(box, 'justify-between')} style={{ ...controlStyle, ...inputStyle(block.style) }}>
+    <div data-canvas-input="" className={cn(box, 'justify-between')} style={{ ...controlStyle, ...inputStyle(block.style) }}>
       <span style={{ color: css(block.style?.placeholderColor) ?? 'var(--fr-muted)' }}>{placeholder || t(M['canvas.select'])}</span>
       <span aria-hidden>▾</span>
     </div>

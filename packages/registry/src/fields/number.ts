@@ -7,7 +7,7 @@ import { NULL, entry, isRootPath } from './shared.ts';
 /** FLD-07. Exact decimal strings throughout; never a JS float (fixes B14 at the type level). */
 export const number = defineField({
   type: 'number',
-  palette: [entry('number', null, 'basic', PALETTE_LABELS['palette.number'], 'hash', ['number', 'numeric', 'amount', 'quantity', 'count'])],
+  palette: [entry('number', null, 'advanced', PALETTE_LABELS['palette.number'], 'hash', ['number', 'numeric', 'amount', 'quantity', 'count'])],
   defaultConfig: () => ({ display: 'input' }),
   checkConfig: (config, report) => {
     const { min, max, step, defaultValue, allowNegative } = config;

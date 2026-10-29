@@ -3,7 +3,7 @@ import { insert, label, openNewForm, openSettings } from './helpers.ts';
 
 test('a 3-page form with a required field on page 3 advances from page 1', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await insert(page, '/short', /Short answer/);
   await insert(page, '/page', /Page break/);
   await insert(page, '/short', /Short answer/);

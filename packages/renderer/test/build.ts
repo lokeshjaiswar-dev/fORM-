@@ -168,6 +168,7 @@ export function kitchenSink(): S.FormDefinition {
     describe(field('linear_scale', 'scale', { config: { min: 0, max: 5, lowLabel: 'Low', highLabel: 'High' } })),
     describe(field('nps', 'nps')),
     describe(field('ranking', 'ranking')),
+    describe(field('matrix', 'matrix')),
     describe(field('file_upload', 'file')),
     describe(field('signature', 'signature', { config: { statement: inline('I confirm these answers.') } })),
     field('hidden', 'utm'),
@@ -178,13 +179,13 @@ export function kitchenSink(): S.FormDefinition {
     content('divider', 'rule'),
   ];
   const first = ['title', 'intro', 'short', 'long', 'email', 'phone', 'number', 'url', 'rule', 'radio', 'select', 'checks', 'multi', 'utm'];
-  const second = ['date', 'time', 'range', 'rating', 'scale', 'nps', 'ranking', 'file', 'signature'];
+  const second = ['date', 'time', 'range', 'rating', 'scale', 'nps', 'ranking', 'matrix', 'file', 'signature'];
   return form([...plain, ...values], [page('page_1', first), page('page_2', second)], [], { description: rich('Kitchen sink of every available type.') });
 }
 
 export const AVAILABLE_IN_SINK: readonly AvailableType[] = [
   'short_text', 'long_text', 'email', 'phone', 'number', 'url', 'single_choice', 'multi_choice', 'date', 'time', 'rating',
-  'linear_scale', 'nps', 'ranking', 'file_upload', 'signature', 'hidden', 'heading', 'paragraph', 'divider',
+  'linear_scale', 'nps', 'ranking', 'matrix', 'file_upload', 'signature', 'hidden', 'heading', 'paragraph', 'divider',
 ];
 
 export interface Fixture { name: string; version: S.RuntimeFormVersion }

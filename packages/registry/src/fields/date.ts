@@ -13,7 +13,7 @@ const absolute = (bound: DateBound | undefined): string | undefined => (bound?.k
  */
 export const date = defineField({
   type: 'date',
-  palette: [entry('date', null, 'date_time', PALETTE_LABELS['palette.date'], 'calendar', ['date', 'day', 'calendar', 'birthday', 'dob'])],
+  palette: [entry('date', null, 'basic', PALETTE_LABELS['palette.date'], 'calendar', ['date', 'day', 'calendar', 'birthday', 'dob'])],
   defaultConfig: (locale) => ({ pattern: datePatternFor(locale), picker: 'calendar' }),
   checkConfig: (config, report) => {
     const min = absolute(config.limits?.min);

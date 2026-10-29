@@ -45,10 +45,10 @@ export function EditBlock({ block }: { block: StoredBlock }) {
   }
 
   return (
-    <div className="w-full space-y-2">
+    <div className="w-full space-y-2" data-canvas-field="">
       {hidden}
       {!block.hideLabel && (
-        <div className="flex h-8 min-w-0 items-center gap-1">
+        <div className="flex h-8 min-w-0 items-center gap-1" data-canvas-label="">
           <InlineEditor
             value={block.label}
             onChange={(label) => updateBlock(block.id, { label })}

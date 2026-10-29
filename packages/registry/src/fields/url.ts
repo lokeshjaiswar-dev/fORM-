@@ -11,7 +11,7 @@ const HOST = /^[^\s:@.][^\s:@]*\.[^\s:@]*[^\s:@.](?::\d{1,5})?$/u;
 /** FLD-09: an absolute link whose scheme the block allows. */
 export const url = defineField({
   type: 'url',
-  palette: [entry('url', null, 'contact', PALETTE_LABELS['palette.url'], 'link', ['url', 'link', 'website', 'web'])],
+  palette: [entry('url', null, 'advanced', PALETTE_LABELS['palette.url'], 'link', ['url', 'link', 'website', 'web'])],
   defaultConfig: () => ({ schemes: ['https', 'http'] }),
   checkAnswer: (value, block, _state, report) => {
     const match = URL_SHAPE.exec(value);

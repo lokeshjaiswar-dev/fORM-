@@ -72,6 +72,8 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
     const onDown = (event: PointerEvent) => {
       const node = event.target as Node;
       if (panelRef.current?.contains(node)) return;
+      const el = node instanceof Element ? node : node.parentElement;
+      if (el?.closest('[data-nice-select]')) return;
       setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
@@ -189,7 +191,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                       label={t(M['design.font'])}
                       value={typeof tokens.typography.body === 'string' ? tokens.typography.body : 'inter'}
                       options={FONTS}
-                      onChange={(body) => patchTokens({ typography: { ...tokens.typography, body: body as FontId } })}
+                      onChange={(body) => patchTokens({ typography: { ...tokens.typography, body: body as FontId, heading: body as FontId } })}
                     />
                     <NumberField
                       label={t(M['design.size'])}
@@ -305,7 +307,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   return (
     <div className="space-y-1.5">
       <Label className="text-zinc-300">{label}</Label>
-      <NiceSelect size="sm" value={value} onChange={onChange} options={options.map(([v, l]) => ({ value: v, label: l }))} />
+      <NiceSelect size="sm" aria-label={label} value={value} onChange={onChange} options={options.map(([v, l]) => ({ value: v, label: l }))} />
     </div>
   );
 }

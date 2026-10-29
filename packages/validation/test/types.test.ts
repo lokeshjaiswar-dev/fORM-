@@ -35,6 +35,12 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     valid: [a.long('two words'), a.long('three short words')],
     invalid: [[a.long('one'), 'f too_few_words'], [a.long('one two three four'), 'f too_many_words'], [a.long('x'.repeat(50_001)), 'f too_long']],
   },
+  full_name: {
+    block: field('full_name', 'f'),
+    blank: [ans.raw('full_name', {}), ans.raw('full_name', { first: '' })],
+    valid: [ans.raw('full_name', { first: 'Asha', last: 'Rao' })],
+    invalid: [[ans.raw('full_name', { first: 'A'.repeat(201) }), 'f.first too_long']],
+  },
   email: {
     block: field('email', 'f', { config: { allowedDomains: ['example.com'] } }),
     blank: [ans.raw('email', { address: '' }), ans.raw('email', { address: '', otpProof: '' })],
@@ -114,6 +120,15 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     blank: [ans.ranking()],
     valid: [ans.ranking('a', 'b', 'c')],
     invalid: [[ans.ranking('a', 'b', 'c', 'd'), ['f.3 not_in_options', 'f too_many_selected']], [ans.ranking('a', 'b', 'zz'), 'f.2 not_in_options'], [ans.ranking('a', 'b', 'c', 'c'), ['f.3 invalid_format', 'f too_many_selected']], [ans.ranking('a', 'a', 'b'), 'f.1 invalid_format']],
+  },
+  matrix: {
+    block: field('matrix', 'f'),
+    blank: [ans.raw('matrix', { mode: 'single', rows: {} })],
+    valid: [ans.raw('matrix', { mode: 'single', rows: { row_1: 'column_1', row_2: 'column_2' } })],
+    invalid: [
+      [ans.raw('matrix', { mode: 'multi', rows: { row_1: ['column_1'] } }), 'f invalid_format'],
+      [ans.raw('matrix', { mode: 'single', rows: { row_1: 'nope' } }), 'f.rows.row_1 not_in_options'],
+    ],
   },
   file_upload: {
     block: field('file_upload', 'f', { config: { ...field('file_upload', 'x').config, maxFiles: 2, minFiles: 1, maxFileBytes: 2 * 1024 * 1024 } }),

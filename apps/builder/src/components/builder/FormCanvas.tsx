@@ -100,6 +100,9 @@ export function FormCanvas() {
     <div
       ref={setNodeRef}
       data-layout={layout}
+      data-label-align={tokens.labelAlign}
+      data-density={tokens.density}
+      data-input-style={tokens.inputStyle}
       className="h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
       style={{
         ...themeCssVars(tokens),
@@ -114,13 +117,20 @@ export function FormCanvas() {
     >
       <div className="flex min-h-full justify-center px-[72px] py-16 pb-24">
         <div
-          className="w-full px-10 py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
+          className="relative w-full px-10 py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
           style={{
             maxWidth: 'var(--fr-width)',
             backgroundColor: 'var(--fr-surface)',
             borderRadius: layout === 'cards' ? '24px' : 'min(24px, calc(var(--fr-radius) + 10px))',
           }}
         >
+        {tokens.progress !== 'none' ? (
+          <div className="absolute inset-x-0 top-0 h-1.5 overflow-hidden" style={{ borderTopLeftRadius: 'inherit', borderTopRightRadius: 'inherit' }} aria-hidden>
+            <div className="h-full w-full bg-[color-mix(in_srgb,var(--fr-text)_10%,transparent)]">
+              <div className="h-full w-1/3" style={{ backgroundColor: 'var(--fr-accent)' }} />
+            </div>
+          </div>
+        ) : null}
         <input
           ref={titleRef}
           value={title}

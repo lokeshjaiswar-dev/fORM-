@@ -7,7 +7,7 @@ import { NULL, entry, isRootPath } from './shared.ts';
 /** FLD-05 (basic): E.164 plus country, whose calling code must prefix the number; per-country number rules (libphonenumber) arrive in P2. */
 export const phone = defineField({
   type: 'phone',
-  palette: [entry('phone', null, 'contact', PALETTE_LABELS['palette.phone'], 'phone', ['phone', 'mobile', 'telephone', 'contact', 'number'])],
+  palette: [entry('phone', null, 'basic', PALETTE_LABELS['palette.phone'], 'phone', ['phone', 'mobile', 'telephone', 'contact', 'number'])],
   defaultConfig: (locale) => ({ defaultCountry: regionOf(locale), showCountrySelect: true }),
   checkConfig: (config, report) => {
     if (config.allowedCountries?.length && !config.allowedCountries.includes(config.defaultCountry)) {

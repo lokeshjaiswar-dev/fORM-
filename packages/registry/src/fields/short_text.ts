@@ -9,7 +9,9 @@ export const SHORT_TEXT_MAX = 10_000;
 
 export const shortText = defineField({
   type: 'short_text',
-  palette: [entry('short_text', null, 'basic', PALETTE_LABELS['palette.short_text'], 'type', ['text', 'short', 'answer', 'input', 'line'])],
+  palette: [
+    entry('short_text', null, 'basic', PALETTE_LABELS['palette.short_text'], 'type', ['text', 'short', 'answer', 'input', 'line']),
+  ],
   defaultConfig: () => ({}),
   checkConfig: (config, report) => {
     if (config.minLength !== undefined && config.maxLength !== undefined && config.minLength > config.maxLength) {

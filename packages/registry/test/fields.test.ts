@@ -36,6 +36,19 @@ const CASES: { [T in AvailableValueType]: Case<T> } = {
     invalid: [['one', 'too_few_words'], ['one two three four five', 'too_many_words'], ['  lone  ', 'too_few_words'], ['', TWIN], [7, TWIN], [{}, TWIN]],
     empty: [''],
   },
+  full_name: {
+    required: true,
+    valid: [{ first: 'Asha', last: 'Rao' }],
+    invalid: [
+      [{ first: 'Asha' }, 'required'],
+      [{ last: 'Rao' }, 'required'],
+      [{ first: 'A'.repeat(201), last: 'Rao' }, TWIN],
+      [{}, TWIN],
+      ['Asha Rao', TWIN],
+      [null, TWIN],
+    ],
+    empty: [{}, { first: '' }],
+  },
   email: {
     config: { allowedDomains: ['@Example.com'] },
     valid: [{ address: 'asha@example.com' }, { address: 'Asha@EXAMPLE.COM', otpProof: 'proof' }],
@@ -131,6 +144,19 @@ const CASES: { [T in AvailableValueType]: Case<T> } = {
       [['option_1', 'option_2', 'option_3', 'option_1'], 'invalid_format'], [[], TWIN], ['option_1', TWIN],
     ],
     empty: [[]],
+  },
+  matrix: {
+    required: true,
+    valid: [{ mode: 'single', rows: { row_1: 'column_1', row_2: 'column_2' } }],
+    invalid: [
+      [{ mode: 'multi', rows: { row_1: ['column_1'] } }, 'invalid_format'],
+      [{ mode: 'single', rows: { row_1: 'nope', row_2: 'column_1' } }, 'not_in_options'],
+      [{ mode: 'single', rows: { gone: 'column_1' } }, 'not_in_options'],
+      [{ mode: 'single', rows: { row_1: 'column_1' } }, 'too_few_selected'],
+      [{ mode: 'single', rows: {} }, TWIN],
+      ['row_1', TWIN],
+    ],
+    empty: [{ mode: 'single', rows: {} }],
   },
   file_upload: {
     config: { maxFiles: 2, minFileBytes: 1 },

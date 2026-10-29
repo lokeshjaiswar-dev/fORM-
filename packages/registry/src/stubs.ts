@@ -1,5 +1,5 @@
-import type { BlockType, ConsentItemId, CurrencyCode, DecimalString, Expr, IsoTime, Locale, MatrixColumnId, MatrixRowId, MinorUnits, RichDoc, TimeZone, Weekday } from '@form/schema';
-import { defineStub, defineStubBlock, isBlank } from './define.ts';
+import type { BlockType, ConsentItemId, CurrencyCode, DecimalString, Expr, IsoTime, Locale, MinorUnits, RichDoc, TimeZone, Weekday } from '@form/schema';
+import { defineStub, defineStubBlock } from './define.ts';
 import { DEFAULT_TEXT, datePatternFor, hourCycleFor, message, regionOf } from './messages.ts';
 
 /* Capabilities for types without a named one use the extension form `x-field:<type>`, like FeatureId `field:<type>`. */
@@ -8,8 +8,6 @@ const emptyDoc = (): RichDoc => ({ type: 'doc', content: [{ type: 'paragraph' }]
 const isIndia = (locale: Locale) => regionOf(locale) === 'IN';
 const WORKDAYS: Weekday[] = [1, 2, 3, 4, 5];
 const ZERO: Expr = { k: 'lit', value: { type: 'number', value: '0' as DecimalString } };
-
-export const fullName = defineStub('full_name', 'x-field:full_name', () => ({ parts: ['first', 'last'], requiredParts: ['first', 'last'] }));
 
 export const address = defineStub('address', 'x-field:address', (locale) => ({
   parts: ['line1', 'line2', 'city', 'state', 'postalCode', 'country'],
@@ -25,16 +23,6 @@ export const datetime = defineStub('datetime', 'x-field:datetime', (locale) => (
   minuteStep: 5,
   timeZone: 'respondent',
 }));
-
-/** No answered row: rows that are absent, empty lists or rows of blank cells (BL-062). */
-const noRows = (rows: object): boolean => Object.values(rows).every(isBlank);
-
-export const matrix = defineStub('matrix', 'matrix', (locale) => ({
-  mode: 'single',
-  rows: [1, 2].map((n) => ({ id: `row_${n}` as MatrixRowId, label: message(locale, DEFAULT_TEXT['defaults.matrix_row'], { n }) })),
-  columns: [1, 2, 3].map((n) => ({ id: `column_${n}` as MatrixColumnId, label: message(locale, DEFAULT_TEXT['defaults.matrix_column'], { n }), input: 'choice' as const })),
-  requireEach: 'none',
-}), (value) => noRows(value.rows));
 
 /**
  * Children are blocks of their own, so a new group starts empty and the builder inserts its first child:

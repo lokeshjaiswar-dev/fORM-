@@ -38,7 +38,7 @@ describe('routes', () => {
     expect(await screen.findByText(/No forms yet/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'New form' }));
     fireEvent.click(await screen.findByRole('button', { name: /Blank form/ }));
-    expect(await screen.findByRole('button', { name: 'Press Enter to start building' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Press Enter to start from scratch' })).toBeInTheDocument();
     const id = path()?.replace('/builder/', '') ?? '';
     expect(id).not.toBe('demo');
     expect(repo.records.get(id)).toMatchObject({ id, rev: 0, format: DOCUMENT_FORMAT, doc: { formId: id, schemaVersion: 2, blocks: {} } });

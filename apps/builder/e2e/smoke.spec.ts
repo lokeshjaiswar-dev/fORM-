@@ -3,7 +3,7 @@ import { insert, label, openNewForm } from './helpers.ts';
 
 test('insert Short answer, preview, fill and submit', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await insert(page, '/short', /Short answer/);
   await label(page, 'Your name');
 
@@ -16,7 +16,7 @@ test('insert Short answer, preview, fill and submit', async ({ page }) => {
 
 test('BL-139: the mobile device frame gets the narrow layout (container queries, not the viewport)', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await insert(page, '/short', /Short answer/);
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const padding = () => page.locator('.fr-form').evaluate((el) => getComputedStyle(el).paddingLeft);
@@ -28,7 +28,7 @@ test('BL-139: the mobile device frame gets the narrow layout (container queries,
 
 test('the renderer root takes its host width as a flex item, not its content width (inline-size container)', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await insert(page, '/short', /Short answer/);
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   await expect(page.locator('.fr-form')).toBeVisible();

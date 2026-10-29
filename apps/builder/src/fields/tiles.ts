@@ -13,11 +13,11 @@ import type { BlockChoice } from '@/state/actions';
 export type Category = PaletteEntry<AvailableType>['category'];
 
 const M = defineMessages('builder', {
-  'palette.category.basic': 'Text',
+  'palette.category.basic': 'Common',
   'palette.category.contact': 'Contact',
-  'palette.category.choice': 'Choice',
+  'palette.category.choice': 'Choices',
   'palette.category.date_time': 'Date and time',
-  'palette.category.rating': 'Rating',
+  'palette.category.rating': 'Survey',
   'palette.category.media': 'Media',
   'palette.category.layout': 'Layout',
   'palette.category.advanced': 'Advanced',
@@ -29,7 +29,7 @@ export type Tile =
   | { kind: 'page_break'; id: 'page_break'; category: Category; label: string; icon: string; keywords: readonly string[] };
 
 /** Categories in palette order; the registry's other categories (payments, compliance, snippets) have no P0 entries. */
-export const CATEGORIES: readonly Category[] = ['basic', 'contact', 'choice', 'date_time', 'rating', 'media', 'layout', 'advanced'];
+export const CATEGORIES: readonly Category[] = ['basic', 'choice', 'rating', 'media', 'layout', 'advanced'];
 
 const CATEGORY_LABELS: Partial<Record<Category, MessageId>> = {
   basic: M['palette.category.basic'],
@@ -90,7 +90,7 @@ export const tileOf = (type: string, overrides?: Readonly<Record<string, unknown
     const match = of.find((tile) => tile.kind === 'block' && Object.entries(tile.choice.configOverrides).every(([k, v]) => overrides[k] === v));
     if (match) return match;
   }
-  return of[0];
+  return of.find((tile) => tile.id === type) ?? of[0];
 };
 
 /** Tiles whose label, id or keywords contain `query` (case-insensitive); all tiles for an empty query. */

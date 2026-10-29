@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { Star } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import type { AvailableType } from '@form/registry';
-import type { BlockOf } from '@form/schema';
+import type { BlockOf, NamePart } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { OptionList, Points, Select, TextBox } from '@/fields/canvasParts';
@@ -31,6 +31,11 @@ const M = defineMessages('builder', {
   'canvas.hidden': 'Hidden from respondents · filled from the URL parameter ‘{name}’',
   'canvas.hidden_utm': 'Hidden from respondents · filled from utm_{param}',
   'canvas.hidden_other': 'Hidden from respondents',
+  'canvas.name.first': 'First name',
+  'canvas.name.last': 'Last name',
+  'canvas.name.middle': 'Middle name',
+  'canvas.name.prefix': 'Prefix',
+  'canvas.name.suffix': 'Suffix',
   'canvas.date': 'Pick a date',
   'canvas.time': 'Pick a time',
   'canvas.heading': 'Heading',
@@ -38,12 +43,29 @@ const M = defineMessages('builder', {
 });
 
 const headingSize = { 1: 'text-[32px]', 2: 'text-[24px]', 3: 'text-[20px]' } as const;
+const NAME_PART: Record<NamePart, typeof M['canvas.name.first']> = {
+  prefix: M['canvas.name.prefix'],
+  first: M['canvas.name.first'],
+  middle: M['canvas.name.middle'],
+  last: M['canvas.name.last'],
+  suffix: M['canvas.name.suffix'],
+};
 const SPACING = { sm: 'my-2', md: 'my-4', lg: 'my-6' } as const;
 const LINE = { solid: '', dashed: 'border-dashed', dotted: 'border-dotted', none: 'border-transparent' } as const;
 
 export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   short_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
   long_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} tall />,
+  full_name: ({ block }) => (
+    <div className="grid grid-cols-2 gap-3 pt-1">
+      {block.config.parts.map((part) => (
+        <div key={part} className="min-w-0">
+          <p className="mb-1 text-[13px] text-[var(--fr-muted)]">{block.config.sublabels?.[part] || t(NAME_PART[part])}</p>
+          <TextBox block={block} placeholder={block.config.placeholders?.[part]} />
+        </div>
+      ))}
+    </div>
+  ),
   email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
   phone: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.showCountrySelect ? `${block.config.defaultCountry} ▾` : undefined} />,
   number: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
@@ -64,6 +86,32 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   linear_scale: ({ block }) => <Points from={block.config.min} to={block.config.max} low={block.config.lowLabel} high={block.config.highLabel} />,
   nps: ({ block }) => <Points from={0} to={10} low={block.config.lowLabel} high={block.config.highLabel} />,
   ranking: ({ block }) => <OptionList options={block.config.options} shape="square" numbered />,
+  matrix: ({ block }) => (
+    <div className="overflow-x-auto pt-1">
+      <table className="w-full min-w-[280px] border-collapse text-[13px]">
+        <thead>
+          <tr>
+            <th className="w-[28%] p-1 text-left font-medium text-[var(--fr-muted)]" />
+            {block.config.columns.map((col) => (
+              <th key={col.id} className="p-1 text-center font-medium text-[var(--fr-muted)]">{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.config.rows.map((row) => (
+            <tr key={row.id}>
+              <td className="p-1 text-[15px]">{typeof row.label === 'string' ? row.label : ''}</td>
+              {block.config.columns.map((col) => (
+                <td key={col.id} className="p-1 text-center">
+                  <span className="inline-block size-4 rounded-full border" style={{ borderColor: 'var(--fr-inputBorder)', backgroundColor: 'var(--fr-inputBg)' }} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ),
   file_upload: () => (
     <div className="flex h-20 items-center justify-center border border-dashed text-[13px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)', borderRadius: 'var(--fr-radius)' }}>{t(M['canvas.upload'])}</div>
   ),

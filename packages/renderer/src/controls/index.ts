@@ -3,10 +3,12 @@ import { DateInput } from './date.tsx';
 import { Divider } from './divider.tsx';
 import { Email } from './email.tsx';
 import { FileUpload } from './file_upload.tsx';
+import { FullName } from './full_name.tsx';
 import { Heading } from './heading.tsx';
 import type { Control } from './hooks.ts';
 import { LinearScale } from './linear_scale.tsx';
 import { LongText } from './long_text.tsx';
+import { Matrix } from './matrix.tsx';
 import { MultiChoice } from './multi_choice.tsx';
 import { Nps } from './nps.tsx';
 import { NumberInput } from './number.tsx';
@@ -27,6 +29,7 @@ import { Url } from './url.tsx';
 export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   short_text: { labelling: () => 'input', Component: ShortText },
   long_text: { labelling: () => 'input', Component: LongText },
+  full_name: { labelling: () => 'group', Component: FullName },
   email: { labelling: () => 'input', Component: Email },
   phone: { labelling: () => 'input', Component: Phone },
   number: { labelling: () => 'input', Component: NumberInput },
@@ -39,6 +42,7 @@ export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   linear_scale: { labelling: () => 'radiogroup', Component: LinearScale },
   nps: { labelling: () => 'radiogroup', Component: Nps },
   ranking: { labelling: () => 'group', Component: Ranking },
+  matrix: { labelling: () => 'group', Component: Matrix },
   file_upload: { labelling: () => 'input', Component: FileUpload },
   signature: { labelling: () => 'group', Component: Signature },
   /* FLD-30: never rendered; logic captures its value (URL parameter, UTM, static or expression). */

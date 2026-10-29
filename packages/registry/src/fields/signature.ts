@@ -6,7 +6,7 @@ import { NULL, entry, isRootPath } from './shared.ts';
 /** FLD-28. The image is an uploaded PNG (S10); a typed name is the accessible alternative. */
 export const signature = defineField({
   type: 'signature',
-  palette: [entry('signature', null, 'advanced', PALETTE_LABELS['palette.signature'], 'pen-line', ['signature', 'sign', 'autograph', 'consent'])],
+  palette: [entry('signature', null, 'media', PALETTE_LABELS['palette.signature'], 'pen-line', ['signature', 'sign', 'autograph', 'consent'])],
   defaultConfig: () => ({ penColor: { token: 'text' }, heightPx: 160, allowTyped: true }),
   checkAnswer: (value, block, _state, report) => {
     if (value.method === 'typed') {

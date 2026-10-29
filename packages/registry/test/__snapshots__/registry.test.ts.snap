@@ -26,6 +26,16 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "full_name": [
+    {
+      "header": "My full name / first",
+      "suffix": ".first",
+    },
+    {
+      "header": "My full name / last",
+      "suffix": ".last",
+    },
+  ],
   "hidden": [
     {
       "header": "My hidden",
@@ -42,6 +52,16 @@ exports[`export headers > match the snapshot 1`] = `
     {
       "header": "My long text",
       "suffix": "",
+    },
+  ],
+  "matrix": [
+    {
+      "header": "My matrix / Row 1",
+      "suffix": ".row_1",
+    },
+    {
+      "header": "My matrix / Row 2",
+      "suffix": ".row_2",
     },
   ],
   "multi_choice": [
@@ -226,6 +246,25 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "count": "number",
     },
   },
+  "full_name": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
   "hidden": {
     "operators": {
       "text": [
@@ -280,6 +319,17 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "text",
+    },
+  },
+  "matrix": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "number",
     },
   },
   "multi_choice": {

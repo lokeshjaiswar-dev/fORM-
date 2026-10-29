@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
   ChoiceGeneral, ChoiceOptions, ChromeGeneral, DateGeneral, DividerGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LongTextGeneral,
-  LongTextValidation, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, ScaleGeneral, ShortTextValidation,
+  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, ScaleGeneral, ShortTextValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
 
@@ -23,6 +23,7 @@ export interface InspectorView<T extends AvailableType> {
 export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   short_text: { general: ChromeGeneral, validation: ShortTextValidation },
   long_text: { general: LongTextGeneral, validation: LongTextValidation },
+  full_name: {},
   email: { general: ChromeGeneral },
   phone: { general: PhoneGeneral },
   number: { general: NumberGeneral, validation: NumberValidation },
@@ -35,6 +36,7 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   linear_scale: { general: ScaleGeneral },
   nps: { general: EndLabels },
   ranking: { options: ChoiceOptions },
+  matrix: { general: MatrixGeneral },
   file_upload: { validation: FileValidation },
   signature: { general: SignatureGeneral },
   hidden: { general: HiddenGeneral },

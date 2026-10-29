@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { openNewForm } from './helpers.ts';
 
 async function startWithShortAnswer(page: Page) {
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await page.getByPlaceholder('Type ‘/’ to insert blocks').fill('/short');
   await page.getByRole('option', { name: /Short answer/ }).click();
 }
@@ -10,7 +10,7 @@ async function startWithShortAnswer(page: Page) {
 test('reload restores the form from IndexedDB, and the forms list shows it', async ({ page }) => {
   await openNewForm(page);
   await page.getByPlaceholder('Form title').fill('Saved form');
-  await page.getByRole('button', { name: 'Press Enter to start building' }).click();
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   await insert.fill('Persisted text');
   await insert.press('Enter');

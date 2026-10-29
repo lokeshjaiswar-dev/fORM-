@@ -1,6 +1,6 @@
 import {
   AlignLeft, Calendar, CheckSquare, ChevronDown, CircleDot, Clock, EyeOff, FilePlus, Gauge, Hash, Heading1, Heading2, Heading3, Link, ListFilter,
-  ListOrdered, Mail, Minus, Paperclip, PenLine, Phone, Smile, Square, Star, Text, Type, type LucideIcon,
+  ListOrdered, Mail, MapPin, Minus, Paperclip, PenLine, Phone, Smile, Square, Star, Table, Text, Type, User, Users, type LucideIcon,
 } from 'lucide-react';
 
 /*
@@ -10,6 +10,10 @@ import {
  */
 
 export const ICONS: Readonly<Record<string, LucideIcon>> = {
+  'user': User,
+  'users': Users,
+  'map-pin': MapPin,
+  'table': Table,
   'type': Type,
   'align-left': AlignLeft,
   'mail': Mail,

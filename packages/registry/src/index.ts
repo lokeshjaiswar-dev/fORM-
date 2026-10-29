@@ -4,10 +4,12 @@ import { date } from './fields/date.ts';
 import { divider } from './fields/divider.ts';
 import { email } from './fields/email.ts';
 import { fileUpload } from './fields/file_upload.ts';
+import { fullName } from './fields/full_name.ts';
 import { heading } from './fields/heading.ts';
 import { hidden } from './fields/hidden.ts';
 import { linearScale } from './fields/linear_scale.ts';
 import { longText } from './fields/long_text.ts';
+import { matrix } from './fields/matrix.ts';
 import { multiChoice } from './fields/multi_choice.ts';
 import { nps } from './fields/nps.ts';
 import { number } from './fields/number.ts';
@@ -21,7 +23,7 @@ import { singleChoice } from './fields/single_choice.ts';
 import { time } from './fields/time.ts';
 import { url } from './fields/url.ts';
 import {
-  address, appointment, calculation, captcha, consent, context, datetime, fullName, image, matrix, payment, repeatingGroup, section, uniqueId,
+  address, appointment, calculation, captcha, consent, context, datetime, image, payment, repeatingGroup, section, uniqueId,
 } from './stubs.ts';
 
 const VALUE_FIELDS: { readonly [T in ValueFieldType]: ValueDefinition<T> } = {

@@ -50,6 +50,19 @@ const CASES: Case[] = [
     expected: { type: 'long_text', value: 'Two\nlines' },
   },
   {
+    name: 'full_name',
+    block: field('full_name', 'q', { required: true }),
+    answer: async (user) => {
+      await user.type(screen.getByRole('textbox', { name: 'First name' }), 'Asha');
+      await user.type(screen.getByRole('textbox', { name: 'Last name' }), 'Rao');
+    },
+    clear: async (user) => {
+      await user.clear(screen.getByRole('textbox', { name: 'First name' }));
+      await user.clear(screen.getByRole('textbox', { name: 'Last name' }));
+    },
+    expected: { type: 'full_name', value: { first: 'Asha', last: 'Rao' } } as AnswerValue,
+  },
+  {
     name: 'email',
     block: field('email', 'q', { required: true }),
     answer: (user) => user.type(box(/q/), 'asha@example.in'),
@@ -183,6 +196,17 @@ const CASES: Case[] = [
     answer: (user) => user.click(screen.getByRole('button', { name: 'Move Option 1 down' })),
     clear: null,
     expected: { type: 'ranking', value: ['option_2', 'option_1', 'option_3'] } as AnswerValue,
+  },
+  {
+    name: 'matrix',
+    block: field('matrix', 'q', { required: true }),
+    answer: async (user) => {
+      const radios = screen.getAllByRole('radio');
+      await user.click(radios[0]!);
+      await user.click(radios[4]!);
+    },
+    clear: null,
+    expected: { type: 'matrix', value: { mode: 'single', rows: { row_1: 'column_1', row_2: 'column_2' } } } as AnswerValue,
   },
   {
     name: 'file_upload',

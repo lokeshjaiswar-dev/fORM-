@@ -30,6 +30,22 @@ describe('FormDesignPanel', () => {
     expect(doc().theme.layout).toBe('cards');
   });
 
+  it('applies style tokens from the Styles tab without closing the panel', async () => {
+    const user = userEvent.setup();
+    render(<FormDesignPanel />);
+    await user.click(screen.getByRole('button', { name: 'Form design' }));
+    await user.click(screen.getByRole('button', { name: 'Styles' }));
+    await user.click(screen.getByRole('button', { name: 'Form width' }));
+    await user.click(screen.getByRole('button', { name: 'Wide' }));
+    expect(doc().theme.tokens.formWidth).toBe('wide');
+    await user.click(screen.getByRole('button', { name: 'Input style' }));
+    await user.click(screen.getByRole('button', { name: 'Filled' }));
+    expect(doc().theme.tokens.inputStyle).toBe('filled');
+    await user.click(screen.getByRole('button', { name: 'Progress bar: Off' }));
+    expect(doc().theme.tokens.progress).toBe('bar');
+    expect(screen.getByRole('dialog', { name: 'Form design' })).toBeInTheDocument();
+  });
+
   it('closes when clicking outside and keeps the password empty by default', async () => {
     const user = userEvent.setup();
     render(

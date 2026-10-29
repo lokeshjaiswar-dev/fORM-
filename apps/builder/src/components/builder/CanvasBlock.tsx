@@ -29,7 +29,6 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
   const block = useBlock(id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data: { type: 'block' } });
   const selected = useUiStore((s) => s.activeBlockId === id);
-  const setActiveBlock = useUiStore((s) => s.setActiveBlock);
   const openInspector = useUiStore((s) => s.openInspector);
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -43,7 +42,7 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
       className={cn('group min-w-0 py-1', span >= 12 ? 'w-full' : share ? 'min-w-0 flex-1' : 'w-1/2', isDragging && 'opacity-40')}
       onClick={(e) => {
         e.stopPropagation();
-        setActiveBlock(id);
+        openInspector(id);
       }}
     >
       <div className="relative">

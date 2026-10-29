@@ -13,7 +13,7 @@ const normalizeDomain = (domain: string): string => asciiLower(domain.trim().rep
  */
 export const email = defineField({
   type: 'email',
-  palette: [entry('email', null, 'contact', PALETTE_LABELS['palette.email'], 'mail', ['email', 'mail', 'address', 'contact'])],
+  palette: [entry('email', null, 'basic', PALETTE_LABELS['palette.email'], 'mail', ['email', 'mail', 'address', 'contact'])],
   defaultConfig: () => ({}),
   checkAnswer: (value, block, _state, report) => {
     const allowed = block.config.allowedDomains;

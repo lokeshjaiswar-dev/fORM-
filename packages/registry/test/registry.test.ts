@@ -54,8 +54,8 @@ describe('REGISTRY', () => {
 });
 
 describe('availability', () => {
-  it('marks the 20 P0 types available and every other type P1 or P2', () => {
-    expect(AVAILABLE_TYPES).toHaveLength(20);
+  it('marks the P0 types available and every other type P1 or P2', () => {
+    expect(AVAILABLE_TYPES).toHaveLength(22);
     for (const type of AVAILABLE_TYPES) expect(availability(type)).toBe('P0');
     for (const type of STUB_TYPES) expect(['P1', 'P2']).toContain(availability(type));
     expect(Object.keys(STUB_AVAILABILITY).sort()).toEqual([...STUB_TYPES].sort());
@@ -86,18 +86,18 @@ describe('stubs', () => {
   });
 
   it('value stubs parse answers with the twin and export canonical JSON', () => {
-    const def = valueDefinition('full_name');
-    const block = fieldBlock('full_name');
+    const def = valueDefinition('address');
+    const block = fieldBlock('address');
     const schema = def.answerSchema(block, { required: true });
-    expect(schema.safeParse({ first: 'Asha', last: 'Rao' })).toEqual({ success: true, data: { first: 'Asha', last: 'Rao' } });
+    expect(schema.safeParse({ city: 'Pune' })).toEqual({ success: true, data: { city: 'Pune' } });
     expect(schema.safeParse({}).success).toBe(false);
-    expect(def.toScalar({ first: 'Asha' })).toEqual({ t: 'null' });
+    expect(def.toScalar({ city: 'Pune' })).toEqual({ t: 'null' });
     expect(def.isEmpty({})).toBe(true);
-    expect(def.isEmpty({ first: 'Asha' })).toBe(false);
-    expect(def.export.columns(block)).toEqual([{ suffix: '', header: 'My full name' }]);
-    expect(def.export.cells({ last: 'Rao', first: 'Asha' }, block)).toEqual(['{"first":"Asha","last":"Rao"}']);
-    expect(def.export.text({ first: 'Asha' }, block)).toBe('{"first":"Asha"}');
-    expect(def.translatable(block)).toEqual(['block:full_name_1:label']);
+    expect(def.isEmpty({ city: 'Pune' })).toBe(false);
+    expect(def.export.columns(block)).toEqual([{ suffix: '', header: 'My address' }]);
+    expect(def.export.cells({ city: 'Pune' }, block)).toEqual(['{"city":"Pune"}']);
+    expect(def.export.text({ city: 'Pune' }, block)).toBe('{"city":"Pune"}');
+    expect(def.translatable(block)).toEqual(['block:address_1:label']);
     expect(valueDefinition('calculation').kind).toBe('computed');
     expect(REGISTRY.captcha.translatable(plainBlockStub('captcha'))).toEqual([]);
   });
@@ -105,12 +105,7 @@ describe('stubs', () => {
   it('stub isEmpty agrees with I9: true exactly for the values the twin rejects as unanswered (BL-062)', () => {
     const notice = { noticeLocale: 'en-IN', noticeVersion: 1 };
     const samples: Partial<Record<ValueFieldType, { valid: unknown[]; empty: unknown[] }>> = {
-      full_name: { valid: [{ first: 'Asha' }], empty: [{}, { first: '' }] },
       address: { valid: [{ city: 'Pune' }], empty: [{}, { line1: '', city: '' }] },
-      matrix: {
-        valid: [{ mode: 'single', rows: { r1: 'c1' } }, { mode: 'multi', rows: { r1: ['c1'] } }, { mode: 'grid', rows: { r1: { c1: true } } }],
-        empty: [{ mode: 'single', rows: {} }, { mode: 'multi', rows: { r1: [] } }, { mode: 'grid', rows: { r1: {} } }, { mode: 'grid', rows: { r1: { c1: '' } } }],
-      },
       repeating_group: { valid: [{ rows: [{ rowId: 'row_1', values: {} }] }], empty: [{ rows: [] }] },
       consent: { valid: [{ items: { item_1: true }, ...notice }, { items: { item_1: false }, ...notice }], empty: [{ items: {}, ...notice }] },
       payment: {
@@ -290,7 +285,7 @@ describe('translatable and lockable content', () => {
     expect(REGISTRY.paragraph.lockableContent(plainBlock('paragraph'))).toEqual(['/config/content']);
     expect(REGISTRY.divider.translatable(plainBlock('divider'))).toEqual([]);
     expect(REGISTRY.divider.lockableContent(plainBlock('divider'))).toEqual([]);
-    expect(REGISTRY.heading.palette.map((p) => p.configOverrides)).toEqual([{ level: 1 }, { level: 2 }, { level: 3 }]);
+    expect(REGISTRY.heading.palette.map((p) => p.configOverrides)).toEqual([{ level: 1 }]);
     for (const type of ['heading', 'paragraph', 'divider'] as const) expect(REGISTRY[type].lint(plainBlock(type) as never, definition([]))).toEqual([]);
   });
 });

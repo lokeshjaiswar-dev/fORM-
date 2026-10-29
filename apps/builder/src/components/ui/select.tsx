@@ -13,6 +13,7 @@ export function NiceSelect({
   disabled,
   className,
   size = 'md',
+  'aria-label': ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -21,6 +22,7 @@ export function NiceSelect({
   disabled?: boolean;
   className?: string;
   size?: 'sm' | 'md';
+  'aria-label'?: string;
 }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -50,9 +52,12 @@ export function NiceSelect({
         ref={btn}
         type="button"
         disabled={disabled}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'flex w-full items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white text-left outline-none hover:border-zinc-300 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 disabled:bg-zinc-50',
+          'flex w-full items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white text-left text-zinc-900 outline-none hover:border-zinc-300 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 disabled:bg-zinc-50',
           size === 'sm' ? 'h-8 px-2 text-[13px]' : 'h-10 px-3 text-[15px]',
         )}
       >
@@ -63,6 +68,7 @@ export function NiceSelect({
         ? createPortal(
             <ul
               ref={menu}
+              data-nice-select=""
               className="fixed z-[80] max-h-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-[0_8px_24px_rgba(15,15,15,0.12)]"
               style={{ top: pos.top, left: pos.left, width: pos.width }}
             >
@@ -73,7 +79,7 @@ export function NiceSelect({
                     <button
                       type="button"
                       className={cn(
-                        'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-zinc-50',
+                        'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[13px] text-zinc-900 hover:bg-zinc-50',
                         on && 'bg-zinc-50 font-medium',
                       )}
                       onClick={() => {

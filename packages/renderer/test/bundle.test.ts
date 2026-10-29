@@ -17,8 +17,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 const KB = 1024;
 const SPEC_BUDGET = 90 * KB;
-const INITIAL_RATCHET = 132 * KB;
-const ENGINES_RATCHET = 97 * KB;
+const INITIAL_RATCHET = 134 * KB;
+const ENGINES_RATCHET = 98 * KB;
 const REGEX_CHUNK_CEILING = 50 * KB;
 
 const ENTRY = fileURLToPath(new URL('../src/index.ts', import.meta.url));
