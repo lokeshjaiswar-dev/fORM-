@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { isPortError } from '@form/ports';
 import { describe, expect, it } from 'vitest';
 import { parseJobKeyring } from './envelope.ts';
-import { createPgBossQueue, deadLetterQueue, installQueueSchema } from './pgboss.ts';
+import { bossPolicy, createPgBossQueue, deadLetterQueue, installQueueSchema } from './pgboss.ts';
 
 // Nothing here connects: every check runs before pg-boss opens its pool. The queue itself is covered by the
 // worker's integration tests against Postgres (apps/worker/test); its port contract suite is WP-1.03 (BL-014).
@@ -39,5 +39,14 @@ describe('createPgBossQueue', () => {
     expect(await code(producer.send('partitions.maintain', { orgId: '0197a1b2-0000-7000-8000-000000000001' as never, resource: { type: 'system', id: 'x' }, data: {} }))).toBe(
       'invalid_argument',
     );
+  });
+});
+
+describe('bossPolicy', () => {
+  it('maps exclusivity and queued coalescing per singleton key', () => {
+    expect(bossPolicy({ exclusive: false, coalesceQueued: false })).toBe('standard');
+    expect(bossPolicy({ exclusive: true, coalesceQueued: false })).toBe('singleton');
+    expect(bossPolicy({ exclusive: false, coalesceQueued: true })).toBe('short');
+    expect(bossPolicy({ exclusive: true, coalesceQueued: true })).toBe('stately');
   });
 });

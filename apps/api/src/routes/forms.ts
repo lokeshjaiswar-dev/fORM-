@@ -29,7 +29,7 @@ export function formRoutes(app: FastifyInstance, deps: { db: Db }): void {
       schema: {
         tags: ['forms'],
         summary: 'List forms in the active org',
-        security: [{ devUser: [], org: [] }],
+        security: [{ session: [], org: [] }, { devUser: [], org: [] }],
         querystring: listQuery,
         response: { 200: z.object({ items: z.array(formSummary) }) },
       },

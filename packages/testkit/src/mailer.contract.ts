@@ -1,5 +1,5 @@
 import { describe, expect, it, type TestContext } from 'vitest';
-import type { MailMessage, Mailer } from '@form/ports';
+import { MailDeliveryError, type MailMessage, type MailRefusalScope, type Mailer } from '@form/ports';
 import { expectPortError, uniquePrefix, useSubject, utf8, type ContractSetup, type ContractSubject } from './contract.ts';
 import type { Inbox, SmtpRefusals } from './smtp-sink.ts';
 
@@ -10,6 +10,18 @@ export interface MailerContractSubject extends ContractSubject<Mailer> {
 }
 
 const headerBlock = (raw: string) => raw.slice(0, raw.indexOf('\r\n\r\n'));
+
+/** The MailDeliveryError a refused send rejects with (BL-015): its code, what was refused, and every refused recipient. */
+async function deliveryFailure(p: Promise<unknown>): Promise<MailDeliveryError> {
+  const e = await p.then(
+    () => undefined,
+    (err: unknown) => err,
+  );
+  expect(e, `expected a MailDeliveryError, got ${String(e)}`).toBeInstanceOf(MailDeliveryError);
+  return e as MailDeliveryError;
+}
+
+const refusalOf = (code: 'rejected' | 'unavailable', scope: MailRefusalScope) => ({ code, scope });
 
 export function runMailerContract(label: string, setup: ContractSetup<MailerContractSubject>): void {
   describe(`Mailer contract: ${label}`, () => {
@@ -104,21 +116,37 @@ export function runMailerContract(label: string, setup: ContractSetup<MailerCont
       });
 
       it("throws 'rejected' when every recipient bounces for good", async (ctx) => {
-        await expectPortError(mailer().send(message({ to: [{ address: refusals(ctx).hardBounce }] })), 'rejected');
+        const r = refusals(ctx);
+        const e = await deliveryFailure(mailer().send(message({ to: [{ address: r.hardBounce }] })));
+        expect(e).toMatchObject(refusalOf('rejected', 'recipients'));
+        expect(e.refused).toEqual([{ address: r.hardBounce, permanent: true, response: expect.stringMatching(/^5\d\d /) }]);
       });
 
-      it("throws 'unavailable' when no recipient is accepted but one is only deferred", async (ctx) => {
-        const r = refusals(ctx);
-        await expectPortError(mailer().send(message({ to: [{ address: r.hardBounce }, { address: r.deferred }] })), 'unavailable');
-      });
+      for (const [order, recipients] of [
+        ['hard bounce first', (r: SmtpRefusals) => [r.hardBounce, r.deferred]],
+        ['deferral first', (r: SmtpRefusals) => [r.deferred, r.hardBounce]],
+      ] as const) {
+        it(`throws 'unavailable' when no recipient is accepted but one is only deferred (${order})`, async (ctx) => {
+          const r = refusals(ctx);
+          const e = await deliveryFailure(mailer().send(message({ to: recipients(r).map((address) => ({ address })) })));
+          expect(e).toMatchObject(refusalOf('unavailable', 'recipients'));
+          // The hard bounce is reported even though the send as a whole will be retried, so it can be suppressed now.
+          expect([...e.refused].sort((a, b) => a.address.localeCompare(b.address))).toEqual([
+            { address: r.deferred, permanent: false, response: expect.stringMatching(/^4\d\d /) },
+            { address: r.hardBounce, permanent: true, response: expect.stringMatching(/^5\d\d /) },
+          ]);
+        });
+      }
 
       it("throws 'rejected' when the server refuses the message itself", async (ctx) => {
-        const sent = mailer().send(message({ subject: `${refusals(ctx).refusedSubject} ${run}` }));
-        await expectPortError(sent, 'rejected');
+        const e = await deliveryFailure(mailer().send(message({ subject: `${refusals(ctx).refusedSubject} ${run}` })));
+        expect(e).toMatchObject({ ...refusalOf('rejected', 'message'), refused: [] });
       });
 
       it("throws 'unavailable', never 'rejected', when the server refuses the sender", async (ctx) => {
-        await expectPortError(mailer().send(message({ from: { address: refusals(ctx).refusedSender } })), 'unavailable');
+        const sent = mailer().send(message({ from: { address: refusals(ctx).refusedSender } }));
+        await expectPortError(sent, 'unavailable');
+        await expect(sent.catch((e: unknown) => e instanceof MailDeliveryError)).resolves.toBe(false);
       });
     });
   });

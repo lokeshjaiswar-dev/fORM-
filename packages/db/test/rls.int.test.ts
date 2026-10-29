@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { assertTenantCtx, forms, orgs, userPublicColumns, users, withTenant, type TenantCtx } from '../src/index.ts';
+import { assertTenantCtx, forms, orgs, userPublicColumns, users, withTenant, type TenantCtx, type Tx } from '../src/index.ts';
 import { failure, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
-import { isolation } from './isolation.ts';
+import { isolationSuite, publicTables, type TableSpec } from './isolation.ts';
 
 let t: TestDb;
 let seed: Seed;
@@ -16,98 +16,172 @@ afterAll(() => t?.close());
 
 const env = () => ({ t, seed });
 
-isolation(
-  'orgs',
-  {
-    foreign: (s) => sql`id = ${s.a.orgId}`,
-    own: (s) => sql`id = ${s.b.orgId}`,
-    update: (s) => sql`update orgs set name = name where id = ${s.a.orgId}`,
-    insertForeign: () => sql`insert into orgs (id, slug, name) values (${randomUUID()}, ${randomUUID()}, 'x')`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
+/** Actor kinds `app_reads_templates()` admits: respondents read no template content. */
+const TEMPLATE_READERS = ['user', 'api_key', 'system', 'platform'] as const;
 
-isolation(
-  'users',
-  {
-    foreign: (s) => sql`id in (${s.a.ownerId}, ${s.a.editorId})`,
-    own: (s) => sql`id = ${s.b.ownerId}`,
-    update: (s) => sql`update users set name = 'x' where id = ${s.a.editorId}`,
-    insertForeign: () => sql`insert into users (id, email, email_norm) values (${randomUUID()}, 'x@a.test', ${randomUUID()})`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'memberships',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update memberships set role = 'viewer' where org_id = ${s.a.orgId}`,
-    insertForeign: (s) => sql`insert into memberships (org_id, user_id, role) values (${s.a.orgId}, ${s.b.editorId}, 'viewer')`,
-    expect: { select: 0, update: 0 },
-  },
-  env,
-);
-
-isolation(
-  'forms',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update forms set title = 'pwned' where org_id = ${s.a.orgId}`,
+/**
+ * Every table in public, with what org B's actors may do to org A's rows (CMP-01). The suite is generated per table
+ * and actor kind; a new table fails `covers every table` until it is listed here.
+ */
+const TABLES: Record<string, TableSpec> = {
+  orgs: { scope: { by: 'org', column: 'id' }, select: 0, touch: 'name', update: 0, delete: 'denied' },
+  org_settings: { scope: { by: 'org' }, select: 0, touch: 'invite_days', update: 0, delete: 'denied' },
+  users: { scope: { by: 'user', column: 'id' }, select: 0, touch: 'name', update: 0, delete: 'denied' },
+  memberships: { scope: { by: 'org' }, select: 0, touch: 'role', update: 0, delete: 0 },
+  invites: { scope: { by: 'org' }, select: 0, touch: 'revoked_at', update: 0, delete: 'denied', visibleTo: ['system'] },
+  sessions: { scope: { by: 'user' }, select: 0, touch: 'revoked_at', update: 0, delete: 'denied', visibleTo: ['user'] },
+  user_identities: { scope: { by: 'user' }, select: 0, touch: 'last_used_at', update: 0, delete: 0, visibleTo: ['user'] },
+  auth_tokens: { scope: { by: 'user' }, select: 0, touch: 'consumed_at', update: 0, delete: 'denied', visibleTo: ['user'] },
+  user_notice_acks: {
+    scope: { by: 'user' },
+    select: 0,
+    touch: 'locale',
+    update: 'denied',
+    delete: 'denied',
+    visibleTo: ['user'],
     insertForeign: (s) =>
-      sql`insert into forms (id, org_id, team_id, owner_user_id, title) values (${randomUUID()}, ${s.a.orgId}, ${s.a.teamId}, ${s.b.editorId}, 'x')`,
-    expect: { select: 0, update: 0 },
+      sql`insert into user_notice_acks (id, user_id, notice_version, notice_hash, locale, context)
+          values (${randomUUID()}, ${s.a.editorId}, '2026-10-19', ${Buffer.alloc(32, 3)}, 'en-IN', 'settings')`,
   },
-  env,
-);
-
-isolation(
-  'form_drafts',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update form_drafts set draft_rev = draft_rev + 1 where org_id = ${s.a.orgId}`,
+  user_grievances: {
+    scope: { by: 'user' },
+    select: 0,
+    touch: 'status',
+    update: 'denied',
+    delete: 'denied',
+    visibleTo: ['user'],
     insertForeign: (s) =>
-      sql`insert into form_drafts (form_id, org_id, draft, schema_version, size_bytes, updated_by) values (${randomUUID()}, ${s.a.orgId}, '{}', 2, 2, ${s.b.editorId})`,
-    expect: { select: 0, update: 0 },
+      sql`insert into user_grievances (id, user_id, reference, category, message, due_at)
+          values (${randomUUID()}, ${s.a.editorId}, 'GRV-AAAAAAAA', 'other', 'x', now() + interval '1 day')`,
   },
-  env,
-);
-
-isolation(
-  'audit_log',
-  {
-    foreign: (s) => sql`org_id = ${s.a.orgId}`,
-    own: (s) => sql`org_id = ${s.b.orgId}`,
-    update: (s) => sql`update audit_log set reason = 'x' where org_id = ${s.a.orgId}`,
+  auth_throttle: {
+    scope: { by: 'custom', foreign: () => sql`true` },
+    select: 'denied',
+    touch: 'hits',
+    update: 'denied',
+    delete: 'denied',
+    insertForeign: () => sql`insert into auth_throttle (bucket, key, window_start, hits) values ('auth_any', ${Buffer.alloc(1)}, now(), 1)`,
+  },
+  forms: { scope: { by: 'org' }, select: 0, touch: 'title', update: 0, delete: 0 },
+  form_drafts: { scope: { by: 'org' }, select: 0, touch: 'draft_rev', update: 0, delete: 0 },
+  audit_log: { scope: { by: 'org' }, select: 0, touch: 'reason', update: 'denied', delete: 'denied' },
+  audit_pending: { scope: { by: 'org', column: 'org_key' }, select: 'denied', touch: 'event', update: 'denied', delete: 'denied' },
+  audit_heads: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'seq', update: 'denied', delete: 'denied' },
+  audit_checkpoints: {
+    scope: { by: 'org', column: 'org_key' },
+    select: 0,
+    touch: 'key_id',
+    update: 'denied',
+    delete: 'denied',
+    // seq 1 with the zero hash is a real link of org A, so only RLS stands in the way.
     insertForeign: (s) =>
-      sql`insert into audit_log (org_id, seq, occurred_at, actor_kind, action, resource_type, outcome, prev_hash, hash)
-          values (${s.a.orgId}, 99, now(), 'system', 'x', 'x', 'success', '\\x00', '\\x00')`,
-    expect: { select: 0, update: 'denied' },
+      sql`insert into audit_checkpoints (org_key, seq, hash, signed_at, key_id, alg, signature)
+          values (${s.a.orgId}, 1, ${Buffer.alloc(32)}, now(), 'k2', 'ed25519', ${Buffer.alloc(64)})`,
   },
-  env,
-);
+  audit_archives: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'object_key', update: 'denied', delete: 'denied' },
+  // Templates (WP-T1.1). Template content is for builder-side actors only; the system rows show in the counts of every
+  // other actor kind. Children get their org from the parent (trigger), so their foreign inserts name a parent of org A.
+  template_packs: { scope: { by: 'org' }, select: 0, touch: 'version', update: 'denied', delete: 'denied' },
+  templates: { scope: { by: 'org' }, select: 0, touch: 'tags', update: 0, delete: 'denied', visibleTo: TEMPLATE_READERS },
+  template_versions: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'changelog',
+    update: 0,
+    delete: 0,
+    visibleTo: TEMPLATE_READERS,
+    insertForeign: (s) =>
+      sql`insert into template_versions (id, template_id, version, schema_version, payload, payload_hash)
+          values (${randomUUID()}, ${s.a.tpl.orgTemplateId}, 9, 1, '{}', ${Buffer.alloc(32)})`,
+  },
+  template_localizations: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'title',
+    update: 0,
+    delete: 0,
+    visibleTo: TEMPLATE_READERS,
+    insertForeign: (s) => sql`insert into template_localizations (template_version_id, locale, title, summary) values (${s.a.tpl.orgV1Id}, 'hi-IN', 'x', 'x')`,
+  },
+  template_categories: { scope: { by: 'org' }, select: 0, touch: 'sort', update: 0, delete: 0, visibleTo: TEMPLATE_READERS },
+  template_category_links: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'category_id',
+    update: 'denied',
+    delete: 0,
+    visibleTo: TEMPLATE_READERS,
+    insertForeign: (s) => sql`insert into template_category_links (template_id, category_id) values (${s.a.tpl.teamTemplateId}, ${s.system.categoryId})`,
+  },
+  brand_kits: { scope: { by: 'org' }, select: 0, touch: 'name', update: 0, delete: 'denied' },
+  form_template_bindings: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'update_state',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into form_template_bindings (id, org_id, form_id, template_id, template_version_id, kind, id_map)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[1]}, ${s.system.templateId}, ${s.system.versionId}, 'form', '{}')`,
+  },
+  template_fork_bindings: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'update_state',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into template_fork_bindings (id, org_id, template_id, upstream_template_id, upstream_version_id, id_map)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.tpl.forkTemplateId}, ${s.system.templateId}, ${s.system.versionId}, '{}')`,
+  },
+  template_usages: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'locale',
+    update: 'denied',
+    delete: 'denied',
+    insertForeign: (s) =>
+      sql`insert into template_usages (org_id, template_id, template_version_id, action) values (${s.a.orgId}, ${s.system.templateId}, ${s.system.versionId}, 'preview')`,
+  },
+  template_stats_daily: { scope: { by: 'org' }, select: 0, touch: 'uses', update: 'denied', delete: 'denied', visibleTo: TEMPLATE_READERS },
+  template_signing_keys: { scope: { by: 'org' }, select: 0, touch: 'label', update: 0, delete: 'denied', visibleTo: TEMPLATE_READERS },
+  template_search_synonyms: { scope: { by: 'org' }, select: 0, touch: 'term', update: 0, delete: 0, visibleTo: TEMPLATE_READERS },
+  template_search_misses: { scope: { by: 'org' }, select: 0, touch: 'count', update: 0, delete: 0 },
+  captcha_redemptions: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'expires_at',
+    update: 'denied',
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into captcha_redemptions (org_id, challenge_hash, expires_at) values (${s.a.orgId}, ${randomBytes(32)}, now())`,
+  },
+  submission_search: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'locale',
+    update: 0,
+    delete: 0,
+    visibleTo: ['system'],
+    insertForeign: (s) =>
+      sql`insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc)
+          values (${randomUUID()}, now(), ${s.a.orgId}, ${s.a.formIds[0]}, 'en-IN', to_tsvector('simple', 'x'))`,
+  },
+};
 
-isolation(
-  'audit_pending',
-  {
-    foreign: (s) => sql`org_key = ${s.a.orgId}`,
-    update: () => sql`update audit_pending set event = '{}'`,
-    insertForeign: (s) => sql`insert into audit_pending (org_key, event) values (${s.a.orgId}, '{}')`,
-    expect: { select: 'denied', update: 'denied' },
-  },
-  env,
-);
+isolationSuite(TABLES, env);
+
+describe('isolation suite', () => {
+  it('covers every table in public', async () => {
+    expect(Object.keys(TABLES).sort()).toEqual(await publicTables(t));
+  });
+});
 
 const userCtx = (): TenantCtx => ({ orgId: seed.b.orgId, actor: 'user', userId: seed.b.editorId, perms: ['forms.read'], requestId: 'r1' });
 
 describe('tenant context', () => {
   it('sees zero rows outside withTenant, without raising', async () => {
-    for (const table of ['orgs', 'users', 'memberships', 'forms', 'form_drafts', 'audit_log']) {
+    for (const table of Object.keys(TABLES).filter((n) => TABLES[n]!.select === 0)) {
       const { rows } = await t.app.pool.query<{ n: number }>(`select count(*)::int as n from ${table}`);
       expect(rows[0]!.n, table).toBe(0);
     }
@@ -159,7 +233,7 @@ describe('tenant context', () => {
       'no draft yet',
     ]);
     const err = await failure(
-      withTenant(t.app.db, userCtx(), (tx) =>
+      withTenant(t.app.db, { ...userCtx(), perms: ['forms.read', 'forms.edit'] }, (tx) =>
         tx.execute(sql`insert into form_drafts (form_id, org_id, draft, schema_version, size_bytes, updated_by)
                        values (${formWithoutDraft}, ${seed.b.orgId}, '{}', 2, 2, ${seed.b.editorId})`),
       ),
@@ -171,13 +245,13 @@ describe('tenant context', () => {
     const err = await failure(withTenant(t.app.db, userCtx(), (tx) => tx.select().from(users)));
     expect(pgCode(err)).toBe('42501');
     const visible = await withTenant(t.app.db, userCtx(), (tx) => tx.select(userPublicColumns).from(users));
-    expect(visible.map((u) => u.id).sort()).toEqual([seed.b.ownerId, seed.b.editorId].sort());
+    expect(visible.map((u) => u.id).sort()).toEqual([seed.b.ownerId, seed.b.editorId, seed.b.viewerId].sort());
   });
 
   it('lets api-key, system and respondent actors (no user id) query users without raising', async () => {
     for (const actor of ['api_key', 'system', 'respondent'] as const) {
       const rows = await withTenant(t.app.db, { orgId: seed.b.orgId, actor, requestId: 'r' }, (tx) => tx.select({ id: users.id }).from(users));
-      expect(rows.length, actor).toBe(2);
+      expect(rows.length, actor).toBe(3);
     }
   });
 
@@ -203,5 +277,58 @@ describe('tenant context', () => {
     expect(() => assertTenantCtx({ ...base, subjectIds: [randomUUID()] })).toThrow(/respondent/);
     expect(() => assertTenantCtx({ ...base, actor: 'respondent', subjectIds: ['x'] })).toThrow(/subjectIds/);
     expect(() => assertTenantCtx({ ...base, requestId: '' })).toThrow(/requestId/);
+  });
+});
+
+describe('submission_search data access (architecture §2.2, C-M8)', () => {
+  const doc = (submissionId: string, text: string) =>
+    sql`insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc)
+        values (${submissionId}, now(), ${seed.b.orgId}, ${seed.b.formIds[0]}, 'en-IN', to_tsvector('simple', ${text}))`;
+  const as = <T>(ctx: Omit<TenantCtx, 'requestId' | 'orgId'>, fn: (tx: Tx) => Promise<T>) =>
+    withTenant(t.app.db, { orgId: seed.b.orgId, requestId: 'search-access', ...ctx }, fn);
+  const visible = async (ctx: Omit<TenantCtx, 'requestId' | 'orgId'>) =>
+    as(ctx, async (tx) => (await tx.execute<{ id: string }>(sql`select submission_id::text as id from submission_search`)).rows.map((r) => r.id));
+  const ownCount = async () =>
+    (await t.owner.query<{ n: number }>('select count(*)::int as n from submission_search where org_id = $1', [seed.b.orgId])).rows[0]!.n;
+
+  it('lets the respondent submit transaction insert a document it then cannot read, change or delete', async () => {
+    const id = randomUUID();
+    const before = await ownCount();
+    // As the SearchIndex adapter inserts. An arbiter (`on conflict (cols)`) needs read access, so it would be refused.
+    await as({ actor: 'respondent', subjectIds: [randomUUID()] }, (tx) => tx.execute(sql`${doc(id, 'my answers')} on conflict do nothing`));
+    const arbiter = as({ actor: 'respondent', subjectIds: [randomUUID()] }, (tx) =>
+      tx.execute(sql`${doc(randomUUID(), 'x')} on conflict (submission_id, received_at) do nothing`),
+    );
+    expect(pgCode(await failure(arbiter))).toBe('42501');
+    expect(await ownCount()).toBe(before + 1);
+    const respondent = { actor: 'respondent', subjectIds: [randomUUID()] } as const;
+    expect(await visible(respondent)).toEqual([]);
+    const changed = await as(respondent, (tx) => tx.execute(sql`update submission_search set locale = 'hi-IN' returning 1`));
+    expect(changed.rows).toEqual([]);
+    const removed = await as(respondent, (tx) => tx.execute(sql`delete from submission_search returning 1`));
+    expect(removed.rows).toEqual([]);
+    expect(await ownCount()).toBe(before + 1);
+  });
+
+  it('shows a respondent only the documents of submissions whose token was verified', async () => {
+    const id = randomUUID();
+    await as({ actor: 'system' }, (tx) => tx.execute(doc(id, 'edited later')));
+    expect(await visible({ actor: 'respondent', subjectIds: [id] })).toEqual([id]);
+  });
+
+  it('hides the documents from users and API keys without submissions.read', async () => {
+    expect(await visible({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit', 'submissions.export'] })).toEqual([]);
+    expect(await visible({ actor: 'api_key', perms: ['forms.read'] })).toEqual([]);
+    const before = await ownCount();
+    const removed = await as({ actor: 'user', userId: seed.b.editorId, perms: ['forms.edit'] }, (tx) => tx.execute(sql`delete from submission_search returning 1`));
+    expect(removed.rows).toEqual([]);
+    expect(await ownCount()).toBe(before);
+  });
+
+  it('shows them to system jobs and to readers with submissions.read', async () => {
+    const all = await visible({ actor: 'system' });
+    expect(all.length).toBe(await ownCount());
+    expect((await visible({ actor: 'user', userId: seed.b.viewerId, perms: ['submissions.read'] })).sort()).toEqual(all.sort());
+    expect((await visible({ actor: 'api_key', perms: ['submissions.read'] })).sort()).toEqual(all.sort());
   });
 });

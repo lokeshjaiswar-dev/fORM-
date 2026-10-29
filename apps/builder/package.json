@@ -10,12 +10,15 @@
     "preview": "vite preview",
     "test": "vitest run --coverage",
     "test:perf": "vitest run --config vitest.perf.config.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:stack": "playwright test -c playwright.stack.config.ts",
+    "headers:nginx": "node security/print.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@form/config": "workspace:*",
     "@form/i18n": "workspace:*",
     "@form/logic": "workspace:*",
     "@form/registry": "workspace:*",
@@ -39,6 +42,7 @@
     "react-router-dom": "^7.18.4",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "uqr": "0.1.3",
     "zod": "catalog:",
     "zundo": "^2.3.0",
     "zustand": "^5.0.15"

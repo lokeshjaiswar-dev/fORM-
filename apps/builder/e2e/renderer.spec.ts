@@ -1,5 +1,5 @@
 import { AxeBuilder } from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { insert, label, openNewForm, openSettings } from './helpers.ts';
 
 async function seriousViolations(page: Page) {

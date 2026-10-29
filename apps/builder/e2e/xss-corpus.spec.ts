@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { XSS_PAYLOADS } from '@form/schema/test-fixtures';
 import { openNewForm } from './helpers.ts';
 

@@ -16,10 +16,11 @@ export const ORG_SPANNING_JOBS = [
 ] as const;
 export type OrgSpanningJob = (typeof ORG_SPANNING_JOBS)[number];
 
-export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft'] as const;
+/** `audit_chain` resolves to its own org key (the zero key for the platform chain). */
+export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft', 'audit_chain'] as const;
 export type JobResourceType = (typeof JOB_RESOURCE_TYPES)[number];
 
-export const PARTITIONED_TABLES = ['audit_log'] as const;
+export const PARTITIONED_TABLES = ['audit_log', 'submission_search'] as const;
 export type PartitionedTable = (typeof PARTITIONED_TABLES)[number];
 
 export interface UserOrg {
@@ -36,9 +37,15 @@ export async function listUserOrgs(db: Executor, userId: string): Promise<UserOr
   return rows.map((r) => ({ orgId: r.org_id, slug: r.slug, name: r.name, role: r.role }));
 }
 
-export async function membershipFor(db: Executor, userId: string, orgId: string): Promise<MembershipRole | null> {
-  const { rows } = await db.execute<{ role: MembershipRole | null }>(sql`select membership_for(${userId}::uuid, ${orgId}::uuid) as role`);
-  return rows[0]?.role ?? null;
+export interface Membership {
+  role: MembershipRole;
+  /** Permissions the org's settings grant on top of the role (an editor approving notices, CMP-24). */
+  grants: string[];
+}
+
+export async function membershipFor(db: Executor, userId: string, orgId: string): Promise<Membership | null> {
+  const { rows } = await db.execute<{ role: MembershipRole; grants: string[] }>(sql`select role, grants from membership_for(${userId}::uuid, ${orgId}::uuid)`);
+  return rows[0] ? { role: rows[0].role, grants: rows[0].grants } : null;
 }
 
 export async function orgsDueFor(db: Executor, job: OrgSpanningJob): Promise<string[]> {

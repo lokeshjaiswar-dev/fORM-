@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -44,6 +45,7 @@ try {
     `insert into orgs (id, slug, name) values ($1, 'demo', 'Demo Org'), ($2, 'other', 'Other Org') on conflict (id) do nothing`,
     [DEMO.org, DEMO.otherOrg],
   );
+  await owner.query(`insert into org_settings (org_id) values ($1), ($2) on conflict (org_id) do nothing`, [DEMO.org, DEMO.otherOrg]);
   await owner.query(
     `insert into users (id, email, email_norm, name) values ($1, 'dev@form.local', 'dev@form.local', 'Dev User'),
        ($2, 'other@form.local', 'other@form.local', 'Other User') on conflict (id) do nothing`,
@@ -85,7 +87,13 @@ if (envOut) {
         'EGRESS_POLICY=allowlist',
         `DATABASE_URL=${urls.fr_app}`,
         'PUBLIC_BUILDER_URL=http://localhost:5173',
+        'PUBLIC_API_URL=http://localhost:5173',
         'AUTH_DEV_HEADERS=true',
+        `AUTH_SECRET=${randomBytes(32).toString('base64url')}`,
+        '# Sign-in emails go to Mailpit (http://127.0.0.1:8025) from deploy/docker/compose.dev.yaml.',
+        'SMTP_URL=smtp://127.0.0.1:1025',
+        '# TOTP secrets are wrapped by this key; without it they last only as long as the process.',
+        '# KMS_KEYFILE_PATH=../worker/.data/form-master.key',
         'LOG_LEVEL=info',
         '# OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318',
         '# NTP_SERVERS=time.nplindia.org',

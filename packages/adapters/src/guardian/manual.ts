@@ -1,53 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { PortError, toIsoInstant, type GuardianVerifier, type IsoInstant } from '@form/ports';
+import { PortError, toIsoInstant, type GuardianVerifier } from '@form/ports';
+import { checkStart, decide, orgRecord, type GuardianRecord, type GuardianStore } from './store.ts';
 
-export interface ManualReview {
-  verificationId: string;
-  orgId: string;
-  submissionId: string;
-  guardianEmail: string;
-  state: 'pending' | 'approved' | 'refused';
-  createdAt: IsoInstant;
-  decidedAt?: IsoInstant;
-  reviewerId?: string;
-  note?: string;
-}
-
-export type ManualReviewDecision = Required<Pick<ManualReview, 'decidedAt' | 'reviewerId'>> & {
-  state: 'approved' | 'refused';
-  note?: string;
-};
-
-/** Where reviews live; the database-backed store arrives with the guardian-consent flow (CMP-13). */
-export interface ManualReviewStore {
-  insert(r: ManualReview): Promise<void>;
-  get(verificationId: string): Promise<ManualReview | undefined>;
-  /** Applies the decision only while the review is pending; false when another reviewer got there first. */
-  decide(verificationId: string, d: ManualReviewDecision): Promise<boolean>;
-  pending(orgId: string): Promise<ManualReview[]>;
-}
-
-export function createMemoryReviewStore(): ManualReviewStore {
-  const reviews = new Map<string, ManualReview>();
-  return {
-    async insert(r) {
-      reviews.set(r.verificationId, { ...r });
-    },
-    async get(id) {
-      const r = reviews.get(id);
-      return r && { ...r };
-    },
-    async decide(id, d) {
-      const r = reviews.get(id);
-      if (r?.state !== 'pending') return false;
-      reviews.set(id, { ...r, ...d });
-      return true;
-    },
-    async pending(orgId) {
-      return [...reviews.values()].filter((r) => r.orgId === orgId && r.state === 'pending').map((r) => ({ ...r }));
-    },
-  };
-}
+const METHOD = 'manual_document_review';
 
 /** What a reviewer submits to `complete` after checking the guardian's documents. */
 export interface ManualReviewPayload {
@@ -67,40 +22,36 @@ function parsePayload(p: unknown): ManualReviewPayload {
 
 export interface ManualGuardianVerifier extends GuardianVerifier {
   /** The review queue for an org. */
-  pending(orgId: string): Promise<ManualReview[]>;
+  pending(orgId: string): Promise<GuardianRecord[]>;
 }
 
 /** CMP-13 `manual_document_review`: a trained reviewer checks the guardian's documents and decides. */
-export function createManualGuardianVerifier(o: { store?: ManualReviewStore; now?: () => Date } = {}): ManualGuardianVerifier {
-  const store = o.store ?? createMemoryReviewStore();
+export function createManualGuardianVerifier(o: { store: GuardianStore; now?: () => Date }): ManualGuardianVerifier {
+  const { store } = o;
   const now = o.now ?? (() => new Date());
 
   return {
-    method: 'manual_document_review',
+    method: METHOD,
 
     async start(i) {
-      if (i.orgId.length === 0 || i.submissionId.length === 0) throw new PortError('invalid_argument', 'orgId and submissionId are required');
-      if (!/^[^\s@]+@[^\s@]+$/.test(i.guardianEmail)) throw new PortError('invalid_argument', 'a guardian email is required');
+      checkStart(i);
       const verificationId = randomUUID();
-      await store.insert({ verificationId, orgId: i.orgId, submissionId: i.submissionId, guardianEmail: i.guardianEmail, state: 'pending', createdAt: toIsoInstant(now()) });
+      await store.insert({ verificationId, orgId: i.orgId, submissionId: i.submissionId, guardianEmail: i.guardianEmail, method: METHOD, state: 'pending', createdAt: toIsoInstant(now()) });
       return { verificationId, next: 'review_queue' };
     },
 
-    async complete({ verificationId, payload }) {
-      const review = await store.get(verificationId);
-      if (!review) throw new PortError('not_found', `no verification ${verificationId}`);
+    async complete({ orgId, verificationId, payload }) {
+      const review = await orgRecord(store, orgId, verificationId, METHOD);
       const p = parsePayload(payload);
-      if (review.state !== 'pending') throw new PortError('conflict', `verification ${verificationId} is already ${review.state}`);
-      const decided = await store.decide(verificationId, {
+      await decide(store, review, {
         state: p.decision === 'approve' ? 'approved' : 'refused',
-        reviewerId: p.reviewerId,
+        decidedBy: p.reviewerId,
         decidedAt: toIsoInstant(now()),
         ...(p.note !== undefined ? { note: p.note } : {}),
       });
-      if (!decided) throw new PortError('conflict', `verification ${verificationId} was decided concurrently`);
-      return { verified: p.decision === 'approve', evidenceRef: `manual_document_review:${verificationId}` };
+      return { verified: p.decision === 'approve', evidenceRef: `${METHOD}:${verificationId}` };
     },
 
-    pending: (orgId) => store.pending(orgId),
+    pending: (orgId) => store.pending(orgId, METHOD),
   };
 }

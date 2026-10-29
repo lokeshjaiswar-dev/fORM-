@@ -3,11 +3,7 @@ import { createReadStream } from 'node:fs';
 import { copyFile, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  BUCKET_NAMES,
-  MAX_PRESIGN_EXPIRES_SEC,
   PortError,
-  isValidObjectKey,
-  isValidObjectTags,
   type BucketName,
   type ByteRange,
   type ByteStream,
@@ -20,7 +16,7 @@ import {
   type Storage,
   type StorageCapabilities,
 } from '@form/ports';
-import { hasControlChars } from '../text.ts';
+import { checkBucket, checkContentType, checkDownloadName, checkExpires, checkKey, checkPostInput, invalid } from './checks.ts';
 
 export interface FilesystemStorageOptions {
   /** Directory that holds every bucket; created on demand. */
@@ -73,32 +69,7 @@ interface PostPolicy {
   tags?: Record<string, string>;
 }
 
-const CONTENT_TYPE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+(?:\s*;\s*[!#$%&'*+.^_`|~0-9A-Za-z-]+=(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+|"[^"\\\r\n]*"))*$/;
 const CAPABILITIES: StorageCapabilities = { objectLock: false, versioning: false, sse: false };
-
-const invalid = (message: string) => new PortError('invalid_argument', message);
-
-function checkBucket(bucket: string): BucketName {
-  if (!(BUCKET_NAMES as readonly string[]).includes(bucket)) throw invalid(`unknown bucket: ${bucket}`);
-  return bucket as BucketName;
-}
-
-function checkKey(key: string): string {
-  if (!isValidObjectKey(key)) throw invalid(`invalid object key: ${JSON.stringify(key)}`);
-  return key;
-}
-
-function checkContentType(contentType: string): string {
-  if (!CONTENT_TYPE.test(contentType)) throw invalid(`invalid content type: ${JSON.stringify(contentType)}`);
-  return contentType;
-}
-
-function checkExpires(expiresSec: number): number {
-  if (!Number.isInteger(expiresSec) || expiresSec < 1 || expiresSec > MAX_PRESIGN_EXPIRES_SEC) {
-    throw invalid(`expiresSec must be an integer in 1..${MAX_PRESIGN_EXPIRES_SEC}`);
-  }
-  return expiresSec;
-}
 
 const b64url = (b: Uint8Array | string) => Buffer.from(b).toString('base64url');
 
@@ -172,14 +143,8 @@ export function createFilesystemStorage(o: FilesystemStorageOptions): Filesystem
 
   const storage: FilesystemStorage = {
     async presignPost(i: PresignPostInput): Promise<PresignedPost> {
-      const bucket = checkBucket(i.bucket);
-      const key = checkKey(i.key);
-      const contentType = checkContentType(i.contentType);
-      const expiresSec = checkExpires(i.expiresSec);
-      if (!Number.isInteger(i.minBytes) || !Number.isInteger(i.maxBytes) || i.minBytes < 0 || i.minBytes > i.maxBytes) {
-        throw invalid('need integers 0 <= minBytes <= maxBytes');
-      }
-      if (i.tags && !isValidObjectTags(i.tags)) throw invalid('invalid object tags');
+      checkPostInput(i);
+      const { bucket, key, contentType, expiresSec } = i;
       const policy: PostPolicy = {
         b: bucket,
         k: key,
@@ -200,8 +165,7 @@ export function createFilesystemStorage(o: FilesystemStorageOptions): Filesystem
       const bucket = checkBucket(i.bucket);
       const key = checkKey(i.key);
       const exp = Math.floor(now() / 1000) + checkExpires(i.expiresSec);
-      const dl = i.downloadName;
-      if (dl !== undefined && (dl.length === 0 || dl.length > 255 || hasControlChars(dl) || /["\\/]/.test(dl))) throw invalid('invalid downloadName');
+      const dl = checkDownloadName(i.downloadName);
       const q = new URLSearchParams({ exp: String(exp) });
       if (i.downloadName !== undefined) q.set('dl', i.downloadName);
       q.set('sig', sign(getPayload(bucket, key, exp, dl)));

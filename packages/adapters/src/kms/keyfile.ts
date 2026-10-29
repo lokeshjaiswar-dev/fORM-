@@ -1,27 +1,12 @@
-import { createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, hkdfSync, randomBytes, sign, type KeyObject } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { PortError, type KeyContext, type KeyProvider } from '@form/ports';
+import { PortError, type KeyProvider } from '@form/ports';
+import { createAppSigner, dekContext, hkdf, invalid } from './signing.ts';
 
 const VERSION = 1;
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 const MAX_DEK_BYTES = 1024;
-const KEY_ID = /^[A-Za-z0-9._:-]{1,128}$/;
-/** DER prefix of a PKCS#8 Ed25519 private key; the 32-byte seed follows. */
-const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
-
-const invalid = (message: string) => new PortError('invalid_argument', message);
-const derive = (master: Uint8Array, info: string) => Buffer.from(hkdfSync('sha256', master, new Uint8Array(0), info, 32));
-
-function checkOrg(ctx: KeyContext): string {
-  if (ctx.orgId.length === 0) throw invalid('orgId is required');
-  return `form:dek:v${VERSION}|${ctx.orgId}`;
-}
-
-function checkKeyId(keyId: string): string {
-  if (!KEY_ID.test(keyId)) throw invalid(`invalid key id ${JSON.stringify(keyId)}`);
-  return keyId;
-}
 
 /**
  * A master key from a local file (architecture §6: on-prem and air-gapped `KMS_DRIVER=keyfile`; dev).
@@ -32,23 +17,13 @@ function checkKeyId(keyId: string): string {
 export function createKeyfileKeyProvider(o: { masterKey: Uint8Array }): KeyProvider {
   if (o.masterKey.byteLength !== 32) throw invalid('the master key must be 32 bytes');
   const master = Uint8Array.from(o.masterKey);
-  const kek = derive(master, `form:kek:v${VERSION}`);
+  const kek = hkdf(master, `form:kek:v${VERSION}`);
   const kekRef = `keyfile:${createHash('sha256').update('form:kek-ref').update(master).digest('hex').slice(0, 16)}`;
-  const signingKeys = new Map<string, KeyObject>();
-
-  const signingKey = (keyId: string): KeyObject => {
-    let k = signingKeys.get(keyId);
-    if (!k) {
-      const seed = derive(master, `form:sign:ed25519:${checkKeyId(keyId)}`);
-      k = createPrivateKey({ key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]), format: 'der', type: 'pkcs8' });
-      signingKeys.set(keyId, k);
-    }
-    return k;
-  };
+  const signer = createAppSigner(master);
 
   return {
     async wrap(plaintextKey, ctx) {
-      const aad = checkOrg(ctx);
+      const aad = dekContext(ctx.orgId);
       if (plaintextKey.byteLength === 0 || plaintextKey.byteLength > MAX_DEK_BYTES) throw invalid(`a data key must be 1..${MAX_DEK_BYTES} bytes`);
       const iv = randomBytes(IV_BYTES);
       const cipher = createCipheriv('aes-256-gcm', kek, iv);
@@ -58,7 +33,7 @@ export function createKeyfileKeyProvider(o: { masterKey: Uint8Array }): KeyProvi
     },
 
     async unwrap(wrapped, ref, ctx) {
-      const aad = checkOrg(ctx);
+      const aad = dekContext(ctx.orgId);
       if (ref !== kekRef) throw new PortError('not_found', `this keyfile does not hold ${ref}`);
       if (wrapped.byteLength < 1 + IV_BYTES + TAG_BYTES + 1 || wrapped[0] !== VERSION) throw new PortError('integrity', 'malformed wrapped key');
       const b = Buffer.from(wrapped);
@@ -72,14 +47,8 @@ export function createKeyfileKeyProvider(o: { masterKey: Uint8Array }): KeyProvi
       }
     },
 
-    async sign(keyId, data) {
-      return { alg: 'ed25519', signature: new Uint8Array(sign(null, data, signingKey(keyId))) };
-    },
-
-    async publicKey(keyId) {
-      const jwk = createPublicKey(signingKey(keyId)).export({ format: 'jwk' });
-      return { alg: 'ed25519', key: new Uint8Array(Buffer.from(jwk.x ?? '', 'base64url')) };
-    },
+    sign: (keyId, data) => signer.sign(keyId, data),
+    publicKey: (keyId) => signer.publicKey(keyId),
   };
 }
 

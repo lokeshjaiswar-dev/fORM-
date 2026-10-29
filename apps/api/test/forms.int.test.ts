@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { provision } from '@form/db';
+import { eq } from 'drizzle-orm';
+import { chainPending, createDb, forms, PLATFORM_ORG_KEY, provision, withTenant, type DbHandle } from '@form/db';
 import { createTestDatabase } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
+import { tenantOf } from '../src/auth.ts';
 import { parseConfig } from '../src/config.ts';
+import { ProblemError } from '../src/errors.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 
 interface Org {
@@ -17,6 +20,7 @@ interface Org {
 
 let app: FastifyInstance;
 let owner: pg.Pool;
+let chainer: DbHandle;
 let a: Org;
 let b: Org;
 
@@ -57,12 +61,25 @@ beforeAll(async () => {
     LOG_LEVEL: 'silent',
   });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
-  app = await buildApp(parsed.config);
+  // Back-pressure off: a loaded machine running the int suites in parallel would see 503s that say nothing about RLS.
+  app = await buildApp(parsed.config, { underPressure: false });
   app.get('/v1/test-only/members', { config: { auth: 'user', perm: 'members.manage' } }, async () => ({ ok: true }));
+  // A write, then a refusal inside the same transaction: the change rolls back, the denied record must not.
+  app.post('/v1/test-only/rename-then-refuse', { config: { auth: 'user', perm: 'forms.read' } }, async (request) =>
+    withTenant(chainer.db, tenantOf(request), async (tx) => {
+      await tx.update(forms).set({ title: 'should roll back' }).where(eq(forms.id, a.forms[0]!));
+      throw new ProblemError('FORBIDDEN', 'Only the form owner may rename it.');
+    }),
+  );
+  app.get('/v1/test-only/boom', { config: { auth: 'user', perm: 'forms.read' } }, async () => {
+    throw new Error('downstream exploded');
+  });
+  chainer = createDb(urls.fr_app, { max: 2, applicationName: 'fr-api-test-chain' });
 });
 
 afterAll(async () => {
   await app?.close();
+  await chainer?.close();
   await owner?.end();
 });
 
@@ -114,6 +131,55 @@ describe('GET /v1/forms (RLS demo)', () => {
     const res = await app.inject({ url: '/v1/test-only/members', headers: as(a.member, a.id) });
     expect(res.statusCode).toBe(403);
     expect((await pending(a.id)).at(-1)).toMatchObject({ outcome: 'denied', reason: 'missing_permission:members.manage' });
+  });
+
+  it('turns a 403 into an audit_log row once audit.chain runs, surviving the rollback of the request', async () => {
+    const res = await app.inject({ method: 'POST', url: '/v1/test-only/rename-then-refuse', headers: as(a.owner, a.id) });
+    expect(res.statusCode).toBe(403);
+    const { rows: title } = await owner.query<{ title: string }>('select title from forms where id = $1', [a.forms[0]]);
+    expect(title[0]!.title).toBe('Acme newest');
+    const stranger = await app.inject({ url: '/v1/forms', headers: as(b.owner, a.id) });
+    expect(stranger.statusCode).toBe(403);
+
+    for (const key of [a.id, PLATFORM_ORG_KEY]) {
+      await withTenant(chainer.db, { orgId: key, actor: 'system', requestId: 'chain' }, (tx) => chainPending(tx, key));
+    }
+    const { rows } = await owner.query<{ org_id: string; actor_id: string; action: string; resource_id: string; outcome: string; reason: string; request_id: string; metadata: unknown }>(
+      `select org_id, actor_id, action, resource_id, outcome, reason, request_id, metadata from audit_log where request_id = any($1) order by org_id`,
+      [[res.headers['x-request-id'], stranger.headers['x-request-id']]],
+    );
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        {
+          org_id: a.id,
+          actor_id: a.owner,
+          action: 'request.authorize',
+          resource_id: 'POST /v1/test-only/rename-then-refuse',
+          outcome: 'denied',
+          reason: 'forbidden',
+          request_id: res.headers['x-request-id'],
+          metadata: { code: 'FORBIDDEN', claimedOrgId: null },
+        },
+        {
+          org_id: PLATFORM_ORG_KEY,
+          actor_id: b.owner,
+          action: 'request.authorize',
+          resource_id: 'GET /v1/forms',
+          outcome: 'denied',
+          reason: 'not_a_member',
+          request_id: stranger.headers['x-request-id'],
+          metadata: { code: 'FORBIDDEN', claimedOrgId: a.id },
+        },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it('audits a 5xx as an error under the tenant, without the error details', async () => {
+    const res = await app.inject({ url: '/v1/test-only/boom', headers: as(a.owner, a.id) });
+    expect(res.statusCode).toBe(500);
+    expect((await pending(a.id)).at(-1)).toMatchObject({ action: 'request.failed', outcome: 'error', reason: 'INTERNAL' });
+    expect(JSON.stringify(await pending(a.id))).not.toContain('exploded');
   });
 
   it('is ready against the real database', async () => {

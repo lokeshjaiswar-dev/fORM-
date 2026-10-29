@@ -4,6 +4,8 @@ const port = 4173;
 
 export default defineConfig({
   testDir: './e2e',
+  /* The sign-in suite against a real API, Postgres and Mailpit runs from playwright.stack.config.ts. */
+  testIgnore: /\.stack\.spec\.ts$/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

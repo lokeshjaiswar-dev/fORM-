@@ -1,12 +1,29 @@
 import { randomUUID } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 import nodemailer from 'nodemailer';
-import { PortError, type MailAddress, type MailMessage, type MailRefusal, type Mailer } from '@form/ports';
+import { MailDeliveryError, PortError, type EgressGuard, type MailAddress, type MailMessage, type MailRefusal, type Mailer } from '@form/ports';
 import { hasControlChars } from '../text.ts';
 
+/** Per-org SMTP senders (`email_senders.smtp_secret_id`): the secret behind a ref is an SMTP URL with credentials. */
+export interface SmtpSenders {
+  /** The SMTP URL of a ref, or undefined when there is no such sender. */
+  resolve(senderSecretRef: string): Promise<string | undefined>;
+  /** Org-supplied relays are tenant destinations: they always pass the EGRESS_POLICY guard (SSRF). */
+  egress: EgressGuard;
+}
+
 export interface SmtpMailerOptions {
-  /** `smtp://host:port` (plain, as Mailpit listens) or `smtps://user:pass@host:465`. Default: Mailpit on localhost. */
+  /**
+   * The platform relay: `smtp://host:port` (STARTTLS when offered; required when the URL has credentials) or
+   * `smtps://user:pass@host:465`. Default: Mailpit on localhost.
+   */
   url?: string;
+  /**
+   * Holds the platform relay to EGRESS_POLICY and pins the connection to the address it vetted. The relay is
+   * operator configuration, so the composition root passes the guard with the relay as a trusted endpoint.
+   */
+  egress?: EgressGuard;
+  senders?: SmtpSenders;
   /** Domain of generated Message-IDs; default: the sender's domain. */
   messageIdDomain?: string;
   /** Socket timeouts in milliseconds. */
@@ -68,41 +85,84 @@ interface SmtpError {
   command?: string | undefined;
   response?: string | undefined;
   recipient?: string | undefined;
+  rejectedErrors?: SmtpError[] | undefined;
 }
 
 const isPermanent = (e: SmtpError) => e.responseCode !== undefined && e.responseCode >= 500 && e.responseCode < 600;
+const refusal = (e: SmtpError): MailRefusal => ({ address: e.recipient ?? '', permanent: isPermanent(e), response: e.response ?? e.message });
 
 /**
- * A 5xx to RCPT TO or DATA refuses this message for good. A 5xx elsewhere (MAIL FROM, AUTH) is a sender or
- * configuration problem, not the recipient's, so it stays 'unavailable' and never leads to a suppression.
+ * RCPT TO refusals of every recipient: 'rejected' only when each one is permanent (a deferred recipient may still
+ * be delivered on retry), in whatever order the server answered. A 5xx to DATA refuses the message for good. A 5xx
+ * anywhere else (MAIL FROM, AUTH) is a sender or configuration problem, not the recipient's, so it stays
+ * 'unavailable' and never leads to a suppression.
  */
 function deliveryError(e: unknown): PortError {
   const err = e as SmtpError;
-  const code = isPermanent(err) && (err.command === 'RCPT TO' || err.command === 'DATA') ? 'rejected' : 'unavailable';
-  return new PortError(code, `SMTP delivery failed: ${err.message}`, { cause: e });
+  if (err.rejectedErrors?.length || err.command === 'RCPT TO') {
+    const refused = (err.rejectedErrors?.length ? err.rejectedErrors : [err]).map(refusal);
+    const code = refused.every((r) => r.permanent) ? 'rejected' : 'unavailable';
+    return new MailDeliveryError(code, 'recipients', refused, `SMTP delivery failed: ${err.message}`, { cause: e });
+  }
+  if (err.command === 'DATA') return new MailDeliveryError(isPermanent(err) ? 'rejected' : 'unavailable', 'message', [], `SMTP delivery failed: ${err.message}`, { cause: e });
+  return new PortError('unavailable', `SMTP delivery failed: ${err.message}`, { cause: e });
 }
 
 /**
- * SMTP mailer for dev and tests; defaults to Mailpit (`axllent/mailpit`, SMTP on 1025, UI on 8025).
- * Per-org senders arrive with the production SMTP adapter (WP-1.03).
+ * Transport options of an SMTP URL; with a pinned address the socket goes there while TLS still checks the name.
+ * A URL with credentials over `smtp://` requires STARTTLS, so AUTH never goes out in plaintext when the server (or
+ * someone in the path) does not offer it.
+ */
+function transportOptions(url: string, timeout: number, pinnedIp?: string) {
+  const u = new URL(url);
+  if (u.protocol !== 'smtp:' && u.protocol !== 'smtps:') throw new PortError('invalid_argument', `expected an smtp:// or smtps:// URL, got ${u.protocol}`);
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const secure = u.protocol === 'smtps:';
+  return {
+    host: pinnedIp ?? host,
+    port: Number(u.port || (secure ? 465 : 25)),
+    secure,
+    requireTLS: !secure && u.username !== '',
+    ...(u.username ? { auth: { user: decodeURIComponent(u.username), pass: decodeURIComponent(u.password) } } : {}),
+    tls: { servername: host },
+    connectionTimeout: timeout,
+    greetingTimeout: timeout,
+    socketTimeout: timeout,
+  };
+}
+
+/**
+ * SMTP mailer (architecture §6): the platform relay (an India-hosted provider on SaaS, the customer relay on-prem,
+ * Mailpit in development) and per-org senders. Recipient refusals come back per address, so `email.send` can
+ * suppress hard bounces and retry deferrals.
  */
 export function createSmtpMailer(o: SmtpMailerOptions = {}): Mailer {
   const timeout = o.timeoutMs ?? 10_000;
   const messageIdDomain = o.messageIdDomain === undefined ? undefined : idDomain(o.messageIdDomain);
-  const transport = nodemailer.createTransport({
-    url: o.url ?? MAILPIT_SMTP_URL,
-    connectionTimeout: timeout,
-    greetingTimeout: timeout,
-    socketTimeout: timeout,
-  });
+  const platformUrl = o.url ?? MAILPIT_SMTP_URL;
+  transportOptions(platformUrl, timeout);
+
+  async function transport(senderSecretRef: string | undefined) {
+    let url = platformUrl;
+    let guard = o.egress;
+    if (senderSecretRef !== undefined) {
+      const resolved = o.senders ? await o.senders.resolve(senderSecretRef) : undefined;
+      if (resolved === undefined) throw new PortError('not_found', 'no such SMTP sender');
+      url = resolved;
+      guard = o.senders!.egress;
+    }
+    const pinned = guard ? (await guard.assertAllowed(new URL(url))).pinnedIp : undefined;
+    return nodemailer.createTransport(transportOptions(url, timeout, pinned));
+  }
 
   return {
     async send(m) {
       checkMessage(m);
       const messageId = m.messageId ?? `<${randomUUID()}@${messageIdDomain ?? idDomain(m.from.address.slice(m.from.address.lastIndexOf('@') + 1))}>`;
+      const t = await transport(m.senderSecretRef);
       let info: { rejectedErrors?: SmtpError[] | undefined };
       try {
-        info = await transport.sendMail({
+        info = await t.sendMail({
           messageId,
           from: m.from,
           to: m.to,
@@ -119,20 +179,22 @@ export function createSmtpMailer(o: SmtpMailerOptions = {}): Mailer {
         });
       } catch (e) {
         throw deliveryError(e);
+      } finally {
+        t.close();
       }
-      const refused = (info.rejectedErrors ?? []).map(
-        (e): MailRefusal => ({ address: e.recipient ?? '', permanent: isPermanent(e), response: e.response ?? e.message }),
-      );
-      return { messageId, refused };
+      return { messageId, refused: (info.rejectedErrors ?? []).map(refusal) };
     },
 
     async verify(senderSecretRef) {
-      if (senderSecretRef !== undefined) return { ok: false, error: 'per-org senders are not supported by the dev SMTP mailer' };
+      let t;
       try {
-        await transport.verify();
+        t = await transport(senderSecretRef);
+        await t.verify();
         return { ok: true };
       } catch (e) {
         return { ok: false, error: (e as Error).message };
+      } finally {
+        t?.close();
       }
     },
   };

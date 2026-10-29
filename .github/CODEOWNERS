@@ -7,6 +7,9 @@
 /packages/db/             @form/core-reviewers @form/data-reviewers
 /packages/crypto/         @form/core-reviewers @form/security-reviewers
 /apps/api/src/authz/      @form/core-reviewers @form/security-reviewers
+/apps/api/src/auth.ts     @form/core-reviewers @form/security-reviewers
+/apps/api/src/modules/auth/  @form/core-reviewers @form/security-reviewers
+/apps/api/src/modules/account/  @form/core-reviewers @form/security-reviewers
 
 /.github/                 @form/core-reviewers @form/platform-reviewers
 /.dependency-cruiser.cjs  @form/core-reviewers @form/platform-reviewers

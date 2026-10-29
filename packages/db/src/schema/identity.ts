@@ -1,4 +1,4 @@
-import { jsonb, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core';
+import { bigint, jsonb, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core';
 import { ts, tsNull } from './columns.ts';
 
 export const ORG_STATUSES = ['active', 'suspended', 'pending_deletion', 'deleted'] as const;
@@ -22,7 +22,8 @@ export const orgs = pgTable('orgs', {
 
 /**
  * Global identity. RLS: `users_visible`, `users_self_update`. fr_app has column grants only; credential
- * columns are unreadable, so select explicit columns (`userPublicColumns`).
+ * columns are unreadable (select explicit columns, `userPublicColumns`) and are read through
+ * `auth_user_by_email()` and `auth_user_credentials()`. A user may update their own credential columns.
  */
 export const users = pgTable('users', {
   id: uuid('id').primaryKey(),
@@ -38,6 +39,9 @@ export const users = pgTable('users', {
   status: text('status').notNull().default('active'),
   lastLoginAt: tsNull('last_login_at'),
   createdAt: ts('created_at'),
+  totpLastStep: bigint('totp_last_step', { mode: 'number' }),
+  /** Set with status `deleted`: the row is then a pseudonymous tombstone (`account_delete()`, CMP-21). */
+  deletedAt: tsNull('deleted_at'),
 });
 
 export const userPublicColumns = {
@@ -48,6 +52,7 @@ export const userPublicColumns = {
   name: users.name,
   locale: users.locale,
   status: users.status,
+  totpEnabledAt: users.totpEnabledAt,
   lastLoginAt: users.lastLoginAt,
   createdAt: users.createdAt,
 };

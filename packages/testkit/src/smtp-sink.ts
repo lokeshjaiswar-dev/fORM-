@@ -218,3 +218,38 @@ export function mailpitInbox(apiUrl: string, o: { timeoutMs?: number } = {}): In
     },
   };
 }
+
+/** Mailpit, pinned by digest like `deploy/docker/compose.dev.yaml`. */
+export const MAILPIT_IMAGE = 'axllent/mailpit:v1.31.3@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d';
+
+export interface MailpitServer {
+  smtpUrl: string;
+  apiUrl: string;
+  stop(): Promise<void>;
+}
+
+/**
+ * Mailpit in a Testcontainers container (the WP-0.15 dev SMTP sink), for end-to-end runs that read mail through its
+ * HTTP API. `ports` pins the host ports, so a process started before the container knows where to look.
+ */
+export async function startMailpit(o: { ports?: { smtp: number; api: number } } = {}): Promise<MailpitServer> {
+  const { GenericContainer, Wait } = await import('testcontainers');
+  const exposed = o.ports
+    ? [
+        { container: 1025, host: o.ports.smtp },
+        { container: 8025, host: o.ports.api },
+      ]
+    : [1025, 8025];
+  const container = await new GenericContainer(MAILPIT_IMAGE)
+    .withExposedPorts(...exposed)
+    .withWaitStrategy(Wait.forHttp('/livez', 8025))
+    .start();
+  const host = container.getHost();
+  return {
+    smtpUrl: `smtp://${host}:${container.getMappedPort(1025)}`,
+    apiUrl: `http://${host}:${container.getMappedPort(8025)}`,
+    stop: async () => {
+      await container.stop();
+    },
+  };
+}

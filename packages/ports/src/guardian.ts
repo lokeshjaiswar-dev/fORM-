@@ -15,6 +15,8 @@ export interface GuardianStart {
 }
 
 export interface GuardianCompleteInput {
+  /** The org completing it; a verification of another org is PortError('not_found'), as if it did not exist. */
+  orgId: string;
   verificationId: string;
   /** Method-specific; implementations validate it and reject anything else with PortError('invalid_argument'). */
   payload: unknown;

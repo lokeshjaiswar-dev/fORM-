@@ -14,6 +14,7 @@
     "db:setup": "tsx scripts/dev-setup.ts"
   },
   "dependencies": {
+    "@form/schema": "workspace:*",
     "drizzle-orm": "catalog:",
     "pg": "catalog:"
   },

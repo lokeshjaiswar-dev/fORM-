@@ -4,6 +4,7 @@ import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { CATEGORIES, categoryLabel, matchTiles, type Tile } from '@/fields/tiles';
 import { FieldTile } from '@/components/builder/FieldIcon';
+import { useEdition } from '@/edition/edition';
 import { cn } from '@/lib/utils';
 
 const M = defineMessages('builder', {
@@ -28,7 +29,8 @@ export function SlashMenu({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const items = useMemo(() => matchTiles(query), [query]);
+  const edition = useEdition();
+  const items = useMemo(() => matchTiles(query, edition), [query, edition]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();

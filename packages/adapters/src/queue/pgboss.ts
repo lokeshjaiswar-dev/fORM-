@@ -76,6 +76,12 @@ function queueOptions(p: JobPolicy): Omit<BossQueueConfig, 'name'> {
   };
 }
 
+/** pg-boss queue policy of a JobPolicy: `singleton` (one active), `short` (one queued), `stately` (both), per singleton key. */
+export function bossPolicy(p: Pick<JobPolicy, 'exclusive' | 'coalesceQueued'>): 'standard' | 'singleton' | 'short' | 'stately' {
+  if (p.exclusive) return p.coalesceQueued ? 'stately' : 'singleton';
+  return p.coalesceQueued ? 'short' : 'standard';
+}
+
 function checkSchema(schema: string): string {
   if (!IDENTIFIER.test(schema)) throw new PortError('invalid_argument', `invalid queue schema ${JSON.stringify(schema)}`);
   return schema;
@@ -145,6 +151,10 @@ export function createPgBossQueue(o: PgBossQueueOptions): PgBossQueue {
     },
 
     async send(name, job, s = {}) {
+      const policy = JOB_POLICIES[name];
+      if (s.singletonKey !== undefined && !policy.coalesceQueued && !policy.exclusive) {
+        throw new PortError('unsupported', `${name} neither coalesces nor is exclusive: a singleton key would not de-duplicate`);
+      }
       return boss.send(name, signJob(o.keyring, name, job), {
         ...(s.singletonKey !== undefined ? { singletonKey: s.singletonKey } : {}),
         ...(s.startAfter !== undefined ? { startAfter: s.startAfter } : {}),
@@ -161,7 +171,7 @@ export function createPgBossQueue(o: PgBossQueueOptions): PgBossQueue {
         {
           batchSize: 1,
           localConcurrency: w.concurrency ?? JOB_POLICIES[name].concurrency,
-          pollingIntervalSeconds: o.pollingIntervalSeconds ?? 2,
+          pollingIntervalSeconds: w.pollIntervalMs !== undefined ? Math.max(0.5, w.pollIntervalMs / 1000) : (o.pollingIntervalSeconds ?? 2),
           perJobResults: true,
         },
         async (jobs): Promise<JobResult[]> => {
@@ -238,7 +248,7 @@ export async function installQueueSchema(o: InstallQueueOptions): Promise<{ queu
       const dead = deadLetterQueue(name);
       // Dead letters wait for an operator: no retries, kept for the default 14 days.
       await ensure(dead, { ...queueOptions(policy), retryLimit: 0 });
-      await ensure(name, { ...queueOptions(policy), policy: policy.exclusive ? 'singleton' : 'standard', deadLetter: dead });
+      await ensure(name, { ...queueOptions(policy), policy: bossPolicy(policy), deadLetter: dead });
       queues.push(name, dead);
     }
     await boss.getDb().executeSql(

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { RESTRICTED_EDITION, editionSummary, loadEditionConfig } from '@form/config';
 import { AVAILABLE_TYPES, REGISTRY, STUB_AVAILABILITY } from '@form/registry';
 import { CONTROLS } from '@form/renderer';
 import type { BlockId, PaletteEntry } from '@form/schema';
 import { CANVAS } from '@/fields/canvas';
 import { ICONS } from '@/fields/icons';
 import { INSPECTOR } from '@/fields/inspector';
-import { CATEGORIES, TILES, matchTiles, tileOf } from '@/fields/tiles';
+import { CATEGORIES, TILES, matchTiles, tileAvailable, tileOf, type Tile } from '@/fields/tiles';
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { useUiStore } from '@/state/uiStore';
@@ -35,10 +36,31 @@ describe('registry views (FND-03)', () => {
   it('tiles are labelled from the builder catalogue and found by label, id or keyword', () => {
     expect(tileOf('short_text')?.label).toBe('Short answer');
     expect(tileOf('single_choice', { display: 'dropdown' })?.label).toBe('Dropdown');
-    expect(matchTiles('nps').map((t) => t.id)).toEqual(['nps']);
-    expect(matchTiles('dob').map((t) => t.id)).toEqual(['date']);
-    expect(matchTiles('page').map((t) => t.id)).toContain('page_break');
-    expect(matchTiles('')).toHaveLength(TILES.length);
+    const saas = editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'saas' }));
+    expect(matchTiles('nps', saas).map((t) => t.id)).toEqual(['nps']);
+    expect(matchTiles('dob', saas).map((t) => t.id)).toEqual(['date']);
+    expect(matchTiles('page', saas).map((t) => t.id)).toContain('page_break');
+    expect(matchTiles('', saas)).toHaveLength(TILES.length);
+  });
+
+  it('edition matrix: a tile is hidden where the edition cannot run its type (FND-19)', () => {
+    const payment = { ...TILES[0], kind: 'block', id: 'payment', choice: { type: 'payment', configOverrides: {} } } as unknown as Tile;
+    const editions = {
+      saas: editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'saas' })),
+      onprem: editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'onprem' })),
+      onpremPayments: editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'onprem', PAYMENTS_ENABLED: 'razorpay' })),
+      airGapped: editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'onprem', EGRESS_POLICY: 'none' })),
+      unknown: RESTRICTED_EDITION,
+    };
+    expect(Object.fromEntries(Object.entries(editions).map(([k, e]) => [k, tileAvailable(payment, e)]))).toEqual({
+      saas: true,
+      onprem: false,
+      onpremPayments: true,
+      airGapped: false,
+      unknown: false,
+    });
+    /* Every P0 palette type runs everywhere: the air-gapped palette is the full palette. */
+    for (const e of Object.values(editions)) expect(matchTiles('', e)).toHaveLength(TILES.length);
   });
 
   it('every available type renders on the canvas', () => {

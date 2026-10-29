@@ -5,7 +5,18 @@ import { parseConfig } from '../src/config.ts';
 
 /** Writes the internal OpenAPI document without a database (the pool never connects). */
 const out = path.resolve(process.argv[2] ?? 'dist/openapi.json');
-const parsed = parseConfig({ NODE_ENV: 'production', LOG_LEVEL: 'silent', DEPLOYMENT_MODE: 'onprem', DATABASE_URL: 'postgres://openapi@127.0.0.1:1/openapi' });
+const parsed = parseConfig({
+  NODE_ENV: 'production',
+  LOG_LEVEL: 'silent',
+  DEPLOYMENT_MODE: 'onprem',
+  DATABASE_URL: 'postgres://openapi@127.0.0.1:1/openapi',
+  PUBLIC_BUILDER_URL: 'https://app.form.example',
+  // A fixed placeholder: the emitter never signs or hashes anything.
+  AUTH_SECRET: 'A'.repeat(43),
+  KMS_KEYFILE_PATH: '/dev/null',
+  MAILER_DRIVER: 'log',
+  PRIVACY_CONTACT_EMAIL: 'privacy@form.example',
+});
 if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
 
 const app = await buildApp(parsed.config);

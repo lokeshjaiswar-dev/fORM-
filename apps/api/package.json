@@ -13,14 +13,18 @@
     "test:int": "vitest run -c vitest.int.config.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.2",
     "@fastify/cors": "11.3.0",
     "@fastify/helmet": "13.1.1",
     "@fastify/otel": "catalog:",
     "@fastify/swagger": "9.9.1",
     "@fastify/under-pressure": "9.2.0",
+    "@form/adapters": "workspace:*",
     "@form/config": "workspace:*",
     "@form/db": "workspace:*",
     "@form/observability": "workspace:*",
+    "@form/ports": "workspace:*",
+    "@node-rs/argon2": "2.2.1",
     "@opentelemetry/api": "catalog:",
     "@opentelemetry/exporter-trace-otlp-http": "catalog:",
     "@opentelemetry/instrumentation": "catalog:",
@@ -34,11 +38,13 @@
     "fastify": "5.12.5",
     "fastify-type-provider-zod": "7.0.0",
     "import-in-the-middle": "catalog:",
+    "openid-client": "6.8.8",
     "pg": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@form/i18n": "workspace:*",
     "@form/testkit": "workspace:*",
     "@form/tsconfig": "workspace:*",
     "@types/node": "catalog:",

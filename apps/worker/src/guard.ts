@@ -1,4 +1,4 @@
-import { appendAuditDetached, isUuid, JOB_RESOURCE_TYPES, resolveJobOrg, type Db, type JobResourceType as DbResourceType } from '@form/db';
+import { audit, isUuid, JOB_RESOURCE_TYPES, resolveJobOrg, type Db, type JobResourceType as DbResourceType } from '@form/db';
 import { PortError, type JobName, type JobResource } from '@form/ports';
 import type { Logger } from 'pino';
 
@@ -16,9 +16,10 @@ const resolvable = (type: string): type is DbResourceType => (JOB_RESOURCE_TYPES
 
 /**
  * ADR-0016 on the worker side: the org of a job comes from the database (`resolve_job_org`), never from the
- * envelope alone, and every refused job leaves a denied audit record on its own connection.
+ * envelope alone, and every refused job leaves a denied audit record on its own connection (`auditWriter`, the
+ * worker's small audit pool, so a busy main pool cannot hold the record up; BL-036).
  */
-export function jobGuard(db: Db, log: Logger) {
+export function jobGuard(db: Db, log: Logger, auditWriter: Db = db) {
   return {
     async resolveOrg(resource: JobResource): Promise<string | null> {
       if (!resolvable(resource.type)) throw new PortError('unsupported', `resolve_job_org does not know ${resource.type}`);
@@ -29,7 +30,7 @@ export function jobGuard(db: Db, log: Logger) {
     async onRejected(r: JobRejectionReport): Promise<void> {
       log.warn({ queue: r.name, jobId: r.id, reason: r.reason, claimedOrgId: r.claimedOrgId, resolvedOrgId: r.resolvedOrgId }, 'job rejected');
       // Filed under the org that owns the resource when the database named one; the claim alone is untrusted.
-      await appendAuditDetached(db, r.resolvedOrgId, {
+      await audit.appendDetached(auditWriter, r.resolvedOrgId, {
         actorKind: 'system',
         action: 'job.rejected',
         resourceType: r.resource?.type ?? 'job',

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ExternalLink, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
+import { runtimeEdition } from '@form/config';
 import { defineMessages } from '@form/i18n';
 import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
@@ -9,6 +10,7 @@ import { BUILDER_LOCALE, t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
+import { useEdition } from '@/edition/edition';
 import { previewStatus, previewUploader, previewVersion } from '@/lib/preview';
 import { useDoc } from '@/state/documentStore';
 import { useOpsStore } from '@/state/opsStore';
@@ -48,7 +50,8 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
   const [unlocked, setUnlocked] = useState(false);
   const [redirect, setRedirect] = useState<string | null>(null);
   const [now] = useState(() => new Date().toISOString() as IsoInstant);
-  const build = useMemo(() => previewVersion(definition, OPEN, now), [definition, now]);
+  const edition = runtimeEdition(useEdition());
+  const build = useMemo(() => previewVersion(definition, OPEN, now, edition), [definition, now, edition]);
   const session = useMemo(() => ({ startedAt: now, device }), [now, device]);
   const shown = status.state === 'password' && unlocked ? OPEN : status;
 

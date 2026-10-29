@@ -2,7 +2,7 @@
 
 A form platform for multi-tenant SaaS and on-prem deployments, working toward feature parity with JotForm, with SOC 2 and India DPDP compliance built in. The plan, schema, architecture and delivery roadmap are in [`docs/platform/`](docs/platform/README.md).
 
-> **Status:** Phase 0 (foundation) work packages are all merged on `dev`; see [Phase 0 exit gate](docs/platform/phase0-exit-gate.md) for what is still open. The builder edits v2 form definitions on the field registry, previews them with `@form/renderer`, keeps drafts in IndexedDB and creates forms from the signed system template pack. The API and worker are skeletons over Postgres with row-level security; the public runtime and server-side submissions arrive in Phase 1.
+> **Status:** Phase 0 is merged on `dev` (see [Phase 0 exit gate](docs/platform/phase0-exit-gate.md)), and so is the first part of Phase 1: the audit log (WP-1.04), production adapters (WP-1.03), edition flags and security headers (WP-1.05), sign-in with sessions and 2FA (WP-1.01), account export and deletion (WP-1.31), organisations, members and invites (WP-1.02) and template storage (WP-T1.1). The builder edits v2 form definitions on the field registry, previews them with `@form/renderer`, keeps drafts in IndexedDB and creates forms from the signed system template pack. Forms are not saved to the API yet (WP-1.06), and field-level encryption (WP-1.11), the public runtime and server-side submissions come later in Phase 1. Open issues are in the [backlog](docs/platform/backlog.md).
 
 ## Workspace
 
@@ -27,7 +27,7 @@ A form platform for multi-tenant SaaS and on-prem deployments, working toward fe
 | `packages/config` | `@form/config` | Edition config schema (`DEPLOYMENT_MODE`, `EGRESS_POLICY`) and feature availability |
 | `packages/testkit` | `@form/testkit` | Adapter contract suites (`runStorageContract`, …), the Postgres Testcontainers harness and test helpers; imported by tests only |
 
-More apps and packages (`runtime`, `worker-pdf`, `cli`, `admin`, …) arrive in Phase 1 and later. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md).
+More apps and packages (`runtime`, `worker-pdf`, `cli`, `admin`, …) arrive in Phase 1 and later. The full layout is fixed in [ADR-0001](docs/adr/0001-monorepo.md); the other architecture decisions are ADR-0002 to ADR-0022 in [`docs/adr/`](docs/adr/).
 
 ## Prerequisites
 
@@ -76,7 +76,7 @@ Do not use `npm install` or `yarn`: the workspace uses pnpm catalogs (`catalog:`
    curl -H 'X-FR-Dev-User: 01970000-0000-7000-8000-000000000002' \
         -H 'X-FR-Org: 01970000-0000-7000-8000-000000000001' http://127.0.0.1:8080/v1/forms
    ```
-   Add `--profile av` to the compose command for ClamAV. If port 5432 is taken, set `FR_PG_PORT` for compose and `DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:<port>/form` for `pnpm dev:setup`. Until sign-in lands (WP-1.01), the API identifies callers by the `X-FR-Dev-User` header, and only when `AUTH_DEV_HEADERS=true` (refused with `NODE_ENV=production`). The OpenAPI document is at `/v1/openapi.json` and in `apps/api/dist/openapi.json` after a build. Tracing turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (the compose collector listens on `http://127.0.0.1:4318`).
+   Add `--profile av` to the compose command for ClamAV. If port 5432 is taken, set `FR_PG_PORT` for compose and `DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:<port>/form` for `pnpm dev:setup`. With the API running, `pnpm dev` proxies `/v1` to it, so the builder's **Sign up** / **Sign in** pages (`/auth/sign-up`, `/auth/sign-in`), two-factor setup (`/account/security`), organisations (`/orgs/new`, `/org/members`, `/org/settings`) and invites work end to end; sign-up, magic-link and reset mails land in Mailpit at http://localhost:8025. For scripts and tests the API also accepts the `X-FR-Dev-User` header, but only when `AUTH_DEV_HEADERS=true` (refused with `NODE_ENV=production`). The OpenAPI document is at `/v1/openapi.json` and in `apps/api/dist/openapi.json` after a build. Tracing turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (the compose collector listens on `http://127.0.0.1:4318`).
 
 6. **Production build (optional)**
    ```sh
@@ -92,7 +92,7 @@ Run these from the repository root before pushing. CI (`.github/workflows/ci.yml
 |---|---|
 | `pnpm lint` | Lint with oxlint |
 | `pnpm typecheck` | Type-check every project |
-| `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage` |
+| `pnpm test` | Unit, component and type tests (Vitest) with coverage in `apps/*/coverage` and `packages/*/coverage`; `schema`, `registry`, `logic`, `validation`, `templates-core` and `templates` fail below 90% line coverage |
 | `pnpm test:int` | Integration tests against Postgres 18 in Testcontainers: migrations, RLS isolation for every actor kind, RLS meta-tests, definer functions, the API, the worker (outbox enqueue, forged jobs, SIGTERM retries, partitions) (CI job `db`). Needs Docker |
 | `pnpm build` | Build every app and package (the template pack first: the builder bundles it) |
 | `pnpm templates:build` | Validate the system templates and write the signed `packages/templates/dist/system-core-<version>.formpack`; `pnpm dev` and `pnpm test` build it first, a bare `vite` or `vitest` in `apps/builder` needs it built |

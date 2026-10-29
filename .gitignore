@@ -20,6 +20,9 @@ lerna-debug.log*
 .env.*
 !.env.example
 
+# Development keyfiles and the filesystem object store (pnpm dev:setup)
+.data
+
 # Test / coverage
 coverage
 *.lcov

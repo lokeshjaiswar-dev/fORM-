@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.ts';
 import { openNewForm } from './helpers.ts';
 
 async function startWithShortAnswer(page: Page) {

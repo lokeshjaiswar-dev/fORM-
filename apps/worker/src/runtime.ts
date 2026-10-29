@@ -67,7 +67,7 @@ export async function startWorker(o: WorkerOptions): Promise<StartedWorker> {
   const defs = selectJobs(o.jobs ?? JOB_DEFINITIONS, o.queues);
   const workers: Worker[] = [];
   for (const def of defs as JobDefinition<JobName>[]) {
-    workers.push(await o.queue.work(def.name, (job) => runJob(def, job, o)));
+    workers.push(await o.queue.work(def.name, (job) => runJob(def, job, o), def.pollIntervalMs ? { pollIntervalMs: def.pollIntervalMs } : {}));
     if (def.cron) await o.queue.schedule(def.name as SystemJobName, def.cron, systemRequest(def.name) as JobRequest<SystemJobName>);
   }
   if (o.seedTemplates && defs.some((d) => d.name === 'templates.seed')) {

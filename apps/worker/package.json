@@ -15,6 +15,7 @@
   "dependencies": {
     "@fastify/otel": "catalog:",
     "@form/adapters": "workspace:*",
+    "@form/config": "workspace:*",
     "@form/db": "workspace:*",
     "@form/observability": "workspace:*",
     "@form/ports": "workspace:*",

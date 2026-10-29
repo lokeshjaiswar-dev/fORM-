@@ -95,8 +95,8 @@ describe('RLS meta-tests', () => {
       create function public_lookup() returns int language sql security definer set search_path = pg_catalog, public as $$ select 1 $$;
       grant execute on function public_lookup() to public;`);
     expect(v).toEqual([
-      { rule: 'definer-unsafe', object: 'unsafe_lookup()' },
       { rule: 'definer-unsafe', object: 'public_lookup()' },
+      { rule: 'definer-unsafe', object: 'unsafe_lookup()' },
     ]);
   });
 });
@@ -119,13 +119,48 @@ describe('roles', () => {
     expect(owners.rows).toEqual([{ owner: 'fr_migrator' }]);
   });
 
-  it('fr_system_agg and fr_template_seeder have no table privileges yet', async () => {
-    const { rows } = await t.owner.query<{ n: number }>(
-      `select count(*)::int as n from pg_class c join pg_namespace n on n.oid = c.relnamespace
-       where n.nspname in ('public', 'parts') and c.relkind in ('r', 'p')
-         and (has_table_privilege('fr_system_agg', c.oid, 'select, insert, update, delete')
-           or has_table_privilege('fr_template_seeder', c.oid, 'select, insert, update, delete'))`,
+  it('fr_template_seeder reaches the template tables only, fr_system_agg the rollup sources and the rollup', async () => {
+    const { rows } = await t.owner.query<{ role: string; table: string; privs: string[] }>(
+      `with p as (
+         select r.role, c.relname as table, array(
+           select x from unnest(array['select', 'insert', 'update', 'delete']) x
+           where has_table_privilege(r.role, c.oid, x) or (x <> 'delete' and has_any_column_privilege(r.role, c.oid, x))) as privs
+         from (values ('fr_system_agg'), ('fr_template_seeder')) r (role)
+         cross join pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname in ('public', 'parts') and c.relkind in ('r', 'p'))
+       select * from p where cardinality(privs) > 0 order by 1, 2`,
     );
-    expect(rows[0]!.n).toBe(0);
+    const sid = ['select', 'insert', 'update'];
+    expect(rows).toEqual([
+      { role: 'fr_system_agg', table: 'form_template_bindings', privs: ['select'] },
+      { role: 'fr_system_agg', table: 'template_stats_daily', privs: sid },
+      { role: 'fr_system_agg', table: 'template_usages', privs: ['select'] },
+      { role: 'fr_system_agg', table: 'templates', privs: ['select'] },
+      { role: 'fr_template_seeder', table: 'template_categories', privs: sid },
+      { role: 'fr_template_seeder', table: 'template_category_links', privs: ['select', 'insert', 'delete'] },
+      { role: 'fr_template_seeder', table: 'template_localizations', privs: [...sid, 'delete'] },
+      { role: 'fr_template_seeder', table: 'template_packs', privs: sid },
+      { role: 'fr_template_seeder', table: 'template_search_synonyms', privs: [...sid, 'delete'] },
+      { role: 'fr_template_seeder', table: 'template_signing_keys', privs: sid },
+      { role: 'fr_template_seeder', table: 'template_versions', privs: sid },
+      { role: 'fr_template_seeder', table: 'templates', privs: sid },
+    ]);
+  });
+
+  it('fr_template_seeder policies admit system rows only', async () => {
+    const { rows } = await t.owner.query<{ table: string; qual: string; with_check: string }>(
+      `select tablename as table, qual, with_check from pg_policies where 'fr_template_seeder' = any (roles) order by 1`,
+    );
+    expect(rows.map((r) => r.table)).toEqual([
+      'template_categories',
+      'template_category_links',
+      'template_localizations',
+      'template_packs',
+      'template_search_synonyms',
+      'template_signing_keys',
+      'template_versions',
+      'templates',
+    ]);
+    for (const r of rows) expect([r.qual, r.with_check], r.table).toEqual(['(org_id IS NULL)', '(org_id IS NULL)']);
   });
 });
