@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 type Side = 'top' | 'bottom' | 'right';
 
-/** App-facing tooltip: dMACQ Tooltip with the previous `content` / `shortcut` props. */
+/** dMACQ Tooltip with `content` / `shortcut` props used across the builder chrome. */
 export function Tooltip({
   content,
   shortcut,

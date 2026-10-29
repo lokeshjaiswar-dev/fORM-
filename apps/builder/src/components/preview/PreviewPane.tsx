@@ -8,7 +8,7 @@ import '@form/renderer/styles.css';
 import type { FormDefinition, IsoInstant, RuntimeStatus } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Alert, AlertDescription, Button, TextLink } from '@dmacq/ui';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip } from '@/components/Tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
 import { useEdition } from '@/edition/edition';
 import { previewStatus, previewUploader, previewVersion } from '@/lib/preview';

@@ -10,7 +10,7 @@ import { APP_IDS, blockOrder, blockText, isField } from '@/lib/definition';
 import { removeRule, setRule } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Button, Input, Label, Switch } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 import { COUNT, UNARY, choiceOptions, condition, firstOperator, kindOf, literal, localToday, operatorsFor, retarget, type Defaults } from '@/components/builder/inspector/conditions';
 
 const M = defineMessages('builder', {

@@ -5,7 +5,7 @@ import { defineMessages, SUPPORTED_DATE_PATTERNS } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, loadSession, useSessionStore } from '@/auth/client';
 import { Button, Input, TextLink } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 import { AuthLayout, Field, FormError } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
 

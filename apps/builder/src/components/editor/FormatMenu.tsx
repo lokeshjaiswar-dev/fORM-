@@ -4,7 +4,7 @@ import { useEditorState, type Editor } from '@tiptap/react';
 import { Bold, Highlighter, Italic, Link, Type, Underline } from 'lucide-react';
 import { toast } from 'sonner';
 import { isSafeHref, type ColorValue } from '@form/schema';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@dmacq/ui';
 import { themeCssVars } from '@form/renderer';
 import { useDoc } from '@/state/documentStore';

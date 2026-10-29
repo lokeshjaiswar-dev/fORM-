@@ -1,9 +1,8 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@dmacq/ui';
-import { cn } from '@/lib/utils';
 
 export type SelectOption = { value: string; label: string };
 
-/** Single-value select over dMACQ Select, matching the previous NiceSelect props. */
+/** Single-value dMACQ Select with an options list. */
 export function NiceSelect({
   value,
   onChange,
@@ -25,12 +24,7 @@ export function NiceSelect({
 }) {
   return (
     <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger
-        size={size}
-        fullWidth
-        className={cn(className)}
-        aria-label={ariaLabel}
-      >
+      <SelectTrigger size={size} fullWidth className={className} aria-label={ariaLabel}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent data-nice-select="">

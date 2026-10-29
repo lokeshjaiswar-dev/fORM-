@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { setBlockWidth, updateBlock } from '@/state/actions';
 import { currentDoc, useBlock } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip } from '@/components/Tooltip';
 import { Button, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { Field, SectionTitle, TextField, ToggleRow } from '@/components/builder/inspector/parts';

@@ -3,7 +3,7 @@ import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { Field as DsField, Input, Label, Switch } from '@dmacq/ui';
-import { NiceSelect, type SelectOption } from '@/components/ui/select';
+import { NiceSelect, type SelectOption } from '@/components/NiceSelect';
 
 /* Inspector controls: each writes through a builder action as the author types, so every edit is one command. */
 

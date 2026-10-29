@@ -9,7 +9,7 @@ import { t } from '@/i18n';
 import { GALLERY_LOCALE, formFromTemplate, loadSystemPack, type VariableAnswers } from '@/lib/systemPack';
 import { uid } from '@/lib/utils';
 import { Button, Field, Input, Label, Switch, TextLink } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 
 const M = defineMessages('builder', {
   'gallery.loading': 'Loading templates…',

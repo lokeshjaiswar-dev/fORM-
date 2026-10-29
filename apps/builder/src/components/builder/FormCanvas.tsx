@@ -16,7 +16,7 @@ import { insertTile } from '@/components/builder/insert';
 import { SlashMenu } from '@/components/builder/SlashMenu';
 import { EmptyStart } from '@/components/builder/EmptyStart';
 import { cn } from '@/lib/utils';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@dmacq/ui';
 
 const M = defineMessages('builder', {

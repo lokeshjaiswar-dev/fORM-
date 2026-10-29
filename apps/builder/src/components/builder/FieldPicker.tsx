@@ -11,7 +11,7 @@ import { insertTile } from '@/components/builder/insert';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { cn } from '@/lib/utils';
 import { Button, ScrollArea, SearchInput } from '@dmacq/ui';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip } from '@/components/Tooltip';
 
 const M = defineMessages('builder', {
   'picker.close': 'Close sidebar',

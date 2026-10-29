@@ -6,7 +6,7 @@ import { BUILDER_LOCALE, t } from '@/i18n';
 import { loadSession, orgApi, useActiveOrg, useSessionStore } from '@/auth/client';
 import { AccountMenu } from '@/auth/AccountMenu';
 import { Badge, Button, Field, Input, TextLink } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 import { FormError, Notice } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
 import {

@@ -4,7 +4,7 @@ import { Lock, Plus, ShieldCheck, Users } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { Button, TextLink } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 import { activeOrgOf, loadSession, signOut, switchOrg, useSessionStore } from './client';
 
 const M = defineMessages('builder', {

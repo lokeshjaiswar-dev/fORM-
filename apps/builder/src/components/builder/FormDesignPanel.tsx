@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { setTheme } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Button, Input, Label, SearchInput, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
 import { applyPreset, applyScheme, COLOR_SCHEMES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
 
@@ -149,18 +149,20 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                     <p className="mb-3 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.schemes'])}</p>
                     <div className="grid grid-cols-6 gap-2">
                       {schemes.map((scheme) => (
-                        <Button
+                        <button
                           key={scheme.id}
                           type="button"
-                          variant="outline"
                           aria-label={scheme.name}
-                          pressed={schemeId === scheme.id}
+                          aria-pressed={schemeId === scheme.id}
                           onClick={() => patch(applyScheme(theme, scheme))}
-                          className={cn('aspect-square h-auto rounded-lg border-2 text-[13px] font-semibold', schemeId === scheme.id ? 'border-sidebar-primary' : 'border-sidebar-border')}
+                          className={cn(
+                            'flex aspect-square items-center justify-center rounded-lg border-2 text-[13px] font-semibold',
+                            schemeId === scheme.id ? 'border-sidebar-primary' : 'border-sidebar-border',
+                          )}
                           style={{ background: scheme.surface, color: scheme.accent }}
                         >
                           A
-                        </Button>
+                        </button>
                       ))}
                     </div>
                   </section>
@@ -224,15 +226,17 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                       const accent = hexOf(preset.tokens.colors.accent, DEFAULT_COLORS.accent);
                       const selected = presetId === preset.id;
                       return (
-                        <Button
+                        <button
                           key={preset.id}
                           type="button"
-                          variant="outline"
-                          pressed={selected}
+                          aria-pressed={selected}
                           onClick={() => patch(applyPreset(theme, preset))}
-                          className={cn('h-auto overflow-hidden rounded-xl border-2 p-0 text-left whitespace-normal', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
+                          className={cn(
+                            'flex w-full flex-col overflow-hidden rounded-xl border-2 text-left',
+                            selected ? 'border-sidebar-primary' : 'border-sidebar-border',
+                          )}
                         >
-                          <div className="relative h-24 p-3" style={{ background: page }}>
+                          <div className="relative h-24 w-full p-3" style={{ background: page }}>
                             {selected ? <span className="absolute left-2 top-2 rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">{t(M['design.current'])}</span> : null}
                             <div className="ml-auto h-full w-[58%] rounded-md p-2 shadow-sm" style={{ background: surface }}>
                               <div className="mb-1 h-1.5 w-2/3 rounded" style={{ background: hexOf(preset.tokens.colors.text, '#111') }} />
@@ -240,8 +244,8 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                               <div className="h-3 w-10 rounded" style={{ background: accent }} />
                             </div>
                           </div>
-                          <p className="bg-sidebar-accent/50 px-2 py-2 text-[12px] font-medium">{preset.name}</p>
-                        </Button>
+                          <p className="bg-sidebar-accent/50 px-3 py-2 text-[12px] font-medium leading-5">{preset.name}</p>
+                        </button>
                       );
                     })}
                   </div>
@@ -254,22 +258,24 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                     ['classic', M['design.classic'], M['design.classic_hint'], '#f59e0b'],
                     ['cards', M['design.cards'], M['design.cards_hint'], '#60a5fa'],
                   ] as const).map(([id, title, hint, tint]) => (
-                    <Button
+                    <button
                       key={id}
                       type="button"
-                      variant="outline"
-                      pressed={theme.layout === id}
+                      aria-pressed={theme.layout === id}
                       onClick={() => patch({ ...theme, layout: id })}
-                      className={cn('h-auto overflow-hidden rounded-xl border-2 p-0 text-left whitespace-normal', theme.layout === id ? 'border-sidebar-primary' : 'border-sidebar-border')}
+                      className={cn(
+                        'flex w-full flex-col overflow-hidden rounded-xl border-2 text-left',
+                        theme.layout === id ? 'border-sidebar-primary' : 'border-sidebar-border',
+                      )}
                     >
-                      <div className="flex h-28 items-center justify-center p-4" style={{ background: tint }}>
+                      <div className="flex h-28 w-full items-center justify-center p-4" style={{ background: tint }}>
                         <div className={cn('bg-white shadow-md', id === 'cards' ? 'h-20 w-24 rounded-2xl' : 'h-[88px] w-28 rounded-md')} />
                       </div>
                       <div className="bg-sidebar-accent/50 px-3 py-2">
-                        <p className="text-[13px] font-semibold">{t(title)}</p>
-                        <p className="text-[12px] text-sidebar-muted">{t(hint)}</p>
+                        <p className="text-[13px] font-semibold leading-5">{t(title)}</p>
+                        <p className="text-[12px] leading-5 text-sidebar-muted">{t(hint)}</p>
                       </div>
-                    </Button>
+                    </button>
                   ))}
                 </div>
               ) : null}

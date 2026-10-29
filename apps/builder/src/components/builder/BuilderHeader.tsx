@@ -17,7 +17,7 @@ import { TemplateDialog } from '@/components/templates/TemplateDialog';
 import { EditionBadge } from '@/edition/EditionBadge';
 import { toast } from 'sonner';
 import { Button } from '@dmacq/ui';
-import { Tooltip, modKey } from '@/components/ui/tooltip';
+import { Tooltip, modKey } from '@/components/Tooltip';
 
 export function BuilderHeader() {
   const title = useDoc((d) => d.title);

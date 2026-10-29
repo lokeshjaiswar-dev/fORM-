@@ -13,7 +13,7 @@ import { insertTile } from '@/components/builder/insert';
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { SlashMenu } from '@/components/builder/SlashMenu';
 import { Button } from '@dmacq/ui';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip } from '@/components/Tooltip';
 
 const M = defineMessages('builder', {
   'block.delete': 'Delete block',

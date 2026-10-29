@@ -5,7 +5,7 @@ import { defineMessages, formatDate, type MessageId } from '@form/i18n';
 import { t } from '@/i18n';
 import { api, download, loadSession, signOut, useSessionStore } from '@/auth/client';
 import { Button, Input, Textarea, TextLink } from '@dmacq/ui';
-import { NiceSelect } from '@/components/ui/select';
+import { NiceSelect } from '@/components/NiceSelect';
 import { AuthLayout, Field, FormError, Notice } from '../auth/AuthLayout';
 import { problemText, submit } from '../auth/util';
 import { PrivacyNotice } from './PrivacyNotice';
