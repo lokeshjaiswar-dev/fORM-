@@ -23,3 +23,12 @@ export function compareDecimal(a: string, b: string): -1 | 0 | 1 | null {
   if (x === null || y === null) return null;
   return x.comparedTo(y) as -1 | 0 | 1;
 }
+
+/** A DecimalString for a finite value of at most 34 significant digits and 10 fraction digits. */
+export function formatDecimal(value: DecimalValue): string | null {
+  if (!value.isFinite() || value.precision(true) > 34) return null;
+  let text = value.toFixed(10);
+  if (text.includes('.')) text = text.replace(/\.?0+$/, '');
+  if (text === '-0') text = '0';
+  return DECIMAL.test(text) ? text : null;
+}

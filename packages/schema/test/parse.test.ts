@@ -21,8 +21,9 @@ describe('runtime twins reject what the types reject', () => {
 
   it('a present answer is never empty (I9)', () => {
     const answer = (type: string, value: unknown) => ok(S.AnswerValueSchema, { type, value });
-    expect(answer('context', '')).toBe(false);
-    expect(answer('context', 'utm')).toBe(true);
+    expect(answer('context', {})).toBe(false);
+    expect(answer('context', { page_url: '' })).toBe(false);
+    expect(answer('context', { page_url: 'https://example.com' })).toBe(true);
     expect(answer('multi_choice', { optionIds: [] })).toBe(false);
     expect(answer('multi_choice', { optionIds: [], other: '' })).toBe(false);
     expect(answer('multi_choice', { optionIds: [], other: 'Something else' })).toBe(true);

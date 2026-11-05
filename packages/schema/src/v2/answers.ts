@@ -1,6 +1,6 @@
 import type { _ExactKeys } from './_internal.ts';
 import type { ValueFieldType } from './catalogue.ts';
-import type { AddressPart, NamePart } from './config.ts';
+import type { AddressPart, ContextSource, NamePart } from './config.ts';
 import type { ScalarValue } from './expr.ts';
 import type { BlockId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, Locale, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, Sha256Hex, TimeZone } from './ids.ts';
 
@@ -59,7 +59,7 @@ export interface AnswerValueMap {
   payment: PaymentSelection;
   appointment: { start: IsoInstant; end: IsoInstant; respondentTimeZone: TimeZone; holdToken?: string };
   calculation: ScalarValue;
-  context: string;
+  context: Partial<Record<ContextSource, string>>;
   unique_id: string;
 }
 export const _answersComplete: _ExactKeys<AnswerValueMap, ValueFieldType> = true;

@@ -45,7 +45,7 @@ describe('builder actions', () => {
     const group = get(groupId);
     expect(group.type).toBe('repeating_group');
     if (group.type !== 'repeating_group') return;
-    expect(group.config.children.map((id) => get(id).type)).toEqual(['short_text', 'single_choice', 'date', 'time']);
+    expect(group.config.children.map((id) => get(id).type)).toEqual(['short_text', 'single_choice', 'date']);
     const extra = addChildBlock(groupId, { type: 'number', configOverrides: {} });
     expect(get(extra).type).toBe('number');
     const after = get(groupId);

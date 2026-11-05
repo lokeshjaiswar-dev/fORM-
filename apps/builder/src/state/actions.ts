@@ -84,71 +84,16 @@ const dropdown = (...labels: string[]) => ({
   options: labels.map((label, i) => ({ id: `option_${i + 1}` as OptionId, label })),
 });
 
-type ChildSpec = { type: AvailableType; label: string; configOverrides?: Partial<BlockConfigMap[AvailableType]>; hideLabel?: boolean };
+type ChildSpec = { type: AvailableType; label: string; configOverrides?: Partial<BlockConfigMap[AvailableType]> };
 
-const CHILD_PRESETS: Record<string, ChildSpec[]> = {
-  'repeating_group': [
-    { type: 'short_text', label: 'Item' },
-    { type: 'single_choice', label: 'Type', configOverrides: dropdown('Option A', 'Option B', 'Option C') },
-    { type: 'date', label: 'Date' },
-    { type: 'time', label: 'Time' },
-  ],
-  'repeating_group.contacts': [
-    { type: 'full_name', label: 'Name' },
-    { type: 'email', label: 'Email' },
-    { type: 'phone', label: 'Phone' },
-  ],
-  'repeating_group.line_items': [
-    { type: 'short_text', label: 'Item', hideLabel: true },
-    { type: 'number', label: 'Quantity', hideLabel: true },
-    { type: 'number', label: 'Amount', hideLabel: true },
-  ],
-  'repeating_group.guests': [
-    { type: 'full_name', label: 'Guest name' },
-    { type: 'email', label: 'Email' },
-    { type: 'single_choice', label: 'Meal', configOverrides: dropdown('Veg', 'Non-veg', 'Jain') },
-  ],
-  'repeating_group.education': [
-    { type: 'short_text', label: 'School / college' },
-    { type: 'short_text', label: 'Degree' },
-    { type: 'number', label: 'Year' },
-  ],
-  'repeating_group.employment': [
-    { type: 'short_text', label: 'Employer' },
-    { type: 'short_text', label: 'Role' },
-    { type: 'date', label: 'From' },
-    { type: 'date', label: 'To' },
-  ],
-  'repeating_group.documents': [
-    { type: 'short_text', label: 'Document name' },
-    { type: 'file_upload', label: 'File' },
-  ],
-  'repeating_group.schedule': [
-    { type: 'date', label: 'Date' },
-    { type: 'time', label: 'Time' },
-    { type: 'long_text', label: 'Notes' },
-  ],
-  'repeating_group.texts': [
-    { type: 'short_text', label: 'Answer 1' },
-    { type: 'short_text', label: 'Answer 2' },
-  ],
-  'repeating_group.dropdowns': [
-    { type: 'single_choice', label: 'Choice 1', configOverrides: dropdown('Option A', 'Option B', 'Option C') },
-    { type: 'single_choice', label: 'Choice 2', configOverrides: dropdown('Option A', 'Option B', 'Option C') },
-  ],
-  'repeating_group.dates': [
-    { type: 'date', label: 'From' },
-    { type: 'date', label: 'To' },
-  ],
-  'repeating_group.checklist': [
-    { type: 'file_upload', label: 'Identity document' },
-    { type: 'file_upload', label: 'Address proof' },
-    { type: 'file_upload', label: 'Photograph', configOverrides: { capture: 'environment', accept: { extensions: ['jpg', 'jpeg', 'png'], mimeTypes: ['image/jpeg', 'image/png'] } } },
-  ],
-};
+const CHILD_PRESETS: ChildSpec[] = [
+  { type: 'short_text', label: 'Item' },
+  { type: 'single_choice', label: 'Type', configOverrides: dropdown('Option A', 'Option B', 'Option C') },
+  { type: 'date', label: 'Date' },
+];
 
 /** A repeating group plus its first child fields, as one undoable step. */
-export function addRepeatingGroup(choice: BlockChoice, at: PageSlot = endSlot(), paletteId = 'repeating_group'): BlockId | '' {
+export function addRepeatingGroup(choice: BlockChoice, at: PageSlot = endSlot()): BlockId | '' {
   let doc = currentDoc();
   const made = newBlock(choice, doc);
   const ops: DocumentOp[] = made.purpose ? [{ op: 'add_purpose', purpose: made.purpose }] : [];
@@ -156,15 +101,13 @@ export function addRepeatingGroup(choice: BlockChoice, at: PageSlot = endSlot(),
   const group = made.block;
   if (group.type !== 'repeating_group') return '';
   doc = { ...doc, blocks: { ...doc.blocks, [group.id]: group } };
-  const specs = CHILD_PRESETS[paletteId] ?? CHILD_PRESETS['repeating_group'] ?? [];
-  const children = specs.map((spec) => {
+  const children = CHILD_PRESETS.map((spec) => {
     const child = createBlock({ type: spec.type, configOverrides: (spec.configOverrides ?? {}) as never }, doc);
     if ('label' in child) child.label = inlineDoc(spec.label);
-    if (spec.hideLabel && isField(child)) child.hideLabel = true;
     doc = { ...doc, blocks: { ...doc.blocks, [child.id]: child } };
     return child;
   });
-  group.config = { ...group.config, children: children.map((c) => c.id) };
+  group.config = { ...group.config, children: children.map((c) => c.id), layout: 'stacked' };
   ops.push({ op: 'add_block', block: group, parent: { pageId: at.pageId }, index: at.index });
   children.forEach((child, i) => ops.push({ op: 'add_block', block: child, parent: { blockId: group.id }, index: i }));
   const result = dispatch({ type: 'apply_ops', ops });
@@ -174,16 +117,16 @@ export function addRepeatingGroup(choice: BlockChoice, at: PageSlot = endSlot(),
 }
 
 /** Adds a child field inside a repeating group. */
-export function addChildBlock(parentId: BlockId, choice: BlockChoice): BlockId | '' {
+export function addChildBlock(parentId: BlockId, choice: BlockChoice, patch: BlockPatch = {}): BlockId | '' {
   const parent = currentDoc().blocks[parentId];
   if (parent?.type !== 'repeating_group') return '';
   const made = newBlock(choice, currentDoc());
   const ops: DocumentOp[] = made.purpose ? [{ op: 'add_purpose', purpose: made.purpose }] : [];
-  const block = made.block;
+  const block = { ...made.block, ...patch } as ReturnType<typeof createBlock>;
   ops.push({ op: 'add_block', block, parent: { blockId: parentId }, index: parent.config.children.length });
   const result = dispatch({ type: 'apply_ops', ops });
   if (!result.ok) return '';
-  useUiStore.setState({ activeBlockId: block.id, started: true });
+  useUiStore.setState({ activeBlockId: block.id, started: true, inspectorOpen: true });
   return block.id;
 }
 

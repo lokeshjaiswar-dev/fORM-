@@ -1,18 +1,19 @@
 import type { ComponentType } from 'react';
-import { Star } from 'lucide-react';
+import { Star, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { isAvailable, type AvailableType } from '@form/registry';
-import type { BlockOf, NamePart } from '@form/schema';
+import { isAvailable, isRepeatableChildType, type AvailableType } from '@form/registry';
+import type { BlockOf, NamePart, StoredBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { OptionList, Points, Select, TextBox } from '@/fields/canvasParts';
+import { TILES } from '@/fields/tiles';
 import { labelStyle } from '@/fields/style';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { addChildBlock, updateBlock } from '@/state/actions';
+import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { isField, plainText } from '@/lib/definition';
-import { Button } from '@dmacq/ui';
+import { useUiStore } from '@/state/uiStore';
+import { inlineDoc, isField } from '@/lib/definition';
 
 /*
  * The canvas view of every available block type (FND-03): what an author sees in place of the respondent control.
@@ -35,7 +36,7 @@ const M = defineMessages('builder', {
   'canvas.hidden_utm': 'Hidden from respondents · filled from utm_{param}',
   'canvas.hidden_other': 'Hidden from respondents',
   'canvas.calculation': 'Result updates as answers change',
-  'canvas.context': 'Filled from this session · {source}',
+  'canvas.context': 'Filled from this session · {facts}',
   'canvas.name.first': 'First name',
   'canvas.name.last': 'Last name',
   'canvas.name.middle': 'Middle name',
@@ -45,9 +46,10 @@ const M = defineMessages('builder', {
   'canvas.time': 'Pick a time',
   'canvas.heading': 'Heading',
   'canvas.paragraph': 'Type something…',
-  'canvas.repeat_add_field': 'Add a field to each row',
   'canvas.repeat_hint': '{min}–{max} rows · respondents can add more while filling',
-  'canvas.repeat_child': 'Short answer',
+  'canvas.repeat_pick': 'Choose a field type',
+  'canvas.repeat_remove': 'Remove this field',
+  'canvas.question': 'Type a question',
 });
 
 const headingSize = { 1: 'text-[32px]', 2: 'text-[24px]', 3: 'text-[20px]' } as const;
@@ -76,7 +78,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   ),
   email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
   phone: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.showCountrySelect ? `${block.config.defaultCountry} ▾` : undefined} />,
-  number: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
+  number: ({ block }) => <NumberCanvas block={block} />,
   url: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
   single_choice: ({ block }) =>
     block.config.display === 'dropdown' ? <Select block={block} placeholder={block.config.placeholder} /> : <OptionList options={block.config.options} shape="round" other={block.config.other?.enabled === true} />,
@@ -130,7 +132,11 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   calculation: () => <p className="text-[12px] text-[var(--fr-muted)]">{t(M['canvas.calculation'])}</p>,
-  context: ({ block }) => <p className="text-[12px] text-[var(--fr-muted)]">{t(M['canvas.context'], { source: block.config.source.replace(/_/g, ' ') })}</p>,
+  context: ({ block }) => (
+    <p className="text-[12px] text-[var(--fr-muted)]">
+      {t(M['canvas.context'], { facts: block.config.sources.map((source) => source.replace(/_/g, ' ')).join(', ') })}
+    </p>
+  ),
   hidden: ({ block }) => {
     const source = block.config.source;
     const text = source.kind === 'url_param' ? t(M['canvas.hidden'], { name: source.name ?? block.key }) : source.kind === 'utm' ? t(M['canvas.hidden_utm'], { param: source.param }) : t(M['canvas.hidden_other']);
@@ -161,26 +167,99 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   divider: ({ block }) => <hr className={cn(SPACING[block.config.spacing], LINE[block.config.lineStyle])} style={{ borderColor: 'var(--fr-inputBorder)' }} />,
 };
 
+function NumberCanvas({ block }: { block: BlockOf<'number'> }) {
+  const c = block.config;
+  const slider = c.display === 'stepper' && c.min !== undefined && c.max !== undefined;
+  if (!slider) return <TextBox block={block} placeholder={c.placeholder} prefix={c.prefix} suffix={c.suffix} />;
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      {c.prefix ? <span className="text-[13px] text-[var(--fr-muted)]">{c.prefix}</span> : null}
+      <span className="text-[12px] text-[var(--fr-muted)]">{c.min}</span>
+      <input type="range" className="w-full accent-[var(--fr-accent)]" min={c.min} max={c.max} step={c.step ?? '1'} defaultValue={c.min} disabled aria-hidden />
+      <span className="text-[12px] text-[var(--fr-muted)]">{c.max}</span>
+      {c.suffix ? <span className="text-[13px] text-[var(--fr-muted)]">{c.suffix}</span> : null}
+    </div>
+  );
+}
+
+const CHILD_TILES = TILES.filter((tile) => tile.kind === 'block' && isRepeatableChildType(tile.choice.type));
+
+function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolean }) {
+  const openInspector = useUiStore((s) => s.openInspector);
+  const requestInsertFocus = useUiStore((s) => s.requestInsertFocus);
+  if (child.type === 'unsupported' || !isAvailable(child.type)) return null;
+  const View = CANVAS[child.type] as CanvasView<AvailableType>;
+  return (
+    <div
+      className={cn('group/child relative flex min-w-0 flex-col px-2 py-2', selected && 'rounded-md bg-[color-mix(in_srgb,var(--fr-accent)_10%,transparent)]')}
+      onClick={(e) => {
+        e.stopPropagation();
+        openInspector(child.id);
+      }}
+    >
+      <button
+        type="button"
+        className={cn(
+          'absolute right-1 top-1 rounded p-0.5 text-[var(--fr-muted)] hover:bg-black/5 hover:text-destructive',
+          selected ? 'opacity-100' : 'opacity-0 group-hover/child:opacity-100',
+        )}
+        aria-label={t(M['canvas.repeat_remove'])}
+        onClick={(e) => {
+          e.stopPropagation();
+          requestDeleteBlock(child.id);
+        }}
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+      {isField(child) && !child.hideLabel ? (
+        <InlineEditor
+          value={child.label}
+          onChange={(label) => updateBlock(child.id, { label })}
+          onEnter={requestInsertFocus}
+          autoFocus={selected}
+          fill={false}
+          className="mb-1 min-h-7 w-full shrink-0 bg-transparent pr-5 text-left text-[13px] font-medium leading-7"
+          style={labelStyle(child.style)}
+          placeholder={t(M['canvas.question'])}
+        />
+      ) : isField(child) ? (
+        <div className="mb-1 min-h-7 shrink-0" aria-hidden />
+      ) : null}
+      <View block={child as never} focused={selected} onEnter={requestInsertFocus} />
+    </div>
+  );
+}
+
 function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) {
   const blocks = useDoc((d) => d.blocks);
-  const children = block.config.children.map((id) => blocks[id]).filter((b) => b && b.type !== 'unsupported' && isAvailable(b.type));
+  const selected = useUiStore((s) => s.activeBlockId);
+  const children = block.config.children.map((id) => blocks[id]).filter((b): b is StoredBlock => !!b && b.type !== 'unsupported' && isAvailable(b.type));
   return (
     <div className="overflow-hidden rounded-md border" style={{ borderColor: 'var(--fr-inputBorder)' }} onClick={(e) => e.stopPropagation()}>
       <p className="border-b px-3 py-1.5 text-[12px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)' }}>
         {t(M['canvas.repeat_hint'], { min: block.config.minRows, max: block.config.maxRows })}
       </p>
-      <div className="flex flex-wrap items-stretch">
+      <div className="grid grid-cols-3 items-start">
         {children.map((child) => (
-          <div key={child.id} className="min-w-[8rem] flex-1 border-r px-3 py-2 text-[13px] last:border-r-0" style={{ borderColor: 'var(--fr-inputBorder)' }}>
-            <p>{isField(child) ? (plainText(child.label) || child.key) : child.type}</p>
-            <p className="text-[11px] text-[var(--fr-muted)]">{child.type.replace(/_/g, ' ')}</p>
-          </div>
+          <RepeatChild key={child.id} child={child} selected={selected === child.id} />
         ))}
       </div>
-      <div className="border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
-        <Button type="button" variant="ghost" size="sm" onClick={() => addChildBlock(block.id, { type: 'short_text', configOverrides: {} })}>
-          {t(M['canvas.repeat_add_field'])}
-        </Button>
+      <div className="flex items-center gap-2 border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+        <select
+          className="h-8 min-w-[10rem] rounded-md border bg-transparent px-2 text-[13px]"
+          style={{ borderColor: 'var(--fr-inputBorder)' }}
+          aria-label={t(M['canvas.repeat_pick'])}
+          value=""
+          onChange={(e) => {
+            const tile = CHILD_TILES.find((item) => item.id === e.target.value);
+            if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
+          }}
+        >
+          <option value="">{t(M['canvas.repeat_pick'])}</option>
+          {CHILD_TILES.filter((tile) => tile.kind === 'block').map((tile) => (
+            <option key={tile.id} value={tile.id}>{tile.label}</option>
+          ))}
+        </select>
       </div>
     </div>
   );

@@ -327,7 +327,8 @@ export interface AppointmentConfig {
 /* Computed */
 export interface CalculationConfig { expr: Expr; resultType: ExprType; format?: ValueFormat; display: 'visible' | 'hidden'; declassify?: { reason: string } }
 export const CONTEXT_SOURCES = ['page_url', 'referrer', 'user_agent', 'started_at', 'submitted_at', 'locale', 'time_zone', 'embed_origin'] as const;
-export interface ContextConfig { source: (typeof CONTEXT_SOURCES)[number]; stripQuery?: boolean }
+export type ContextSource = (typeof CONTEXT_SOURCES)[number];
+export interface ContextConfig { sources: ContextSource[]; stripQuery?: boolean }
 export interface UniqueIdConfig { prefix: PlainTemplate; padTo: number; startAt: number; resetEvery: 'never' | 'year' | 'month'; showOnEnding: boolean }
 
 /* Content and container */

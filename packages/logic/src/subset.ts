@@ -7,7 +7,7 @@ import { OPERAND_OPERATORS, UNARY, baseOperator } from './operators.ts';
 /*
  * Static typing of the P0 subset (delivery plan WP-0.07): condition groups with every comparison
  * operator, operands that are answers, request metadata, literals, typed option sets and expressions
- * made of `lit`, `ref` and comparisons. Everything else is reported as `missing_capability`, which
+ * made of `lit`, `ref`, numeric `+ - * /` and comparisons. Everything else is reported as `missing_capability`, which
  * compile() treats as fatal (ADR-0002 §2), until WP-2.01–2.03 bring it.
  */
 
@@ -39,6 +39,7 @@ const TEXT_META: ReadonlySet<MetaKey> = new Set<MetaKey>([
   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
 ]);
 const COMPARISONS: ReadonlySet<string> = new Set(['==', '!=', '<', '<=', '>', '>=']);
+const ARITHMETIC: ReadonlySet<string> = new Set(['+', '-', '*', '/']);
 const ORDERED: ReadonlySet<ValueKind> = new Set<ValueKind>(['number', 'money', 'date', 'time', 'datetime']);
 const COUNT = /^(0|[1-9]\d*)$/;
 
@@ -94,7 +95,7 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
   return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type };
 }
 
-/** Expressions in the P0 subset: `lit`, `ref` and comparisons of those. */
+/** Expressions in the P0 subset: `lit`, `ref`, numeric arithmetic and comparisons of those. */
 export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<string>): Typed | null {
   let nodes = 0;
   let tooLarge = false;
@@ -114,7 +115,27 @@ export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<
         const typed = typeRef(ctx, e.ref, `${at}/ref`, reads);
         return typed && { ...typed, source: 'expr' };
       }
+      case 'unary': {
+        if (e.op !== 'neg') break;
+        const arg = visit(e.arg, `${at}/arg`, depth + 1);
+        if (!arg) return null;
+        if (arg.kind !== 'number') {
+          ctx.issue('expr_type_error', at, `'neg' needs a number, not ${arg.kind}`);
+          return null;
+        }
+        return { kind: 'number', source: 'expr' };
+      }
       case 'binary': {
+        if (ARITHMETIC.has(e.op)) {
+          const left = visit(e.left, `${at}/left`, depth + 1);
+          const right = visit(e.right, `${at}/right`, depth + 1);
+          if (!left || !right) return null;
+          if (left.kind !== 'number' || right.kind !== 'number') {
+            ctx.issue('expr_type_error', at, `'${e.op}' needs numbers, not ${left.kind} and ${right.kind}`);
+            return null;
+          }
+          return { kind: 'number', source: 'expr' };
+        }
         if (!COMPARISONS.has(e.op)) break;
         const left = visit(e.left, `${at}/left`, depth + 1);
         const right = visit(e.right, `${at}/right`, depth + 1);

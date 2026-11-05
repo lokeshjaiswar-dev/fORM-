@@ -12,18 +12,22 @@ export function NumberInput({ block, field }: ControlProps<'number'>) {
   return (
     <Affix prefix={c.prefix} suffix={c.suffix}>
       {slider ? (
-        <input
-          id={field.ids.input}
-          className="fr-range-input"
-          type="range"
-          min={c.min}
-          max={c.max}
-          step={step}
-          value={answer.value ?? c.min}
-          onChange={(e) => answer.set(e.target.value.trim() as DecimalString)}
-          onBlur={answer.onBlur}
-          {...inputAttrs(field)}
-        />
+        <div className="fr-slider">
+          <span className="fr-slider-edge">{c.min}</span>
+          <input
+            id={field.ids.input}
+            className="fr-range-input"
+            type="range"
+            min={c.min}
+            max={c.max}
+            step={step}
+            value={answer.value ?? c.min}
+            onChange={(e) => answer.set(e.target.value.trim() as DecimalString)}
+            onBlur={answer.onBlur}
+            {...inputAttrs(field)}
+          />
+          <span className="fr-slider-edge">{c.max}</span>
+        </div>
       ) : (
         <input
           id={field.ids.input}

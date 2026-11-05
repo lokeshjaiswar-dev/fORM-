@@ -45,4 +45,12 @@ export const MESSAGES = defineMessages('renderer', {
   'title.untitled': 'Form title',
   'ending.fill_again': 'Submit another response',
   'ending.redirecting': 'Taking you to the next page…',
+  'session.page_url': 'Page URL',
+  'session.referrer': 'Referrer',
+  'session.user_agent': 'Browser',
+  'session.started_at': 'Started at',
+  'session.submitted_at': 'Submitted at',
+  'session.locale': 'Locale',
+  'session.time_zone': 'Time zone',
+  'session.embed_origin': 'Embed origin',
 });

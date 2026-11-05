@@ -7,7 +7,7 @@ import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { tileOf } from '@/fields/tiles';
-import { KEY_PATTERN, isField, richDoc, takenKeys } from '@/lib/definition';
+import { KEY_PATTERN, isField, placementOf, richDoc, takenKeys } from '@/lib/definition';
 import { cn } from '@/lib/utils';
 import { setBlockWidth, updateBlock } from '@/state/actions';
 import { currentDoc, useBlock } from '@/state/documentStore';
@@ -216,7 +216,12 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
   );
 }
 
-function Look({ block }: { block: Exclude<StoredBlock, { type: 'unsupported' }> }) {
+function inRepeatingGroup(id: BlockId): boolean {
+  const at = placementOf(currentDoc(), id);
+  return !!at && 'blockId' in at.parent && currentDoc().blocks[at.parent.blockId]?.type === 'repeating_group';
+}
+
+function Look({ block, compact }: { block: Exclude<StoredBlock, { type: 'unsupported' }>; compact?: boolean }) {
   const style = block.style ?? {};
   const set = (patch: { [K in keyof BlockStyle]?: BlockStyle[K] | undefined }) => {
     const next: Record<string, unknown> = { ...style, ...patch };
@@ -224,11 +229,12 @@ function Look({ block }: { block: Exclude<StoredBlock, { type: 'unsupported' }> 
     updateBlock(block.id, { style: Object.keys(next).length ? next : undefined });
   };
   const field = isField(block);
+  const inputLook = field && block.type !== 'hidden' && block.type !== 'repeating_group';
   return (
     <>
       <SectionTitle>{t(M['inspector.look'])}</SectionTitle>
       <ColorField label={t(field ? M['inspector.label_color'] : M['inspector.text_color'])} value={style.labelColor} fallback="#111111" onChange={(labelColor) => set({ labelColor })} />
-      {field && block.type !== 'hidden' ? (
+      {inputLook ? (
         <>
           <ColorField label={t(M['inspector.input_text_color'])} value={style.inputTextColor} fallback="#111111" onChange={(inputTextColor) => set({ inputTextColor })} />
           <ColorField label={t(M['inspector.input_bg'])} value={style.inputBg} fallback="#ffffff" onChange={(inputBg) => set({ inputBg })} />
@@ -236,24 +242,29 @@ function Look({ block }: { block: Exclude<StoredBlock, { type: 'unsupported' }> 
           <ColorField label={t(M['inspector.placeholder_color'])} value={style.placeholderColor} fallback="#a1a1aa" onChange={(placeholderColor) => set({ placeholderColor })} />
         </>
       ) : null}
-      <ToggleGroup
-        type="single"
-        size="sm"
-        appearance="tinted"
-        className="w-full"
-        aria-label={t(M['inspector.align'])}
-        value={style.align ?? 'left'}
-        onValueChange={(a) => a && set({ align: a === 'left' ? undefined : (a as 'center') })}
-      >
-        <ToggleGroupItem value="left" className="flex-1">{t(M['inspector.align_left'])}</ToggleGroupItem>
-        <ToggleGroupItem value="center" className="flex-1">{t(M['inspector.align_center'])}</ToggleGroupItem>
-      </ToggleGroup>
+      {compact ? null : (
+        <ToggleGroup
+          type="single"
+          size="sm"
+          appearance="tinted"
+          className="w-full"
+          aria-label={t(M['inspector.align'])}
+          value={style.align ?? 'left'}
+          onValueChange={(a) => a && set({ align: a === 'left' ? undefined : (a as 'center') })}
+        >
+          <ToggleGroupItem value="left" className="flex-1">{t(M['inspector.align_left'])}</ToggleGroupItem>
+          <ToggleGroupItem value="center" className="flex-1">{t(M['inspector.align_center'])}</ToggleGroupItem>
+        </ToggleGroup>
+      )}
     </>
   );
 }
 
 function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupported' }> }) {
   const width = block.layout?.width ?? 'full';
+  const nested = inRepeatingGroup(block.id);
+  const list = block.type === 'repeating_group';
+  const skipWidth = nested || list;
   return (
     <>
       {isField(block) ? (
@@ -277,21 +288,23 @@ function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupporte
         </>
       ) : null}
       <Registered block={block} section="general" />
-      <Field label={t(M['inspector.width'])} hint={t(M['inspector.width_hint'])}>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
-          aria-label={t(M['inspector.width'])}
-          value={width}
-          onValueChange={(w) => w && setBlockWidth(block.id, w as 'full' | 'half')}
-        >
-          <ToggleGroupItem value="full" className="flex-1">{t(M['inspector.width_full'])}</ToggleGroupItem>
-          <ToggleGroupItem value="half" className="flex-1">{t(M['inspector.width_half'])}</ToggleGroupItem>
-        </ToggleGroup>
-      </Field>
-      {block.type !== 'divider' ? <Look block={block} /> : null}
+      {skipWidth ? null : (
+        <Field label={t(M['inspector.width'])} hint={t(M['inspector.width_hint'])}>
+          <ToggleGroup
+            type="single"
+            size="sm"
+            appearance="tinted"
+            className="w-full"
+            aria-label={t(M['inspector.width'])}
+            value={width}
+            onValueChange={(w) => w && setBlockWidth(block.id, w as 'full' | 'half')}
+          >
+            <ToggleGroupItem value="full" className="flex-1">{t(M['inspector.width_full'])}</ToggleGroupItem>
+            <ToggleGroupItem value="half" className="flex-1">{t(M['inspector.width_half'])}</ToggleGroupItem>
+          </ToggleGroup>
+        </Field>
+      )}
+      {block.type !== 'divider' ? <Look block={block} compact={nested || list} /> : null}
     </>
   );
 }

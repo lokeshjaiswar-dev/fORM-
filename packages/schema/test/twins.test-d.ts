@@ -175,6 +175,7 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.PaymentConfigSchema>>().toEqualTypeOf<S.PaymentConfig>();
   expectTypeOf<z.infer<typeof S.AppointmentConfigSchema>>().toEqualTypeOf<S.AppointmentConfig>();
   expectTypeOf<z.infer<typeof S.CalculationConfigSchema>>().toEqualTypeOf<S.CalculationConfig>();
+  expectTypeOf<z.infer<typeof S.ContextSourceSchema>>().toEqualTypeOf<S.ContextSource>();
   expectTypeOf<z.infer<typeof S.ContextConfigSchema>>().toEqualTypeOf<S.ContextConfig>();
   expectTypeOf<z.infer<typeof S.UniqueIdConfigSchema>>().toEqualTypeOf<S.UniqueIdConfig>();
   expectTypeOf<z.infer<typeof S.HeadingConfigSchema>>().toEqualTypeOf<S.HeadingConfig>();

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { StoredAnswer } from '../answers.ts';
 import { depthGuard, guarded, guardedMap, keyed, options, tagged } from './_util.ts';
 import { ValueFieldTypeSchema } from './catalogue.ts';
-import { NamePartSchema } from './config.ts';
+import { ContextSourceSchema, NamePartSchema } from './config.ts';
 import { ScalarValueSchema } from './logic.ts';
 import {
   BlockIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema, DecimalStringSchema, EmailAddressSchema, FileIdSchema,
@@ -107,7 +107,7 @@ const ANSWER_VALUE_SHAPE = {
   payment: PaymentSelectionSchema,
   appointment: z.strictObject({ start: IsoInstantSchema, end: IsoInstantSchema, respondentTimeZone: TimeZoneSchema, holdToken: z.string().exactOptional() }),
   calculation: ScalarValueSchema,
-  context: part(10_000),
+  context: keyed(z.partialRecord(ContextSourceSchema, part(10_000)).refine(someValue, 'session details need at least one fact')),
   unique_id: z.string().min(1).max(128),
 };
 

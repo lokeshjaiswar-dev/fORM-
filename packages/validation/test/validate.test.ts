@@ -91,7 +91,7 @@ describe('scope (VAL-10, RSP-02)', () => {
     expect(codes(run(def, junk).errors)).toEqual(['a required']);
     /* This version does not compile computed fields yet (x-field capabilities), so they are spliced into a compiled one, visible and required. */
     const computed = [
-      field('context', 'ctx', { required: true, config: { source: 'page_url' } }),
+      field('context', 'ctx', { required: true, config: { sources: ['page_url'] } }),
       field('calculation', 'calc', { required: true }),
       field('unique_id', 'uid', { required: true }),
     ];

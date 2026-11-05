@@ -380,7 +380,11 @@ export const CalculationConfigSchema = z.strictObject({
   display: z.enum(['visible', 'hidden']),
   declassify: z.strictObject({ reason: z.string().min(1).max(1000) }).exactOptional(),
 });
-export const ContextConfigSchema = z.strictObject({ source: z.enum(CONTEXT_SOURCES), stripQuery: z.boolean().exactOptional() });
+export const ContextSourceSchema = z.enum(CONTEXT_SOURCES);
+export const ContextConfigSchema = z.strictObject({
+  sources: z.array(ContextSourceSchema).min(1).max(CONTEXT_SOURCES.length),
+  stripQuery: z.boolean().exactOptional(),
+}).refine((config) => new Set(config.sources).size === config.sources.length, 'sources must be unique');
 export const UniqueIdConfigSchema = z.strictObject({
   prefix: PlainTemplateSchema,
   padTo: count.max(20),

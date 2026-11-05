@@ -1,14 +1,17 @@
 import { defineMessages } from '@form/i18n';
-import { isRepeatableChildType, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
-import { DATE_PATTERNS, type BlockOf, type DecimalString, type MatrixColumnId, type MatrixRowId, type SchemaLike } from '@form/schema';
+import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
+import { CONTEXT_SOURCES, DATE_PATTERNS, type BlockOf, type ContextSource, type DecimalString, type MatrixColumnId, type MatrixRowId, type SchemaLike } from '@form/schema';
 import { patternProblem } from '@form/validation';
 import { t } from '@/i18n';
+import { useDraft } from '@/lib/useDraft';
 import { NumberField, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
-import { APP_IDS, isField, plainText } from '@/lib/definition';
+import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
+import { formatFormula, parseFormula } from '@/lib/formula';
 import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions';
 import { currentDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
 import { Button } from '@dmacq/ui';
 
@@ -104,14 +107,12 @@ const M = defineMessages('builder', {
   'inspector.repeat_min': 'Minimum rows',
   'inspector.repeat_max': 'Maximum rows',
   'inspector.repeat_initial': 'Rows shown at start',
-  'inspector.repeat_layout': 'Layout',
-  'inspector.repeat_layout_stacked': 'Stacked',
-  'inspector.repeat_layout_table': 'Table',
   'inspector.repeat_add_label': 'Add-row button',
   'inspector.repeat_remove_label': 'Remove-row button',
   'inspector.repeat_fields': 'Fields in each row',
   'inspector.repeat_add_field': 'Add field',
   'inspector.repeat_pick_field': 'Choose a field type',
+  'inspector.repeat_remove_field': 'Remove this field',
   'inspector.searchable': 'Search options',
   'inspector.time_range': 'Start and end time',
   'inspector.capture': 'Camera',
@@ -123,7 +124,11 @@ const M = defineMessages('builder', {
   'inspector.calc_none': 'Fixed zero until a field is chosen',
   'inspector.calc_display': 'Show on the form',
   'inspector.calc_hidden': 'Keep in the answers only',
-  'inspector.context_source': 'Session fact',
+  'inspector.calc_formula': 'Formula',
+  'inspector.calc_formula_hint': 'Use field keys with + − × ÷. Click a field below to insert it.',
+  'inspector.calc_fields': 'Insert a field',
+  'inspector.calc_no_fields': 'Add a number, rating or scale field first.',
+  'inspector.context_facts': 'Facts to capture',
   'inspector.context_strip': 'Drop the query string from URLs',
 });
 
@@ -489,28 +494,75 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
   );
 }
 
+const CALC_SOURCES = new Set(['number', 'rating', 'linear_scale', 'nps', 'repeating_group', 'calculation']);
+
 export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const doc = currentDoc();
   const sources = Object.values(doc.blocks).flatMap((b) => {
-    if (!b || b.id === block.id || !isField(b)) return [];
-    if (!['number', 'rating', 'linear_scale', 'nps', 'repeating_group'].includes(b.type)) return [];
-    return [{ value: b.id, label: `${plainText(b.label) || b.key} (${b.type.replace(/_/g, ' ')})` }];
+    if (!b || b.id === block.id || !isField(b) || !CALC_SOURCES.has(b.type)) return [];
+    return [{ id: b.id, key: b.key, label: plainText(b.label) || b.key }];
   });
-  const current = block.config.expr.k === 'ref' && block.config.expr.ref.kind === 'answer' ? block.config.expr.ref.blockId : '';
+  const keys = new Map(sources.map((s) => [s.key, s.id]));
+  const labels = new Map(sources.map((s) => [s.id, s.key]));
+  const stored = formatFormula(block.config.expr, labels);
+  const shown = stored === '0' && block.config.expr.k === 'lit' ? '' : stored;
+  const [draft, setDraft] = useDraft(shown);
+  const parsed = parseFormula(draft, keys);
   return (
     <>
-      <SelectField
-        label={t(M['inspector.calc_source'])}
-        value={current}
-        options={[{ value: '', label: t(M['inspector.calc_none']) }, ...sources]}
-        onChange={(id) =>
-          setConfig(block, {
-            expr: id
-              ? { k: 'ref', ref: { kind: 'answer', blockId: id } }
-              : { k: 'lit', value: { type: 'number', value: '0' } },
-          })
-        }
+      <TextField
+        label={t(M['inspector.calc_formula'])}
+        hint={t(M['inspector.calc_formula_hint'])}
+        value={draft}
+        error={parsed.ok ? null : parsed.error}
+        placeholder="qty * price"
+        onChange={(text) => {
+          setDraft(text);
+          const next = parseFormula(text, keys);
+          if (next.ok) setConfig(block, { expr: next.expr });
+        }}
       />
+      <SectionTitle>{t(M['inspector.calc_fields'])}</SectionTitle>
+      {sources.length === 0 ? (
+        <p className="text-[13px] text-muted-foreground">{t(M['inspector.calc_no_fields'])}</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {sources.map((source) => (
+            <Button
+              key={source.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const text = draft.trim() ? `${draft.trimEnd()} ${source.key}` : source.key;
+                setDraft(text);
+                const next = parseFormula(text, keys);
+                if (next.ok) setConfig(block, { expr: next.expr });
+              }}
+            >
+              {source.label}
+            </Button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {(['+', '-', '*', '/', '(', ')'] as const).map((op) => (
+          <Button
+            key={op}
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const text = `${draft}${draft && !draft.endsWith(' ') ? ' ' : ''}${op} `;
+              setDraft(text);
+              const next = parseFormula(text, keys);
+              if (next.ok) setConfig(block, { expr: next.expr });
+            }}
+          >
+            {op}
+          </Button>
+        ))}
+      </div>
       <SelectField
         label={t(M['inspector.calc_display'])}
         value={block.config.display}
@@ -525,16 +577,25 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
 }
 
 export function ContextGeneral({ block }: InspectorProps<'context'>) {
-  const sources = ['page_url', 'referrer', 'user_agent', 'started_at', 'submitted_at', 'locale', 'time_zone', 'embed_origin'] as const;
+  const selected = new Set(block.config.sources);
+  const toggle = (source: ContextSource, on: boolean) => {
+    const next = CONTEXT_SOURCES.filter((item) => (item === source ? on : selected.has(item)));
+    if (next.length === 0) return;
+    setConfig(block, { sources: [...next] });
+  };
+  const urls = selected.has('page_url') || selected.has('referrer');
   return (
     <>
-      <SelectField
-        label={t(M['inspector.context_source'])}
-        value={block.config.source}
-        options={sources.map((source) => ({ value: source, label: source.replace(/_/g, ' ') }))}
-        onChange={(source) => setConfig(block, { source })}
-      />
-      {(block.config.source === 'page_url' || block.config.source === 'referrer') ? (
+      <SectionTitle>{t(M['inspector.context_facts'])}</SectionTitle>
+      {CONTEXT_SOURCES.map((source) => (
+        <ToggleRow
+          key={source}
+          label={t(PALETTE_LABELS[`palette.context.${source}`])}
+          checked={selected.has(source)}
+          onChange={(on) => toggle(source, on)}
+        />
+      ))}
+      {urls ? (
         <ToggleRow label={t(M['inspector.context_strip'])} checked={block.config.stripQuery === true} onChange={(on) => setConfig(block, { stripQuery: on || undefined })} />
       ) : null}
     </>
@@ -674,15 +735,6 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
       <NumberField label={t(M['inspector.repeat_min'])} value={block.config.minRows} parse={parseInteger(0, 200)} onChange={(minRows) => minRows !== undefined && setConfig(block, { minRows })} />
       <NumberField label={t(M['inspector.repeat_max'])} value={block.config.maxRows} parse={parseInteger(1, 200)} onChange={(maxRows) => maxRows !== undefined && setConfig(block, { maxRows })} />
       <NumberField label={t(M['inspector.repeat_initial'])} value={block.config.initialRows} parse={parseInteger(0, 200)} onChange={(initialRows) => setConfig(block, { initialRows })} />
-      <SelectField
-        label={t(M['inspector.repeat_layout'])}
-        value={block.config.layout}
-        options={[
-          { value: 'stacked', label: t(M['inspector.repeat_layout_stacked']) },
-          { value: 'table', label: t(M['inspector.repeat_layout_table']) },
-        ]}
-        onChange={(layout) => setConfig(block, { layout })}
-      />
       <TextField label={t(M['inspector.repeat_add_label'])} value={block.config.addLabel} onChange={(addLabel) => setConfig(block, { addLabel: text(addLabel) })} />
       <TextField label={t(M['inspector.repeat_remove_label'])} value={block.config.removeLabel} onChange={(removeLabel) => setConfig(block, { removeLabel: text(removeLabel) })} />
       <SectionTitle>{t(M['inspector.repeat_fields'])}</SectionTitle>
@@ -691,10 +743,10 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
         const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
         return (
           <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
-            <span className="truncate">{name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}</span>
-            {block.config.children.length > 1 ? (
-              <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => requestDeleteBlock(id)}>×</Button>
-            ) : null}
+            <button type="button" className="truncate text-left hover:underline" onClick={() => useUiStore.getState().openInspector(id)}>
+              {name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}
+            </button>
+            <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" aria-label={t(M['inspector.repeat_remove_field'])} onClick={() => requestDeleteBlock(id)}>×</Button>
           </div>
         );
       })}
@@ -705,7 +757,7 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
         options={childOptions}
         onChange={(tileId) => {
           const tile = CHILD_TILES.find((item) => item.id === tileId);
-          if (tile?.kind === 'block') addChildBlock(block.id, tile.choice);
+          if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
         }}
       />
       <ConfigProblem block={block} />

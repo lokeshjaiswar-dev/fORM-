@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { FormProvider, useForm, type FieldValues } from 'react-hook-form';
 import { isAvailable } from '@form/registry';
-import { toPlain } from '@form/schema';
 import type { AnswerValueMap, Answers, BlockId, GroupRowId, StoredBlock } from '@form/schema';
 import { RendererContext, useRenderer } from '../context.ts';
 import { Block } from '../fields/Field.tsx';
@@ -24,14 +23,12 @@ function RowFields({
   values,
   onChange,
   onBlur,
-  asCells,
 }: {
   rowId: string;
   fields: StoredBlock[];
   values: Answers;
   onChange: (values: Answers) => void;
   onBlur: () => void;
-  asCells?: boolean;
 }) {
   const parent = useRenderer();
   const methods = useForm({ defaultValues: values as FieldValues });
@@ -54,19 +51,9 @@ function RowFields({
   return (
     <RendererContext.Provider value={ctx}>
       <FormProvider {...methods}>
-        {asCells ? (
-          <>
-            {fields.map((child) => (
-              <td key={child.id} className="fr-repeat-cell" onBlur={onBlur}>
-                <Block block={child} />
-              </td>
-            ))}
-          </>
-        ) : (
-          <div className="fr-repeat-fields" onBlur={onBlur}>
-            {fields.map((child) => <Block key={child.id} block={child} />)}
-          </div>
-        )}
+        <div className="fr-repeat-fields" onBlur={onBlur}>
+          {fields.map((child) => <Block key={child.id} block={child} />)}
+        </div>
       </FormProvider>
     </RendererContext.Provider>
   );
@@ -109,62 +96,27 @@ export function RepeatingGroup({ block, field }: ControlProps<'repeating_group'>
 
   const addLabel = c.addLabel?.trim() || t(MESSAGES['repeat.add']);
   const removeLabel = c.removeLabel?.trim() || t(MESSAGES['repeat.remove']);
-  const header = (child: StoredBlock) => ('label' in child ? toPlain(child.label).trim() || child.type : child.type);
 
   return (
-    <div className="fr-repeat" data-layout={c.layout}>
-      {c.layout === 'table' ? (
-        <div className="fr-repeat-table-wrap">
-          <table className="fr-repeat-table">
-            <thead>
-              <tr>
-                {childBlocks.map((child) => <th key={child.id}>{header(child)}</th>)}
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={row.rowId}>
-                  <RowFields
-                    rowId={row.rowId}
-                    fields={childBlocks}
-                    values={row.values as Answers}
-                    onChange={(values) => setRow(index, values)}
-                    onBlur={answer.onBlur}
-                    asCells
-                  />
-                  <td>
-                    {!locked && rows.length > min ? (
-                      <button type="button" className="fr-repeat-remove" onClick={() => remove(index)}>
-                        {removeLabel}
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="fr-repeat-body">
-          {rows.map((row, index) => (
-            <div key={row.rowId} className="fr-repeat-row">
-              <RowFields
-                rowId={row.rowId}
-                fields={childBlocks}
-                values={row.values as Answers}
-                onChange={(values) => setRow(index, values)}
-                onBlur={answer.onBlur}
-              />
-              {!locked && rows.length > min ? (
-                <button type="button" className="fr-repeat-remove" aria-label={removeLabel} onClick={() => remove(index)}>
-                  {removeLabel}
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="fr-repeat">
+      <div className="fr-repeat-body">
+        {rows.map((row, index) => (
+          <div key={row.rowId} className="fr-repeat-row">
+            <RowFields
+              rowId={row.rowId}
+              fields={childBlocks}
+              values={row.values as Answers}
+              onChange={(values) => setRow(index, values)}
+              onBlur={answer.onBlur}
+            />
+            {!locked && rows.length > min ? (
+              <button type="button" className="fr-repeat-remove" aria-label={removeLabel} onClick={() => remove(index)}>
+                {removeLabel}
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
       {!locked && rows.length < max ? (
         <button type="button" className="fr-repeat-add" onClick={add} id={rows.length === 0 ? field.ids.input : undefined}>
           {addLabel}

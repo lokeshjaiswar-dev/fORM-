@@ -1,7 +1,7 @@
 export { PAGE_SCOPED, cell, parseCell, stepKey } from './cells.ts';
 export type { CellKind, ParsedCell } from './cells.ts';
 export { ENGINE, compile } from './compile.ts';
-export { D, compareDecimal, parseDecimal } from './decimal.ts';
+export { D, compareDecimal, formatDecimal, parseDecimal } from './decimal.ts';
 export type { DecimalValue } from './decimal.ts';
 export { createEvaluator, evaluate } from './evaluate.ts';
 export type { EvaluableVersion, Evaluator } from './evaluate.ts';

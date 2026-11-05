@@ -16,8 +16,36 @@ exports[`export headers > match the snapshot 1`] = `
   ],
   "context": [
     {
-      "header": "My context",
-      "suffix": "",
+      "header": "My context / page_url",
+      "suffix": ".page_url",
+    },
+    {
+      "header": "My context / referrer",
+      "suffix": ".referrer",
+    },
+    {
+      "header": "My context / user_agent",
+      "suffix": ".user_agent",
+    },
+    {
+      "header": "My context / started_at",
+      "suffix": ".started_at",
+    },
+    {
+      "header": "My context / submitted_at",
+      "suffix": ".submitted_at",
+    },
+    {
+      "header": "My context / locale",
+      "suffix": ".locale",
+    },
+    {
+      "header": "My context / time_zone",
+      "suffix": ".time_zone",
+    },
+    {
+      "header": "My context / embed_origin",
+      "suffix": ".embed_origin",
     },
   ],
   "date": [
@@ -236,6 +264,14 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "text",
+      "embed_origin": "text",
+      "locale": "text",
+      "page_url": "text",
+      "referrer": "text",
+      "started_at": "text",
+      "submitted_at": "text",
+      "time_zone": "text",
+      "user_agent": "text",
     },
   },
   "date": {

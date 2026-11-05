@@ -110,7 +110,7 @@ describe('stubs', () => {
         valid: [{ currency: 'INR', customAmount: '100' }, { currency: 'INR', items: [{ productId: 'p1', quantity: 1 }] }],
         empty: [{ currency: 'INR' }, { currency: 'INR', items: [] }],
       },
-      context: { valid: ['https://example.com'], empty: [''] },
+      context: { valid: [{ page_url: 'https://example.com' }], empty: [{}] },
       unique_id: { valid: ['F-000001'], empty: [''] },
     };
     for (const [type, { valid, empty }] of Object.entries(samples) as Array<[ValueFieldType, { valid: unknown[]; empty: unknown[] }]>) {

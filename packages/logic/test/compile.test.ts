@@ -268,6 +268,31 @@ describe('compile', () => {
     expect(compile(def, REGISTRY).ok).toBe(true);
   });
 
+  it('a calculation formula of number fields compiles', () => {
+    const def = form(
+      [
+        field('number', 'qty'),
+        field('number', 'price'),
+        field('calculation', 'total', {
+          config: {
+            expr: {
+              k: 'binary',
+              op: '*',
+              left: { k: 'ref', ref: { kind: 'answer', blockId: bid('qty') } },
+              right: { k: 'ref', ref: { kind: 'answer', blockId: bid('price') } },
+            },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['qty', 'price', 'total'])],
+    );
+    const c = compiled(def);
+    expect(c.plan.some((s) => s.kind === 'capture' && s.blockId === 'total')).toBe(true);
+    expect(c.requires).toContain('expr@1');
+  });
+
   it('captures hidden values, typed as text', () => {
     const def = form([
       field('short_text', 'name'),

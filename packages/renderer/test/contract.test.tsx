@@ -405,14 +405,14 @@ describe('control contract', () => {
 
   it('context: captures the page URL from the session', async () => {
     const submitted: SubmitPayload[] = [];
-    const block = field('context', 'page', { config: { source: 'page_url' } });
+    const block = field('context', 'page', { config: { sources: ['page_url'] } });
     const version = runtime(form([block, field('short_text', 'name')], [page('p1', ['page', 'name'])]));
     render(<FormRenderer {...props(version, { session: { startedAt: '2026-10-19T04:30:00Z' as never, pageUrl: 'https://example.test/form' }, onSubmit: (p) => void submitted.push(p) })} />);
     const user = userEvent.setup();
     await user.type(box(/name/), 'Asha');
     await submitIn(user);
     await waitFor(() => expect(submitted).toHaveLength(1));
-    expect(submitted[0]?.answers['page' as never]).toEqual({ type: 'context', value: 'https://example.test/form' });
+    expect(submitted[0]?.answers['page' as never]).toEqual({ type: 'context', value: { page_url: 'https://example.test/form' } });
   });
 
   it('hidden: captures its URL parameter without any UI', async () => {

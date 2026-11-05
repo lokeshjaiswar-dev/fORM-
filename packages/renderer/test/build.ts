@@ -175,7 +175,7 @@ export function kitchenSink(): S.FormDefinition {
     describe(field('signature', 'signature', { config: { statement: inline('I confirm these answers.') } })),
     field('hidden', 'utm'),
     describe(field('calculation', 'total')),
-    describe(field('context', 'page', { config: { source: 'page_url' } })),
+    describe(field('context', 'page', { config: { sources: ['page_url'] } })),
   ];
   const plain: S.StoredBlock[] = [
     content('heading', 'title', { level: 1, text: inline('About you'), subheading: inline('A few questions') }),

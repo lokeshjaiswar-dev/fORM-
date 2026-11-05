@@ -311,6 +311,30 @@ describe('evaluate', () => {
     expect(evalStateJson(session.update({}, [bid('age')]), ids)).toBe(full({}));
   });
 
+  it('a formula calculation multiplies number fields', () => {
+    const def = form(
+      [
+        field('number', 'qty'),
+        field('number', 'price'),
+        field('calculation', 'total', {
+          config: {
+            expr: {
+              k: 'binary',
+              op: '*',
+              left: { k: 'ref', ref: { kind: 'answer', blockId: bid('qty') } },
+              right: { k: 'ref', ref: { kind: 'answer', blockId: bid('price') } },
+            },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['qty', 'price', 'total'])],
+    );
+    const state = evaluate(versionOf(def), { [bid('qty')]: a.number('3'), [bid('price')]: a.number('4.5') }, META, 'client');
+    expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '13.5' } });
+  });
+
   it('refuses a version compiled by another engine', () => {
     const version = versionOf(form(blocks(), pages()));
     expect(() => evaluate({ ...version, compiled: { ...version.compiled, engine: 'logic@1' as 'logic@2' } }, {}, META, 'client')).toThrow(/logic@1/);

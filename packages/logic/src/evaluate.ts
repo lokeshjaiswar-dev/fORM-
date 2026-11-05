@@ -8,6 +8,7 @@ import type {
 import { actionWrites, isClientAction } from './analyze.ts';
 import { cell, stepKey } from './cells.ts';
 import { ENGINE } from './compile.ts';
+import { formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
 import { ancestorsOf } from './structure.ts';
 import { traceEntry, type TraceEntry } from './trace.ts';
@@ -174,6 +175,22 @@ function literalValue(literal: Literal): ScalarValue {
 
 const text = (v: string | undefined): ScalarValue => (v === undefined ? NULL : { t: 'text', v });
 
+function arithmetic(a: ScalarValue, b: ScalarValue, op: '+' | '-' | '*' | '/'): ScalarValue {
+  if (a.t !== 'number' || b.t !== 'number') return NULL;
+  const x = parseDecimal(a.v);
+  const y = parseDecimal(b.v);
+  if (!x || !y) return NULL;
+  let z: DecimalValue;
+  try {
+    if (op === '/' && y.isZero()) return NULL;
+    z = op === '+' ? x.add(y) : op === '-' ? x.sub(y) : op === '*' ? x.mul(y) : x.div(y);
+  } catch {
+    return NULL;
+  }
+  const v = formatDecimal(z);
+  return v === null ? NULL : { t: 'number', v: v as never };
+}
+
 class Session {
   private cells = new Map<string, unknown>();
   readonly outputs: unknown[];
@@ -289,8 +306,22 @@ class Session {
         return literalValue(expr.value);
       case 'ref':
         return this.refValue(expr.ref);
+      case 'unary': {
+        if (expr.op !== 'neg') break;
+        const a = this.exprValue(expr.arg, depth + 1);
+        if (a.t !== 'number') return NULL;
+        const n = parseDecimal(a.v);
+        if (!n) return NULL;
+        const text = formatDecimal(n.neg());
+        return text === null ? NULL : { t: 'number', v: text as never };
+      }
       case 'binary': {
         const op = expr.op;
+        if (op === '+' || op === '-' || op === '*' || op === '/') {
+          const a = this.exprValue(expr.left, depth + 1);
+          const b = this.exprValue(expr.right, depth + 1);
+          return arithmetic(a, b, op);
+        }
         if (op !== '==' && op !== '!=' && op !== '<' && op !== '<=' && op !== '>' && op !== '>=') break;
         const a = this.exprValue(expr.left, depth + 1);
         const b = this.exprValue(expr.right, depth + 1);
@@ -409,9 +440,14 @@ class Session {
       return prev?.type === 'calculation' && JSON.stringify(prev.value) === JSON.stringify(v) ? prev : { type: 'calculation', value: v };
     }
     if (block?.type === 'context') {
-      const value = this.contextText(block.config.source, block.config.stripQuery === true)?.trim() ?? '';
-      if (value === '') return null;
-      return prev?.type === 'context' && prev.value === value ? prev : { type: 'context', value };
+      const stripQuery = block.config.stripQuery === true;
+      const value: Partial<Record<(typeof block.config.sources)[number], string>> = {};
+      for (const source of block.config.sources) {
+        const text = this.contextText(source, stripQuery)?.trim();
+        if (text) value[source] = text;
+      }
+      if (Object.keys(value).length === 0) return null;
+      return prev?.type === 'context' && JSON.stringify(prev.value) === JSON.stringify(value) ? prev : { type: 'context', value };
     }
     if (block?.type !== 'hidden') return null;
     const source = block.config.source;
@@ -431,7 +467,7 @@ class Session {
     return prev?.type === 'hidden' && prev.value === v.v ? prev : { type: 'hidden', value: v.v };
   }
 
-  private contextText(source: ContextConfig['source'], stripQuery: boolean): string | undefined {
+  private contextText(source: ContextConfig['sources'][number], stripQuery: boolean): string | undefined {
     const m = this.meta;
     const strip = (url: string | undefined) => {
       if (url === undefined) return undefined;

@@ -104,7 +104,7 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
       const step: PlanStep = { kind: 'capture', blockId };
       steps.push({
         step, key: stepKey(step), reads: [], writes: [cell.value(blockId)], ruleIndex: -1,
-        order: placement.elementOrder.get(blockId) ?? 0, pointer: at('source'),
+        order: placement.elementOrder.get(blockId) ?? 0, pointer: at('sources'),
       });
     }
     if (block.type === 'date' || block.type === 'datetime') {

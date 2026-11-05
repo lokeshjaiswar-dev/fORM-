@@ -11,7 +11,7 @@ const asText = (value: ScalarValue): string => {
   return '';
 };
 
-/** FLD-33. The value is produced by capture from `expr` (a literal or another field's answer in P0). */
+/** FLD-33. The value is produced by capture from `expr` (literals, field refs and + − × ÷ in P0). */
 export const calculation = defineField({
   type: 'calculation',
   kind: 'computed',

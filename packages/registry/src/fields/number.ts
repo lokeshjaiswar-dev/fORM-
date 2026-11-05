@@ -8,7 +8,7 @@ import { NULL, entry, isRootPath } from './shared.ts';
 export const number = defineField({
   type: 'number',
   palette: [
-    entry('number', null, 'advanced', PALETTE_LABELS['palette.number'], 'hash', ['number', 'numeric', 'amount', 'quantity', 'count']),
+    entry('number', null, 'basic', PALETTE_LABELS['palette.number'], 'hash', ['number', 'numeric', 'amount', 'quantity', 'count']),
     entry('number', 'slider', 'advanced', PALETTE_LABELS['palette.number.slider'], 'gauge', ['slider', 'range', 'scale', 'stepper'], {
       display: 'stepper',
       min: '0' as never,
