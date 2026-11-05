@@ -74,7 +74,7 @@ describe('compile', () => {
 
   describe('missing_capability is fatal (ADR-0002 §2)', () => {
     it('for a registry stub, even though a draft only warns', () => {
-      const def = form([field('full_name', 'who')], [page('p1', ['who'])]);
+      const def = form([field('address', 'who')], [page('p1', ['who'])]);
       expect(codes(validateDefinition(def, 'save', REGISTRY))).toEqual(['warning:missing_capability:/blocks/who']);
       expect(codes(validateDefinition(def, 'publish', REGISTRY))).toEqual(['error:missing_capability:/blocks/who']);
       expect(codes(failure(def))).toEqual(['error:missing_capability:/blocks/who']);

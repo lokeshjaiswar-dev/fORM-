@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
@@ -14,6 +14,7 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   const other = c.other?.enabled ? c.other : undefined;
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ids = answer.value?.optionIds ?? [];
   const otherOn = answer.value?.other !== undefined;
   const exclusive = new Set<OptionId>(c.exclusiveOptionIds ?? []);
@@ -30,9 +31,24 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
 
   const panelId = `${field.ids.base}-options`;
   const dropdown = c.display === 'dropdown';
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!c.searchable || q === '') return options;
+    return options.filter((o) => text(o.label).toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
+  }, [c.searchable, options, query, text]);
   const list = (
     <div id={panelId} className="fr-choices" hidden={dropdown && !open} style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
-      {options.map((o, i) => (
+      {c.searchable ? (
+        <input
+          className="fr-input"
+          type="search"
+          value={query}
+          placeholder={c.placeholder?.trim() || t('system:select.placeholder')}
+          onChange={(e) => setQuery(e.target.value)}
+          disabled={locked}
+        />
+      ) : null}
+      {shown.map((o, i) => (
         <label key={o.id} className="fr-choice">
           <input
             type="checkbox"

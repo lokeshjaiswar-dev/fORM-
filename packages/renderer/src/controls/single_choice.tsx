@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
@@ -17,6 +17,12 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const selected = answer.value ? (answer.value.optionId ?? (answer.value.other !== undefined ? OTHER : '')) : '';
   const locked = field.disabled || field.readOnly;
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!c.searchable || q === '') return options;
+    return options.filter((o) => text(o.label).toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
+  }, [c.searchable, options, query, text]);
   const choose = (value: string) => {
     if (value === '') answer.set(undefined);
     else if (value === OTHER) answer.set({ optionId: null, other: answer.value?.other ?? '' });
@@ -41,6 +47,17 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
     const { readOnly: _readOnly, ...selectAttrs } = inputAttrs(field);
     return (
       <>
+        {c.searchable ? (
+          <input
+            className="fr-input"
+            type="search"
+            value={query}
+            placeholder={c.placeholder?.trim() || t('system:select.placeholder')}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={locked}
+            aria-label={c.placeholder?.trim() || t('system:select.placeholder')}
+          />
+        ) : null}
         <select
           id={field.ids.input}
           className="fr-input fr-select"
@@ -51,7 +68,7 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
           disabled={locked}
         >
           <option value="">{c.placeholder?.trim() || t('system:select.placeholder')}</option>
-          {options.map((o) => (
+          {filtered.map((o) => (
             <option key={o.id} value={o.id}>{text(o.label)}</option>
           ))}
           {other ? <option value={OTHER}>{otherLabel}</option> : null}

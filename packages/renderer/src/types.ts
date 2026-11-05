@@ -55,6 +55,7 @@ export interface RendererSession {
   pageUrl?: string;
   referrer?: string;
   embedOrigin?: string;
+  userAgent?: string;
 }
 
 export interface FormRendererProps {

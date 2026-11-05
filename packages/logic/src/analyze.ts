@@ -90,6 +90,23 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
         order: placement.elementOrder.get(blockId) ?? 0, pointer: at('source'),
       });
     }
+    if (block.type === 'calculation') {
+      const reads = new Set<string>();
+      if (block.config.expr.k !== 'lit') usesExpr = true;
+      typeExpr(ctx, block.config.expr, at('expr'), reads);
+      const step: PlanStep = { kind: 'capture', blockId };
+      steps.push({
+        step, key: stepKey(step), reads: [...reads].sort(), writes: [cell.value(blockId)], ruleIndex: -1,
+        order: placement.elementOrder.get(blockId) ?? 0, pointer: at('expr'),
+      });
+    }
+    if (block.type === 'context') {
+      const step: PlanStep = { kind: 'capture', blockId };
+      steps.push({
+        step, key: stepKey(step), reads: [], writes: [cell.value(blockId)], ruleIndex: -1,
+        order: placement.elementOrder.get(blockId) ?? 0, pointer: at('source'),
+      });
+    }
     if (block.type === 'date' || block.type === 'datetime') {
       for (const side of ['min', 'max'] as const) {
         const bound = block.config.limits?.[side];

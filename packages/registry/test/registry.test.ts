@@ -55,7 +55,7 @@ describe('REGISTRY', () => {
 
 describe('availability', () => {
   it('marks the P0 types available and every other type P1 or P2', () => {
-    expect(AVAILABLE_TYPES).toHaveLength(22);
+    expect(AVAILABLE_TYPES).toHaveLength(25);
     for (const type of AVAILABLE_TYPES) expect(availability(type)).toBe('P0');
     for (const type of STUB_TYPES) expect(['P1', 'P2']).toContain(availability(type));
     expect(Object.keys(STUB_AVAILABILITY).sort()).toEqual([...STUB_TYPES].sort());
@@ -79,10 +79,9 @@ describe('stubs', () => {
     expect(def.lockableContent(block as never)).toContain('/config');
   });
 
-  it('repeating_group starts without children until the builder inserts one', () => {
-    expect(DRAFT_DEFAULT_CONFIG_TYPES).toEqual(['repeating_group']);
-    expect(REGISTRY.repeating_group.defaultConfig(EN_IN)).toMatchObject({ children: [] });
-    expect(REGISTRY.repeating_group.configSchema.safeParse({ ...REGISTRY.repeating_group.defaultConfig(EN_IN), children: ['short_text_1'] }).success).toBe(true);
+  it('draft defaults stay empty now that repeating groups ship a placeholder child', () => {
+    expect(DRAFT_DEFAULT_CONFIG_TYPES).toEqual([]);
+    expect(REGISTRY.repeating_group.configSchema.safeParse(REGISTRY.repeating_group.defaultConfig(EN_IN)).success).toBe(true);
   });
 
   it('value stubs parse answers with the twin and export canonical JSON', () => {
@@ -106,7 +105,6 @@ describe('stubs', () => {
     const notice = { noticeLocale: 'en-IN', noticeVersion: 1 };
     const samples: Partial<Record<ValueFieldType, { valid: unknown[]; empty: unknown[] }>> = {
       address: { valid: [{ city: 'Pune' }], empty: [{}, { line1: '', city: '' }] },
-      repeating_group: { valid: [{ rows: [{ rowId: 'row_1', values: {} }] }], empty: [{ rows: [] }] },
       consent: { valid: [{ items: { item_1: true }, ...notice }, { items: { item_1: false }, ...notice }], empty: [{ items: {}, ...notice }] },
       payment: {
         valid: [{ currency: 'INR', customAmount: '100' }, { currency: 'INR', items: [{ productId: 'p1', quantity: 1 }] }],
@@ -168,7 +166,7 @@ describe('default compliance (CMP-03)', () => {
     expect(pick('short_text')).toMatchObject({ classification: 'personal', category: 'free_text' });
     expect(pick('long_text')).toMatchObject({ classification: 'personal', category: 'free_text' });
     expect(pick('hidden')).toMatchObject({ classification: 'none' });
-    expect(COMPLIANCE_UNDER_REVIEW).toEqual(['hidden']);
+    expect(COMPLIANCE_UNDER_REVIEW).toEqual(['hidden', 'context']);
   });
 
   it('is frozen so a block never shares mutable defaults', () => {

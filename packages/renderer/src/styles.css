@@ -237,8 +237,20 @@
 }
 
 :where(.fr-root) .fr-input:disabled,
-:where(.fr-root) .fr-input[readonly] {
+:where(.fr-root) .fr-input[readonly],
+:where(.fr-root) .fr-computed {
   background: color-mix(in srgb, var(--fr-text) 5%, var(--fr-inputBg));
+}
+
+:where(.fr-root) .fr-computed {
+  display: flex;
+  align-items: center;
+}
+
+:where(.fr-root) .fr-range-input {
+  width: 100%;
+  min-height: 42px;
+  accent-color: var(--fr-accent);
 }
 
 :where(.fr-root) .fr-field[data-invalid] .fr-input {
@@ -460,6 +472,108 @@
 :where(.fr-root) .fr-matrix thead th {
   color: var(--fr-muted);
   font-size: 0.8125em;
+}
+
+:where(.fr-root) .fr-repeat {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--fr-inputBorder);
+  border-radius: var(--fr-radius);
+  overflow: hidden;
+  background: var(--fr-inputBg);
+}
+
+:where(.fr-root) .fr-repeat-body {
+  display: flex;
+  flex-direction: column;
+}
+
+:where(.fr-root) .fr-repeat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--fr-inputBorder);
+  border-radius: 0;
+}
+
+:where(.fr-root) .fr-repeat-row:last-child {
+  border-bottom: 0;
+}
+
+:where(.fr-root) .fr-repeat-title {
+  display: none;
+}
+
+:where(.fr-root) .fr-repeat-fields {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+:where(.fr-root) .fr-repeat-fields > .fr-field {
+  flex: 1 1 9rem;
+  min-width: 8rem;
+  margin: 0;
+}
+
+:where(.fr-root) .fr-repeat .fr-label,
+:where(.fr-root) .fr-repeat legend.fr-label {
+  font-size: 0.75em;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+
+:where(.fr-root) .fr-repeat-table-wrap {
+  overflow-x: auto;
+}
+
+:where(.fr-root) .fr-repeat-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:where(.fr-root) .fr-repeat-table th {
+  text-align: start;
+  font-size: 0.8125em;
+  color: var(--fr-muted);
+  font-weight: 600;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--fr-inputBorder);
+}
+
+:where(.fr-root) .fr-repeat-cell {
+  vertical-align: top;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--fr-inputBorder);
+}
+
+:where(.fr-root) .fr-repeat[data-layout='table'] .fr-field {
+  margin: 0;
+}
+
+:where(.fr-root) .fr-repeat-add,
+:where(.fr-root) .fr-repeat-remove {
+  align-self: center;
+  padding: 0.35rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--fr-accent);
+  font-size: 0.875em;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-repeat-add {
+  align-self: stretch;
+  padding: 0.65rem 0.75rem;
+  text-align: start;
+  border-top: 1px solid var(--fr-inputBorder);
 }
 
 :where(.fr-root) .fr-ranking {

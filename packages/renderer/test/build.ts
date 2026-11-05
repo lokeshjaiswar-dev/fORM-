@@ -169,23 +169,27 @@ export function kitchenSink(): S.FormDefinition {
     describe(field('nps', 'nps')),
     describe(field('ranking', 'ranking')),
     describe(field('matrix', 'matrix')),
+    describe(field('repeating_group', 'group', { config: { children: ['group_item' as never], minRows: 0, maxRows: 5, initialRows: 1, layout: 'stacked' } })),
+    field('short_text', 'group_item', { label: inline('Item') }),
     describe(field('file_upload', 'file')),
     describe(field('signature', 'signature', { config: { statement: inline('I confirm these answers.') } })),
     field('hidden', 'utm'),
+    describe(field('calculation', 'total')),
+    describe(field('context', 'page', { config: { source: 'page_url' } })),
   ];
   const plain: S.StoredBlock[] = [
     content('heading', 'title', { level: 1, text: inline('About you'), subheading: inline('A few questions') }),
     content('paragraph', 'intro', { content: rich('Answer what you can.') }),
     content('divider', 'rule'),
   ];
-  const first = ['title', 'intro', 'short', 'long', 'email', 'phone', 'number', 'url', 'rule', 'radio', 'select', 'checks', 'multi', 'utm'];
-  const second = ['date', 'time', 'range', 'rating', 'scale', 'nps', 'ranking', 'matrix', 'file', 'signature'];
+  const first = ['title', 'intro', 'short', 'long', 'email', 'phone', 'number', 'url', 'rule', 'radio', 'select', 'checks', 'multi', 'utm', 'total', 'page'];
+  const second = ['date', 'time', 'range', 'rating', 'scale', 'nps', 'ranking', 'matrix', 'group', 'file', 'signature'];
   return form([...plain, ...values], [page('page_1', first), page('page_2', second)], [], { description: rich('Kitchen sink of every available type.') });
 }
 
 export const AVAILABLE_IN_SINK: readonly AvailableType[] = [
   'short_text', 'long_text', 'email', 'phone', 'number', 'url', 'single_choice', 'multi_choice', 'date', 'time', 'rating',
-  'linear_scale', 'nps', 'ranking', 'matrix', 'file_upload', 'signature', 'hidden', 'heading', 'paragraph', 'divider',
+  'linear_scale', 'nps', 'ranking', 'matrix', 'file_upload', 'signature', 'hidden', 'calculation', 'context', 'heading', 'paragraph', 'divider',
 ];
 
 export interface Fixture { name: string; version: S.RuntimeFormVersion }

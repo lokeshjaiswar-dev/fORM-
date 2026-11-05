@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { Star } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import type { AvailableType } from '@form/registry';
+import { isAvailable, type AvailableType } from '@form/registry';
 import type { BlockOf, NamePart } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -9,7 +9,10 @@ import { OptionList, Points, Select, TextBox } from '@/fields/canvasParts';
 import { labelStyle } from '@/fields/style';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { updateBlock } from '@/state/actions';
+import { addChildBlock, updateBlock } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
+import { isField, plainText } from '@/lib/definition';
+import { Button } from '@dmacq/ui';
 
 /*
  * The canvas view of every available block type (FND-03): what an author sees in place of the respondent control.
@@ -31,6 +34,8 @@ const M = defineMessages('builder', {
   'canvas.hidden': 'Hidden from respondents · filled from the URL parameter ‘{name}’',
   'canvas.hidden_utm': 'Hidden from respondents · filled from utm_{param}',
   'canvas.hidden_other': 'Hidden from respondents',
+  'canvas.calculation': 'Result updates as answers change',
+  'canvas.context': 'Filled from this session · {source}',
   'canvas.name.first': 'First name',
   'canvas.name.last': 'Last name',
   'canvas.name.middle': 'Middle name',
@@ -40,6 +45,9 @@ const M = defineMessages('builder', {
   'canvas.time': 'Pick a time',
   'canvas.heading': 'Heading',
   'canvas.paragraph': 'Type something…',
+  'canvas.repeat_add_field': 'Add a field to each row',
+  'canvas.repeat_hint': '{min}–{max} rows · respondents can add more while filling',
+  'canvas.repeat_child': 'Short answer',
 });
 
 const headingSize = { 1: 'text-[32px]', 2: 'text-[24px]', 3: 'text-[20px]' } as const;
@@ -86,6 +94,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   linear_scale: ({ block }) => <Points from={block.config.min} to={block.config.max} low={block.config.lowLabel} high={block.config.highLabel} />,
   nps: ({ block }) => <Points from={0} to={10} low={block.config.lowLabel} high={block.config.highLabel} />,
   ranking: ({ block }) => <OptionList options={block.config.options} shape="square" numbered />,
+  repeating_group: ({ block }) => <RepeatingGroupCanvas block={block} />,
   matrix: ({ block }) => (
     <div className="overflow-x-auto pt-1">
       <table className="w-full min-w-[280px] border-collapse text-[13px]">
@@ -120,6 +129,8 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       {t(M['canvas.signature'])}
     </div>
   ),
+  calculation: () => <p className="text-[12px] text-[var(--fr-muted)]">{t(M['canvas.calculation'])}</p>,
+  context: ({ block }) => <p className="text-[12px] text-[var(--fr-muted)]">{t(M['canvas.context'], { source: block.config.source.replace(/_/g, ' ') })}</p>,
   hidden: ({ block }) => {
     const source = block.config.source;
     const text = source.kind === 'url_param' ? t(M['canvas.hidden'], { name: source.name ?? block.key }) : source.kind === 'utm' ? t(M['canvas.hidden_utm'], { param: source.param }) : t(M['canvas.hidden_other']);
@@ -149,3 +160,28 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   ),
   divider: ({ block }) => <hr className={cn(SPACING[block.config.spacing], LINE[block.config.lineStyle])} style={{ borderColor: 'var(--fr-inputBorder)' }} />,
 };
+
+function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) {
+  const blocks = useDoc((d) => d.blocks);
+  const children = block.config.children.map((id) => blocks[id]).filter((b) => b && b.type !== 'unsupported' && isAvailable(b.type));
+  return (
+    <div className="overflow-hidden rounded-md border" style={{ borderColor: 'var(--fr-inputBorder)' }} onClick={(e) => e.stopPropagation()}>
+      <p className="border-b px-3 py-1.5 text-[12px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+        {t(M['canvas.repeat_hint'], { min: block.config.minRows, max: block.config.maxRows })}
+      </p>
+      <div className="flex flex-wrap items-stretch">
+        {children.map((child) => (
+          <div key={child.id} className="min-w-[8rem] flex-1 border-r px-3 py-2 text-[13px] last:border-r-0" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+            <p>{isField(child) ? (plainText(child.label) || child.key) : child.type}</p>
+            <p className="text-[11px] text-[var(--fr-muted)]">{child.type.replace(/_/g, ' ')}</p>
+          </div>
+        ))}
+      </div>
+      <div className="border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => addChildBlock(block.id, { type: 'short_text', configOverrides: {} })}>
+          {t(M['canvas.repeat_add_field'])}
+        </Button>
+      </div>
+    </div>
+  );
+}

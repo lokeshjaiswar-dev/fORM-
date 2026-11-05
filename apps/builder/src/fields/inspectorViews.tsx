@@ -1,13 +1,15 @@
 import { defineMessages } from '@form/i18n';
-import { REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
+import { isRepeatableChildType, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
 import { DATE_PATTERNS, type BlockOf, type DecimalString, type MatrixColumnId, type MatrixRowId, type SchemaLike } from '@form/schema';
 import { patternProblem } from '@form/validation';
 import { t } from '@/i18n';
-import { NumberField, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { NumberField, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
-import { APP_IDS } from '@/lib/definition';
-import { updateBlock } from '@/state/actions';
+import { APP_IDS, isField, plainText } from '@/lib/definition';
+import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions';
+import { currentDoc } from '@/state/documentStore';
+import { TILES } from '@/fields/tiles';
 import { Button } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
@@ -99,6 +101,30 @@ const M = defineMessages('builder', {
   'inspector.matrix_add_column': 'Add column',
   'inspector.matrix_row_n': 'Row {n}',
   'inspector.matrix_column_n': 'Column {n}',
+  'inspector.repeat_min': 'Minimum rows',
+  'inspector.repeat_max': 'Maximum rows',
+  'inspector.repeat_initial': 'Rows shown at start',
+  'inspector.repeat_layout': 'Layout',
+  'inspector.repeat_layout_stacked': 'Stacked',
+  'inspector.repeat_layout_table': 'Table',
+  'inspector.repeat_add_label': 'Add-row button',
+  'inspector.repeat_remove_label': 'Remove-row button',
+  'inspector.repeat_fields': 'Fields in each row',
+  'inspector.repeat_add_field': 'Add field',
+  'inspector.repeat_pick_field': 'Choose a field type',
+  'inspector.searchable': 'Search options',
+  'inspector.time_range': 'Start and end time',
+  'inspector.capture': 'Camera',
+  'inspector.capture_none': 'File picker only',
+  'inspector.capture_user': 'Front camera',
+  'inspector.capture_environment': 'Rear camera',
+  'inspector.email_verify': 'Ask for a one-time code',
+  'inspector.calc_source': 'Take the value from',
+  'inspector.calc_none': 'Fixed zero until a field is chosen',
+  'inspector.calc_display': 'Show on the form',
+  'inspector.calc_hidden': 'Keep in the answers only',
+  'inspector.context_source': 'Session fact',
+  'inspector.context_strip': 'Drop the query string from URLs',
 });
 
 const MIB = 1024 * 1024;
@@ -146,6 +172,19 @@ export function ChromeGeneral({ block }: { block: Chrome }) {
     <>
       <Placeholder block={block} />
       <Affixes block={block} />
+    </>
+  );
+}
+
+export function EmailGeneral({ block }: InspectorProps<'email'>) {
+  return (
+    <>
+      <ChromeGeneral block={block} />
+      <ToggleRow
+        label={t(M['inspector.email_verify'])}
+        checked={block.config.verify?.enabled === true}
+        onChange={(on) => setConfig(block, { verify: on ? { enabled: true, codeLength: 6, ttlMinutes: 10 } : undefined })}
+      />
     </>
   );
 }
@@ -259,6 +298,9 @@ export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'mul
         onChange={(display) => setConfig(block, { display })}
       />
       {block.config.display === 'dropdown' ? <Placeholder block={block} /> : null}
+      {block.config.display === 'dropdown' ? (
+        <ToggleRow label={t(M['inspector.searchable'])} checked={block.config.searchable === true} onChange={(on) => setConfig(block, { searchable: on || undefined })} />
+      ) : null}
     </>
   );
 }
@@ -308,6 +350,11 @@ export function TimeGeneral({ block }: InspectorProps<'time'>) {
         value={String(block.config.minuteStep)}
         options={['1', '5', '10', '15', '30'].map((v) => ({ value: v, label: v }))}
         onChange={(v) => setConfig(block, { minuteStep: Number(v) })}
+      />
+      <ToggleRow
+        label={t(M['inspector.time_range'])}
+        checked={block.config.range?.enabled === true}
+        onChange={(on) => setConfig(block, { range: on ? { enabled: true } : undefined })}
       />
     </>
   );
@@ -370,6 +417,16 @@ export function FileValidation({ block }: InspectorProps<'file_upload'>) {
           onChange={(mb) => mb !== undefined && setConfig(block, { maxFileBytes: mb * MIB })}
         />
       </div>
+      <SelectField
+        label={t(M['inspector.capture'])}
+        value={block.config.capture}
+        options={[
+          { value: 'none', label: t(M['inspector.capture_none']) },
+          { value: 'user', label: t(M['inspector.capture_user']) },
+          { value: 'environment', label: t(M['inspector.capture_environment']) },
+        ]}
+        onChange={(capture) => setConfig(block, { capture })}
+      />
       <TextField
         label={t(M['inspector.extensions'])}
         hint={t(M['inspector.extensions_hint'])}
@@ -427,6 +484,58 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
           value={source.value.filter((p) => typeof p === 'string').join('')}
           onChange={(value) => setConfig(block, { source: { kind: 'static', value: value ? [value] : [] } })}
         />
+      ) : null}
+    </>
+  );
+}
+
+export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
+  const doc = currentDoc();
+  const sources = Object.values(doc.blocks).flatMap((b) => {
+    if (!b || b.id === block.id || !isField(b)) return [];
+    if (!['number', 'rating', 'linear_scale', 'nps', 'repeating_group'].includes(b.type)) return [];
+    return [{ value: b.id, label: `${plainText(b.label) || b.key} (${b.type.replace(/_/g, ' ')})` }];
+  });
+  const current = block.config.expr.k === 'ref' && block.config.expr.ref.kind === 'answer' ? block.config.expr.ref.blockId : '';
+  return (
+    <>
+      <SelectField
+        label={t(M['inspector.calc_source'])}
+        value={current}
+        options={[{ value: '', label: t(M['inspector.calc_none']) }, ...sources]}
+        onChange={(id) =>
+          setConfig(block, {
+            expr: id
+              ? { k: 'ref', ref: { kind: 'answer', blockId: id } }
+              : { k: 'lit', value: { type: 'number', value: '0' } },
+          })
+        }
+      />
+      <SelectField
+        label={t(M['inspector.calc_display'])}
+        value={block.config.display}
+        options={[
+          { value: 'visible', label: t(M['inspector.calc_display']) },
+          { value: 'hidden', label: t(M['inspector.calc_hidden']) },
+        ]}
+        onChange={(display) => setConfig(block, { display })}
+      />
+    </>
+  );
+}
+
+export function ContextGeneral({ block }: InspectorProps<'context'>) {
+  const sources = ['page_url', 'referrer', 'user_agent', 'started_at', 'submitted_at', 'locale', 'time_zone', 'embed_origin'] as const;
+  return (
+    <>
+      <SelectField
+        label={t(M['inspector.context_source'])}
+        value={block.config.source}
+        options={sources.map((source) => ({ value: source, label: source.replace(/_/g, ' ') }))}
+        onChange={(source) => setConfig(block, { source })}
+      />
+      {(block.config.source === 'page_url' || block.config.source === 'referrer') ? (
+        <ToggleRow label={t(M['inspector.context_strip'])} checked={block.config.stripQuery === true} onChange={(on) => setConfig(block, { stripQuery: on || undefined })} />
       ) : null}
     </>
   );
@@ -549,6 +658,55 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
             columns: columns.map((col) => ({ id: col.id as MatrixColumnId, label: col.label || t(M['inspector.matrix_column_n'], { n: 1 }), input: inputFor(mode) })),
           })
         }
+      />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+const CHILD_TILES = TILES.filter((tile) => tile.kind === 'block' && isRepeatableChildType(tile.choice.type));
+
+export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group'>) {
+  const doc = currentDoc();
+  const childOptions = CHILD_TILES.filter((tile) => tile.kind === 'block').map((tile) => ({ value: tile.id, label: tile.label }));
+  return (
+    <>
+      <NumberField label={t(M['inspector.repeat_min'])} value={block.config.minRows} parse={parseInteger(0, 200)} onChange={(minRows) => minRows !== undefined && setConfig(block, { minRows })} />
+      <NumberField label={t(M['inspector.repeat_max'])} value={block.config.maxRows} parse={parseInteger(1, 200)} onChange={(maxRows) => maxRows !== undefined && setConfig(block, { maxRows })} />
+      <NumberField label={t(M['inspector.repeat_initial'])} value={block.config.initialRows} parse={parseInteger(0, 200)} onChange={(initialRows) => setConfig(block, { initialRows })} />
+      <SelectField
+        label={t(M['inspector.repeat_layout'])}
+        value={block.config.layout}
+        options={[
+          { value: 'stacked', label: t(M['inspector.repeat_layout_stacked']) },
+          { value: 'table', label: t(M['inspector.repeat_layout_table']) },
+        ]}
+        onChange={(layout) => setConfig(block, { layout })}
+      />
+      <TextField label={t(M['inspector.repeat_add_label'])} value={block.config.addLabel} onChange={(addLabel) => setConfig(block, { addLabel: text(addLabel) })} />
+      <TextField label={t(M['inspector.repeat_remove_label'])} value={block.config.removeLabel} onChange={(removeLabel) => setConfig(block, { removeLabel: text(removeLabel) })} />
+      <SectionTitle>{t(M['inspector.repeat_fields'])}</SectionTitle>
+      {block.config.children.map((id) => {
+        const child = doc.blocks[id];
+        const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
+        return (
+          <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
+            <span className="truncate">{name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}</span>
+            {block.config.children.length > 1 ? (
+              <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => requestDeleteBlock(id)}>×</Button>
+            ) : null}
+          </div>
+        );
+      })}
+      <SelectField
+        label={t(M['inspector.repeat_add_field'])}
+        value=""
+        placeholder={t(M['inspector.repeat_pick_field'])}
+        options={childOptions}
+        onChange={(tileId) => {
+          const tile = CHILD_TILES.find((item) => item.id === tileId);
+          if (tile?.kind === 'block') addChildBlock(block.id, tile.choice);
+        }}
       />
       <ConfigProblem block={block} />
     </>

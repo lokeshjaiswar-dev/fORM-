@@ -145,6 +145,7 @@ export function createBlock(entry: Pick<PaletteEntry<AvailableType>, 'configOver
     required: false,
     compliance: { ...defaults, purposeIds: defaults.classification === 'none' || !purpose ? [] : [purpose] },
     config,
+    ...(type === 'calculation' || type === 'context' ? { readOnly: true } : {}),
   } as Block;
 }
 

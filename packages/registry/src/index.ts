@@ -1,5 +1,7 @@
 import type { AnswerPath, AnswerValueMap, BlockId, FieldBlockOf, FieldRegistry, ScalarValue, ValueFieldType } from '@form/schema';
 import type { PlainBlockType, PlainDefinition, ValueDefinition } from './define.ts';
+import { calculation } from './fields/calculation.ts';
+import { context } from './fields/context.ts';
 import { date } from './fields/date.ts';
 import { divider } from './fields/divider.ts';
 import { email } from './fields/email.ts';
@@ -16,6 +18,7 @@ import { number } from './fields/number.ts';
 import { paragraph } from './fields/paragraph.ts';
 import { phone } from './fields/phone.ts';
 import { ranking } from './fields/ranking.ts';
+import { repeatingGroup } from './fields/repeating_group.ts';
 import { rating } from './fields/rating.ts';
 import { shortText } from './fields/short_text.ts';
 import { signature } from './fields/signature.ts';
@@ -23,7 +26,7 @@ import { singleChoice } from './fields/single_choice.ts';
 import { time } from './fields/time.ts';
 import { url } from './fields/url.ts';
 import {
-  address, appointment, calculation, captcha, consent, context, datetime, image, payment, repeatingGroup, section, uniqueId,
+  address, appointment, captcha, consent, datetime, image, payment, section, uniqueId,
 } from './stubs.ts';
 
 const VALUE_FIELDS: { readonly [T in ValueFieldType]: ValueDefinition<T> } = {
@@ -95,6 +98,7 @@ export { LONG_TEXT_MAX, wordCount } from './fields/long_text.ts';
 export { rankCount } from './fields/ranking.ts';
 export { UNBOUND_BLOCK_ID } from './fields/shared.ts';
 export { SHORT_TEXT_MAX } from './fields/short_text.ts';
+export { isRepeatableChildType } from './fields/repeating_group.ts';
 export { DRAFT_DEFAULT_CONFIG_TYPES } from './stubs.ts';
 export { DEFAULT_TEXT, PALETTE_LABELS } from './messages.ts';
 export { CALLING_CODE_REGIONS, callingCodeOf } from './util/calling-codes.ts';

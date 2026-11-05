@@ -64,4 +64,4 @@ export const DEFAULT_COMPLIANCE: { readonly [T in ValueFieldType]: FieldComplian
 };
 
 /** Defaults a privacy reviewer still has to confirm: a hidden field captures whatever the URL carries. */
-export const COMPLIANCE_UNDER_REVIEW: readonly ValueFieldType[] = Object.freeze(['hidden']);
+export const COMPLIANCE_UNDER_REVIEW: readonly ValueFieldType[] = Object.freeze(['hidden', 'context']);

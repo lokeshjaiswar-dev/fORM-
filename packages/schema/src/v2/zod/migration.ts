@@ -39,6 +39,7 @@ export const EvalMetaSchema = z.strictObject({
   pageUrl: z.string().exactOptional(),
   referrer: z.string().exactOptional(),
   embedOrigin: z.string().exactOptional(),
+  userAgent: z.string().exactOptional(),
   isPreview: z.boolean(),
   holidayCalendars: keyed(z.partialRecord(HolidayCalendarIdSchema, z.array(IsoDateSchema))).readonly().exactOptional(),
   shuffleSeed: z.string().min(1),

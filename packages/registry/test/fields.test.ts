@@ -4,6 +4,7 @@ import { AVAILABLE_TYPES, REGISTRY, valueDefinition, type AvailableType } from '
 import { EN_IN, fieldBlock, file } from './fixtures.ts';
 
 type AvailableValueType = Extract<AvailableType, ValueFieldType>;
+type InputAvailable = Exclude<AvailableValueType, 'calculation' | 'context'>;
 
 interface Case<T extends AvailableValueType> {
   config?: Partial<BlockConfigMap[T]>;
@@ -23,7 +24,7 @@ const MIB = 1024 * 1024;
 const pdf = file('cv.pdf', 'application/pdf');
 const png = file('photo.png', 'image/png');
 
-const CASES: { [T in AvailableValueType]: Case<T> } = {
+const CASES: { [T in InputAvailable]: Case<T> } = {
   short_text: {
     config: { minLength: 2, maxLength: 5 },
     valid: ['ab', 'hello', 'नमस्ते', '👍🏽👍🏽'],
@@ -145,6 +146,23 @@ const CASES: { [T in AvailableValueType]: Case<T> } = {
     ],
     empty: [[]],
   },
+  repeating_group: {
+    config: { children: ['item'] as never, minRows: 2, maxRows: 3, initialRows: 2, layout: 'stacked' },
+    required: true,
+    valid: [{ rows: [
+      { rowId: 'r1', values: { item: { type: 'short_text', value: 'A' } } },
+      { rowId: 'r2', values: { item: { type: 'short_text', value: 'B' } } },
+    ] }],
+    invalid: [
+      [{ rows: [{ rowId: 'r1', values: {} }] }, 'too_few_rows'],
+      [{ rows: [{ rowId: 'a', values: {} }, { rowId: 'b', values: {} }, { rowId: 'c', values: {} }, { rowId: 'd', values: {} }] }, 'too_many_rows'],
+      [{ rows: [{ rowId: 'r1', values: {} }, { rowId: 'r1', values: {} }] }, 'invalid_format'],
+      [{ rows: [{ rowId: 'r1', values: { other: { type: 'short_text', value: 'x' } } }, { rowId: 'r2', values: {} }] }, 'not_in_options'],
+      [{ rows: [] }, TWIN],
+      ['rows', TWIN],
+    ],
+    empty: [{ rows: [] }],
+  },
   matrix: {
     required: true,
     valid: [{ mode: 'single', rows: { row_1: 'column_1', row_2: 'column_2' } }],
@@ -188,7 +206,7 @@ const CASES: { [T in AvailableValueType]: Case<T> } = {
 const codesOf = (result: { success: boolean; error?: unknown }): string[] =>
   ((result.error as { issues?: Array<{ params?: { code?: string } }> } | undefined)?.issues ?? []).map((i) => i.params?.code ?? '');
 
-const VALUE_TYPES = AVAILABLE_TYPES.filter((t): t is AvailableValueType => REGISTRY[t].kind === 'input');
+const VALUE_TYPES = AVAILABLE_TYPES.filter((t): t is InputAvailable => REGISTRY[t].kind === 'input');
 
 describe('table per available value type', () => {
   it('covers every available value type', () => {

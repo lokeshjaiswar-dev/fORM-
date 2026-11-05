@@ -60,6 +60,8 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
               <th scope="row">{typeof row.label === 'string' ? row.label : text(row.label)}</th>
               {c.columns.map((col, ci) => {
                 const inputId = ri === 0 && ci === 0 ? field.ids.input : undefined;
+                const rowLabel = typeof row.label === 'string' ? row.label : text(row.label);
+                const cellName = `${rowLabel} ${col.label}`.trim();
                 if (mode === 'single') {
                   const checked = value?.mode === 'single' && value.rows[row.id] === col.id;
                   return (
@@ -68,6 +70,7 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
                         id={inputId}
                         type="radio"
                         name={`${field.ids.base}-${row.id}`}
+                        aria-label={cellName}
                         checked={checked}
                         disabled={locked}
                         onChange={() => setSingle(row.id, col.id)}
@@ -83,6 +86,7 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
                       <input
                         id={inputId}
                         type="checkbox"
+                        aria-label={cellName}
                         checked={checked}
                         disabled={locked}
                         onChange={(e) => setMulti(row.id, col.id, e.target.checked)}
@@ -99,6 +103,7 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
                       className="fr-input"
                       type={col.input === 'number' ? 'text' : 'text'}
                       inputMode={col.input === 'number' ? 'decimal' : undefined}
+                      aria-label={cellName}
                       value={cell}
                       disabled={field.disabled}
                       readOnly={field.readOnly || undefined}

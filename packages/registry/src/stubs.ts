@@ -1,4 +1,4 @@
-import type { BlockType, ConsentItemId, CurrencyCode, DecimalString, Expr, IsoTime, Locale, MinorUnits, RichDoc, TimeZone, Weekday } from '@form/schema';
+import type { BlockType, ConsentItemId, CurrencyCode, IsoTime, Locale, MinorUnits, RichDoc, TimeZone, Weekday } from '@form/schema';
 import { defineStub, defineStubBlock } from './define.ts';
 import { DEFAULT_TEXT, datePatternFor, hourCycleFor, message, regionOf } from './messages.ts';
 
@@ -7,8 +7,6 @@ import { DEFAULT_TEXT, datePatternFor, hourCycleFor, message, regionOf } from '.
 const emptyDoc = (): RichDoc => ({ type: 'doc', content: [{ type: 'paragraph' }] });
 const isIndia = (locale: Locale) => regionOf(locale) === 'IN';
 const WORKDAYS: Weekday[] = [1, 2, 3, 4, 5];
-const ZERO: Expr = { k: 'lit', value: { type: 'number', value: '0' as DecimalString } };
-
 export const address = defineStub('address', 'x-field:address', (locale) => ({
   parts: ['line1', 'line2', 'city', 'state', 'postalCode', 'country'],
   requiredParts: ['line1', 'city', 'state', 'postalCode', 'country'],
@@ -24,19 +22,8 @@ export const datetime = defineStub('datetime', 'x-field:datetime', (locale) => (
   timeZone: 'respondent',
 }));
 
-/**
- * Children are blocks of their own, so a new group starts empty and the builder inserts its first child:
- * this default is a draft that `configSchema` rejects (1..30 children), listed in DRAFT_DEFAULT_CONFIG_TYPES.
- */
-export const repeatingGroup = defineStub(
-  'repeating_group',
-  'repeating_groups',
-  () => ({ children: [], minRows: 0, maxRows: 10, layout: 'stacked' }),
-  (value) => value.rows.length === 0,
-);
-
-/** The only types whose `defaultConfig` fails `configSchema` until the builder completes it; generic callers skip them. */
-export const DRAFT_DEFAULT_CONFIG_TYPES = ['repeating_group'] as const satisfies readonly BlockType[];
+/** Types whose `defaultConfig` is a draft that `configSchema` rejects; none now that repeating groups carry a placeholder child. */
+export const DRAFT_DEFAULT_CONFIG_TYPES = [] as const satisfies readonly BlockType[];
 
 export const consent = defineStub('consent', 'consent_dpdp', (locale) => ({
   mode: 'terms',
@@ -73,8 +60,6 @@ export const appointment = defineStub('appointment', 'appointments', (locale) =>
   attachIcs: true,
 }));
 
-export const calculation = defineStub('calculation', 'x-field:calculation', () => ({ expr: ZERO, resultType: 'number', display: 'visible' }));
-export const context = defineStub('context', 'x-field:context', () => ({ source: 'page_url' }));
 export const uniqueId = defineStub('unique_id', 'x-field:unique_id', () => ({ prefix: [], padTo: 6, startAt: 1, resetEvery: 'never', showOnEnding: true }));
 
 export const captcha = defineStubBlock('captcha', 'transient', 'x-field:captcha', () => ({ provider: 'platform_default' }));

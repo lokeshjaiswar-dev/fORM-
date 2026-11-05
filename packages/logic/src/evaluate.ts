@@ -1,7 +1,7 @@
 import { answerScalar, valueDefinition } from '@form/registry';
 import { ANSWER_VALUE_SCHEMAS, VALUE_FIELD_TYPES } from '@form/schema';
 import type {
-  Action, AnswerValue, Answers, BlockId, CompiledForm, Condition, ConditionGroup, EndingId, EvalMeta, EvalState, Evaluate, Expr, FieldBlock,
+  Action, AnswerValue, Answers, BlockId, CompiledForm, Condition, ConditionGroup, ContextConfig, EndingId, EvalMeta, EvalState, Evaluate, Expr, FieldBlock,
   FormDefinition, FormVersion, Literal, Operand, PageId, PlanStep, PublicFormDefinition, Rule, RuleId, RuntimeFormVersion, ScalarValue,
   ServerAction, StoredBlock, ValueFieldType, ValueRef,
 } from '@form/schema';
@@ -87,7 +87,8 @@ function prepare(version: EvaluableVersion): Prepared {
     if (step.kind === 'on_path') return { kind: 'on_path', step, key, page: pageIndex.get(step.pageId) ?? -1 };
     if (step.kind === 'capture') {
       const block = def.blocks[step.blockId];
-      const authoritative = block?.type === 'hidden' && (block.config.source.kind === 'static' || block.config.source.kind === 'expr');
+      const authoritative = block?.type === 'calculation' || block?.type === 'context'
+        || (block?.type === 'hidden' && (block.config.source.kind === 'static' || block.config.source.kind === 'expr'));
       return { kind: 'capture', step, key, blockId: step.blockId, authoritative };
     }
     return { kind: 'other', step, key };
@@ -401,6 +402,17 @@ class Session {
 
   private capture(id: BlockId, previous: unknown): AnswerValue | null {
     const block = this.p.blocks.get(id);
+    const prev = previous as AnswerValue | null | undefined;
+    if (block?.type === 'calculation') {
+      const v = this.exprValue(block.config.expr);
+      if (v.t === 'null') return null;
+      return prev?.type === 'calculation' && JSON.stringify(prev.value) === JSON.stringify(v) ? prev : { type: 'calculation', value: v };
+    }
+    if (block?.type === 'context') {
+      const value = this.contextText(block.config.source, block.config.stripQuery === true)?.trim() ?? '';
+      if (value === '') return null;
+      return prev?.type === 'context' && prev.value === value ? prev : { type: 'context', value };
+    }
     if (block?.type !== 'hidden') return null;
     const source = block.config.source;
     let v: ScalarValue = NULL;
@@ -416,8 +428,35 @@ class Session {
       v = this.exprValue(source.expr);
     }
     if (v.t !== 'text' || v.v === '') return null;
-    const prev = previous as AnswerValue | null | undefined;
     return prev?.type === 'hidden' && prev.value === v.v ? prev : { type: 'hidden', value: v.v };
+  }
+
+  private contextText(source: ContextConfig['source'], stripQuery: boolean): string | undefined {
+    const m = this.meta;
+    const strip = (url: string | undefined) => {
+      if (url === undefined) return undefined;
+      if (!stripQuery) return url;
+      const q = url.indexOf('?');
+      return q < 0 ? url : url.slice(0, q);
+    };
+    switch (source) {
+      case 'page_url':
+        return strip(m.pageUrl);
+      case 'referrer':
+        return strip(m.referrer);
+      case 'user_agent':
+        return m.userAgent;
+      case 'started_at':
+        return m.now;
+      case 'submitted_at':
+        return undefined;
+      case 'locale':
+        return m.locale;
+      case 'time_zone':
+        return m.timeZone;
+      case 'embed_origin':
+        return m.embedOrigin;
+    }
   }
 
   /** The value `step` writes to `c` given its output, on top of `current`. */

@@ -3,6 +3,7 @@ import { graphemeLength } from '@form/i18n';
 import { configTexts, defineField, headerOf } from '../define.ts';
 import { PALETTE_LABELS } from '../messages.ts';
 import { CHOICE_OPS, TEXT_OPS } from '../operators.ts';
+import { COUNTRY_OPTIONS } from './countries.ts';
 import {
   NULL, defaultOptions, entry, hasOption, isRootPath, optionAltLint, optionLabel, optionScalar, optionTexts, otherTexts,
 } from './shared.ts';
@@ -31,6 +32,12 @@ export const singleChoice = defineField({
     }),
     entry('single_choice', 'radio', 'choice', PALETTE_LABELS['palette.single_choice.radio'], 'circle-dot', ['choice', 'radio', 'single', 'option', 'multiple choice'], { display: 'radio' }),
     entry('single_choice', 'dropdown', 'choice', PALETTE_LABELS['palette.single_choice.dropdown'], 'chevron-down', ['dropdown', 'select', 'list', 'single'], { display: 'dropdown' }),
+    entry('single_choice', 'country', 'basic', PALETTE_LABELS['palette.single_choice.country'], 'map-pin', ['country', 'nation', 'region', 'search'], {
+      display: 'dropdown',
+      searchable: true,
+      options: COUNTRY_OPTIONS,
+      placeholder: 'Search a country',
+    }),
   ],
   defaultConfig: (locale) => ({ display: 'radio', options: defaultOptions(locale) }),
   checkConfig: (config, report) => {

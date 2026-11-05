@@ -1,6 +1,6 @@
 import {
-  AlignLeft, Calendar, CheckSquare, ChevronDown, CircleDot, Clock, EyeOff, FilePlus, Gauge, Hash, Heading1, Heading2, Heading3, Link, ListFilter,
-  ListOrdered, Mail, MapPin, Minus, Paperclip, PenLine, Phone, Smile, Square, Star, Table, Text, Type, User, Users, type LucideIcon,
+  AlignLeft, Briefcase, Calendar, CalendarClock, Camera, CheckSquare, ChevronDown, CircleDot, Clock, EyeOff, FilePlus, Files, Gauge, Globe, GraduationCap, Hash, Heading1, Heading2, Heading3, Link, ListFilter, ListPlus,
+  ListOrdered, Mail, MapPin, Minus, Paperclip, PenLine, Phone, ShoppingCart, Smile, Square, Star, Table, Text, Type, User, UserPlus, Users, type LucideIcon,
 } from 'lucide-react';
 
 /*
@@ -30,7 +30,16 @@ export const ICONS: Readonly<Record<string, LucideIcon>> = {
   'gauge': Gauge,
   'smile': Smile,
   'list-ordered': ListOrdered,
+  'list-plus': ListPlus,
+  'shopping-cart': ShoppingCart,
+  'user-plus': UserPlus,
+  'graduation-cap': GraduationCap,
+  'briefcase': Briefcase,
+  'files': Files,
+  'calendar-clock': CalendarClock,
   'paperclip': Paperclip,
+  'camera': Camera,
+  'globe': Globe,
   'pen-line': PenLine,
   'eye-off': EyeOff,
   'heading-1': Heading1,

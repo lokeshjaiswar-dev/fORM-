@@ -8,6 +8,18 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "calculation": [
+    {
+      "header": "My calculation",
+      "suffix": "",
+    },
+  ],
+  "context": [
+    {
+      "header": "My context",
+      "suffix": "",
+    },
+  ],
   "date": [
     {
       "header": "My date",
@@ -128,6 +140,12 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "repeating_group": [
+    {
+      "header": "My repeating group",
+      "suffix": "",
+    },
+  ],
   "short_text": [
     {
       "header": "My short text",
@@ -183,6 +201,43 @@ exports[`export headers > match the snapshot 1`] = `
 
 exports[`operator matrix > matches the snapshot 1`] = `
 {
+  "calculation": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+    },
+  },
+  "context": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
   "date": {
     "operators": {
       "date": [
@@ -460,6 +515,25 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "number",
+    },
+  },
+  "repeating_group": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+      "count": "number",
     },
   },
   "short_text": {

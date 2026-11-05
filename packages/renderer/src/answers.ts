@@ -1,4 +1,4 @@
-import type { AnswerValue, Answers, FieldBlock, IsoDate, IsoInstant, IsoTime, PublicFormDefinition } from '@form/schema';
+import type { AnswerValue, Answers, FieldBlock, GroupRowId, IsoDate, IsoInstant, IsoTime, PublicFormDefinition } from '@form/schema';
 import type { RawAnswers } from '@form/validation/lazy';
 import { templateText, type PipeContext } from './text.ts';
 
@@ -46,6 +46,14 @@ function defaultOf(block: FieldBlock, today: IsoDate, ctx: PipeContext & { now: 
     }
     case 'rating':
       return block.config.defaultValue === undefined ? undefined : { type: 'rating', value: block.config.defaultValue };
+    case 'repeating_group': {
+      const n = block.config.initialRows ?? Math.max(block.config.minRows, 0);
+      if (n < 1) return undefined;
+      return {
+        type: 'repeating_group',
+        value: { rows: Array.from({ length: n }, (_, i) => ({ rowId: `row_${i + 1}` as GroupRowId, values: {} })) },
+      };
+    }
     default:
       return undefined;
   }
@@ -53,9 +61,13 @@ function defaultOf(block: FieldBlock, today: IsoDate, ctx: PipeContext & { now: 
 
 /** The answers a session starts from: the host's (resume, prefill) over each field's default. */
 export function startingAnswers(def: PublicFormDefinition, initial: Answers | undefined, today: IsoDate, ctx: PipeContext & { now: IsoInstant }): RawAnswers {
+  const nested = new Set<string>();
+  for (const block of Object.values(def.blocks)) {
+    if (block?.type === 'repeating_group') block.config.children.forEach((id) => nested.add(id));
+  }
   const out: Record<string, AnswerValue | null> = {};
   for (const block of Object.values(def.blocks)) {
-    if (!block || block.type === 'unsupported' || !('key' in block)) continue;
+    if (!block || block.type === 'unsupported' || !('key' in block) || nested.has(block.id)) continue;
     const given = initial?.[block.id];
     const value = given ?? defaultOf(block, today, ctx);
     out[block.id] = value ?? null;

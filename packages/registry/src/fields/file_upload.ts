@@ -27,7 +27,13 @@ export function acceptsFile(file: Pick<FileRef, 'name' | 'mime'>, accept: FileUp
 /** FLD-26/27. Files are uploaded first; the answer only references them (S10). */
 export const fileUpload = defineField({
   type: 'file_upload',
-  palette: [entry('file_upload', null, 'media', PALETTE_LABELS['palette.file_upload'], 'paperclip', ['file', 'upload', 'attachment', 'document', 'photo'])],
+  palette: [
+    entry('file_upload', null, 'media', PALETTE_LABELS['palette.file_upload'], 'paperclip', ['file', 'upload', 'attachment', 'document']),
+    entry('file_upload', 'photo', 'media', PALETTE_LABELS['palette.file_upload.photo'], 'camera', ['photo', 'camera', 'capture', 'picture', 'image'], {
+      capture: 'environment',
+      accept: { extensions: ['jpg', 'jpeg', 'png'], mimeTypes: ['image/jpeg', 'image/png'] },
+    }),
+  ],
   defaultConfig: () => ({
     maxFiles: 1,
     maxFileBytes: 10 * MIB,

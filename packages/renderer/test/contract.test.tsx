@@ -25,6 +25,7 @@ beforeEach(() => {
 interface Case {
   name: string;
   block: FieldBlock;
+  extra?: FieldBlock[];
   answer: (user: UserEvent) => Promise<void>;
   /** Empties the answer through the UI; null when the control cannot be emptied (a chosen radio, a ranked list). */
   clear: ((user: UserEvent) => Promise<void>) | null;
@@ -198,6 +199,19 @@ const CASES: Case[] = [
     expected: { type: 'ranking', value: ['option_2', 'option_1', 'option_3'] } as AnswerValue,
   },
   {
+    name: 'repeating_group',
+    block: field('repeating_group', 'q', { required: true, config: { children: ['item' as never], minRows: 0, maxRows: 10, initialRows: 1, layout: 'stacked' } }),
+    extra: [field('short_text', 'item')],
+    answer: (user) => user.type(screen.getByRole('textbox', { name: /item/i }), 'Asha'),
+    clear: (user) => user.clear(screen.getByRole('textbox', { name: /item/i })),
+    expected: (answer) => {
+      expect(answer.type).toBe('repeating_group');
+      const rows = (answer.value as { rows: Array<{ values: Record<string, unknown> }> }).rows;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.values).toEqual({ item: { type: 'short_text', value: 'Asha' } });
+    },
+  },
+  {
     name: 'matrix',
     block: field('matrix', 'q', { required: true }),
     answer: async (user) => {
@@ -258,15 +272,15 @@ async function submitIn(user: UserEvent) {
 describe('control contract', () => {
   it('every available value type except hidden has a case; content types render', () => {
     const tested = new Set(CASES.map((c) => c.block.type));
-    const values = AVAILABLE_TYPES.filter((t) => !['heading', 'paragraph', 'divider', 'hidden'].includes(t));
+    const values = AVAILABLE_TYPES.filter((t) => !['heading', 'paragraph', 'divider', 'hidden', 'calculation', 'context'].includes(t));
     expect(values.filter((t) => !tested.has(t as ValueFieldType))).toEqual([]);
     expect(Object.keys(CONTROLS).sort()).toEqual([...AVAILABLE_TYPES].sort());
   });
 
-  it.each(CASES)('$name: render → answer → validate → clear → payload shape', async ({ block, answer, clear, expected }) => {
+  it.each(CASES)('$name: render → answer → validate → clear → payload shape', async ({ block, extra = [], answer, clear, expected }) => {
     const submitted: SubmitPayload[] = [];
     const upload = fakeUploader();
-    const version = runtime(form([block], [page('p1', [block.id])]));
+    const version = runtime(form([block, ...extra], [page('p1', [block.id])]));
     render(<FormRenderer {...props(version, { uploader: upload.uploader, onSubmit: (p) => void submitted.push(p) })} />);
     const user = userEvent.setup();
 
@@ -377,6 +391,28 @@ describe('control contract', () => {
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     await waitFor(() => expect(submitted).toHaveLength(1));
     expect(submitted[0]?.answers['q' as never]).toEqual({ type: 'phone', value: { e164: '+442079460958', country: 'GB' } });
+  });
+
+  it('calculation: shows a captured number without the respondent typing', async () => {
+    const submitted: SubmitPayload[] = [];
+    const block = field('calculation', 'total');
+    const version = runtime(form([block], [page('p1', ['total'])]));
+    render(<FormRenderer {...props(version, { onSubmit: (p) => void submitted.push(p) })} />);
+    await submitIn(userEvent.setup());
+    await waitFor(() => expect(submitted).toHaveLength(1));
+    expect(submitted[0]?.answers['total' as never]).toEqual({ type: 'calculation', value: { t: 'number', v: '0' } });
+  });
+
+  it('context: captures the page URL from the session', async () => {
+    const submitted: SubmitPayload[] = [];
+    const block = field('context', 'page', { config: { source: 'page_url' } });
+    const version = runtime(form([block, field('short_text', 'name')], [page('p1', ['page', 'name'])]));
+    render(<FormRenderer {...props(version, { session: { startedAt: '2026-10-19T04:30:00Z' as never, pageUrl: 'https://example.test/form' }, onSubmit: (p) => void submitted.push(p) })} />);
+    const user = userEvent.setup();
+    await user.type(box(/name/), 'Asha');
+    await submitIn(user);
+    await waitFor(() => expect(submitted).toHaveLength(1));
+    expect(submitted[0]?.answers['page' as never]).toEqual({ type: 'context', value: 'https://example.test/form' });
   });
 
   it('hidden: captures its URL parameter without any UI', async () => {

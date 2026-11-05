@@ -31,5 +31,6 @@ export function sessionMeta(version: RuntimeFormVersion, locale: Locale, mode: '
   if (session.pageUrl !== undefined) meta.pageUrl = session.pageUrl;
   if (session.referrer !== undefined) meta.referrer = session.referrer;
   if (session.embedOrigin !== undefined) meta.embedOrigin = session.embedOrigin;
+  if (session.userAgent !== undefined) meta.userAgent = session.userAgent;
   return meta;
 }

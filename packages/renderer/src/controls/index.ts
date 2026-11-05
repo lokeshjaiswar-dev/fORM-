@@ -1,4 +1,6 @@
 import type { AvailableType } from '@form/registry';
+import { Calculation } from './calculation.tsx';
+import { ContextField } from './context.tsx';
 import { DateInput } from './date.tsx';
 import { Divider } from './divider.tsx';
 import { Email } from './email.tsx';
@@ -15,6 +17,7 @@ import { NumberInput } from './number.tsx';
 import { Paragraph } from './paragraph.tsx';
 import { Phone } from './phone.tsx';
 import { Ranking } from './ranking.tsx';
+import { RepeatingGroup } from './repeating_group.tsx';
 import { Rating } from './rating.tsx';
 import { ShortText } from './short_text.tsx';
 import { Signature } from './signature.tsx';
@@ -43,10 +46,13 @@ export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   nps: { labelling: () => 'radiogroup', Component: Nps },
   ranking: { labelling: () => 'group', Component: Ranking },
   matrix: { labelling: () => 'group', Component: Matrix },
+  repeating_group: { labelling: () => 'group', Component: RepeatingGroup },
   file_upload: { labelling: () => 'input', Component: FileUpload },
   signature: { labelling: () => 'group', Component: Signature },
   /* FLD-30: never rendered; logic captures its value (URL parameter, UTM, static or expression). */
   hidden: { labelling: () => 'none', Component: () => null },
+  calculation: { labelling: (block) => (block.config.display === 'hidden' ? 'none' : 'input'), Component: Calculation },
+  context: { labelling: () => 'input', Component: ContextField },
   heading: { labelling: () => 'content', Component: Heading },
   paragraph: { labelling: () => 'content', Component: Paragraph },
   divider: { labelling: () => 'content', Component: Divider },

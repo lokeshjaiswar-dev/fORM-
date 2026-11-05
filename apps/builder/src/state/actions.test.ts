@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BlockId, DocumentOp, IsoInstant, OptionId, PageId, StoredBlock } from '@form/schema';
 import {
-  addBlock, copyBlock, deleteBlock, duplicateBlock, insertPageBreak, moveBlock, pasteBlock, placeBeside, removePageBreak, removeRule, replaceDocument,
+  addBlock, addChildBlock, addRepeatingGroup, copyBlock, deleteBlock, duplicateBlock, insertPageBreak, moveBlock, pasteBlock, placeBeside, removePageBreak, removeRule, replaceDocument,
   requestDeleteBlock, setBlockWidth, setRule, setTitle, updateBlock,
 } from '@/state/actions';
 import { dispatch } from '@/state/commands/dispatch';
@@ -38,6 +38,19 @@ describe('builder actions', () => {
     expect(ui().activeBlockId).toBe(added);
     expect(keyOf(get(addBlock(SHORT)))).toBe('short_text');
     expect(keyOf(get(addBlock(SHORT)))).toBe('short_text_2');
+  });
+
+  it('addRepeatingGroup inserts the group and its child fields', () => {
+    const groupId = addRepeatingGroup({ type: 'repeating_group', configOverrides: {} });
+    const group = get(groupId);
+    expect(group.type).toBe('repeating_group');
+    if (group.type !== 'repeating_group') return;
+    expect(group.config.children.map((id) => get(id).type)).toEqual(['short_text', 'single_choice', 'date', 'time']);
+    const extra = addChildBlock(groupId, { type: 'number', configOverrides: {} });
+    expect(get(extra).type).toBe('number');
+    const after = get(groupId);
+    expect(after.type).toBe('repeating_group');
+    if (after.type === 'repeating_group') expect(after.config.children.at(-1)).toBe(extra);
   });
 
   it('a palette entry brings its config overrides (FND-03)', () => {

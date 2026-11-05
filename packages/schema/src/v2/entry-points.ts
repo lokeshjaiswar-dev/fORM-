@@ -23,7 +23,7 @@ export interface EvalMeta {
   locale: Locale;
   urlParams: Readonly<Record<string, string>>;
   device?: 'desktop' | 'tablet' | 'mobile';
-  pageUrl?: string; referrer?: string; embedOrigin?: string;
+  pageUrl?: string; referrer?: string; embedOrigin?: string; userAgent?: string;
   isPreview: boolean;
   holidayCalendars?: Readonly<Partial<Record<HolidayCalendarId, IsoDate[]>>>;
   shuffleSeed: string;               // per session

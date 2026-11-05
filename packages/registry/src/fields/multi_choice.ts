@@ -14,6 +14,7 @@ export const multiChoice = defineField({
   palette: [
     entry('multi_choice', 'checkbox', 'choice', PALETTE_LABELS['palette.multi_choice.checkbox'], 'check-square', ['checkbox', 'checkboxes', 'multiple', 'select many'], { display: 'checkbox' }),
     entry('multi_choice', 'dropdown', 'choice', PALETTE_LABELS['palette.multi_choice.dropdown'], 'list-filter', ['dropdown', 'multi-select', 'select many', 'tags'], { display: 'dropdown' }),
+    entry('multi_choice', 'search', 'choice', PALETTE_LABELS['palette.multi_choice.search'], 'list-filter', ['search', 'filter', 'multi-select', 'lookup'], { display: 'dropdown', searchable: true }),
   ],
   defaultConfig: (locale) => ({ display: 'checkbox', options: defaultOptions(locale) }),
   checkConfig: (config, report) => {

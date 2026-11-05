@@ -1,8 +1,8 @@
 import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
-  ChoiceGeneral, ChoiceOptions, ChromeGeneral, DateGeneral, DividerGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LongTextGeneral,
-  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, ScaleGeneral, ShortTextValidation,
+  CalculationGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ContextGeneral, DateGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LongTextGeneral,
+  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
 
@@ -24,7 +24,7 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   short_text: { general: ChromeGeneral, validation: ShortTextValidation },
   long_text: { general: LongTextGeneral, validation: LongTextValidation },
   full_name: {},
-  email: { general: ChromeGeneral },
+  email: { general: EmailGeneral },
   phone: { general: PhoneGeneral },
   number: { general: NumberGeneral, validation: NumberValidation },
   url: { general: ChromeGeneral },
@@ -37,9 +37,12 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   nps: { general: EndLabels },
   ranking: { options: ChoiceOptions },
   matrix: { general: MatrixGeneral },
+  repeating_group: { general: RepeatingGroupGeneral },
   file_upload: { validation: FileValidation },
   signature: { general: SignatureGeneral },
   hidden: { general: HiddenGeneral },
+  calculation: { general: CalculationGeneral },
+  context: { general: ContextGeneral },
   heading: { general: HeadingGeneral },
   paragraph: {},
   divider: { general: DividerGeneral },
