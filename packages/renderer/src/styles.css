@@ -445,10 +445,38 @@
   background: color-mix(in srgb, var(--fr-accent) 12%, var(--fr-inputBg));
 }
 
-:where(.fr-root) .fr-input.fr-blank {
-  border-style: none none solid;
+:where(.fr-root) .fr-blank-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4em;
+  width: 100%;
+  font-size: 1.05em;
+  line-height: 1.7;
+}
+
+:where(.fr-root) .fr-blank-words {
+  color: inherit;
+}
+
+:where(.fr-root) .fr-blank-input {
+  flex: 1 1 8rem;
+  min-width: 8rem;
+  max-width: 18rem;
+  margin: 0;
+  padding: 0 2px 2px;
+  border: none;
+  border-bottom: 1.5px solid var(--fr-inputBorder);
   border-radius: 0;
-  padding-inline: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+:where(.fr-root) .fr-blank-input:focus {
+  outline: none;
+  border-bottom-color: var(--fr-accent);
 }
 
 :where(.fr-root) .fr-image-choices {

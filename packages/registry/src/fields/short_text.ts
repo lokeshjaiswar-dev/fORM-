@@ -11,7 +11,7 @@ export const shortText = defineField({
   type: 'short_text',
   palette: [
     entry('short_text', null, 'basic', PALETTE_LABELS['palette.short_text'], 'type', ['text', 'short', 'answer', 'input', 'line']),
-    entry('short_text', 'fill_blank', 'basic', PALETTE_LABELS['palette.short_text.fill_blank'], 'type', ['fill in the blank', 'blank', 'underscore', 'sentence', 'complete'], { placeholder: '_____' }),
+    entry('short_text', 'fill_blank', 'basic', PALETTE_LABELS['palette.short_text.fill_blank'], 'type', ['fill in the blank', 'blank', 'underscore', 'sentence', 'complete'], { placeholder: '_____', prefix: 'My name is ', suffix: '.' }),
     entry('short_text', 'pan', 'advanced', PALETTE_LABELS['palette.short_text.pan'], 'hash', ['pan', 'income tax', 'india'], { preset: 'in_pan', placeholder: 'ABCDE1234F', maxLength: 10 }),
     entry('short_text', 'gstin', 'advanced', PALETTE_LABELS['palette.short_text.gstin'], 'hash', ['gstin', 'gst', 'tax', 'india'], { preset: 'in_gstin', placeholder: '22AAAAA0000A1Z5', maxLength: 15 }),
     entry('short_text', 'pincode', 'advanced', PALETTE_LABELS['palette.short_text.pincode'], 'map-pin', ['pin', 'pincode', 'postal', 'india'], { preset: 'in_pincode', placeholder: '411001', maxLength: 6 }),

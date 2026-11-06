@@ -11,6 +11,7 @@ export function insertTile(tile: Tile, at?: PageSlot): void {
   else {
     const kind = REGISTRY[tile.choice.type].kind;
     const content = kind === 'content' || kind === 'container' || kind === 'transient';
-    addBlock(tile.choice, at, content ? {} : { label: inlineDoc(tile.label) });
+    const fillBlank = tile.choice.type === 'short_text' && tile.choice.configOverrides.placeholder === '_____';
+    addBlock(tile.choice, at, content ? {} : { label: inlineDoc(tile.label), ...(fillBlank ? { hideLabel: true } : {}) });
   }
 }

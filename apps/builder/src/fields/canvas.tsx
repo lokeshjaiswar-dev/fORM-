@@ -71,7 +71,21 @@ const SPACING = { sm: 'my-2', md: 'my-4', lg: 'my-6' } as const;
 const LINE = { solid: '', dashed: 'border-dashed', dotted: 'border-dotted', none: 'border-transparent' } as const;
 
 export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
-  short_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
+  short_text: ({ block }) =>
+    block.config.placeholder === '_____' ? (
+      <span className="flex w-full flex-wrap items-baseline gap-x-2 pt-1 text-[16px] leading-8">
+        {block.config.prefix ? <span>{block.config.prefix}</span> : null}
+        <span
+          className="inline-block min-w-[8rem] flex-1 border-b-[1.5px] border-[var(--fr-inputBorder)] px-1 text-center"
+          style={{ maxWidth: '18rem' }}
+        >
+          {'\u00a0'}
+        </span>
+        {block.config.suffix ? <span>{block.config.suffix}</span> : null}
+      </span>
+    ) : (
+      <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />
+    ),
   long_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} tall />,
   full_name: ({ block }) => (
     <div className="grid grid-cols-2 gap-3 pt-1">
