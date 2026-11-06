@@ -2,7 +2,7 @@ import { createElement, useState, type ComponentType } from 'react';
 import { X } from 'lucide-react';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable, type AvailableType } from '@form/registry';
-import type { BlockId, BlockOf, BlockStyle, FieldBlock, HexColor, StoredBlock } from '@form/schema';
+import { isSafeUrl, type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type SafeUrl, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
@@ -15,7 +15,7 @@ import { useUiStore } from '@/state/uiStore';
 import { Tooltip } from '@/components/Tooltip';
 import { Button, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { Field, SectionTitle, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { Field, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
 import { PrivacySection } from '@/components/builder/inspector/PrivacySection';
 
@@ -55,9 +55,41 @@ const M = defineMessages('builder', {
   'inspector.required_read_only': 'A read-only field needs a default value to be required.',
   'inspector.required_message': 'Message when empty',
   'inspector.required_message_placeholder': 'This field is required.',
+  'inspector.format_message': 'Message when the answer is invalid',
+  'inspector.unique': 'Must be unique on this form',
+  'inspector.unique_hint': 'The same value cannot be submitted twice. Checked when the form is submitted.',
+  'inspector.unique_normalize': 'Compare as',
+  'inspector.unique_exact': 'Exactly as typed',
+  'inspector.unique_lower': 'Ignore case and extra spaces',
+  'inspector.unique_e164': 'As a phone number',
+  'inspector.unique_digits': 'Digits only',
+  'inspector.unique_message': 'Message when the value is already used',
+  'inspector.api_validation': 'Validate with an API',
+  'inspector.api_url': 'API URL',
+  'inspector.api_url_hint': 'The browser POSTs JSON using this field key ({key}) as the property name and the typed answer as the value. Respond with ok true, or ok false and a message.',
   'inspector.hidden_never_required': 'Hidden fields are never required.',
   'inspector.no_validation': 'This block has no answer to validate.',
 });
+
+const UNIQUE_TYPES = new Set<FieldBlock['type']>(['short_text', 'email', 'phone', 'url', 'number']);
+const FORMAT_CODE: Partial<Record<FieldBlock['type'], ValidationErrorCode>> = {
+  short_text: 'pattern',
+  long_text: 'too_long',
+  email: 'invalid_email',
+  phone: 'invalid_phone',
+  url: 'invalid_url',
+  number: 'not_a_number',
+  date: 'date_out_of_range',
+  datetime: 'date_out_of_range',
+  time: 'time_out_of_range',
+  file_upload: 'file_type_not_allowed',
+};
+
+function defaultNormalize(type: FieldBlock['type']): UniqueConstraint['normalize'] {
+  if (type === 'phone') return 'e164';
+  if (type === 'number') return 'digits';
+  return 'trim_lower';
+}
 
 type Tab = 'general' | 'options' | 'validation' | 'logic' | 'privacy';
 const TAB_LABELS: Record<Tab, MessageId> = {
@@ -316,13 +348,31 @@ function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupporte
   );
 }
 
+function ApiUrlField({ block }: { block: FieldBlock }) {
+  const stored = block.apiValidation?.url ?? '';
+  const [text, setText] = useDraft(stored);
+  return (
+    <TextField
+      label={t(M['inspector.api_url'])}
+      hint={t(M['inspector.api_url_hint'], { key: block.key })}
+      value={text}
+      placeholder="http://localhost:3001/verify-name"
+      onChange={(url) => {
+        setText(url);
+        if (!url) updateBlock(block.id, { apiValidation: undefined });
+        else if (isSafeUrl(url)) updateBlock(block.id, { apiValidation: { url: url as SafeUrl } });
+      }}
+    />
+  );
+}
+
 function ValidationTab({ block }: { block: FieldBlock }) {
   const hidden = block.type === 'hidden';
-  const message = block.messages?.required;
-  const setMessage = (text: string) => {
-    const messages: Record<string, string> = { ...block.messages };
-    if (text) messages['required'] = text;
-    else delete messages['required'];
+  const formatCode = FORMAT_CODE[block.type];
+  const setMessage = (code: ValidationErrorCode, text: string) => {
+    const messages: Partial<Record<ValidationErrorCode, string>> = { ...block.messages };
+    if (text) messages[code] = text;
+    else delete messages[code];
     updateBlock(block.id, { messages: Object.keys(messages).length ? messages : undefined });
   };
   return (
@@ -339,11 +389,46 @@ function ValidationTab({ block }: { block: FieldBlock }) {
             </p>
           ) : null}
           {block.required ? (
-            <TextField label={t(M['inspector.required_message'])} placeholder={t(M['inspector.required_message_placeholder'])} value={message} onChange={setMessage} />
+            <TextField label={t(M['inspector.required_message'])} placeholder={t(M['inspector.required_message_placeholder'])} value={block.messages?.required} onChange={(text) => setMessage('required', text)} />
           ) : null}
         </>
       )}
+      <ToggleRow
+        label={t(M['inspector.api_validation'])}
+        checked={block.apiValidation !== undefined}
+        onChange={(on) => updateBlock(block.id, { apiValidation: on ? { url: 'http://localhost:3001/verify-name' as SafeUrl } : undefined })}
+      />
+      {block.apiValidation ? <ApiUrlField block={block} /> : null}
       <Registered block={block} section="validation" />
+      {formatCode ? (
+        <TextField label={t(M['inspector.format_message'])} value={block.messages?.[formatCode]} onChange={(text) => setMessage(formatCode, text)} />
+      ) : null}
+      {UNIQUE_TYPES.has(block.type) ? (
+        <>
+          <ToggleRow
+            label={t(M['inspector.unique'])}
+            hint={t(M['inspector.unique_hint'])}
+            checked={block.unique !== undefined}
+            onChange={(on) => updateBlock(block.id, { unique: on ? { normalize: defaultNormalize(block.type) } : undefined })}
+          />
+          {block.unique ? (
+            <>
+              <SelectField
+                label={t(M['inspector.unique_normalize'])}
+                value={block.unique.normalize}
+                options={[
+                  { value: 'exact', label: t(M['inspector.unique_exact']) },
+                  { value: 'trim_lower', label: t(M['inspector.unique_lower']) },
+                  { value: 'e164', label: t(M['inspector.unique_e164']) },
+                  { value: 'digits', label: t(M['inspector.unique_digits']) },
+                ]}
+                onChange={(normalize) => updateBlock(block.id, { unique: { ...block.unique, normalize: normalize as UniqueConstraint['normalize'] } })}
+              />
+              <TextField label={t(M['inspector.unique_message'])} value={block.unique.message} onChange={(message) => updateBlock(block.id, { unique: { ...block.unique, message: message || undefined } })} />
+            </>
+          ) : null}
+        </>
+      ) : null}
       {!sectionOf(block, 'validation') && hidden ? <p className="text-[13px] text-muted-foreground">{t(M['inspector.no_validation'])}</p> : null}
     </>
   );

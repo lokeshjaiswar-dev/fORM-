@@ -50,6 +50,7 @@ export const SYSTEM_MESSAGES = defineMessages('system', {
   too_few_rows: 'Add at least {min, plural, one {# row} other {# rows}}.',
   too_many_rows: 'Add no more than {max, plural, one {# row} other {# rows}}.',
   not_unique: 'This value has already been used.',
+  api_failed: 'This answer could not be verified.',
   slot_unavailable: 'This slot is no longer available. Choose another one.',
   out_of_stock: 'This item is out of stock.',
   coupon_invalid: 'This coupon code is not valid.',

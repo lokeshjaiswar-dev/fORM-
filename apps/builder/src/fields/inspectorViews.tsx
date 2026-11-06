@@ -13,6 +13,7 @@ import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions'
 import { currentDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
+import { ChoiceOtherValidation, FileMinLimits, MaskFields } from '@/fields/validationViews';
 import { Button } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
@@ -28,6 +29,9 @@ const M = defineMessages('builder', {
   'inspector.suffix': 'Suffix',
   'inspector.min_length': 'Minimum characters',
   'inspector.max_length': 'Maximum characters',
+  'inspector.limit_unit': 'Count',
+  'inspector.limit_characters': 'Characters',
+  'inspector.limit_words': 'Words',
   'inspector.pattern': 'Pattern (regular expression)',
   'inspector.pattern_invalid': 'This pattern is ignored until fixed: {problem}',
   'inspector.rows': 'Rows',
@@ -230,6 +234,7 @@ export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
         error={problem ? t(M['inspector.pattern_invalid'], { problem }) : null}
         onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
       />
+      <MaskFields value={block.config.mask} onChange={(mask) => setConfig(block, { mask })} />
       <ConfigProblem block={block} />
     </>
   );
@@ -246,12 +251,22 @@ export function LongTextGeneral({ block }: InspectorProps<'long_text'>) {
 
 export function LongTextValidation({ block }: InspectorProps<'long_text'>) {
   const limit = block.config.limit;
-  const setLimit = (patch: { min?: number | undefined; max?: number | undefined }) => {
+  const setLimit = (patch: { unit?: 'characters' | 'words'; min?: number | undefined; max?: number | undefined }) => {
     const next = { unit: 'characters' as const, ...limit, ...patch };
-    setConfig(block, { limit: next.min === undefined && next.max === undefined ? undefined : next });
+    const unused = next.min === undefined && next.max === undefined && next.unit === 'characters';
+    setConfig(block, { limit: unused ? undefined : next });
   };
   return (
     <>
+      <SelectField
+        label={t(M['inspector.limit_unit'])}
+        value={limit?.unit ?? 'characters'}
+        options={[
+          { value: 'characters', label: t(M['inspector.limit_characters']) },
+          { value: 'words', label: t(M['inspector.limit_words']) },
+        ]}
+        onChange={(unit) => setLimit({ unit: unit as 'characters' | 'words' })}
+      />
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t(M['inspector.min_length'])} value={limit?.min} parse={count(50_000)} onChange={(min) => setLimit({ min })} />
         <NumberField label={t(M['inspector.max_length'])} value={limit?.max} parse={count(50_000)} onChange={(max) => setLimit({ max })} />
@@ -337,6 +352,16 @@ export function MultiChoiceValidation({ block }: InspectorProps<'multi_choice'>)
         <NumberField label={t(M['inspector.min_selected'])} value={block.config.minSelected} parse={parseInteger(0, n)} onChange={(minSelected) => setConfig(block, { minSelected })} />
         <NumberField label={t(M['inspector.max_selected'])} value={block.config.maxSelected} parse={parseInteger(1, n)} onChange={(maxSelected) => setConfig(block, { maxSelected })} />
       </div>
+      <ChoiceOtherValidation block={block} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function SingleChoiceValidation({ block }: InspectorProps<'single_choice'>) {
+  return (
+    <>
+      <ChoiceOtherValidation block={block} />
       <ConfigProblem block={block} />
     </>
   );
@@ -542,6 +567,7 @@ export function FileValidation({ block }: InspectorProps<'file_upload'>) {
   const { accept } = block.config;
   return (
     <>
+      <FileMinLimits block={block} />
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t(M['inspector.max_files'])} value={block.config.maxFiles} parse={parseInteger(1, 20)} onChange={(maxFiles) => maxFiles !== undefined && setConfig(block, { maxFiles })} />
         <NumberField

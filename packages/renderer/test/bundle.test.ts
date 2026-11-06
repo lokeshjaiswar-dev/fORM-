@@ -17,7 +17,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 const KB = 1024;
 const SPEC_BUDGET = 90 * KB;
-const INITIAL_RATCHET = 144 * KB;
+const INITIAL_RATCHET = 145 * KB;
 const ENGINES_RATCHET = 102 * KB;
 const REGEX_CHUNK_CEILING = 50 * KB;
 

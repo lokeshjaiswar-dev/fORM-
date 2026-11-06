@@ -2,6 +2,7 @@
   "above_max": "Enter {max} or less.",
   "age_out_of_range": "Your age is outside the range this form accepts.",
   "amount_changed": "The total has changed. Check the amount and try again.",
+  "api_failed": "This answer could not be verified.",
   "below_min": "Enter {min} or more.",
   "blocked_by_rule": "This answer cannot be accepted.",
   "captcha_failed": "Verification failed. Try again.",

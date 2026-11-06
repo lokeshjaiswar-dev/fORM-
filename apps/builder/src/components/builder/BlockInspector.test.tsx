@@ -153,6 +153,62 @@ describe('BlockInspector validation', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('read-only field needs a default value');
   });
 
+  it('writes a short-text mask and a unique constraint', async () => {
+    resetStore([block('short_text', 'code')]);
+    const user = open('code');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    await user.type(screen.getByRole('textbox', { name: 'Input mask' }), 'AAA-####');
+    expect(get('code').config['mask']).toEqual({ pattern: 'AAA-####', storeMasked: true });
+    await user.click(screen.getByRole('switch', { name: 'Must be unique on this form' }));
+    expect(get('code')['unique']).toEqual({ normalize: 'trim_lower' });
+  });
+
+  it('counts long text in words', async () => {
+    resetStore([block('long_text', 'bio')]);
+    const user = open('bio');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    await pick(user, 'Count', 'Words');
+    const min = screen.getByRole('textbox', { name: 'Minimum characters' });
+    await user.type(min, '10');
+    expect(get('bio').config['limit']).toEqual({ unit: 'words', min: 10 });
+  });
+
+  it('toggles email confirmation and allowed domains', async () => {
+    resetStore([block('email', 'mail')]);
+    const user = open('mail');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    await user.click(screen.getByRole('switch', { name: 'Ask the respondent to type the email twice' }));
+    await user.type(screen.getByRole('textbox', { name: 'Allowed domains' }), 'acme.com');
+    expect(get('mail').config['confirm']).toBe(true);
+    expect(get('mail').config['allowedDomains']).toEqual(['acme.com']);
+  });
+
+  it('enables API validation and stores an https URL', async () => {
+    resetStore([block('short_text', 'emp_name')]);
+    const user = open('emp_name');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    await user.click(screen.getByRole('switch', { name: 'Validate with an API' }));
+    expect(get('emp_name').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name' });
+    fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/names' } });
+    expect(get('emp_name').apiValidation).toEqual({ url: 'https://hr.example.com/names' });
+  });
+
+  it('enables API validation on any answer field', async () => {
+    resetStore([block('email', 'mail')]);
+    const user = open('mail');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    await user.click(screen.getByRole('switch', { name: 'Validate with an API' }));
+    expect(get('mail').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name' });
+  });
+
+  it('sets a minimum age on a date field', async () => {
+    resetStore([block('date', 'dob')]);
+    const user = open('dob');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    await user.type(screen.getByRole('textbox', { name: 'Minimum age' }), '18');
+    expect(get('dob').config['limits']).toEqual({ age: { min: 18 } });
+  });
+
   it('a number limit is written only once it is a decimal', async () => {
     resetStore([block('number', 'n')]);
     const user = open('n');

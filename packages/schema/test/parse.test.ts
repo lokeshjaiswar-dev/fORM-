@@ -116,6 +116,12 @@ describe('primitives', () => {
     expect(ok(S.SafeUrlSchema, 'mailto:a@b.co')).toBe(false);
   });
 
+  it('accepts API validation on any field against an http(s) URL', () => {
+    const name = definition().blocks[ids.name];
+    expect(ok(S.FieldBlockSchema, { ...name, apiValidation: { url: 'https://api.example.com/verify' } })).toBe(true);
+    expect(ok(S.FieldBlockSchema, { ...name, apiValidation: { url: 'javascript:alert(1)' } })).toBe(false);
+  });
+
   it('extensions are x- namespaced', () => {
     expect(ok(S.ExtensionsSchema, { 'x-acme': { any: 1 } })).toBe(true);
     expect(ok(S.ExtensionsSchema, { acme: 1 })).toBe(false);

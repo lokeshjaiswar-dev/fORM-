@@ -11,7 +11,9 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({ mode }) => {
   /* VITE_API_URL: the API origin when it is not the builder's own (SaaS: api.form.example). Unset: same origin. */
   const apiUrl = loadEnv(mode, root, 'VITE_').VITE_API_URL;
-  const connectOrigins = apiUrl ? [apiUrl] : [];
+  /* Dev preview POSTs field API checks from the browser; CSP connect-src must allow the demo validator. */
+  const demoValidate = mode === 'development' ? ['http://localhost:3001', 'http://127.0.0.1:3001'] : [];
+  const connectOrigins = [...(apiUrl ? [apiUrl] : []), ...demoValidate];
   /* Same-origin API in development: `/v1` goes to `pnpm dev:api` (:8080). */
   const proxy = apiUrl ? {} : { '/v1': process.env.FR_DEV_API_URL ?? 'http://127.0.0.1:8080' };
   /* Reports go to the local collector, through `report-uri` only (see BuilderHeaderOptions.reportTo). */

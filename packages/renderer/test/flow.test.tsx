@@ -81,6 +81,25 @@ describe('paging, logic and submit', () => {
     expect(await screen.findByRole('textbox', { name: /city/ })).toBeInTheDocument();
   });
 
+  it('POSTs the field key from the browser and blocks submit when the API returns ok false', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: false, message: 'Name not found' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const def = form(
+      [field('short_text', 'emp_name', { required: true, apiValidation: { url: 'https://hr.example.com/names' as SafeUrl } })],
+      [page('p1', ['emp_name'])],
+    );
+    render(<FormRenderer {...props(runtime(def))} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByRole('textbox', { name: /emp_name/ }), 'Lokesh');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText('Name not found')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://hr.example.com/names',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ emp_name: 'Lokesh' }) }),
+    );
+    vi.unstubAllGlobals();
+  });
+
   it('marks invalid fields, describes them by their error, announces the count and focuses the first', async () => {
     render(<FormRenderer {...props(runtime(threePages()))} />);
     const user = userEvent.setup();

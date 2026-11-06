@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { keyed } from './_util.ts';
 import { VALIDATION_ERROR_CODES } from '../envelope.ts';
 import { FieldComplianceSchema } from './compliance.ts';
-import { BlockIdSchema, ExtensionsSchema, FieldKeySchema, OriginSchema } from './primitives.ts';
+import { BlockIdSchema, ExtensionsSchema, FieldKeySchema, OriginSchema, SafeUrlSchema } from './primitives.ts';
 import { ColorValueSchema, InlineDocSchema, RichDocSchema } from './rich-text.ts';
 
 export const BlockLayoutSchema = z.strictObject({
@@ -57,4 +57,5 @@ export const fieldBase = <T extends string>(type: T) => ({
   compliance: FieldComplianceSchema,
   prefill: PrefillConfigSchema.exactOptional(),
   unique: UniqueConstraintSchema.exactOptional(),
+  apiValidation: z.strictObject({ url: SafeUrlSchema }).exactOptional(),
 });

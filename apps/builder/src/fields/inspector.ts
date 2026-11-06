@@ -2,9 +2,12 @@ import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
   AddressGeneral, AppointmentGeneral, CalculationGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ContextGeneral, DateGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LongTextGeneral, UniqueIdGeneral, SectionGeneral,
-  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation,
+  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
+import {
+  AddressValidation, DateTimeValidation, DateValidation, EmailValidation, FullNameValidation, PhoneValidation, TimeValidation, UrlValidation,
+} from '@/fields/validationViews';
 
 /*
  * The inspector view of every available block type (FND-03): the type's own settings in the General, Options and
@@ -23,22 +26,22 @@ export interface InspectorView<T extends AvailableType> {
 export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   short_text: { general: ChromeGeneral, validation: ShortTextValidation },
   long_text: { general: LongTextGeneral, validation: LongTextValidation },
-  full_name: {},
-  email: { general: EmailGeneral },
-  phone: { general: PhoneGeneral },
-  address: { general: AddressGeneral },
-  datetime: { general: DateTimeGeneral },
+  full_name: { validation: FullNameValidation },
+  email: { general: EmailGeneral, validation: EmailValidation },
+  phone: { general: PhoneGeneral, validation: PhoneValidation },
+  address: { general: AddressGeneral, validation: AddressValidation },
+  datetime: { general: DateTimeGeneral, validation: DateTimeValidation },
   consent: { general: ConsentGeneral },
   unique_id: { general: UniqueIdGeneral },
   appointment: { general: AppointmentGeneral },
   captcha: {},
   section: { general: SectionGeneral },
   number: { general: NumberGeneral, validation: NumberValidation },
-  url: { general: ChromeGeneral },
-  single_choice: { general: ChoiceGeneral, options: ChoiceOptions },
+  url: { general: ChromeGeneral, validation: UrlValidation },
+  single_choice: { general: ChoiceGeneral, options: ChoiceOptions, validation: SingleChoiceValidation },
   multi_choice: { general: ChoiceGeneral, options: ChoiceOptions, validation: MultiChoiceValidation },
-  date: { general: DateGeneral },
-  time: { general: TimeGeneral },
+  date: { general: DateGeneral, validation: DateValidation },
+  time: { general: TimeGeneral, validation: TimeValidation },
   rating: { general: RatingGeneral },
   linear_scale: { general: ScaleGeneral },
   nps: { general: EndLabels },

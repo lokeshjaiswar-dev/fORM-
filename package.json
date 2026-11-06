@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "turbo run dev --filter=@form/builder",
+    "demo:validate-api": "node tools/demo-validate-api/server.mjs",
     "dev:api": "pnpm --filter @form/api dev",
     "dev:worker": "pnpm --filter @form/worker dev",
     "dev:setup": "pnpm --filter @form/db db:setup --env-out ../../apps/api/.env.local && pnpm --filter @form/worker dev:setup --env-out .env.local",

@@ -45,6 +45,16 @@ describe('builder security headers (FND-20)', () => {
     expect(headers['Content-Security-Policy-Report-Only']).toBe("require-trusted-types-for 'script'; trusted-types 'none'; report-uri /__csp-report; report-to csp");
   });
 
+  it('development can allow extra connect origins (demo validation API)', () => {
+    const headers = builderSecurityHeaders({
+      mode: 'development',
+      connectOrigins: ['http://localhost:3001'],
+      reportUri: '/__csp-report',
+      reportTo: false,
+    });
+    expect(directives(headers['Content-Security-Policy'] ?? '')['connect-src']).toBe("'self' http://localhost:3001");
+  });
+
   it('a separate API origin is allowed to connect and receives the reports', () => {
     const headers = productionHeaders({ PUBLIC_API_URL: 'https://api.form.example/' });
     const csp = directives(headers['Content-Security-Policy'] ?? '');

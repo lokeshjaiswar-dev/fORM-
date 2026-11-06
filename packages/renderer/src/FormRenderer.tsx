@@ -8,6 +8,7 @@ import {
 } from '@form/schema';
 import { loadRegexEngine, needsRegexEngine, type RawAnswers } from '@form/validation/lazy';
 import { startingAnswers } from './answers.ts';
+import { verifyFieldApis } from './controls/apiValidation.ts';
 import { RendererContext, useRenderer, type RendererContextValue } from './context.ts';
 import { usePipes } from './controls/hooks.ts';
 import { useEvalSession, useEvaluation } from './eval/context.ts';
@@ -270,6 +271,20 @@ function FormSession({ props, meta, base, onRestart }: {
     const errors = validation.errors();
     if (!ok || errors.length) {
       invalid(errors, current);
+      return;
+    }
+    const remote = await verifyFieldApis(
+      def,
+      form.getValues() as RawAnswers,
+      evaluateNow().state.visible,
+      isLast ? undefined : current,
+      base.t(`system:api_failed`),
+    );
+    if (remote.length) {
+      for (const error of remote) {
+        if (error.blockId !== undefined) form.setError(error.blockId, { type: error.code, message: error.message });
+      }
+      invalid(remote, current);
       return;
     }
     setFormErrors([]);

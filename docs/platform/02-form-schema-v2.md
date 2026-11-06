@@ -559,7 +559,7 @@ export const VALIDATION_ERROR_CODES = [
   'not_in_options', 'too_few_selected', 'too_many_selected', 'other_text_required',
   'invalid_date', 'date_out_of_range', 'date_not_allowed', 'age_out_of_range', 'invalid_time', 'time_out_of_range',
   'file_too_large', 'file_too_small', 'file_type_not_allowed', 'too_many_files', 'too_few_files', 'file_missing', 'file_infected',
-  'row_incomplete', 'too_few_rows', 'too_many_rows', 'not_unique', 'slot_unavailable', 'out_of_stock', 'coupon_invalid',
+  'row_incomplete', 'too_few_rows', 'too_many_rows', 'not_unique', 'api_failed', 'slot_unavailable', 'out_of_stock', 'coupon_invalid',
   'payment_required', 'payment_failed', 'amount_changed', 'consent_required', 'captcha_failed', 'blocked_by_rule', 'stale_version',
 ] as const;
 export type ValidationErrorCode = (typeof VALIDATION_ERROR_CODES)[number];
@@ -590,6 +590,7 @@ export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   compliance: FieldCompliance;
   prefill?: PrefillConfig;
   unique?: UniqueConstraint;
+  apiValidation?: { url: SafeUrl };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

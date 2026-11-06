@@ -47,8 +47,8 @@ export interface Control<T extends AvailableType> {
 
 /** The control's answer from react-hook-form, typed by block type; `set(undefined)` clears it. */
 export function useAnswer<T extends ValueFieldType>(block: FieldBlockOf<T>) {
-  const { control } = useFormContext();
-  const { revalidate } = useRenderer();
+  const { control, setError, clearErrors } = useFormContext();
+  const { revalidate, t } = useRenderer();
   const { field } = useController({ name: block.id, control });
   const raw = field.value as AnswerValue | null | undefined;
   const value = raw && raw.type === block.type ? (raw.value as AnswerValueMap[T]) : undefined;
@@ -60,7 +60,22 @@ export function useAnswer<T extends ValueFieldType>(block: FieldBlockOf<T>) {
     },
     [onChange, revalidate, block.type, block.id],
   );
-  return { value, set, onBlur: field.onBlur };
+  const onBlur = useCallback(() => {
+    field.onBlur();
+    const url = block.apiValidation?.url;
+    if (!url) return;
+    const current = field.value as AnswerValue | null | undefined;
+    const payload = current && current.type === block.type ? current.value : undefined;
+    if (payload === undefined || payload === null || payload === '') return;
+    if (typeof payload === 'string' && payload.trim() === '') return;
+    void import('./apiValidation.ts').then(({ postFieldApi }) =>
+      postFieldApi(url, block.key, payload).then((result) => {
+        if (result.ok) clearErrors(block.id);
+        else setError(block.id, { type: 'api_failed', message: result.message ?? t('system:api_failed') });
+      }),
+    );
+  }, [block.apiValidation?.url, block.id, block.key, block.type, clearErrors, field, setError, t]);
+  return { value, set, onBlur };
 }
 
 /** ARIA and state attributes every input-like control carries. */
