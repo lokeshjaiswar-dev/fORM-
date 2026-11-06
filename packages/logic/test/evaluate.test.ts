@@ -2,7 +2,7 @@ import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import { createEvaluator, evalStateJson, evaluate } from '../src/index.ts';
 import {
-  META, a, all, ans, any, bid, bool, choices, cond, date, disable, enable, expr, field, form, heading, hide, id, meta, nil, num, opts, page, pid,
+  META, a, all, ans, any, bid, bool, choices, cond, date, disable, enable, expr, field, form, heading, hide, id, meta, nil, num, oid, opts, page, pid,
   requireIt, rule, show, text, time, unrequire, versionOf,
 } from './build.ts';
 
@@ -333,6 +333,33 @@ describe('evaluate', () => {
     );
     const state = evaluate(versionOf(def), { [bid('qty')]: a.number('3'), [bid('price')]: a.number('4.5') }, META, 'client');
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '13.5' } });
+  });
+
+  it('blocks submit when a text field does not start with another field’s option code', () => {
+    const def = form(
+      [
+        field('single_choice', 'state', { config: { display: 'dropdown', options: [
+          { id: oid('mh'), label: 'Maharashtra', code: '27' },
+          { id: oid('ka'), label: 'Karnataka', code: '29' },
+        ] } }),
+        field('short_text', 'gstin'),
+      ],
+      [page('p1', ['state', 'gstin'])],
+      [rule(
+        'gst',
+        all(cond(ans('gstin'), 'is_answered'), cond(ans('gstin'), 'not_starts_with', ans('state'))),
+        [{ type: 'block_submit', message: 'GSTIN does not match the selected state', atPage: pid('p1'), anchorBlockId: bid('gstin') }],
+      )],
+    );
+    const mismatch = evaluate(versionOf(def), { [bid('state')]: a.single('mh'), [bid('gstin')]: a.text('29AAAAA0000A1Z5') }, META, 'client');
+    expect(mismatch.submitBlocks).toEqual([{
+      ruleId: id('gst'),
+      message: 'GSTIN does not match the selected state',
+      atPage: pid('p1'),
+      anchorBlockId: bid('gstin'),
+    }]);
+    const match = evaluate(versionOf(def), { [bid('state')]: a.single('mh'), [bid('gstin')]: a.text('27AAAAA0000A1Z5') }, META, 'client');
+    expect(match.submitBlocks).toEqual([]);
   });
 
   it('refuses a version compiled by another engine', () => {

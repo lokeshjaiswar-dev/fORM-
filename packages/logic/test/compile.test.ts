@@ -4,7 +4,7 @@ import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import { compile, validateDefinition } from '../src/index.ts';
 import {
-  all, ans, bid, choices, compiled, cond, date, disable, expr, field, form, heading, hide, id, nil, num, opts, page, requireIt, rule, show, text, time,
+  all, ans, bid, choices, compiled, cond, date, disable, expr, field, form, heading, hide, id, nil, num, oid, opts, page, pid, requireIt, rule, show, text, time,
 } from './build.ts';
 
 const codes = (issues: readonly S.PublishIssue[]) => issues.map((i) => `${i.severity}:${i.code}:${i.path}`);
@@ -78,6 +78,18 @@ describe('compile', () => {
       expect(codes(validateDefinition(def, 'save', REGISTRY))).toEqual(['warning:missing_capability:/blocks/who']);
       expect(codes(validateDefinition(def, 'publish', REGISTRY))).toEqual(['error:missing_capability:/blocks/who']);
       expect(codes(failure(def))).toEqual(['error:missing_capability:/blocks/who']);
+    });
+
+    it('compiles a block_submit check against another field', () => {
+      const def = form(
+        [
+          field('single_choice', 'state', { config: { display: 'dropdown', options: [{ id: oid('mh'), label: 'Maharashtra', code: '27' }] } }),
+          field('short_text', 'gstin'),
+        ],
+        [page('p1', ['state', 'gstin'])],
+        [rule('gst', all(cond(ans('gstin'), 'not_starts_with', ans('state'))), [{ type: 'block_submit', message: 'mismatch', atPage: pid('p1'), anchorBlockId: bid('gstin') }])],
+      );
+      expect(compiled(def).plan.some((s) => s.kind === 'rule' && s.ruleId === id('gst'))).toBe(true);
     });
 
     it('for logic outside the P0 subset', () => {

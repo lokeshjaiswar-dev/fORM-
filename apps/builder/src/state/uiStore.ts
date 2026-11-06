@@ -21,6 +21,7 @@ export type SaveState = { state: 'idle' } | { state: 'saving' } | { state: 'save
 export interface UiState {
   activeBlockId: BlockId | null;
   inspectorOpen: boolean;
+  logicOpen: boolean;
   inspectorWidth: number;
   sidebarOpen: boolean;
   started: boolean;
@@ -35,6 +36,7 @@ export interface UiState {
   setActiveBlock: (id: BlockId | null) => void;
   openInspector: (id: BlockId) => void;
   closeInspector: () => void;
+  setLogicOpen: (open: boolean) => void;
   setInspectorWidth: (width: number) => void;
   setSidebarOpen: (open: boolean) => void;
   startBlank: () => void;
@@ -44,9 +46,10 @@ export interface UiState {
   dismissConflict: () => void;
 }
 
-export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save'> = {
+export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'logicOpen' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save'> = {
   activeBlockId: null,
   inspectorOpen: false,
+  logicOpen: false,
   inspectorWidth: 400,
   sidebarOpen: false,
   started: false,
@@ -61,8 +64,9 @@ export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'insp
 export const useUiStore = create<UiState>()((set) => ({
   ...INITIAL_UI,
   setActiveBlock: (activeBlockId) => set({ activeBlockId }),
-  openInspector: (id) => set({ activeBlockId: id, inspectorOpen: true }),
+  openInspector: (id) => set({ activeBlockId: id, inspectorOpen: true, logicOpen: false }),
   closeInspector: () => set({ inspectorOpen: false }),
+  setLogicOpen: (logicOpen) => set((s) => ({ logicOpen, inspectorOpen: logicOpen ? false : s.inspectorOpen })),
   setInspectorWidth: (width) => set({ inspectorWidth: Math.min(640, Math.max(280, width)) }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   startBlank: () => set((s) => ({ started: true, activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),

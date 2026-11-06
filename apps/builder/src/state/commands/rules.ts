@@ -59,6 +59,8 @@ export function actionTargets(action: Action): string[] {
       return [action.from, action.to];
     case 'skip_to_end':
       return [action.from];
+    case 'block_submit':
+      return action.anchorBlockId === undefined ? [] : [action.anchorBlockId];
     default:
       return [];
   }

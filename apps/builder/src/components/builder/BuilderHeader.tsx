@@ -24,6 +24,8 @@ export function BuilderHeader() {
   const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const logicOpen = useUiStore((s) => s.logicOpen);
+  const setLogicOpen = useUiStore((s) => s.setLogicOpen);
   const save = useUiStore((s) => s.save);
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
@@ -53,6 +55,11 @@ export function BuilderHeader() {
         <EditionBadge className="mr-1" />
 
         <div className="flex items-center gap-0.5">
+          {mode === 'edit' ? (
+            <Button type="button" variant="ghost" size="sm" pressed={logicOpen} onClick={() => setLogicOpen(!logicOpen)}>
+              Logic
+            </Button>
+          ) : null}
           {(['edit', 'preview'] as const).map((m) => (
             <Button key={m} type="button" variant="ghost" size="sm" pressed={mode === m} onClick={() => setMode(m)}>
               {m === 'edit' ? 'Edit' : 'Preview'}

@@ -6,8 +6,8 @@ import type { StepInfo } from './plan.ts';
 import { placementOf, valueReadsOf, type Placement } from './structure.ts';
 import { checkGroup, typeExpr, type TypeContext } from './subset.ts';
 
-/** Client actions in the P0 subset; every other action is `missing_capability` until WP-2.01–2.03. */
-const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable']);
+/** Client actions the engine runs today; every other action is `missing_capability` until WP-2.01–2.03. */
+const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit']);
 const SERVER_ONLY: ReadonlySet<string> = new Set(SERVER_ONLY_ACTION_TYPES);
 export const isClientAction = (action: Action): action is ClientAction => !SERVER_ONLY.has(action.type);
 
@@ -24,6 +24,10 @@ export function actionWrites(def: Pick<FormDefinition, 'blocks' | 'pages'>, acti
     case 'enable':
     case 'disable':
       return action.targets.filter(exists).map((t) => [cell.enabled(t), action.type === 'enable']);
+    case 'block_submit': {
+      const page = action.atPage && exists(action.atPage) ? action.atPage : 'form';
+      return [[cell.submitBlock(page), true]];
+    }
     default:
       return [];
   }
@@ -137,7 +141,7 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     const actions = [...rule.then, ...(rule.else ?? [])];
     const branch = (list: readonly Action[] | undefined, name: 'then' | 'else') => list?.forEach((action, j) => {
       if (!P0_ACTIONS.has(action.type)) {
-        ctx.issue('missing_capability', `${at}/${name}/${j}`, `'${action.type}' actions are not available yet; P0 logic shows, hides, requires and enables`);
+        ctx.issue('missing_capability', `${at}/${name}/${j}`, `'${action.type}' actions are not available yet; logic shows, hides, requires, enables and can block submit`);
         return;
       }
       for (const [c] of actionWrites(def, action)) writes.add(c);

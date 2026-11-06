@@ -1,8 +1,8 @@
 import { REGISTRY } from '@form/registry';
 import {
   IsoDateSchema, IsoTimeSchema,
-  type BlockId, type ComparableKind, type Condition, type ConditionId, type DecimalString, type FieldBlock, type IsoDate, type IsoTime,
-  type LogicOperator, type Operand, type OptionId,
+  type BlockId, type ComparableKind, type Condition, type ConditionId, type DecimalString, type FieldBlock, type IsoDate, type IsoLocalDateTime, type IsoTime,
+  type LogicOperator, type Operand, type OptionId, type TimeZone,
 } from '@form/schema';
 import type { labelString } from '@/fields/style';
 
@@ -13,6 +13,7 @@ const EDITABLE: ReadonlySet<LogicOperator> = new Set<LogicOperator>([
 ]);
 export const UNARY: ReadonlySet<LogicOperator> = new Set<LogicOperator>(['is_answered', 'is_not_answered']);
 export const COUNT: ReadonlySet<LogicOperator> = new Set<LogicOperator>(['count_eq', 'count_gte', 'count_lte']);
+export const TEXT_MATCH: ReadonlySet<LogicOperator> = new Set<LogicOperator>(['contains', 'not_contains', 'starts_with', 'not_starts_with', 'ends_with', 'not_ends_with']);
 
 /** The comparable kind of a field's whole answer (registry `paths['']`). */
 export const kindOf = (block: FieldBlock): ComparableKind | undefined => (REGISTRY[block.type].paths as Readonly<Record<string, ComparableKind>>)[''];
@@ -29,9 +30,9 @@ export const choiceOptions = (block: FieldBlock) => ('options' in block.config ?
 const choiceOperand = (kind: ComparableKind | undefined, op: LogicOperator) => (kind === 'choice' || kind === 'choices') && !COUNT.has(op);
 
 /** The literal type a binary operator on `kind` compares against; null when the editor has no typed value for it. */
-function literalType(kind: ComparableKind | undefined, op: LogicOperator): 'number' | 'date' | 'time' | 'text' | null {
+function literalType(kind: ComparableKind | undefined, op: LogicOperator): 'number' | 'date' | 'time' | 'text' | 'boolean' | 'datetime' | null {
   if (COUNT.has(op) || kind === 'number') return 'number';
-  if (kind === 'date' || kind === 'time' || kind === 'text') return kind;
+  if (kind === 'date' || kind === 'time' || kind === 'text' || kind === 'boolean' || kind === 'datetime') return kind;
   return null;
 }
 
@@ -43,15 +44,33 @@ export function literal(kind: ComparableKind | undefined, op: LogicOperator, tex
   }
   if (type === 'date') return IsoDateSchema.safeParse(text).success ? { kind: 'literal', value: { type: 'date', value: text as IsoDate } } : null;
   if (type === 'time') return IsoTimeSchema.safeParse(text).success ? { kind: 'literal', value: { type: 'time', value: text as IsoTime } } : null;
+  if (type === 'boolean') return text === 'true' || text === 'false' ? { kind: 'literal', value: { type: 'boolean', value: text === 'true' } } : null;
+  if (type === 'datetime') return { kind: 'literal', value: { type: 'datetime', value: text as IsoLocalDateTime, tz: 'Asia/Kolkata' as TimeZone } };
   if (type === 'text') return { kind: 'literal', value: { type: 'text', value: text } };
   return null;
 }
 
+/** Fields whose answer can sit on the right of `op` on `source` (another question, not a typed value). */
+export function compareFields(source: FieldBlock, op: LogicOperator, fields: readonly FieldBlock[]): FieldBlock[] {
+  if (UNARY.has(op)) return [];
+  const kind = kindOf(source);
+  return fields.filter((other) => {
+    if (other.id === source.id) return false;
+    const otherKind = kindOf(other);
+    if (TEXT_MATCH.has(op) && kind === 'text') return otherKind === 'text' || otherKind === 'choice';
+    if (choiceOperand(kind, op)) return false;
+    return otherKind === kind;
+  });
+}
+
 /** Whether `right` is an operand `op` on `source` can compile with. */
-export function fits(source: FieldBlock, op: LogicOperator, right: Operand | undefined): boolean {
+export function fits(source: FieldBlock, op: LogicOperator, right: Operand | undefined, fields: readonly FieldBlock[] = []): boolean {
   if (UNARY.has(op)) return right === undefined;
   if (!right) return false;
   const kind = kindOf(source);
+  if (right.kind === 'ref' && right.ref.kind === 'answer') {
+    return compareFields(source, op, fields).some((f) => f.id === right.ref.blockId);
+  }
   if (choiceOperand(kind, op)) return right.kind === 'options' && right.blockId === source.id && right.optionIds.length > 0;
   return right.kind === 'literal' && right.value.type === literalType(kind, op);
 }
@@ -73,6 +92,8 @@ export function initialRight(source: FieldBlock, op: LogicOperator, defaults: De
     case 'number': return { kind: 'literal', value: { type: 'number', value: (COUNT.has(op) ? '1' : '0') as DecimalString } };
     case 'date': return { kind: 'literal', value: { type: 'date', value: defaults.today } };
     case 'time': return { kind: 'literal', value: { type: 'time', value: '12:00' as IsoTime } };
+    case 'boolean': return { kind: 'literal', value: { type: 'boolean', value: true } };
+    case 'datetime': return { kind: 'literal', value: { type: 'datetime', value: `${defaults.today}T12:00:00` as IsoLocalDateTime, tz: 'Asia/Kolkata' as TimeZone } };
     case 'text': return { kind: 'literal', value: { type: 'text', value: '' } };
     default: return undefined;
   }

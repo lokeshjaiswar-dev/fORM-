@@ -193,7 +193,7 @@ function fits(op: LogicOperator, left: Typed, right: Typed): boolean {
     case 'not_starts_with':
     case 'ends_with':
     case 'not_ends_with':
-      return right.kind === 'text';
+      return right.kind === 'text' || right.kind === 'choice';
     case 'includes_any':
     case 'includes_all':
     case 'includes_none':

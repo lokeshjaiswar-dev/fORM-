@@ -364,12 +364,31 @@ class Session {
     return !(valueDefinition(block.type as ValueFieldType).isEmpty as (value: unknown) => boolean)(answer.value);
   }
 
+  /** Option export code of a choice answer, so text operators can match GSTIN prefixes to a state field. */
+  private optionCode(blockId: string, optionId: string): string {
+    const block = this.p.blocks.get(blockId as BlockId);
+    const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; code?: string }> }).options : undefined;
+    const code = options?.find((o) => o.id === optionId)?.code?.trim();
+    return code ?? '';
+  }
+
+  private asText(value: ScalarValue): ScalarValue {
+    if (value.t === 'text') return value;
+    if (value.t === 'option') return text(this.optionCode(value.blockId, value.v));
+    if (value.t === 'list' && value.of === 'option') {
+      const first = value.items.find((item): item is Extract<ScalarValue, { t: 'option' }> => item.t === 'option');
+      return first ? text(this.optionCode(first.blockId, first.v)) : NULL;
+    }
+    return value;
+  }
+
   private condition(c: Condition): boolean {
     const left = this.operandValue(c.left);
+    const textOp = c.op === 'contains' || c.op === 'not_contains' || c.op === 'starts_with' || c.op === 'not_starts_with' || c.op === 'ends_with' || c.op === 'not_ends_with';
     return compare({
       op: c.op,
-      left,
-      right: this.operandValue(c.right),
+      left: textOp ? this.asText(left) : left,
+      right: textOp ? this.asText(this.operandValue(c.right)) : this.operandValue(c.right),
       right2: this.operandValue(c.right2),
       caseSensitive: c.caseSensitive === true,
       answered: this.answered(c.left, left),
@@ -615,8 +634,18 @@ class Session {
       if (next === -1) return { end: jump && 'end' in jump ? jump.end : endingId };
       return p.pageIds[next] as PageId;
     };
+    const submitBlocks: EvalState['submitBlocks'] = [];
+    this.p.steps.forEach((s, i) => {
+      if (s.kind !== 'rule') return;
+      const out = this.outputs[i];
+      const actions = out === true ? s.rule.then : out === false ? (s.rule.else ?? []) : [];
+      for (const a of actions) {
+        if (a.type !== 'block_submit') continue;
+        submitBlocks.push({ ruleId: s.rule.id, message: a.message, atPage: a.atPage, anchorBlockId: a.anchorBlockId });
+      }
+    });
     const state: EvalState = {
-      visible, required, disabled, hiddenOptions: {}, values, variables: {}, submitBlocks: [], nextPage, path, endingId, serverEffects: this.serverEffects(),
+      visible, required, disabled, hiddenOptions: {}, values, variables: {}, submitBlocks, nextPage, path, endingId, serverEffects: this.serverEffects(),
     };
     if (this.tracing) {
       state.trace = p.steps.map((s, i): TraceEntry => {

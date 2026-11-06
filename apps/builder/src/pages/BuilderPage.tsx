@@ -5,6 +5,7 @@ import { FieldPicker } from '@/components/builder/FieldPicker';
 import { FormCanvas } from '@/components/builder/FormCanvas';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { BlockInspector } from '@/components/builder/BlockInspector';
+import { FormLogicPanel } from '@/components/builder/FormLogicPanel';
 import { DeleteBlockDialog } from '@/components/builder/DeleteBlockDialog';
 import { SessionBanners } from '@/components/builder/SessionBanners';
 import { FormPreview } from '@/components/preview/PreviewPane';
@@ -16,6 +17,7 @@ import { useFormSession } from '@/persistence/useFormSession';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { useHistoryShortcuts } from '@/state/history';
 import { useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import { TextLink } from '@dmacq/ui';
 
 /** `/builder/:id` and `/builder/:id/preview`: the form the URL names, loaded from the repository. */
@@ -40,6 +42,7 @@ export function BuilderPage() {
 
 function Builder() {
   const [mode] = useBuilderMode();
+  const logicOpen = useUiStore((s) => s.logicOpen);
   const structure = useDoc((d) => d.pages.map((p) => p.children.join(',')).join('|'));
   useHistoryShortcuts();
   useBlockClipboard();
@@ -64,7 +67,7 @@ function Builder() {
                 </ErrorBoundary>
               )}
             </FormDesignPanel>
-            {mode === 'edit' && <BlockInspector />}
+            {mode === 'edit' && logicOpen ? <FormLogicPanel /> : mode === 'edit' ? <BlockInspector /> : null}
           </div>
         </div>
         <DeleteBlockDialog />
