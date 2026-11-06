@@ -47,7 +47,11 @@ export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, 
   });
 
   // TipTap compares options by identity on every render; only a changed class or label may reach setOptions.
-  const [initial] = useState(() => ({ extensions: editorExtensions(kind, { onEnter: events.enter }), content: editorContent(value) }));
+  const [initial] = useState(() => ({
+    extensions: editorExtensions(kind, { onEnter: events.enter }),
+    content: editorContent(value),
+    autofocus: autoFocus ? ('end' as const) : false,
+  }));
   const editorProps = useMemo(() => ({
     attributes: {
       class: editorClass,
@@ -77,8 +81,23 @@ export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, 
     if (!same(editorAst(kind, editor.getJSON()), value)) editor.commands.setContent(editorContent(value), { emitUpdate: false });
   }, [editor, kind, value]);
 
+  const wasAutoFocus = useRef(false);
   useEffect(() => {
-    if (autoFocus && editor && !editor.isFocused) editor.commands.focus('end');
+    if (!editor) return;
+    const justSelected = !!autoFocus && !wasAutoFocus.current;
+    wasAutoFocus.current = !!autoFocus;
+    if (!justSelected) return;
+    const toEnd = () => {
+      if (editor.isDestroyed) return;
+      editor.commands.focus('end');
+      editor.view.focus();
+    };
+    const timer = window.setTimeout(toEnd, 0);
+    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(toEnd));
+    return () => {
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
+    };
   }, [autoFocus, editor]);
 
   return editor;

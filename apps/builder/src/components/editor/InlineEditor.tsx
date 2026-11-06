@@ -30,7 +30,7 @@ export function EditorFrame({ kind, fill = true, editorClassName, ...props }: Ri
             {props.placeholder}
           </div>
         ) : null}
-        <EditorContent editor={editor} className={cn('min-w-0', fill && 'w-full', props.className)} style={props.style} />
+        <EditorContent editor={editor} className={cn('min-w-0 pe-0.5', fill && 'w-full', props.className)} style={props.style} />
       </div>
       {editor ? <FormatMenu editor={editor} /> : null}
     </>

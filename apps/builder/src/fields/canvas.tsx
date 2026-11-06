@@ -37,6 +37,13 @@ const M = defineMessages('builder', {
   'canvas.hidden_other': 'Hidden from respondents',
   'canvas.calculation': 'Result updates as answers change',
   'canvas.context': 'Filled from this session · {facts}',
+  'canvas.consent': 'I agree to the terms',
+  'canvas.captcha': "I'm not a robot",
+  'canvas.appointment': 'Pick a date and time',
+  'canvas.section': 'Section',
+  'canvas.section_hint': 'Fields in this collapse',
+  'canvas.section_pick': 'Add a field',
+  'canvas.unique_id': 'Assigned when they submit',
   'canvas.name.first': 'First name',
   'canvas.name.last': 'Last name',
   'canvas.name.middle': 'Middle name',
@@ -78,6 +85,16 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   ),
   email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
   phone: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.showCountrySelect ? `${block.config.defaultCountry} ▾` : undefined} />,
+  address: ({ block }) => (
+    <div className="grid grid-cols-2 gap-3 pt-1">
+      {block.config.parts.filter((part) => part !== 'country' || block.config.country.mode !== 'fixed').map((part) => (
+        <div key={part} className={part === 'line1' || part === 'line2' ? 'col-span-2 min-w-0' : 'min-w-0'}>
+          <p className="mb-1 text-[13px] text-[var(--fr-muted)]">{part}</p>
+          <TextBox block={block} />
+        </div>
+      ))}
+    </div>
+  ),
   number: ({ block }) => <NumberCanvas block={block} />,
   url: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
   single_choice: ({ block }) =>
@@ -85,6 +102,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   multi_choice: ({ block }) =>
     block.config.display === 'dropdown' ? <Select block={block} placeholder={block.config.placeholder} /> : <OptionList options={block.config.options} shape="square" other={block.config.other?.enabled === true} />,
   date: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.date'])} · ${block.config.pattern}`} />,
+  datetime: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.date'])} · ${block.config.pattern}`} />,
   time: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.time'])} · ${block.config.hourCycle === 'h12' ? '12h' : '24h'}`} />,
   rating: ({ block }) => (
     <div className="flex gap-1 pt-1 text-[var(--fr-muted)]">
@@ -137,6 +155,21 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       {t(M['canvas.context'], { facts: block.config.sources.map((source) => source.replace(/_/g, ' ')).join(', ') })}
     </p>
   ),
+  consent: () => (
+    <label className="flex items-center gap-2 pt-1 text-[14px] text-[var(--fr-text)]">
+      <input type="checkbox" disabled aria-hidden />
+      <span>{t(M['canvas.consent'])}</span>
+    </label>
+  ),
+  appointment: ({ block }) => <TextBox block={block} placeholder={t(M['canvas.appointment'])} />,
+  captcha: () => (
+    <label className="flex w-max items-center gap-2 rounded-md border px-3 py-2 text-[14px]" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+      <input type="checkbox" disabled aria-hidden />
+      <span>{t(M['canvas.captcha'])}</span>
+    </label>
+  ),
+  section: ({ block }) => <SectionCanvas block={block} />,
+  unique_id: ({ block }) => <TextBox block={block} placeholder={String(block.config.startAt).padStart(block.config.padTo, '0')} />,
   hidden: ({ block }) => {
     const source = block.config.source;
     const text = source.kind === 'url_param' ? t(M['canvas.hidden'], { name: source.name ?? block.key }) : source.kind === 'utm' ? t(M['canvas.hidden_utm'], { param: source.param }) : t(M['canvas.hidden_other']);
@@ -226,6 +259,51 @@ function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolea
         <div className="mb-1 min-h-7 shrink-0" aria-hidden />
       ) : null}
       <View block={child as never} focused={selected} onEnter={requestInsertFocus} />
+    </div>
+  );
+}
+
+const SECTION_TILES = TILES.filter((tile) => tile.kind === 'block' && tile.choice.type !== 'section');
+
+function SectionCanvas({ block }: { block: BlockOf<'section'> }) {
+  const blocks = useDoc((d) => d.blocks);
+  const selected = useUiStore((s) => s.activeBlockId);
+  const children = block.config.children.map((id) => blocks[id]).filter((b): b is StoredBlock => !!b && b.type !== 'unsupported' && isAvailable(b.type));
+  return (
+    <div className="overflow-hidden rounded-md border" style={{ borderColor: 'var(--fr-inputBorder)' }} onClick={(e) => e.stopPropagation()}>
+      <InlineEditor
+        value={block.config.title}
+        onChange={(title) => updateBlock(block.id, { config: { ...block.config, title } })}
+        autoFocus={selected === block.id}
+        fill={false}
+        className="w-full bg-transparent px-3 py-2 text-left text-[16px] font-semibold"
+        placeholder={t(M['canvas.section'])}
+      />
+      <p className="border-y px-3 py-1.5 text-[12px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+        {t(M['canvas.section_hint'])}
+      </p>
+      <div className="flex flex-col">
+        {children.map((child) => (
+          <RepeatChild key={child.id} child={child} selected={selected === child.id} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2 border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+        <select
+          className="h-8 min-w-[10rem] rounded-md border bg-transparent px-2 text-[13px]"
+          style={{ borderColor: 'var(--fr-inputBorder)' }}
+          aria-label={t(M['canvas.section_pick'])}
+          value=""
+          onChange={(e) => {
+            const tile = SECTION_TILES.find((item) => item.id === e.target.value);
+            if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
+          }}
+        >
+          <option value="">{t(M['canvas.section_pick'])}</option>
+          {SECTION_TILES.filter((tile) => tile.kind === 'block').map((tile) => (
+            <option key={tile.id} value={tile.id}>{tile.label}</option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

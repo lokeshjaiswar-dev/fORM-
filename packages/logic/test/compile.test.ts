@@ -74,7 +74,7 @@ describe('compile', () => {
 
   describe('missing_capability is fatal (ADR-0002 §2)', () => {
     it('for a registry stub, even though a draft only warns', () => {
-      const def = form([field('address', 'who')], [page('p1', ['who'])]);
+      const def = form([field('payment', 'who')], [page('p1', ['who'])]);
       expect(codes(validateDefinition(def, 'save', REGISTRY))).toEqual(['warning:missing_capability:/blocks/who']);
       expect(codes(validateDefinition(def, 'publish', REGISTRY))).toEqual(['error:missing_capability:/blocks/who']);
       expect(codes(failure(def))).toEqual(['error:missing_capability:/blocks/who']);
@@ -103,7 +103,7 @@ describe('compile', () => {
     });
 
     it('for a rule reading a stub block', () => {
-      const def = form([field('address', 'home'), field('short_text', 'name')], [page('p1', ['home', 'name'])], [rule('r', cond(ans('home'), 'is_answered'), [show('name')])]);
+      const def = form([field('payment', 'home'), field('short_text', 'name')], [page('p1', ['home', 'name'])], [rule('r', cond(ans('home'), 'is_answered'), [show('name')])]);
       expect(codes(failure(def))).toContain('error:missing_capability:/logic/rules/0/when/children/0/left/ref');
     });
   });

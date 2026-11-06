@@ -1,7 +1,12 @@
 import type { AvailableType } from '@form/registry';
+import { AddressField } from './address.tsx';
+import { AppointmentField } from './appointment.tsx';
 import { Calculation } from './calculation.tsx';
+import { Captcha } from './captcha.tsx';
+import { ConsentField } from './consent.tsx';
 import { ContextField } from './context.tsx';
 import { DateInput } from './date.tsx';
+import { DateTimeInput } from './datetime.tsx';
 import { Divider } from './divider.tsx';
 import { Email } from './email.tsx';
 import { FileUpload } from './file_upload.tsx';
@@ -17,12 +22,14 @@ import { NumberInput } from './number.tsx';
 import { Paragraph } from './paragraph.tsx';
 import { Phone } from './phone.tsx';
 import { Ranking } from './ranking.tsx';
+import { Section } from './section.tsx';
 import { RepeatingGroup } from './repeating_group.tsx';
 import { Rating } from './rating.tsx';
 import { ShortText } from './short_text.tsx';
 import { Signature } from './signature.tsx';
 import { SingleChoice } from './single_choice.tsx';
 import { TimeInput } from './time.tsx';
+import { UniqueIdField } from './unique_id.tsx';
 import { Url } from './url.tsx';
 
 /**
@@ -35,11 +42,13 @@ export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   full_name: { labelling: () => 'group', Component: FullName },
   email: { labelling: () => 'input', Component: Email },
   phone: { labelling: () => 'input', Component: Phone },
+  address: { labelling: () => 'group', Component: AddressField },
   number: { labelling: () => 'input', Component: NumberInput },
   url: { labelling: () => 'input', Component: Url },
   single_choice: { labelling: (block) => (block.config.display === 'dropdown' ? 'input' : 'radiogroup'), Component: SingleChoice },
   multi_choice: { labelling: () => 'group', Component: MultiChoice },
   date: { labelling: () => 'input', Component: DateInput },
+  datetime: { labelling: () => 'input', Component: DateTimeInput },
   time: { labelling: (block) => (block.config.range?.enabled ? 'group' : 'input'), Component: TimeInput },
   rating: { labelling: () => 'radiogroup', Component: Rating },
   linear_scale: { labelling: () => 'radiogroup', Component: LinearScale },
@@ -51,11 +60,16 @@ export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   signature: { labelling: () => 'group', Component: Signature },
   /* FLD-30: never rendered; logic captures its value (URL parameter, UTM, static or expression). */
   hidden: { labelling: () => 'none', Component: () => null },
+  consent: { labelling: () => 'group', Component: ConsentField },
   calculation: { labelling: (block) => (block.config.display === 'hidden' ? 'none' : 'input'), Component: Calculation },
   context: { labelling: () => 'input', Component: ContextField },
+  unique_id: { labelling: () => 'input', Component: UniqueIdField },
+  appointment: { labelling: () => 'group', Component: AppointmentField },
+  captcha: { labelling: () => 'content', Component: Captcha },
   heading: { labelling: () => 'content', Component: Heading },
   paragraph: { labelling: () => 'content', Component: Paragraph },
   divider: { labelling: () => 'content', Component: Divider },
+  section: { labelling: () => 'content', Component: Section },
 };
 
 export type { Control, ControlProps, FieldIds, FieldState, Labelling } from './hooks.ts';

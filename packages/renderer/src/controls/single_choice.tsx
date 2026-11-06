@@ -43,6 +43,32 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
     />
   ) : null;
 
+  if (c.display === 'image') {
+    return (
+      <>
+        <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
+          {options.map((o, i) => (
+            <label key={o.id} className="fr-image-choice" data-selected={selected === o.id ? 'true' : undefined}>
+              <input
+                type="radio"
+                id={i === 0 ? field.ids.input : undefined}
+                name={field.ids.base}
+                value={o.id}
+                checked={selected === o.id}
+                disabled={locked}
+                onChange={() => choose(o.id)}
+                onBlur={answer.onBlur}
+              />
+              {o.image && typeof o.image === 'object' && 'url' in o.image ? <img src={String(o.image.url)} alt="" /> : <span className="fr-image-choice-fallback" />}
+              <span>{text(o.label)}</span>
+            </label>
+          ))}
+        </div>
+        {otherInput}
+      </>
+    );
+  }
+
   if (c.display === 'dropdown') {
     const { readOnly: _readOnly, ...selectAttrs } = inputAttrs(field);
     return (

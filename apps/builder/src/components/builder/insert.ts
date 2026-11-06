@@ -1,3 +1,4 @@
+import { REGISTRY } from '@form/registry';
 import type { Tile } from '@/fields/tiles';
 import { inlineDoc } from '@/lib/definition';
 import { addBlock, addRepeatingGroup, insertPageBreak } from '@/state/actions';
@@ -8,7 +9,8 @@ export function insertTile(tile: Tile, at?: PageSlot): void {
   if (tile.kind === 'page_break') insertPageBreak(at);
   else if (tile.choice.type === 'repeating_group') addRepeatingGroup(tile.choice, at);
   else {
-    const content = tile.choice.type === 'heading' || tile.choice.type === 'paragraph' || tile.choice.type === 'divider';
+    const kind = REGISTRY[tile.choice.type].kind;
+    const content = kind === 'content' || kind === 'container' || kind === 'transient';
     addBlock(tile.choice, at, content ? {} : { label: inlineDoc(tile.label) });
   }
 }

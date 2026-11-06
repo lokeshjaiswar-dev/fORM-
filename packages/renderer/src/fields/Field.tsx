@@ -66,7 +66,7 @@ function FieldShell({ block, control }: { block: FieldBlock; control: Control<ne
     invalid: !!error,
     required,
     disabled: state.disabled.has(block.id),
-    readOnly: block.readOnly === true || block.type === 'calculation' || block.type === 'context',
+    readOnly: block.readOnly === true || block.type === 'calculation' || block.type === 'context' || block.type === 'unique_id',
     autoFocus: block.autoFocus === true,
   };
   const labelling = control.labelling(block as never);

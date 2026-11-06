@@ -133,7 +133,8 @@ export function freshKey(def: FormDefinition, base: string): FieldKey {
 export function createBlock(entry: Pick<PaletteEntry<AvailableType>, 'configOverrides'> & { type: AvailableType }, def: FormDefinition, ids: IdSource = APP_IDS): Block {
   const id = ids.newId() as BlockId;
   const config = { ...REGISTRY[entry.type].defaultConfig(def.i18n.defaultLocale), ...entry.configOverrides } as BlockConfigMap[AvailableType];
-  if (entry.type === 'heading' || entry.type === 'paragraph' || entry.type === 'divider') return { id, type: entry.type, config } as Block;
+  const kind = REGISTRY[entry.type].kind;
+  if (kind === 'content' || kind === 'container' || kind === 'transient') return { id, type: entry.type, config } as Block;
   const type = entry.type as Extract<AvailableType, ValueFieldType>;
   const defaults = DEFAULT_COMPLIANCE[type];
   const purpose = def.privacy.purposes[0]?.id;
@@ -146,6 +147,7 @@ export function createBlock(entry: Pick<PaletteEntry<AvailableType>, 'configOver
     compliance: { ...defaults, purposeIds: defaults.classification === 'none' || !purpose ? [] : [purpose] },
     config,
     ...(type === 'calculation' || type === 'context' ? { readOnly: true } : {}),
+    ...(type === 'consent' ? { hideLabel: true } : {}),
   } as Block;
 }
 

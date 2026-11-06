@@ -1,8 +1,13 @@
 import type { AnswerPath, AnswerValueMap, BlockId, FieldBlockOf, FieldRegistry, ScalarValue, ValueFieldType } from '@form/schema';
 import type { PlainBlockType, PlainDefinition, ValueDefinition } from './define.ts';
+import { address } from './fields/address.ts';
+import { appointment } from './fields/appointment.ts';
 import { calculation } from './fields/calculation.ts';
+import { captcha } from './fields/captcha.ts';
+import { consent } from './fields/consent.ts';
 import { context } from './fields/context.ts';
 import { date } from './fields/date.ts';
+import { datetime } from './fields/datetime.ts';
 import { divider } from './fields/divider.ts';
 import { email } from './fields/email.ts';
 import { fileUpload } from './fields/file_upload.ts';
@@ -20,14 +25,14 @@ import { phone } from './fields/phone.ts';
 import { ranking } from './fields/ranking.ts';
 import { repeatingGroup } from './fields/repeating_group.ts';
 import { rating } from './fields/rating.ts';
+import { section } from './fields/section.ts';
 import { shortText } from './fields/short_text.ts';
 import { signature } from './fields/signature.ts';
 import { singleChoice } from './fields/single_choice.ts';
 import { time } from './fields/time.ts';
+import { uniqueId } from './fields/unique_id.ts';
 import { url } from './fields/url.ts';
-import {
-  address, appointment, captcha, consent, datetime, image, payment, section, uniqueId,
-} from './stubs.ts';
+import { image, payment } from './stubs.ts';
 
 const VALUE_FIELDS: { readonly [T in ValueFieldType]: ValueDefinition<T> } = {
   short_text: shortText,
@@ -100,6 +105,9 @@ export { UNBOUND_BLOCK_ID } from './fields/shared.ts';
 export { SHORT_TEXT_MAX } from './fields/short_text.ts';
 export { isRepeatableChildType } from './fields/repeating_group.ts';
 export { DRAFT_DEFAULT_CONFIG_TYPES } from './stubs.ts';
+export { formatUniqueId } from './fields/unique_id.ts';
+export { IN_STATES } from './fields/address.ts';
+export { COUNTRY_OPTIONS } from './fields/countries.ts';
 export { DEFAULT_TEXT, PALETTE_LABELS } from './messages.ts';
 export { CALLING_CODE_REGIONS, callingCodeOf } from './util/calling-codes.ts';
 export { CHOICES_OPS, CHOICE_OPS, FILE_OPS, NUMBER_OPS, PRESENCE_OPS, TEMPORAL_OPS, TEXT_OPS } from './operators.ts';

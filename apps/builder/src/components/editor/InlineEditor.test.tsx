@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { fromHtml, fromHtmlInline } from '@form/schema';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { RichEditor } from '@/components/editor/RichEditor';
@@ -34,6 +34,15 @@ describe('InlineEditor', () => {
     expect(onChange).toHaveBeenLastCalledWith({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Full', marks: [{ type: 'bold' }] }, { type: 'text', text: ' name' }] }] });
     fireEvent.keyDown(editable(container), { key: 'Enter' });
     expect(onEnter).toHaveBeenCalledOnce();
+  });
+
+  it('puts the caret at the end of the label when focused', async () => {
+    const { container } = render(<InlineEditor value={inlineDoc('Short answer')} onChange={() => {}} autoFocus />);
+    await waitFor(() => {
+      const sel = document.getSelection();
+      expect(sel?.toString()).toBe('');
+      expect(editable(container).contains(sel?.anchorNode)).toBe(true);
+    });
   });
 
   it('follows external changes such as undo', () => {

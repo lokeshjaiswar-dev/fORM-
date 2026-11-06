@@ -1,4 +1,12 @@
 {
+  "address.city": "City",
+  "address.country": "Country",
+  "address.line1": "Address line 1",
+  "address.line2": "Address line 2",
+  "address.postal": "PIN / postal code",
+  "address.state": "State",
+  "appointment.day": "Date",
+  "captcha.not_robot": "I'm not a robot",
   "choice.other_answer": "Your answer for {label}",
   "counter.characters": "{count} / {max} characters",
   "counter.characters_open": "{count, plural, one {# character} other {# characters}}",

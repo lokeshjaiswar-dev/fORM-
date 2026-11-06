@@ -34,7 +34,7 @@ export function field<T extends S.ValueFieldType>(
   } as S.FieldBlockOf<T>;
 }
 
-export const content = <T extends 'heading' | 'paragraph' | 'divider'>(type: T, blockId: string, config?: Partial<S.BlockConfigMap[T]>): S.PlainBlockOf<T> =>
+export const content = <T extends 'heading' | 'paragraph' | 'divider' | 'captcha' | 'section'>(type: T, blockId: string, config?: Partial<S.BlockConfigMap[T]>): S.PlainBlockOf<T> =>
   ({ id: id<S.BlockId>(blockId), type, config: { ...REGISTRY[type].defaultConfig(EN_IN), ...config } }) as S.PlainBlockOf<T>;
 
 export const page = (pageId: string, children: string[], extra: Partial<S.Page> = {}): S.Page => ({ id: id<S.PageId>(pageId), children: children.map((c) => id<S.BlockId>(c)), ...extra });

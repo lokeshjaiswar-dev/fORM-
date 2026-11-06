@@ -4,7 +4,7 @@ import { AVAILABLE_TYPES, REGISTRY, valueDefinition, type AvailableType } from '
 import { EN_IN, fieldBlock, file } from './fixtures.ts';
 
 type AvailableValueType = Extract<AvailableType, ValueFieldType>;
-type InputAvailable = Exclude<AvailableValueType, 'calculation' | 'context'>;
+type InputAvailable = Exclude<AvailableValueType, 'calculation' | 'context' | 'unique_id'>;
 
 interface Case<T extends AvailableValueType> {
   config?: Partial<BlockConfigMap[T]>;
@@ -56,6 +56,19 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
     invalid: [[{ address: 'asha@other.com' }, 'email_domain_blocked'], [{ address: 'asha@example.co' }, 'email_domain_blocked'], [{ address: 'not-an-email' }, TWIN], [{ address: '' }, TWIN], ['asha@example.com', TWIN], [{}, TWIN]],
     empty: [{ address: '' }],
   },
+  address: {
+    required: true,
+    valid: [{ line1: '12 MG Road', city: 'Pune', state: 'Maharashtra', postalCode: '411001', country: 'IN' }],
+    invalid: [
+      [{ line1: '12 MG Road' }, 'required'],
+      [{ line1: '12 MG Road', city: 'Pune', state: 'MH', postalCode: '41100', country: 'IN' }, 'invalid_format'],
+      [{ line1: 'x'.repeat(201), city: 'Pune', state: 'MH', postalCode: '411001', country: 'IN' }, TWIN],
+      [{}, TWIN],
+      ['Pune', TWIN],
+      [null, TWIN],
+    ],
+    empty: [{}, { line1: '' }],
+  },
   phone: {
     config: { allowedCountries: ['IN'] as never },
     valid: [{ e164: '+919812345678', country: 'IN' }],
@@ -94,6 +107,17 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
       [{ optionIds: [] }, TWIN],
     ],
     empty: [{ optionIds: [] }],
+  },
+  datetime: {
+    valid: [{ local: '2024-06-03T10:00', timeZone: 'Asia/Kolkata', instant: '2024-06-03T04:30:00.000Z' }],
+    invalid: [
+      [{ local: '2024-06-03T10:00', timeZone: 'Asia/Kolkata', instant: 'not-an-instant' }, TWIN],
+      [{ local: '03-06-2024T10:00', timeZone: 'Asia/Kolkata', instant: '2024-06-03T04:30:00.000Z' }, TWIN],
+      [{ local: '', timeZone: 'Asia/Kolkata', instant: '2024-06-03T04:30:00.000Z' }, TWIN],
+      [{}, TWIN],
+      ['2024-06-03T10:00', TWIN],
+    ],
+    empty: [{ local: '', timeZone: 'UTC', instant: '2024-06-03T00:00:00.000Z' }],
   },
   date: {
     config: {
@@ -195,6 +219,29 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
       ['data:image/png;base64,AAAA', TWIN], [{}, TWIN],
     ],
     empty: [],
+  },
+  appointment: {
+    valid: [{ start: '2026-11-10T03:30:00Z', end: '2026-11-10T04:00:00Z', respondentTimeZone: 'Asia/Kolkata' }],
+    invalid: [
+      [{ start: '2026-11-10T04:00:00Z', end: '2026-11-10T03:30:00Z', respondentTimeZone: 'Asia/Kolkata' }, 'invalid_format'],
+      [{ start: 'nope', end: '2026-11-10T04:00:00Z', respondentTimeZone: 'Asia/Kolkata' }, TWIN],
+      [{ start: '2026-11-10T03:30:00Z', respondentTimeZone: 'Asia/Kolkata' }, TWIN],
+      ['slot', TWIN],
+      [null, TWIN],
+    ],
+    empty: [{ start: '', end: '', respondentTimeZone: 'Asia/Kolkata' }],
+  },
+  consent: {
+    required: true,
+    valid: [{ items: { item_1: true }, noticeLocale: 'en-IN', noticeVersion: 0 }],
+    invalid: [
+      [{ items: { item_1: false }, noticeLocale: 'en-IN', noticeVersion: 0 }, 'required'],
+      [{ items: {}, noticeLocale: 'en-IN', noticeVersion: 0 }, TWIN],
+      [{ items: { item_1: true }, noticeLocale: 'en-IN' }, TWIN],
+      ['yes', TWIN],
+      [null, TWIN],
+    ],
+    empty: [{ items: {}, noticeLocale: 'en-IN', noticeVersion: 0 }],
   },
   hidden: {
     valid: ['newsletter', 'utm-42'],
@@ -387,5 +434,17 @@ describe('config rules beyond the twin', () => {
     rejects('number', { allowNegative: false, min: '-1' as never });
     rejects('number', { allowNegative: false, defaultValue: '-1' as never });
     accepts('number', { allowNegative: false, min: '0' as never, defaultValue: '0' as never });
+  });
+
+  it('address: PIN rules and unique id preview', () => {
+    const schema = valueDefinition('address').answerSchema(fieldBlock('address'), { required: false });
+    expect(schema.safeParse({ postalCode: '411001', country: 'IN' }).success).toBe(true);
+    expect(schema.safeParse({ postalCode: '41100', country: 'IN' }).success).toBe(false);
+    expect(schema.safeParse({ postalCode: '94105', country: 'US' }).success).toBe(true);
+    expect(valueDefinition('address').configSchema.safeParse({ ...valueDefinition('address').defaultConfig(EN_IN), country: { mode: 'list' } }).success).toBe(false);
+    expect(valueDefinition('unique_id').export.text('APP-000001', fieldBlock('unique_id', { prefix: ['APP-'] }))).toBe('APP-000001');
+    const dt = valueDefinition('datetime').answerSchema(fieldBlock('datetime', { limits: { min: { kind: 'absolute', date: '2026-01-01' as never } } }), { required: false });
+    expect(dt.safeParse({ local: '2026-06-03T10:00', timeZone: 'UTC', instant: '2026-06-03T10:00:00Z' }).success).toBe(true);
+    expect(dt.safeParse({ local: '2025-06-03T10:00', timeZone: 'UTC', instant: '2025-06-03T10:00:00Z' }).success).toBe(false);
   });
 });

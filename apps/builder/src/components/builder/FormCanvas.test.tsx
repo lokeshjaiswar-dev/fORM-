@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BlockId } from '@form/schema';
 import { setTheme, updateBlock } from '@/state/actions';
@@ -28,6 +28,18 @@ describe('FormCanvas', () => {
     await user.click(within(menu).getByRole('option', { name: 'Dropdown' }));
     const added = blockIds()[2] as string;
     expect(doc().blocks[added as BlockId]).toMatchObject({ type: 'single_choice', config: { display: 'dropdown' } });
+  });
+
+  it('puts the caret at the end of the new field label', async () => {
+    renderCanvas();
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/short');
+    await user.click(screen.getByRole('option', { name: 'Short answer' }));
+    await waitFor(() => {
+      const sel = document.getSelection();
+      expect(sel?.toString()).toBe('');
+      expect(sel?.anchorNode?.textContent).toContain('Short answer');
+    });
   });
 
   it('a page break from the slash menu starts a new page, and removing it merges the pages', async () => {

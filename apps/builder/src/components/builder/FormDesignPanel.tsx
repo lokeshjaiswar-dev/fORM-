@@ -37,9 +37,9 @@ const M = defineMessages('builder', {
   'design.inputs': 'Input style',
   'design.progress': 'Progress bar',
   'design.classic': 'Classic',
-  'design.classic_hint': 'All questions on one page',
+  'design.classic_hint': 'All questions on one page, stacked',
   'design.cards': 'Cards',
-  'design.cards_hint': 'A rounder, roomier sheet',
+  'design.cards_hint': 'Each question sits on its own rounded card',
   'design.search': 'Search themes',
   'design.current': 'Current',
 });

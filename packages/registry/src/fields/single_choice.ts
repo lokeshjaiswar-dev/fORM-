@@ -32,6 +32,7 @@ export const singleChoice = defineField({
     }),
     entry('single_choice', 'radio', 'choice', PALETTE_LABELS['palette.single_choice.radio'], 'circle-dot', ['choice', 'radio', 'single', 'option', 'multiple choice'], { display: 'radio' }),
     entry('single_choice', 'dropdown', 'choice', PALETTE_LABELS['palette.single_choice.dropdown'], 'chevron-down', ['dropdown', 'select', 'list', 'single'], { display: 'dropdown' }),
+    entry('single_choice', 'image', 'choice', PALETTE_LABELS['palette.single_choice.image'], 'files', ['image choice', 'picture', 'visual select', 'photo options'], { display: 'image' }),
     entry('single_choice', 'country', 'basic', PALETTE_LABELS['palette.single_choice.country'], 'map-pin', ['country', 'nation', 'region', 'search'], {
       display: 'dropdown',
       searchable: true,

@@ -2,6 +2,38 @@
 
 exports[`export headers > match the snapshot 1`] = `
 {
+  "address": [
+    {
+      "header": "My address / line1",
+      "suffix": ".line1",
+    },
+    {
+      "header": "My address / line2",
+      "suffix": ".line2",
+    },
+    {
+      "header": "My address / city",
+      "suffix": ".city",
+    },
+    {
+      "header": "My address / state",
+      "suffix": ".state",
+    },
+    {
+      "header": "My address / postalCode",
+      "suffix": ".postalCode",
+    },
+    {
+      "header": "My address / country",
+      "suffix": ".country",
+    },
+  ],
+  "appointment": [
+    {
+      "header": "My appointment",
+      "suffix": "",
+    },
+  ],
   "blank label": [
     {
       "header": "short_text",
@@ -12,6 +44,12 @@ exports[`export headers > match the snapshot 1`] = `
     {
       "header": "My calculation",
       "suffix": "",
+    },
+  ],
+  "consent": [
+    {
+      "header": "Terms 1",
+      "suffix": ".item_1",
     },
   ],
   "context": [
@@ -51,6 +89,12 @@ exports[`export headers > match the snapshot 1`] = `
   "date": [
     {
       "header": "My date",
+      "suffix": "",
+    },
+  ],
+  "datetime": [
+    {
+      "header": "My datetime",
       "suffix": "",
     },
   ],
@@ -218,6 +262,12 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": ".end",
     },
   ],
+  "unique_id": [
+    {
+      "header": "My unique id",
+      "suffix": "",
+    },
+  ],
   "url": [
     {
       "header": "My url",
@@ -229,6 +279,46 @@ exports[`export headers > match the snapshot 1`] = `
 
 exports[`operator matrix > matches the snapshot 1`] = `
 {
+  "address": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+    },
+  },
+  "appointment": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
+      "end": "text",
+      "start": "text",
+    },
+  },
   "calculation": {
     "operators": {
       "number": [
@@ -245,6 +335,19 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "number",
+    },
+  },
+  "consent": {
+    "operators": {
+      "boolean": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+      ],
+    },
+    "paths": {
+      "": "boolean",
     },
   },
   "context": {
@@ -290,6 +393,24 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "date",
+    },
+  },
+  "datetime": {
+    "operators": {
+      "datetime": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "before",
+        "after",
+        "on_or_before",
+        "on_or_after",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "datetime",
     },
   },
   "email": {
@@ -649,6 +770,25 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "": "time",
       "end": "time",
       "start": "time",
+    },
+  },
+  "unique_id": {
+    "operators": {
+      "text": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "starts_with",
+        "not_starts_with",
+        "ends_with",
+        "not_ends_with",
+      ],
+    },
+    "paths": {
+      "": "text",
     },
   },
   "url": {

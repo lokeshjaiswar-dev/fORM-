@@ -1,8 +1,9 @@
-import type { AvailableType } from '@form/registry';
+import { REGISTRY, type AvailableType } from '@form/registry';
 import type {
   Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
 } from '@form/schema';
 import { APP_IDS, blankDefinition, createBlock, inlineDoc, isField, placementOf, richDoc } from '@/lib/definition';
+import { focusLabelEnd } from '@/lib/focusLabel';
 import { dispatch, type CommandResult } from '@/state/commands/dispatch';
 import { rulesReading } from '@/state/commands/rules';
 import type { BlockPatch, PageSlot, RuleFate } from '@/state/commands/types';
@@ -62,7 +63,8 @@ export function setEndings(endings: Ending[], defaultEndingId: EndingId, behavio
 const defaultPurpose = (doc: FormDefinition): Purpose => ({ ...(blankDefinition(doc.formId).privacy.purposes[0] as Purpose), id: APP_IDS.newId() as PurposeId });
 
 function newBlock(choice: BlockChoice, doc: FormDefinition): { block: ReturnType<typeof createBlock>; purpose?: Purpose } {
-  if (choice.type === 'heading' || choice.type === 'paragraph' || choice.type === 'divider' || doc.privacy.purposes.length) return { block: createBlock(choice, doc) };
+  const kind = REGISTRY[choice.type].kind;
+  if (kind === 'content' || kind === 'container' || kind === 'transient' || doc.privacy.purposes.length) return { block: createBlock(choice, doc) };
   const purpose = defaultPurpose(doc);
   return { block: createBlock(choice, { ...doc, privacy: { ...doc.privacy, purposes: [purpose] } }), purpose };
 }
@@ -76,6 +78,7 @@ export function addBlock(choice: BlockChoice, at: PageSlot = endSlot(), patch: B
   const result = dispatch({ type: 'apply_ops', ops });
   if (!result.ok) return '';
   useUiStore.setState({ activeBlockId: block.id, started: true });
+  focusLabelEnd(block.id);
   return block.id;
 }
 
@@ -113,13 +116,14 @@ export function addRepeatingGroup(choice: BlockChoice, at: PageSlot = endSlot())
   const result = dispatch({ type: 'apply_ops', ops });
   if (!result.ok) return '';
   useUiStore.setState({ activeBlockId: group.id, started: true });
+  focusLabelEnd(group.id);
   return group.id;
 }
 
 /** Adds a child field inside a repeating group. */
 export function addChildBlock(parentId: BlockId, choice: BlockChoice, patch: BlockPatch = {}): BlockId | '' {
   const parent = currentDoc().blocks[parentId];
-  if (parent?.type !== 'repeating_group') return '';
+  if (parent?.type !== 'repeating_group' && parent?.type !== 'section') return '';
   const made = newBlock(choice, currentDoc());
   const ops: DocumentOp[] = made.purpose ? [{ op: 'add_purpose', purpose: made.purpose }] : [];
   const block = { ...made.block, ...patch } as ReturnType<typeof createBlock>;
@@ -127,6 +131,7 @@ export function addChildBlock(parentId: BlockId, choice: BlockChoice, patch: Blo
   const result = dispatch({ type: 'apply_ops', ops });
   if (!result.ok) return '';
   useUiStore.setState({ activeBlockId: block.id, started: true, inspectorOpen: true });
+  focusLabelEnd(block.id);
   return block.id;
 }
 

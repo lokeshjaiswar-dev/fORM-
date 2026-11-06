@@ -55,7 +55,7 @@ describe('REGISTRY', () => {
 
 describe('availability', () => {
   it('marks the P0 types available and every other type P1 or P2', () => {
-    expect(AVAILABLE_TYPES).toHaveLength(25);
+    expect(AVAILABLE_TYPES).toHaveLength(32);
     for (const type of AVAILABLE_TYPES) expect(availability(type)).toBe('P0');
     for (const type of STUB_TYPES) expect(['P1', 'P2']).toContain(availability(type));
     expect(Object.keys(STUB_AVAILABILITY).sort()).toEqual([...STUB_TYPES].sort());
@@ -85,33 +85,32 @@ describe('stubs', () => {
   });
 
   it('value stubs parse answers with the twin and export canonical JSON', () => {
-    const def = valueDefinition('address');
-    const block = fieldBlock('address');
+    const def = valueDefinition('payment');
+    const block = fieldBlock('payment');
     const schema = def.answerSchema(block, { required: true });
-    expect(schema.safeParse({ city: 'Pune' })).toEqual({ success: true, data: { city: 'Pune' } });
-    expect(schema.safeParse({}).success).toBe(false);
-    expect(def.toScalar({ city: 'Pune' })).toEqual({ t: 'null' });
-    expect(def.isEmpty({})).toBe(true);
-    expect(def.isEmpty({ city: 'Pune' })).toBe(false);
-    expect(def.export.columns(block)).toEqual([{ suffix: '', header: 'My address' }]);
-    expect(def.export.cells({ city: 'Pune' }, block)).toEqual(['{"city":"Pune"}']);
-    expect(def.export.text({ city: 'Pune' }, block)).toBe('{"city":"Pune"}');
-    expect(def.translatable(block)).toEqual(['block:address_1:label']);
+    const paid = { currency: id('INR'), customAmount: id('100') };
+    expect(schema.safeParse(paid).success).toBe(true);
+    expect(schema.safeParse({ currency: id('INR') }).success).toBe(false);
+    expect(def.toScalar(paid as never)).toEqual({ t: 'null' });
+    expect(def.isEmpty({ currency: id('INR') } as never)).toBe(true);
+    expect(def.export.columns(block)).toEqual([{ suffix: '', header: 'My payment' }]);
+    expect(def.translatable(block)).toEqual(['block:payment_1:label']);
     expect(valueDefinition('calculation').kind).toBe('computed');
-    expect(REGISTRY.captcha.translatable(plainBlockStub('captcha'))).toEqual([]);
+    expect(REGISTRY.captcha.translatable(plainBlock('captcha'))).toEqual([]);
   });
 
   it('stub isEmpty agrees with I9: true exactly for the values the twin rejects as unanswered (BL-062)', () => {
     const notice = { noticeLocale: 'en-IN', noticeVersion: 1 };
     const samples: Partial<Record<ValueFieldType, { valid: unknown[]; empty: unknown[] }>> = {
       address: { valid: [{ city: 'Pune' }], empty: [{}, { line1: '', city: '' }] },
-      consent: { valid: [{ items: { item_1: true }, ...notice }, { items: { item_1: false }, ...notice }], empty: [{ items: {}, ...notice }] },
+      consent: { valid: [{ items: { item_1: true }, ...notice }], empty: [{ items: {}, ...notice }] },
       payment: {
         valid: [{ currency: 'INR', customAmount: '100' }, { currency: 'INR', items: [{ productId: 'p1', quantity: 1 }] }],
         empty: [{ currency: 'INR' }, { currency: 'INR', items: [] }],
       },
       context: { valid: [{ page_url: 'https://example.com' }], empty: [{}] },
       unique_id: { valid: ['F-000001'], empty: [''] },
+      appointment: { valid: [{ start: '2026-11-10T03:30:00Z', end: '2026-11-10T04:00:00Z', respondentTimeZone: 'Asia/Kolkata' }], empty: [{ start: '', end: '', respondentTimeZone: 'Asia/Kolkata' }] },
     };
     for (const [type, { valid, empty }] of Object.entries(samples) as Array<[ValueFieldType, { valid: unknown[]; empty: unknown[] }]>) {
       const def = valueDefinition(type);
@@ -143,8 +142,6 @@ describe('stubs', () => {
     expect([0, false, 'x', ['x'], { a: 'x' }].some(isBlank)).toBe(false);
   });
 });
-
-const plainBlockStub = (type: 'captcha') => ({ id: id<BlockId>(`${type}_1`), type, config: { provider: 'platform_default' as const } });
 
 describe('default compliance (CMP-03)', () => {
   it('parses for every value type and starts without purposes', () => {
@@ -284,7 +281,7 @@ describe('translatable and lockable content', () => {
     expect(REGISTRY.divider.translatable(plainBlock('divider'))).toEqual([]);
     expect(REGISTRY.divider.lockableContent(plainBlock('divider'))).toEqual([]);
     expect(REGISTRY.heading.palette.map((p) => p.configOverrides)).toEqual([{ level: 1 }]);
-    for (const type of ['heading', 'paragraph', 'divider'] as const) expect(REGISTRY[type].lint(plainBlock(type) as never, definition([]))).toEqual([]);
+    for (const type of ['heading', 'paragraph', 'divider', 'captcha', 'section'] as const) expect(REGISTRY[type].lint(plainBlock(type) as never, definition([]))).toEqual([]);
   });
 });
 

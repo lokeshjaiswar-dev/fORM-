@@ -1,5 +1,5 @@
 import {
-  AlignLeft, Briefcase, Calendar, CalendarClock, Camera, CheckSquare, ChevronDown, CircleDot, Clock, EyeOff, FilePlus, Files, Gauge, Globe, GraduationCap, Hash, Heading1, Heading2, Heading3, Link, ListFilter, ListPlus,
+  AlignLeft, Briefcase, Calendar, CalendarClock, Camera, CheckSquare, ChevronDown, ChevronsUpDown, CircleDot, Clock, EyeOff, FilePlus, Files, Gauge, Globe, GraduationCap, Hash, Heading1, Heading2, Heading3, Link, ListFilter, ListPlus, Shield,
   ListOrdered, Mail, MapPin, Minus, Paperclip, PenLine, Phone, ShoppingCart, Smile, Square, Star, Table, Text, Type, User, UserPlus, Users, type LucideIcon,
 } from 'lucide-react';
 
@@ -48,6 +48,8 @@ export const ICONS: Readonly<Record<string, LucideIcon>> = {
   'text': Text,
   'minus': Minus,
   'file-plus': FilePlus,
+  'shield': Shield,
+  'chevrons-up-down': ChevronsUpDown,
 };
 
 export const iconFor = (name: string): LucideIcon => ICONS[name] ?? Square;

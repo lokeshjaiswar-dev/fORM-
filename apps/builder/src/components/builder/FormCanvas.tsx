@@ -80,6 +80,7 @@ export function FormCanvas() {
   const titleRef = useRef<HTMLInputElement>(null);
   const insertRef = useRef<HTMLInputElement>(null);
   const insertFocusKey = useUiStore((s) => s.insertFocusKey);
+  const activeBlockId = useUiStore((s) => s.activeBlockId);
   const showStart = !started && ids.length === 0 && pages.length === 1;
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop' });
 
@@ -88,8 +89,8 @@ export function FormCanvas() {
   }, [showStart]);
 
   useEffect(() => {
-    if (!showStart) insertRef.current?.focus();
-  }, [showStart, insertFocusKey]);
+    if (!showStart && !activeBlockId) insertRef.current?.focus();
+  }, [showStart, insertFocusKey, activeBlockId]);
 
   const closeSlash = () => {
     setSlashOpen(false);
@@ -136,7 +137,13 @@ export function FormCanvas() {
           ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.currentTarget.select();
+          }}
+          onFocus={(e) => {
+            if (e.currentTarget.value) e.currentTarget.select();
+          }}
           onKeyDown={(e) => {
             if (e.key !== 'Enter') return;
             e.preventDefault();

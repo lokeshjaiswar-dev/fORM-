@@ -19,7 +19,7 @@ export function fieldBlock<T extends S.ValueFieldType>(type: T, config: Partial<
   } as S.FieldBlockOf<T>;
 }
 
-export function plainBlock<T extends 'heading' | 'paragraph' | 'divider'>(type: T, config: Partial<S.BlockConfigMap[T]> = {}): S.PlainBlockOf<T> {
+export function plainBlock<T extends 'heading' | 'paragraph' | 'divider' | 'captcha' | 'section'>(type: T, config: Partial<S.BlockConfigMap[T]> = {}): S.PlainBlockOf<T> {
   return { id: id<S.BlockId>(`${type}_1`), type, config: { ...REGISTRY[type].defaultConfig(EN_IN), ...config } } as S.PlainBlockOf<T>;
 }
 

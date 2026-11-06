@@ -88,7 +88,7 @@ function prepare(version: EvaluableVersion): Prepared {
     if (step.kind === 'on_path') return { kind: 'on_path', step, key, page: pageIndex.get(step.pageId) ?? -1 };
     if (step.kind === 'capture') {
       const block = def.blocks[step.blockId];
-      const authoritative = block?.type === 'calculation' || block?.type === 'context'
+      const authoritative = block?.type === 'calculation' || block?.type === 'context' || block?.type === 'unique_id'
         || (block?.type === 'hidden' && (block.config.source.kind === 'static' || block.config.source.kind === 'expr'));
       return { kind: 'capture', step, key, blockId: step.blockId, authoritative };
     }
@@ -438,6 +438,11 @@ class Session {
       const v = this.exprValue(block.config.expr);
       if (v.t === 'null') return null;
       return prev?.type === 'calculation' && JSON.stringify(prev.value) === JSON.stringify(v) ? prev : { type: 'calculation', value: v };
+    }
+    if (block?.type === 'unique_id') {
+      const prefix = block.config.prefix.map((part) => (typeof part === 'string' ? part : '')).join('');
+      const value = `${prefix}${String(Math.max(0, block.config.startAt)).padStart(block.config.padTo, '0')}`;
+      return prev?.type === 'unique_id' && prev.value === value ? prev : { type: 'unique_id', value };
     }
     if (block?.type === 'context') {
       const stripQuery = block.config.stripQuery === true;

@@ -130,6 +130,24 @@ const M = defineMessages('builder', {
   'inspector.calc_no_fields': 'Add a number, rating or scale field first.',
   'inspector.context_facts': 'Facts to capture',
   'inspector.context_strip': 'Drop the query string from URLs',
+  'inspector.display_image': 'Image choices',
+  'inspector.unique_prefix': 'Prefix',
+  'inspector.unique_pad': 'Digit padding',
+  'inspector.unique_start': 'Start at',
+  'inspector.unique_reset': 'Reset the counter',
+  'inspector.unique_reset_never': 'Never',
+  'inspector.unique_reset_year': 'Each year',
+  'inspector.unique_reset_month': 'Each month',
+  'inspector.consent_notice': 'Checkbox only — add a notice later if you need one',
+  'inspector.slot_minutes': 'Slot length (minutes)',
+  'inspector.rolling_days': 'Days ahead',
+  'inspector.min_notice': 'Minimum notice (minutes)',
+  'inspector.collapsible': 'Collapsible',
+  'inspector.initially_collapsed': 'Start collapsed',
+  'inspector.postal_validate': 'Validate PIN / postal code',
+  'inspector.country_mode': 'Country',
+  'inspector.country_fixed': 'Fixed (India by default)',
+  'inspector.country_any': 'Respondent picks any country',
 });
 
 const MIB = 1024 * 1024;
@@ -299,6 +317,7 @@ export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'mul
         options={[
           { value: list, label: t(list === 'radio' ? M['inspector.display_radio'] : M['inspector.display_checkbox']) },
           { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
+          { value: 'image', label: t(M['inspector.display_image']) },
         ]}
         onChange={(display) => setConfig(block, { display })}
       />
@@ -319,6 +338,116 @@ export function MultiChoiceValidation({ block }: InspectorProps<'multi_choice'>)
         <NumberField label={t(M['inspector.max_selected'])} value={block.config.maxSelected} parse={parseInteger(1, n)} onChange={(maxSelected) => setConfig(block, { maxSelected })} />
       </div>
       <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function AddressGeneral({ block }: InspectorProps<'address'>) {
+  return (
+    <>
+      <SelectField
+        label={t(M['inspector.country_mode'])}
+        value={block.config.country.mode}
+        options={[
+          { value: 'fixed', label: t(M['inspector.country_fixed']) },
+          { value: 'any', label: t(M['inspector.country_any']) },
+        ]}
+        onChange={(mode) => setConfig(block, { country: { ...block.config.country, mode } })}
+      />
+      <ToggleRow label={t(M['inspector.postal_validate'])} checked={block.config.validatePostalCode} onChange={(on) => setConfig(block, { validatePostalCode: on })} />
+    </>
+  );
+}
+
+export function DateTimeGeneral({ block }: InspectorProps<'datetime'>) {
+  return (
+    <>
+      <SelectField label={t(M['inspector.date_pattern'])} value={block.config.pattern} options={DATE_PATTERNS.map((p) => ({ value: p, label: p }))} onChange={(pattern) => setConfig(block, { pattern })} />
+      <SelectField
+        label={t(M['inspector.hour_cycle'])}
+        value={block.config.hourCycle}
+        options={[{ value: 'h12', label: t(M['inspector.hour_cycle_h12']) }, { value: 'h23', label: t(M['inspector.hour_cycle_h23']) }]}
+        onChange={(hourCycle) => setConfig(block, { hourCycle })}
+      />
+      <SelectField
+        label={t(M['inspector.minute_step'])}
+        value={String(block.config.minuteStep)}
+        options={['1', '5', '10', '15', '30'].map((v) => ({ value: v, label: v }))}
+        onChange={(v) => setConfig(block, { minuteStep: Number(v) })}
+      />
+    </>
+  );
+}
+
+export function ConsentGeneral({ block }: InspectorProps<'consent'>) {
+  return <p className="text-[13px] leading-5 text-muted-foreground">{t(M['inspector.consent_notice'])} ({block.config.mode})</p>;
+}
+
+export function AppointmentGeneral({ block }: InspectorProps<'appointment'>) {
+  return (
+    <>
+      <NumberField label={t(M['inspector.slot_minutes'])} value={block.config.slotMinutes} parse={parseInteger(5, 480)} onChange={(slotMinutes) => slotMinutes !== undefined && setConfig(block, { slotMinutes })} />
+      <NumberField label={t(M['inspector.rolling_days'])} value={block.config.rollingDays} parse={parseInteger(1, 365)} onChange={(rollingDays) => rollingDays !== undefined && setConfig(block, { rollingDays })} />
+      <NumberField label={t(M['inspector.min_notice'])} value={block.config.minNoticeMinutes} parse={parseInteger(0, 10_080)} onChange={(minNoticeMinutes) => minNoticeMinutes !== undefined && setConfig(block, { minNoticeMinutes })} />
+    </>
+  );
+}
+
+export function SectionGeneral({ block }: InspectorProps<'section'>) {
+  const doc = currentDoc();
+  const childOptions = TILES.filter((tile) => tile.kind === 'block' && tile.choice.type !== 'section').map((tile) => ({ value: tile.id, label: tile.label }));
+  return (
+    <>
+      <ToggleRow label={t(M['inspector.collapsible'])} checked={block.config.collapsible} onChange={(collapsible) => setConfig(block, { collapsible })} />
+      {block.config.collapsible ? (
+        <ToggleRow label={t(M['inspector.initially_collapsed'])} checked={block.config.initiallyCollapsed === true} onChange={(on) => setConfig(block, { initiallyCollapsed: on || undefined })} />
+      ) : null}
+      <SectionTitle>{t(M['inspector.repeat_fields'])}</SectionTitle>
+      {block.config.children.map((id) => {
+        const child = doc.blocks[id];
+        const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
+        return (
+          <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
+            <button type="button" className="truncate text-left hover:underline" onClick={() => useUiStore.getState().openInspector(id)}>
+              {name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}
+            </button>
+            <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" aria-label={t(M['inspector.repeat_remove_field'])} onClick={() => requestDeleteBlock(id)}>×</Button>
+          </div>
+        );
+      })}
+      <SelectField
+        label={t(M['inspector.repeat_add_field'])}
+        value=""
+        placeholder={t(M['inspector.repeat_pick_field'])}
+        options={childOptions}
+        onChange={(tileId) => {
+          const tile = TILES.find((item) => item.id === tileId);
+          if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
+        }}
+      />
+    </>
+  );
+}
+
+export function UniqueIdGeneral({ block }: InspectorProps<'unique_id'>) {
+  const prefix = block.config.prefix.map((part) => (typeof part === 'string' ? part : '')).join('');
+  return (
+    <>
+      <TextField label={t(M['inspector.unique_prefix'])} value={prefix} onChange={(value) => setConfig(block, { prefix: value ? [value] : [] })} />
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField label={t(M['inspector.unique_pad'])} value={block.config.padTo} parse={parseInteger(1, 20)} onChange={(padTo) => padTo !== undefined && setConfig(block, { padTo })} />
+        <NumberField label={t(M['inspector.unique_start'])} value={block.config.startAt} parse={parseInteger(0, 1_000_000)} onChange={(startAt) => startAt !== undefined && setConfig(block, { startAt })} />
+      </div>
+      <SelectField
+        label={t(M['inspector.unique_reset'])}
+        value={block.config.resetEvery}
+        options={[
+          { value: 'never', label: t(M['inspector.unique_reset_never']) },
+          { value: 'year', label: t(M['inspector.unique_reset_year']) },
+          { value: 'month', label: t(M['inspector.unique_reset_month']) },
+        ]}
+        onChange={(resetEvery) => setConfig(block, { resetEvery })}
+      />
     </>
   );
 }

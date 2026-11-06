@@ -100,6 +100,13 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
         order: placement.elementOrder.get(blockId) ?? 0, pointer: at('expr'),
       });
     }
+    if (block.type === 'unique_id') {
+      const step: PlanStep = { kind: 'capture', blockId };
+      steps.push({
+        step, key: stepKey(step), reads: [], writes: [cell.value(blockId)], ruleIndex: -1,
+        order: placement.elementOrder.get(blockId) ?? 0, pointer: at('prefix'),
+      });
+    }
     if (block.type === 'context') {
       const step: PlanStep = { kind: 'capture', blockId };
       steps.push({

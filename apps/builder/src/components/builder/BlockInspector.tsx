@@ -95,8 +95,15 @@ export function BlockInspector() {
   const tab = picked.id === activeBlockId ? picked.tab : 'general';
   const setTab = (next: Tab) => setPicked({ id: activeBlockId, tab: next });
 
-  if (!block || block.type === 'unsupported' || !inspectorOpen) return <aside className="w-0 shrink-0 overflow-hidden border-l border-transparent" />;
-  const open = inspectorOpen;
+  const open = inspectorOpen && !!block && block.type !== 'unsupported';
+  if (!block || block.type === 'unsupported') {
+    return (
+      <aside
+        className="relative flex shrink-0 flex-col overflow-hidden border-l border-transparent bg-background transition-[width,border-color] duration-300 ease-out"
+        style={{ width: 0 }}
+      />
+    );
+  }
   const tabs = tabsFor(block);
   const shown = tabs.includes(tab) ? tab : 'general';
   const typeName = tileOf(block.type, block.config as Readonly<Record<string, unknown>>)?.label ?? block.type;
@@ -146,7 +153,7 @@ export function BlockInspector() {
         </div>
 
         <Tabs value={shown} onValueChange={(id) => setTab(id as Tab)} size="sm" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="px-3">
+          <TabsList className="shrink-0 flex-nowrap overflow-x-auto px-3">
             {tabs.map((id) => (
               <TabsTrigger key={id} value={id}>
                 {t(TAB_LABELS[id])}
@@ -195,12 +202,12 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
   const hex = typeof value === 'string' && HEX.test(value) ? value : fallback;
   const [text, setText] = useDraft(typeof value === 'string' ? value : '');
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Label className="text-[12px] text-muted-foreground">{label}</Label>
-      <div className="flex items-center gap-1.5">
-        <input type="color" aria-label={label} value={hex} onChange={(e) => onChange(e.target.value as HexColor)} className="size-7 cursor-pointer rounded border border-border" />
+    <div className="flex min-h-8 items-center justify-between gap-2">
+      <Label className="min-w-0 flex-1 text-[12px] leading-4 text-muted-foreground">{label}</Label>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <input type="color" aria-label={label} value={hex} onChange={(e) => onChange(e.target.value as HexColor)} className="size-7 shrink-0 cursor-pointer rounded border border-border" />
         <Input
-          className="w-[92px]"
+          className="h-7 w-[92px] px-2 text-[12px]"
           aria-label={t(M['inspector.color_code'], { label })}
           value={text}
           placeholder={fallback}
@@ -218,7 +225,7 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
 
 function inRepeatingGroup(id: BlockId): boolean {
   const at = placementOf(currentDoc(), id);
-  return !!at && 'blockId' in at.parent && currentDoc().blocks[at.parent.blockId]?.type === 'repeating_group';
+  return !!at && 'blockId' in at.parent;
 }
 
 function Look({ block, compact }: { block: Exclude<StoredBlock, { type: 'unsupported' }>; compact?: boolean }) {
@@ -263,7 +270,7 @@ function Look({ block, compact }: { block: Exclude<StoredBlock, { type: 'unsuppo
 function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupported' }> }) {
   const width = block.layout?.width ?? 'full';
   const nested = inRepeatingGroup(block.id);
-  const list = block.type === 'repeating_group';
+  const list = block.type === 'repeating_group' || block.type === 'section';
   const skipWidth = nested || list;
   return (
     <>

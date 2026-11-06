@@ -53,6 +53,15 @@ describe('builder actions', () => {
     if (after.type === 'repeating_group') expect(after.config.children.at(-1)).toBe(extra);
   });
 
+  it('addChildBlock nests a field in a section', () => {
+    const sectionId = addBlock({ type: 'section', configOverrides: {} });
+    const child = addChildBlock(sectionId, { type: 'short_text', configOverrides: {} });
+    const section = get(sectionId);
+    expect(get(child).type).toBe('short_text');
+    expect(section.type).toBe('section');
+    if (section.type === 'section') expect(section.config.children).toEqual([child]);
+  });
+
   it('a palette entry brings its config overrides (FND-03)', () => {
     const dropdown = addBlock({ type: 'single_choice', configOverrides: { display: 'dropdown' } });
     expect(get(dropdown)).toMatchObject({ config: { display: 'dropdown', options: [{ id: 'option_1' }, { id: 'option_2' }, { id: 'option_3' }] } });

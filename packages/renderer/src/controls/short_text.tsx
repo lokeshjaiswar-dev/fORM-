@@ -8,7 +8,7 @@ export function ShortText({ block, field }: ControlProps<'short_text'>) {
     <Affix prefix={c.prefix} suffix={c.suffix}>
       <input
         id={field.ids.input}
-        className="fr-input"
+        className={c.placeholder === '_____' ? 'fr-input fr-blank' : 'fr-input'}
         type="text"
         value={answer.value ?? ''}
         placeholder={c.placeholder}

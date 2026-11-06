@@ -78,6 +78,70 @@ const CASES: Case[] = [
     expected: { type: 'phone', value: { e164: '+919876543210', country: 'IN' } } as AnswerValue,
   },
   {
+    name: 'address',
+    block: field('address', 'q', { required: true }),
+    answer: async (user) => {
+      await user.type(screen.getByRole('textbox', { name: 'Address line 1' }), '12 MG Road');
+      await user.type(screen.getByRole('textbox', { name: 'City' }), 'Pune');
+      await user.selectOptions(screen.getByRole('combobox', { name: 'State' }), 'Maharashtra');
+      await user.type(screen.getByRole('textbox', { name: 'PIN / postal code' }), '411001');
+    },
+    clear: async (user) => {
+      await user.clear(screen.getByRole('textbox', { name: 'Address line 1' }));
+      await user.clear(screen.getByRole('textbox', { name: 'City' }));
+      await user.clear(screen.getByRole('textbox', { name: 'PIN / postal code' }));
+    },
+    expected: (answer) => {
+      expect(answer.type).toBe('address');
+      if (answer.type === 'address') {
+        expect(answer.value.line1).toBe('12 MG Road');
+        expect(answer.value.city).toBe('Pune');
+        expect(answer.value.postalCode).toBe('411001');
+        expect(answer.value.country).toBe('IN');
+      }
+    },
+  },
+  {
+    name: 'datetime',
+    block: field('datetime', 'q', { required: true }),
+    answer: async () => {
+      fireEvent.change(screen.getByLabelText(/q/), { target: { value: '2026-06-03T10:00' } });
+    },
+    clear: async () => {
+      fireEvent.change(screen.getByLabelText(/q/), { target: { value: '' } });
+    },
+    expected: (answer) => {
+      expect(answer.type).toBe('datetime');
+      if (answer.type === 'datetime') expect(answer.value.local).toBe('2026-06-03T10:00');
+    },
+  },
+  {
+    name: 'appointment',
+    block: field('appointment', 'q', { required: true }),
+    answer: async (user) => {
+      const slots = await screen.findAllByRole('listitem');
+      await user.click(slots[0] as HTMLElement);
+    },
+    clear: null,
+    expected: (answer) => {
+      expect(answer.type).toBe('appointment');
+      if (answer.type === 'appointment') {
+        expect(answer.value.start.endsWith('Z')).toBe(true);
+        expect(answer.value.end > answer.value.start).toBe(true);
+      }
+    },
+  },
+  {
+    name: 'consent',
+    block: field('consent', 'q', { required: true }),
+    answer: (user) => user.click(screen.getByRole('checkbox')),
+    clear: (user) => user.click(screen.getByRole('checkbox')),
+    expected: (answer) => {
+      expect(answer.type).toBe('consent');
+      if (answer.type === 'consent') expect(answer.value.items.item_1).toBe(true);
+    },
+  },
+  {
     name: 'number',
     block: field('number', 'q', { required: true }),
     answer: (user) => user.type(box(/q/), '42.5'),
@@ -272,7 +336,7 @@ async function submitIn(user: UserEvent) {
 describe('control contract', () => {
   it('every available value type except hidden has a case; content types render', () => {
     const tested = new Set(CASES.map((c) => c.block.type));
-    const values = AVAILABLE_TYPES.filter((t) => !['heading', 'paragraph', 'divider', 'hidden', 'calculation', 'context'].includes(t));
+    const values = AVAILABLE_TYPES.filter((t) => !['heading', 'paragraph', 'divider', 'hidden', 'calculation', 'context', 'unique_id', 'captcha', 'section'].includes(t));
     expect(values.filter((t) => !tested.has(t as ValueFieldType))).toEqual([]);
     expect(Object.keys(CONTROLS).sort()).toEqual([...AVAILABLE_TYPES].sort());
   });

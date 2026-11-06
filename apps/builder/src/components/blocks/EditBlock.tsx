@@ -48,7 +48,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
     <div className="w-full space-y-2" data-canvas-field="">
       {hidden}
       {!block.hideLabel && (
-        <div className="flex h-8 min-w-0 items-center gap-1" data-canvas-label="">
+        <div className="flex min-h-8 min-w-0 items-center gap-1" data-canvas-label="">
           <InlineEditor
             value={block.label}
             onChange={(label) => updateBlock(block.id, { label })}
@@ -60,7 +60,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
             style={labelStyle(block.style)}
             placeholder={t(block.type === 'hidden' ? M['block.hidden_field'] : M['block.question'])}
           />
-          {block.required && <span className="shrink-0 text-[22px] font-semibold leading-8 text-black">*</span>}
+          {block.required && <span className="shrink-0 self-center text-[22px] font-semibold leading-8 text-black">*</span>}
         </div>
       )}
       {block.description ? <p className="text-left text-[13px] text-muted-foreground">{plainText(block.description)}</p> : null}

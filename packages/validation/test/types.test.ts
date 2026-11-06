@@ -1,4 +1,4 @@
-import { AVAILABLE_TYPES } from '@form/registry';
+import { AVAILABLE_TYPES, REGISTRY } from '@form/registry';
 import { VALUE_FIELD_TYPES } from '@form/schema';
 import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
@@ -47,6 +47,12 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     valid: [a.email('asha@example.com'), ans.raw('email', { address: 'asha@example.com', otpProof: '' })],
     invalid: [[a.email('asha@'), 'f.address invalid_email'], [a.email('asha@other.org'), 'f.address email_domain_blocked']],
   },
+  address: {
+    block: field('address', 'f'),
+    blank: [ans.raw('address', {}), ans.raw('address', { line1: '' })],
+    valid: [ans.raw('address', { line1: '12 MG Road', city: 'Pune', state: 'Maharashtra', postalCode: '411001', country: 'IN' })],
+    invalid: [[ans.raw('address', { line1: '12 MG Road', city: 'Pune', state: 'MH', postalCode: '41100', country: 'IN' }), 'f.postalCode invalid_format']],
+  },
   phone: {
     block: field('phone', 'f', { config: { defaultCountry: id<S.CountryCode>('IN'), showCountrySelect: true, allowedCountries: [id<S.CountryCode>('IN')] } }),
     blank: [ans.raw('phone', { e164: '', country: 'IN' })],
@@ -82,6 +88,12 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
       [a.multi('a', 'a'), 'f.optionIds.1 invalid_format'],
       [ans.multiOther('x', 'a', 'b'), 'f.other not_in_options'],
     ],
+  },
+  datetime: {
+    block: field('datetime', 'f'),
+    blank: [ans.raw('datetime', { local: '', timeZone: 'UTC', instant: '2026-10-19T00:00:00.000Z' })],
+    valid: [ans.raw('datetime', { local: '2026-10-19T10:00', timeZone: 'Asia/Kolkata', instant: '2026-10-19T04:30:00.000Z' })],
+    invalid: [[ans.raw('datetime', { local: '19-10-2026T10:00', timeZone: 'UTC', instant: '2026-10-19T00:00:00.000Z' }), 'f.local invalid_date']],
   },
   date: {
     block: field('date', 'f', {
@@ -141,6 +153,18 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
       [ans.files({ scan: 'infected' }), 'f.0.scan file_infected'],
     ],
   },
+  appointment: {
+    block: field('appointment', 'f'),
+    blank: [ans.raw('appointment', { start: '', end: '', respondentTimeZone: 'UTC' })],
+    valid: [ans.raw('appointment', { start: '2026-11-10T03:30:00Z', end: '2026-11-10T04:00:00Z', respondentTimeZone: 'Asia/Kolkata' })],
+    invalid: [[ans.raw('appointment', { start: '2026-11-10T04:00:00Z', end: '2026-11-10T03:30:00Z', respondentTimeZone: 'UTC' }), 'f.end invalid_format']],
+  },
+  consent: {
+    block: field('consent', 'f'),
+    blank: [ans.raw('consent', { items: {}, noticeLocale: 'en-IN', noticeVersion: 0 })],
+    valid: [ans.raw('consent', { items: { item_1: true }, noticeLocale: 'en-IN', noticeVersion: 0 })],
+    invalid: [[ans.raw('consent', { items: { item_1: false }, noticeLocale: 'en-IN', noticeVersion: 0 }), 'f.items.item_1 required']],
+  },
   signature: {
     block: field('signature', 'f', { config: { penColor: { token: 'text' }, heightPx: 160, allowTyped: true } }),
     blank: [null],
@@ -149,7 +173,7 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
   },
 };
 
-const INPUT_TYPES: string[] = AVAILABLE_TYPES.filter((t) => (VALUE_FIELD_TYPES as readonly string[]).includes(t) && t !== 'hidden');
+const INPUT_TYPES: string[] = AVAILABLE_TYPES.filter((t) => (VALUE_FIELD_TYPES as readonly string[]).includes(t) && t !== 'hidden' && t !== 'repeating_group' && REGISTRY[t].kind === 'input');
 
 describe('validateAnswers per type', () => {
   it('has a table row for every available input type', () => {

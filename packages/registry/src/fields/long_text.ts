@@ -32,7 +32,6 @@ export function wordCount(value: string): number {
 export const longText = defineField({
   type: 'long_text',
   palette: [
-    entry('long_text', 'address', 'basic', PALETTE_LABELS['palette.long_text.address'], 'map-pin', ['address', 'street', 'city', 'location', 'contact'], { placeholder: 'Street address' }),
     entry('long_text', null, 'basic', PALETTE_LABELS['palette.long_text'], 'align-left', ['text', 'long', 'paragraph', 'comment', 'multi-line']),
   ],
   defaultConfig: () => ({ rows: 4 }),

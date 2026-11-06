@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
-  CalculationGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ContextGeneral, DateGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LongTextGeneral,
+  AddressGeneral, AppointmentGeneral, CalculationGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ContextGeneral, DateGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LongTextGeneral, UniqueIdGeneral, SectionGeneral,
   LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
@@ -26,6 +26,13 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   full_name: {},
   email: { general: EmailGeneral },
   phone: { general: PhoneGeneral },
+  address: { general: AddressGeneral },
+  datetime: { general: DateTimeGeneral },
+  consent: { general: ConsentGeneral },
+  unique_id: { general: UniqueIdGeneral },
+  appointment: { general: AppointmentGeneral },
+  captcha: {},
+  section: { general: SectionGeneral },
   number: { general: NumberGeneral, validation: NumberValidation },
   url: { general: ChromeGeneral },
   single_choice: { general: ChoiceGeneral, options: ChoiceOptions },
