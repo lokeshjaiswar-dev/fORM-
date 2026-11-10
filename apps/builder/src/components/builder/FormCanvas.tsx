@@ -119,9 +119,9 @@ export function FormCanvas() {
     >
       <div className="flex min-h-full justify-center px-[72px] py-16 pb-24">
         <div
-          className="relative w-full px-10 py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
+          className="relative w-full px-[7.5rem] py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
           style={{
-            maxWidth: 'var(--fr-width)',
+            maxWidth: 'calc(var(--fr-width) + 10rem)',
             backgroundColor: 'var(--fr-surface)',
             borderRadius: layout === 'cards' ? '24px' : 'min(24px, calc(var(--fr-radius) + 10px))',
           }}

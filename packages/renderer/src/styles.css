@@ -77,6 +77,14 @@
   box-shadow: 0 8px 24px color-mix(in srgb, #000 6%, transparent);
 }
 
+.fr-root[data-mode='preview'][data-layout='cards'] .fr-cell {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 :where(.fr-root) .fr-header {
   margin-bottom: var(--fr-gap);
 }
