@@ -1,4 +1,4 @@
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable } from '@form/registry';
@@ -11,7 +11,6 @@ import { APP_IDS, blockOrder, blockText, isField, placementOf } from '@/lib/defi
 import { labelString } from '@/fields/style';
 import { removeRule, setRule } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { useUiStore } from '@/state/uiStore';
 import { Button, Input, Label, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import {
@@ -20,8 +19,6 @@ import {
 } from '@/components/builder/inspector/conditions';
 
 const M = defineMessages('builder', {
-  'rules.title': 'Logic',
-  'rules.close': 'Close logic',
   'rules.intro': 'When answers match, show an error so the person cannot continue. Put codes on dropdown options (for example 27 on Maharashtra) and compare another field to that option’s code — one check covers every option.',
   'rules.add': 'Add a check',
   'rules.empty': 'No checks yet. Add one to compare questions, for example GSTIN against State.',
@@ -95,6 +92,24 @@ function pageOf(def: FormDefinition, id: BlockId): PageId | undefined {
 function emptyCondition(source: FieldBlock, defaults: Defaults): Condition {
   const op = firstOperator(source, defaults);
   return retarget(newId() as ConditionId, source, op, undefined, defaults);
+}
+
+/** Prefer “this text field is filled and does not start with that dropdown’s option code” — the GSTIN vs State case. */
+function starterCheck(fields: FieldBlock[], defaults: Defaults): { conditions: Condition[]; anchor: BlockId } | null {
+  const source = [...fields].reverse().find((f) => kindOf(f) === 'text' && operatorsFor(f).includes('not_starts_with')) ?? fields[0];
+  if (!source) return null;
+  const peer = compareFields(source, 'not_starts_with', fields)[0];
+  if (peer && operatorsFor(source).includes('not_starts_with')) {
+    return {
+      anchor: source.id,
+      conditions: [
+        condition(newId() as ConditionId, source, 'is_answered'),
+        condition(newId() as ConditionId, peer, 'is_answered'),
+        condition(newId() as ConditionId, source, 'not_starts_with', { kind: 'ref', ref: { kind: 'answer', blockId: peer.id } }),
+      ],
+    };
+  }
+  return { anchor: source.id, conditions: [emptyCondition(source, defaults)] };
 }
 
 function checkRule(id: RuleId, name: string, enabled: boolean, whenId: ConditionId, conditions: Condition[], message: string, anchor: BlockId, atPage?: PageId): Rule {
@@ -301,43 +316,33 @@ function CheckEditor({ rule, fields, defaults, def }: { rule: Rule; fields: Fiel
   );
 }
 
-/** Form-level When / Then checks that block submit when answers do not match. */
-export function FormLogicPanel() {
+/** When / Then checks for Form design → Logic. */
+export function FormLogicChecks() {
   const def = useDoc((d) => d);
   const rules = useDoc((d) => d.logic.rules);
-  const close = () => useUiStore.getState().setLogicOpen(false);
   const [defaults] = useState<Defaults>(() => ({ today: localToday(new Date()) }));
   const fields = fieldsOf(def);
   const checks = rules.filter(isCheck);
   const add = () => {
-    const source = fields[0];
-    const anchor = fields[1]?.id ?? source?.id;
-    if (!source || !anchor) return;
-    setRule(checkRule(newId() as RuleId, '', true, newId() as ConditionId, [emptyCondition(source, defaults)], t(M['rules.message_placeholder']), anchor, pageOf(def, anchor)));
+    const start = starterCheck(fields, defaults);
+    if (!start) return;
+    setRule(checkRule(newId() as RuleId, '', true, newId() as ConditionId, start.conditions, t(M['rules.message_placeholder']), start.anchor, pageOf(def, start.anchor)));
   };
   return (
-    <aside className="flex h-full w-[min(100%,400px)] shrink-0 flex-col border-l border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-[16px] font-semibold">{t(M['rules.title'])}</h2>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['rules.close'])} onClick={close}>
-          <X className="size-4" />
+    <div className="space-y-3">
+      <p className="text-[13px] leading-relaxed text-sidebar-muted">{t(M['rules.intro'])}</p>
+      {fields.length === 0 ? <p className="text-[13px] text-sidebar-muted">{t(M['rules.no_fields'])}</p> : null}
+      {fields.length > 0 && checks.length === 0 ? <p className="text-[13px] text-sidebar-muted">{t(M['rules.empty'])}</p> : null}
+      <ul className="space-y-3">
+        {checks.map((rule) => (
+          <CheckEditor key={rule.id} rule={rule} fields={fields} defaults={defaults} def={def} />
+        ))}
+      </ul>
+      {fields.length ? (
+        <Button type="button" variant="ghost" size="sm" onClick={add}>
+          <Plus className="size-3.5" /> {t(M['rules.add'])}
         </Button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        <p className="text-[13px] leading-relaxed text-muted-foreground">{t(M['rules.intro'])}</p>
-        {fields.length === 0 ? <p className="text-[13px] text-muted-foreground">{t(M['rules.no_fields'])}</p> : null}
-        {fields.length > 0 && checks.length === 0 ? <p className="text-[13px] text-muted-foreground">{t(M['rules.empty'])}</p> : null}
-        <ul className="space-y-3">
-          {checks.map((rule) => (
-            <CheckEditor key={rule.id} rule={rule} fields={fields} defaults={defaults} def={def} />
-          ))}
-        </ul>
-        {fields.length ? (
-          <Button type="button" variant="ghost" size="sm" onClick={add}>
-            <Plus className="size-3.5" /> {t(M['rules.add'])}
-          </Button>
-        ) : null}
-      </div>
-    </aside>
+      ) : null}
+    </div>
   );
 }

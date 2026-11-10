@@ -1,18 +1,20 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Plus, Upload } from 'lucide-react';
+import { FileText, Inbox, Plus, Upload } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import type { FormDefinition, IsoInstant } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { AccountMenu } from '@/auth/AccountMenu';
+import { useSessionStore } from '@/auth/client';
 import { EditionBadge } from '@/edition/EditionBadge';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
 import { uid } from '@/lib/utils';
 import { DOCUMENT_FORMAT, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
 import { whenSaved } from '@/persistence/autosave';
 import { importV1, newStoredForm } from '@/persistence/openForm';
+import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
 import { useRepository } from '@/persistence/repository';
 import { noteImport } from '@/persistence/useFormSession';
 import { builderPath } from '@/pages/useBuilderMode';
@@ -24,6 +26,8 @@ const M = defineMessages('builder', {
   'forms.import_label': 'v1 JSON file',
   'forms.empty': 'No forms yet. Start a new one or import a v1 export.',
   'forms.untitled': 'Untitled form',
+  'forms.responses': 'Responses',
+  'forms.responses_n': '{n, plural, one {# response} other {# responses}}',
   'forms.blocks': '{n, plural, one {# block} other {# blocks}}',
   'forms.unreadable': 'Saved forms could not be read.',
   'forms.not_saved': 'The form could not be saved in this browser.',
@@ -45,15 +49,19 @@ function savedWhen(iso: string): string {
 /** The forms saved in this browser: open one, start a new one (blank or from a template), or import a v1 JSON export. */
 export function FormsPage() {
   const repo = useRepository();
+  const session = useSessionStore((s) => s.status);
+  const submissions = useOptionalSubmissions();
   const navigate = useNavigate();
   const file = useRef<HTMLInputElement>(null);
   const [forms, setForms] = useState<FormSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(preloadGallery, []);
 
   useEffect(() => {
+    if (session === 'unknown') return;
     let live = true;
     whenSaved().then(() => repo.list()).then(
       (list) => live && setForms(list),
@@ -62,7 +70,22 @@ export function FormsPage() {
     return () => {
       live = false;
     };
-  }, [repo]);
+  }, [repo, session]);
+
+  useEffect(() => {
+    if (!submissions || !forms) return;
+    let live = true;
+    Promise.all(forms.map(async (form) => [form.id, (await submissions.listByForm(form.id)).length] as const)).then(
+      (pairs) => {
+        if (!live) return;
+        setCounts(Object.fromEntries(pairs));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [forms, submissions]);
 
   async function saveThenOpen(form: StoredForm): Promise<void> {
     try {
@@ -141,8 +164,8 @@ export function FormsPage() {
       ) : (
         <ul className="mt-8 divide-y divide-border">
           {forms.map((form) => (
-            <li key={form.id}>
-              <Link to={builderPath(form.id)} className="-mx-2 flex items-center gap-3 rounded-[6px] px-2 py-3 hover:bg-state-hover">
+            <li key={form.id} className="-mx-2 flex items-center gap-2 rounded-[6px] px-2 py-3 hover:bg-state-hover">
+              <Link to={builderPath(form.id)} className="flex min-w-0 flex-1 items-center gap-3">
                 <FileText className="size-4 shrink-0 text-text-subtle" />
                 <span className="min-w-0 flex-1 truncate text-[15px]">{form.title || t(M['forms.untitled'])}</span>
                 <span className="shrink-0 text-[13px] text-muted-foreground">
@@ -150,6 +173,13 @@ export function FormsPage() {
                   {savedWhen(form.savedAt)}
                 </span>
               </Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/forms/${form.id}/responses`} onClick={(e) => e.stopPropagation()}>
+                  <Inbox />
+                  {t(M['forms.responses'])}
+                  {counts[form.id] ? ` · ${t(M['forms.responses_n'], { n: counts[form.id] ?? 0 })}` : ''}
+                </Link>
+              </Button>
             </li>
           ))}
         </ul>

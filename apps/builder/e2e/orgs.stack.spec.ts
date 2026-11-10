@@ -3,7 +3,7 @@ import { mailLink } from './stack.ts';
 
 /*
  * WP-1.02 end to end against the real API: create an org with the en-IN defaults, invite by email, accept the invite
- * through sign-up (the link waits through the verification email), see the member, change their role.
+ * through sign-up, see the member, change their role.
  */
 
 test.use({ realApi: true });
@@ -14,12 +14,10 @@ const newEmail = (who: string) => `e2e-${who}-${Date.now()}-${Math.floor(Math.ra
 async function signUp(page: Page, email: string, name: string): Promise<void> {
   await page.goto('/auth/sign-up');
   await page.getByLabel('Your name').fill(name);
-  await page.getByLabel('Work email').fill(email);
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByLabel('Organisation name').fill(`${name} org`);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('status')).toContainText(`We sent a link to ${email}`);
-  await page.goto(await mailLink(email, '/auth/verify'));
-  await page.getByRole('button', { name: `Continue as ${email}` }).click();
 }
 
 test('create an org → invite → accept through sign-up → change the role', async ({ page, browser }) => {
@@ -27,7 +25,7 @@ test('create an org → invite → accept through sign-up → change the role', 
   await signUp(page, ownerEmail, 'Asha');
   await page.waitForURL('**/forms');
 
-  await page.getByRole('link', { name: 'Create an organisation' }).click();
+  await page.getByRole('link', { name: 'New organisation' }).click();
   await expect(page.getByLabel('Language')).toHaveValue('en-IN');
   await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Kolkata');
   await expect(page.getByLabel('Date format')).toHaveValue('DD-MM-YYYY');

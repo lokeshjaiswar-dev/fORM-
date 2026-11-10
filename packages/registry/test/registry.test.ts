@@ -55,7 +55,7 @@ describe('REGISTRY', () => {
 
 describe('availability', () => {
   it('marks the P0 types available and every other type P1 or P2', () => {
-    expect(AVAILABLE_TYPES).toHaveLength(32);
+    expect(AVAILABLE_TYPES).toHaveLength(41);
     for (const type of AVAILABLE_TYPES) expect(availability(type)).toBe('P0');
     for (const type of STUB_TYPES) expect(['P1', 'P2']).toContain(availability(type));
     expect(Object.keys(STUB_AVAILABILITY).sort()).toEqual([...STUB_TYPES].sort());

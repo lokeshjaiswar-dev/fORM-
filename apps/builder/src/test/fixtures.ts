@@ -4,6 +4,13 @@ import type {
 } from '@form/schema';
 import { blankDefinition, blockOrder, createBlock, inlineDoc, isField, type IdSource } from '@/lib/definition';
 import { newestFirst, summarize, type DocumentRepository, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
+import {
+  newestSubmissionFirst,
+  summarizeSubmission,
+  type StoredSubmission,
+  type SubmissionSummary,
+  type SubmissionsRepository,
+} from '@/persistence/SubmissionsRepository';
 import { currentDoc } from '@/state/documentStore';
 import { loadDocument } from '@/state/history';
 import { defaultOps, loadOps } from '@/state/opsStore';
@@ -93,6 +100,26 @@ export class MemoryRepository implements DocumentRepository {
 
   async save(form: StoredForm): Promise<void> {
     this.records.set(form.id, structuredClone(form));
+  }
+}
+
+export class MemorySubmissions implements SubmissionsRepository {
+  readonly records = new Map<string, StoredSubmission>();
+
+  async listByForm(formId: string): Promise<SubmissionSummary[]> {
+    return [...this.records.values()]
+      .filter((row) => row.formId === formId)
+      .map(summarizeSubmission)
+      .sort(newestSubmissionFirst);
+  }
+
+  async get(formId: string, id: string): Promise<StoredSubmission | null> {
+    const row = this.records.get(id);
+    return row && row.formId === formId ? structuredClone(row) : null;
+  }
+
+  async create(record: StoredSubmission): Promise<void> {
+    this.records.set(record.id, structuredClone(record));
   }
 }
 

@@ -694,6 +694,112 @@
   font-size: 0.8125em;
 }
 
+:where(.fr-root) .fr-date-range,
+:where(.fr-root) .fr-matching {
+  display: grid;
+  gap: 0.5rem 0.75rem;
+}
+
+:where(.fr-root) .fr-matching-row {
+  display: grid;
+  gap: 0.25rem;
+}
+
+:where(.fr-root) .fr-likert-wrap {
+  overflow-x: auto;
+}
+
+:where(.fr-root) .fr-likert {
+  width: 100%;
+  min-width: 16rem;
+  border-collapse: collapse;
+}
+
+:where(.fr-root) .fr-likert th,
+:where(.fr-root) .fr-likert td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--fr-inputBorder);
+  text-align: center;
+  font-weight: 500;
+}
+
+:where(.fr-root) .fr-likert th[scope='row'] {
+  text-align: start;
+}
+
+:where(.fr-root) .fr-semantic-wrap,
+:where(.fr-root) .fr-schedule-wrap {
+  overflow-x: auto;
+}
+
+:where(.fr-root) .fr-semantic,
+:where(.fr-root) .fr-schedule {
+  width: 100%;
+  min-width: 16rem;
+  border-collapse: collapse;
+}
+
+:where(.fr-root) .fr-semantic th,
+:where(.fr-root) .fr-semantic td,
+:where(.fr-root) .fr-schedule th,
+:where(.fr-root) .fr-schedule td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--fr-inputBorder);
+  text-align: center;
+  font-weight: 500;
+}
+
+:where(.fr-root) .fr-semantic th[scope='row'],
+:where(.fr-root) .fr-schedule th[scope='row'] {
+  text-align: start;
+}
+
+:where(.fr-root) .fr-number-range {
+  display: grid;
+  gap: 0.25rem 0.75rem;
+}
+
+:where(.fr-root) .fr-sum,
+:where(.fr-root) .fr-cardsort {
+  display: grid;
+  gap: 0.5rem 0.75rem;
+}
+
+:where(.fr-root) .fr-sum-row,
+:where(.fr-root) .fr-cardsort-row {
+  display: grid;
+  grid-template-columns: 1fr 7rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+:where(.fr-root) .fr-sum-total {
+  margin: 0;
+  color: var(--fr-muted);
+  font-size: 0.8125em;
+}
+
+:where(.fr-root) .fr-maxdiff-wrap {
+  overflow-x: auto;
+}
+
+:where(.fr-root) .fr-maxdiff {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:where(.fr-root) .fr-maxdiff th,
+:where(.fr-root) .fr-maxdiff td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--fr-inputBorder);
+  text-align: center;
+}
+
+:where(.fr-root) .fr-maxdiff th[scope='row'] {
+  text-align: start;
+  font-weight: 500;
+}
+
 :where(.fr-root) .fr-repeat {
   display: flex;
   flex-direction: column;

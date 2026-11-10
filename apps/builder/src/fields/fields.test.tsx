@@ -12,6 +12,7 @@ import { CATEGORIES, TILES, matchTiles, tileAvailable, tileOf, type Tile } from 
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { useUiStore } from '@/state/uiStore';
+import { isField } from '@/lib/definition';
 import { block, resetStore } from '@/test/fixtures';
 
 describe('registry views (FND-03)', () => {
@@ -65,22 +66,23 @@ describe('registry views (FND-03)', () => {
   });
 
   it('every available type renders on the canvas', () => {
-    resetStore(AVAILABLE_TYPES.map((type) => block(type, `b_${type}`, ['heading', 'paragraph', 'divider'].includes(type) ? {} : { label: `Label ${type}` })));
+    resetStore(AVAILABLE_TYPES.map((type) => block(type, `b_${type}`, { label: `Label ${type}` })));
     for (const type of AVAILABLE_TYPES) {
-      const { container, unmount } = render(<EditBlock block={block(type, `b_${type}`, ['heading', 'paragraph', 'divider'].includes(type) ? {} : { label: `Label ${type}` })} />);
+      const item = block(type, `b_${type}`, { label: `Label ${type}` });
+      const { container, unmount } = render(<EditBlock block={item} />);
       expect(container.firstChild, type).not.toBeNull();
-      if (!['heading', 'paragraph', 'divider'].includes(type)) expect(screen.getByText(`Label ${type}`), type).toBeInTheDocument();
+      if (isField(item) && !item.hideLabel) expect(within(container).getByText(`Label ${type}`), type).toBeInTheDocument();
       unmount();
     }
   });
 
-  const CONTENT = ['heading', 'paragraph', 'divider'];
   it.each(AVAILABLE_TYPES)('%s opens in the inspector with its sections, and each section renders', async (type) => {
-    resetStore(AVAILABLE_TYPES.map((t) => block(t, `b_${t}`, CONTENT.includes(t) ? {} : { label: `Label ${t}` })));
+    const item = block(type, `b_${type}`, { label: `Label ${type}` });
+    resetStore(AVAILABLE_TYPES.map((t) => (t === type ? item : block(t, `b_${t}`, { label: `Label ${t}` }))));
     useUiStore.getState().openInspector(`b_${type}` as BlockId);
     render(<BlockInspector />);
     const view = INSPECTOR[type] as { options?: unknown };
-    const field = !CONTENT.includes(type);
+    const field = isField(item);
     const expected = ['General', ...(view.options ? ['Options'] : []), ...(field ? ['Validation'] : []), 'Logic', ...(field ? ['Privacy'] : [])];
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(expected);
     const user = userEvent.setup();

@@ -1,7 +1,7 @@
 import type { _ExactKeys } from './_internal.ts';
 import type { BlockType } from './catalogue.ts';
 import type { Expr, ExprType } from './expr.ts';
-import type { AssetRef, BlockId, ConnectionId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, HolidayCalendarId, IsoDate, IsoTime, Locale, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, PurposeId, SafeUrl, TextAlign, TimeZone, Weekday } from './ids.ts';
+import type { AssetRef, BlockId, CardBucketId, CardItemId, ConnectionId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, HolidayCalendarId, IsoDate, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, PurposeId, SafeUrl, SemanticPairId, TextAlign, TimeZone, Weekday } from './ids.ts';
 import type { ColorValue, DatePattern, InlineDoc, LabelText, PlainTemplate, RichDoc, ValueFormat } from './rich-text.ts';
 import type { BrandRef, Origin } from './template-primitives.ts';
 
@@ -144,6 +144,70 @@ export interface DateConfig {
   picker: 'calendar' | 'selects' | 'native';
   defaultValue?: { kind: 'today' } | { kind: 'fixed'; date: IsoDate };
   limits?: DateLimits;
+}
+/** Inclusive calendar span; `end` must not precede `start`. */
+export interface DateRangeConfig {
+  pattern: DatePattern;
+  picker: 'calendar' | 'selects' | 'native';
+  allowSameDay: boolean;
+  minSpanDays?: number;
+  maxSpanDays?: number;
+  limits?: DateLimits;
+}
+export interface MatchingPrompt { id: MatchingPromptId; label: string }
+/** Each prompt maps to one option; `exclusive` forbids sharing an option. */
+export interface MatchingConfig {
+  prompts: MatchingPrompt[];
+  options: ChoiceOption[];
+  exclusive: boolean;
+  shuffle?: boolean;
+}
+export interface LikertStatement { id: LikertStatementId; label: string }
+/** One integer score per statement, from `min` to `max`. */
+export interface LikertConfig {
+  statements: LikertStatement[];
+  min: 1;
+  max: number;
+  lowLabel?: string;
+  highLabel?: string;
+}
+/** Integers on options that must add up to `target`. */
+export interface ConstantSumConfig {
+  options: ChoiceOption[];
+  target: number;
+  allowZero: boolean;
+}
+/** Best and worst of the listed options (MaxDiff). */
+export interface MaxDiffConfig {
+  options: ChoiceOption[];
+  shuffle?: boolean;
+}
+export interface CardSortItem { id: CardItemId; label: string }
+export interface CardSortBucket { id: CardBucketId; label: string }
+/** Closed card sort: each item maps to one bucket. */
+export interface CardSortConfig {
+  items: CardSortItem[];
+  buckets: CardSortBucket[];
+  exclusive: boolean;
+}
+export interface SemanticPair { id: SemanticPairId; left: string; right: string }
+/** Bipolar scale: one integer between `min` and `max` per adjective pair. */
+export interface SemanticDifferentialConfig {
+  pairs: SemanticPair[];
+  min: 1;
+  max: number;
+}
+/** Inclusive numeric span; `to` must not be below `from`. */
+export interface NumberRangeConfig {
+  min?: DecimalString;
+  max?: DecimalString;
+  integerOnly?: boolean;
+  allowNegative?: boolean;
+}
+/** Checkboxes on a weekday × time-slot grid. */
+export interface ScheduleGridConfig {
+  weekdays: Weekday[];
+  slots: IsoTime[];
 }
 export interface DateTimeConfig {
   pattern: DatePattern; hourCycle: 'h12' | 'h23'; minuteStep: 1 | 5 | 10 | 15 | 30;
@@ -347,8 +411,10 @@ export interface SectionConfig {
 export interface BlockConfigMap {
   short_text: ShortTextConfig; long_text: LongTextConfig; full_name: FullNameConfig; email: EmailConfig;
   phone: PhoneConfig; address: AddressConfig; number: NumberConfig; url: UrlConfig;
-  single_choice: SingleChoiceConfig; multi_choice: MultiChoiceConfig; date: DateConfig; datetime: DateTimeConfig;
+  single_choice: SingleChoiceConfig; multi_choice: MultiChoiceConfig; date: DateConfig; date_range: DateRangeConfig; datetime: DateTimeConfig;
   time: TimeConfig; rating: RatingConfig; linear_scale: LinearScaleConfig; nps: NpsConfig; ranking: RankingConfig;
+  matching: MatchingConfig; likert: LikertConfig; constant_sum: ConstantSumConfig; maxdiff: MaxDiffConfig; card_sort: CardSortConfig;
+  semantic_differential: SemanticDifferentialConfig; number_range: NumberRangeConfig; schedule_grid: ScheduleGridConfig;
   matrix: MatrixConfig; repeating_group: RepeatingGroupConfig; file_upload: FileUploadConfig; signature: SignatureConfig;
   hidden: HiddenConfig; consent: ConsentConfig; payment: PaymentConfig; appointment: AppointmentConfig;
   calculation: CalculationConfig; context: ContextConfig; unique_id: UniqueIdConfig; captcha: CaptchaConfig;

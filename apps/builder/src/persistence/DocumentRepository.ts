@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /*
- * Where the builder keeps its forms. IndexedDbRepository keeps them in this browser; WP-1.06 adds an ApiRepository
- * behind the same interface and keeps IndexedDB as the offline cache.
+ * Where the builder keeps its forms. CachingApiRepository writes the v2 definition to Postgres and keeps IndexedDB
+ * as the offline cache plus local FormOps (open / closed / password). Tests pass a MemoryRepository.
  */
 
 /** The stored document's shape: a v2 `FormDefinition`. Drafts an older build saved as `v1` are migrated on load. */

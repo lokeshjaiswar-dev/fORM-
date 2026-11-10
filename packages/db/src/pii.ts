@@ -52,6 +52,16 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     retainBasis: 'org lifetime; on account deletion owner_user_id passes to an org owner, updated_by keeps the pseudonymous id',
   },
   form_drafts: { columns: ['draft', 'updated_by'], erase: 'delete', retainBasis: 'with the form' },
+  form_versions: {
+    columns: ['definition', 'published_by'],
+    erase: 'delete',
+    retainBasis: 'with the form; immutable after publish',
+  },
+  form_submissions: {
+    columns: ['answers', 'fields'],
+    erase: 'delete',
+    retainBasis: 'with the form or retention.sweep / dsr.execute',
+  },
   audit_pending: { columns: ['event'], erase: 'ttl', retainBasis: 'seconds: moved into audit_log by audit.chain' },
   audit_log: {
     columns: ['actor_id', 'impersonator_id', 'session_id', 'api_key_id', 'actor_ip_hash', 'actor_ua', 'metadata'],

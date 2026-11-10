@@ -56,6 +56,8 @@ describe('FormDesignPanel', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Form design' }));
     expect(screen.getByRole('dialog', { name: 'Form design' })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Logic' }));
+    expect(screen.getByText(/When answers match/)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Submit' }));
     expect(screen.getByLabelText('Password (optional)')).toHaveValue('');
     await user.click(screen.getByRole('button', { name: 'Outside' }));

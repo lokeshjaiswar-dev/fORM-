@@ -1,6 +1,6 @@
 import {
-  AlignLeft, Briefcase, Calendar, CalendarClock, Camera, CheckSquare, ChevronDown, ChevronsUpDown, CircleDot, Clock, EyeOff, FilePlus, Files, Gauge, Globe, GraduationCap, Hash, Heading1, Heading2, Heading3, Link, ListFilter, ListPlus, Shield,
-  ListOrdered, Mail, MapPin, Minus, Paperclip, PenLine, Phone, ShoppingCart, Smile, Square, Star, Table, Text, Type, User, UserPlus, Users, type LucideIcon,
+  AlignLeft, ArrowLeftRight, Briefcase, Calendar, CalendarClock, CalendarDays, CalendarRange, Camera, CheckSquare, ChevronDown, ChevronsLeftRight, ChevronsUpDown, CircleDot, Clock, Columns3, EyeOff, FilePlus, Files, Gauge, GitCompare, Globe, GraduationCap, Hash, Heading1, Heading2, Heading3, Link, ListFilter, ListPlus, Percent, Scale, Shield,
+  ListOrdered, Mail, MapPin, Minus, Paperclip, PenLine, Phone, Rows3, ShoppingCart, Smile, Square, Star, Table, Text, Type, User, UserPlus, Users, type LucideIcon,
 } from 'lucide-react';
 
 /*
@@ -25,6 +25,15 @@ export const ICONS: Readonly<Record<string, LucideIcon>> = {
   'check-square': CheckSquare,
   'list-filter': ListFilter,
   'calendar': Calendar,
+  'calendar-range': CalendarRange,
+  'calendar-days': CalendarDays,
+  'arrow-left-right': ArrowLeftRight,
+  'chevrons-left-right': ChevronsLeftRight,
+  'git-compare': GitCompare,
+  'rows-3': Rows3,
+  'percent': Percent,
+  'scale': Scale,
+  'columns-3': Columns3,
   'clock': Clock,
   'star': Star,
   'gauge': Gauge,

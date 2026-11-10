@@ -1,7 +1,11 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { loadSession } from '@/auth/client';
 import { Toaster, TooltipProvider } from '@dmacq/ui';
 import { BuilderPage } from '@/pages/BuilderPage';
+import { PublicFillPage } from '@/pages/PublicFillPage';
 import { FormsPage } from '@/pages/FormsPage';
+import { ResponsesPage } from '@/pages/ResponsesPage';
 import { MagicLinkPage, VerifyEmailPage } from '@/pages/auth/LinkPages';
 import { MfaPage } from '@/pages/auth/MfaPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPages';
@@ -15,11 +19,14 @@ import { InvitePage } from '@/pages/org/InvitePage';
 import { MembersPage } from '@/pages/org/MembersPage';
 import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
+import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/f/:slug" element={<PublicFillPage />} />
       <Route path="/forms" element={<FormsPage />} />
+      <Route path="/forms/:id/responses" element={<ResponsesPage />} />
       <Route path="/builder/:id/preview?" element={<BuilderPage />} />
       <Route path="/auth/sign-in" element={<SignInPage />} />
       <Route path="/auth/sign-up" element={<SignUpPage />} />
@@ -41,14 +48,19 @@ export function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    void loadSession();
+  }, []);
   return (
     <RepositoryProvider>
-      <TooltipProvider>
-        <BrowserRouter>
-          <Toaster position="bottom-right" />
-          <AppRoutes />
-        </BrowserRouter>
-      </TooltipProvider>
+      <SubmissionsProvider>
+        <TooltipProvider>
+          <BrowserRouter>
+            <Toaster position="bottom-right" />
+            <AppRoutes />
+          </BrowserRouter>
+        </TooltipProvider>
+      </SubmissionsProvider>
     </RepositoryProvider>
   );
 }

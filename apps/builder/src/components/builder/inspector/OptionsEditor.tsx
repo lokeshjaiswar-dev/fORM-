@@ -23,7 +23,7 @@ const M = defineMessages('builder', {
   'options.codes_hint': 'Answers store each option’s id, never its label: renaming an option keeps its answers and its code.',
 });
 
-type ChoiceBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'> | BlockOf<'ranking'>;
+type ChoiceBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'> | BlockOf<'ranking'> | BlockOf<'matching'> | BlockOf<'constant_sum'> | BlockOf<'maxdiff'>;
 
 /**
  * Edits a choice block's options. An option's id is created once and never derived from its label, and its export
@@ -114,18 +114,20 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
         ))}
       </ul>
       <p className="text-[12px] text-muted-foreground">{t(M['options.codes_hint'])}</p>
-      {block.type !== 'ranking' ? (
+      {block.type !== 'ranking' && block.type !== 'matching' && block.type !== 'constant_sum' && block.type !== 'maxdiff' ? (
         <ToggleRow
           label={t(M['options.other'])}
           checked={block.config.other?.enabled === true}
           onChange={(on) => updateBlock(block.id, { config: { ...block.config, other: on ? { enabled: true, textRequired: false } : undefined } })}
         />
       ) : null}
-      <ToggleRow
-        label={t(M['options.shuffle'])}
-        checked={block.type === 'ranking' ? block.config.shuffle === true : block.config.shuffle !== undefined && block.config.shuffle !== false}
-        onChange={(on) => updateBlock(block.id, { config: { ...block.config, shuffle: on ? (block.type === 'ranking' ? true : { keepLast: 0 }) : undefined } })}
-      />
+      {block.type !== 'constant_sum' ? (
+        <ToggleRow
+          label={t(M['options.shuffle'])}
+          checked={block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? block.config.shuffle === true : block.config.shuffle !== undefined && block.config.shuffle !== false}
+          onChange={(on) => updateBlock(block.id, { config: { ...block.config, shuffle: on ? (block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? true : { keepLast: 0 }) : undefined } })}
+        />
+      ) : null}
     </div>
   );
 }

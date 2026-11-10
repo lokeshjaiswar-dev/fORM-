@@ -366,6 +366,11 @@ describe('OpenAPI', () => {
       '/v1/auth/verify-email',
       '/v1/csp-reports',
       '/v1/forms',
+      '/v1/forms/{formId}/submissions',
+      '/v1/forms/{formId}/submissions/{id}',
+      '/v1/forms/{id}/draft',
+      '/v1/forms/{id}/live',
+      '/v1/forms/{id}/publish',
       '/v1/invites/accept',
       '/v1/invites/lookup',
       '/v1/me',
@@ -386,6 +391,8 @@ describe('OpenAPI', () => {
       '/v1/org/members/{userId}/access-link',
       '/v1/org/settings',
       '/v1/orgs',
+      '/v1/p/{slug}',
+      '/v1/p/{slug}/submissions',
       '/v1/privacy/notice',
     ]);
     expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);

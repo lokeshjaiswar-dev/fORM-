@@ -288,6 +288,15 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
       `insert into form_drafts (form_id, org_id, draft, schema_version, size_bytes, updated_by) values ($1, $2, '{"blocks":[]}', 2, 13, $3)`,
       [formId, s.orgId, s.ownerId],
     );
+    await owner.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash)
+       values ($1, $2, $3, 1, 2, $4, '{}', '{}', '0')`,
+      [randomUUID(), s.orgId, formId, s.ownerId],
+    );
+    await owner.query(
+      `insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, '{}', '[]')`,
+      [randomUUID(), s.orgId, formId],
+    );
   }
   await owner.query(
     `insert into sessions (id, token_hash, user_id, mfa_level, idle_expires_at, absolute_expires_at)

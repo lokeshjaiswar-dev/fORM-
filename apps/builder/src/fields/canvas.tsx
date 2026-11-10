@@ -50,6 +50,21 @@ const M = defineMessages('builder', {
   'canvas.name.prefix': 'Prefix',
   'canvas.name.suffix': 'Suffix',
   'canvas.date': 'Pick a date',
+  'canvas.date_start': 'Start date',
+  'canvas.date_end': 'End date',
+  'canvas.match': 'Match…',
+  'canvas.best': 'Best',
+  'canvas.worst': 'Worst',
+  'canvas.group': 'Group…',
+  'canvas.number_from': 'From',
+  'canvas.number_to': 'To',
+  'canvas.day_0': 'Sun',
+  'canvas.day_1': 'Mon',
+  'canvas.day_2': 'Tue',
+  'canvas.day_3': 'Wed',
+  'canvas.day_4': 'Thu',
+  'canvas.day_5': 'Fri',
+  'canvas.day_6': 'Sat',
   'canvas.time': 'Pick a time',
   'canvas.heading': 'Heading',
   'canvas.paragraph': 'Type something…',
@@ -58,6 +73,16 @@ const M = defineMessages('builder', {
   'canvas.repeat_remove': 'Remove this field',
   'canvas.question': 'Type a question',
 });
+
+const DAY_LABEL = {
+  0: M['canvas.day_0'],
+  1: M['canvas.day_1'],
+  2: M['canvas.day_2'],
+  3: M['canvas.day_3'],
+  4: M['canvas.day_4'],
+  5: M['canvas.day_5'],
+  6: M['canvas.day_6'],
+} as const;
 
 const headingSize = { 1: 'text-[32px]', 2: 'text-[24px]', 3: 'text-[20px]' } as const;
 const NAME_PART: Record<NamePart, typeof M['canvas.name.first']> = {
@@ -116,6 +141,12 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   multi_choice: ({ block }) =>
     block.config.display === 'dropdown' ? <Select block={block} placeholder={block.config.placeholder} /> : <OptionList options={block.config.options} shape="square" other={block.config.other?.enabled === true} />,
   date: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.date'])} · ${block.config.pattern}`} />,
+  date_range: ({ block }) => (
+    <div className="grid grid-cols-2 gap-3 pt-1">
+      <TextBox block={block} placeholder={`${t(M['canvas.date_start'])} · ${block.config.pattern}`} />
+      <TextBox block={block} placeholder={`${t(M['canvas.date_end'])} · ${block.config.pattern}`} />
+    </div>
+  ),
   datetime: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.date'])} · ${block.config.pattern}`} />,
   time: ({ block }) => <TextBox block={block} placeholder={`${t(M['canvas.time'])} · ${block.config.hourCycle === 'h12' ? '12h' : '24h'}`} />,
   rating: ({ block }) => (
@@ -128,6 +159,144 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   linear_scale: ({ block }) => <Points from={block.config.min} to={block.config.max} low={block.config.lowLabel} high={block.config.highLabel} />,
   nps: ({ block }) => <Points from={0} to={10} low={block.config.lowLabel} high={block.config.highLabel} />,
   ranking: ({ block }) => <OptionList options={block.config.options} shape="square" numbered />,
+  matching: ({ block }) => (
+    <div className="space-y-2 pt-1">
+      {block.config.prompts.map((prompt) => (
+        <div key={prompt.id} className="grid grid-cols-[1fr_1fr] items-center gap-2">
+          <p className="text-[14px]">{prompt.label}</p>
+          <Select block={block} placeholder={t(M['canvas.match'])} />
+        </div>
+      ))}
+    </div>
+  ),
+  constant_sum: ({ block }) => (
+    <div className="space-y-2 pt-1">
+      {block.config.options.map((option) => (
+        <div key={option.id} className="grid grid-cols-[1fr_5rem] items-center gap-2">
+          <p className="text-[14px]">{typeof option.label === 'string' ? option.label : ''}</p>
+          <TextBox block={block} placeholder="0" />
+        </div>
+      ))}
+    </div>
+  ),
+  maxdiff: ({ block }) => (
+    <div className="overflow-x-auto pt-1">
+      <table className="w-full min-w-[240px] border-collapse text-[13px]">
+        <thead>
+          <tr>
+            <th className="p-1 text-center font-medium text-[var(--fr-muted)]">{t(M['canvas.best'])}</th>
+            <th />
+            <th className="p-1 text-center font-medium text-[var(--fr-muted)]">{t(M['canvas.worst'])}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {block.config.options.map((option) => (
+            <tr key={option.id}>
+              <td className="p-1 text-center"><span className="inline-block size-4 rounded-full border" style={{ borderColor: 'var(--fr-inputBorder)' }} /></td>
+              <td className="p-1 text-[15px]">{typeof option.label === 'string' ? option.label : ''}</td>
+              <td className="p-1 text-center"><span className="inline-block size-4 rounded-full border" style={{ borderColor: 'var(--fr-inputBorder)' }} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ),
+  card_sort: ({ block }) => (
+    <div className="space-y-2 pt-1">
+      {block.config.items.map((item) => (
+        <div key={item.id} className="grid grid-cols-[1fr_1fr] items-center gap-2">
+          <p className="text-[14px]">{item.label}</p>
+          <Select block={block} placeholder={t(M['canvas.group'])} />
+        </div>
+      ))}
+    </div>
+  ),
+  semantic_differential: ({ block }) => (
+    <div className="overflow-x-auto pt-1">
+      <table className="w-full min-w-[280px] border-collapse text-[13px]">
+        <thead>
+          <tr>
+            <th className="p-1" />
+            {Array.from({ length: Math.max(2, Math.min(10, block.config.max)) }, (_, i) => (
+              <th key={i} className="p-1 text-center font-medium text-[var(--fr-muted)]">{block.config.min + i}</th>
+            ))}
+            <th className="p-1" />
+          </tr>
+        </thead>
+        <tbody>
+          {block.config.pairs.map((pair) => (
+            <tr key={pair.id}>
+              <td className="p-1 text-[15px]">{pair.left}</td>
+              {Array.from({ length: Math.max(2, Math.min(10, block.config.max)) }, (_, i) => (
+                <td key={i} className="p-1 text-center">
+                  <span className="inline-block size-4 rounded-full border" style={{ borderColor: 'var(--fr-inputBorder)', backgroundColor: 'var(--fr-inputBg)' }} />
+                </td>
+              ))}
+              <td className="p-1 text-[15px]">{pair.right}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ),
+  number_range: ({ block }) => (
+    <div className="grid grid-cols-2 gap-3 pt-1">
+      <TextBox block={block} placeholder={t(M['canvas.number_from'])} prefix={block.config.min} suffix={block.config.max} />
+      <TextBox block={block} placeholder={t(M['canvas.number_to'])} />
+    </div>
+  ),
+  schedule_grid: ({ block }) => (
+    <div className="overflow-x-auto pt-1">
+      <table className="w-full min-w-[240px] border-collapse text-[13px]">
+        <thead>
+          <tr>
+            <th className="p-1" />
+            {block.config.weekdays.map((day) => (
+              <th key={day} className="p-1 text-center font-medium text-[var(--fr-muted)]">{t(DAY_LABEL[day])}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.config.slots.map((slot) => (
+            <tr key={slot}>
+              <td className="p-1 text-[13px]">{slot}</td>
+              {block.config.weekdays.map((day) => (
+                <td key={day} className="p-1 text-center">
+                  <span className="inline-block size-4 rounded border" style={{ borderColor: 'var(--fr-inputBorder)', backgroundColor: 'var(--fr-inputBg)' }} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ),
+  likert: ({ block }) => (
+    <div className="overflow-x-auto pt-1">
+      <table className="w-full min-w-[280px] border-collapse text-[13px]">
+        <thead>
+          <tr>
+            <th className="w-[28%] p-1" />
+            {Array.from({ length: Math.max(2, Math.min(10, block.config.max)) }, (_, i) => (
+              <th key={i} className="p-1 text-center font-medium text-[var(--fr-muted)]">{block.config.min + i}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.config.statements.map((stmt) => (
+            <tr key={stmt.id}>
+              <td className="p-1 text-[15px]">{stmt.label}</td>
+              {Array.from({ length: Math.max(2, Math.min(10, block.config.max)) }, (_, i) => (
+                <td key={i} className="p-1 text-center">
+                  <span className="inline-block size-4 rounded-full border" style={{ borderColor: 'var(--fr-inputBorder)', backgroundColor: 'var(--fr-inputBg)' }} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ),
   repeating_group: ({ block }) => <RepeatingGroupCanvas block={block} />,
   matrix: ({ block }) => (
     <div className="overflow-x-auto pt-1">

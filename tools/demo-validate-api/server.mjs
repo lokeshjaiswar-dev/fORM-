@@ -7,7 +7,7 @@
  * URL: http://localhost:3001/verify-name
  *
  * The form POSTs { [fieldKey]: "typed value" }. This server accepts any key.
- * Allowed names (case-insensitive): Lokesh, Asha Rao, Priya.
+ * Allowed names (case-insensitive): Lokesh, Asha Rao, Jayesh.
  */
 import http from 'node:http';
 

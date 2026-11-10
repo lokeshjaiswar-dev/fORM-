@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, foreignKey, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, foreignKey, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { bytea, ts, tsNull } from './columns.ts';
 import { orgs } from './identity.ts';
 
@@ -17,6 +17,8 @@ export const forms = pgTable(
     teamId: uuid('team_id').notNull(),
     ownerUserId: uuid('owner_user_id').notNull(),
     title: text('title').notNull(),
+    /** Public fill address (`/f/:slug`). Set on first publish. */
+    slug: text('slug'),
     lifecycle: text('lifecycle', { enum: FORM_LIFECYCLES }).notNull().default('active'),
     trashedAt: tsNull('trashed_at'),
     liveVersionId: uuid('live_version_id'),
@@ -51,4 +53,43 @@ export const formDrafts = pgTable(
     updatedBy: uuid('updated_by').notNull(),
   },
   (t) => [foreignKey({ name: 'form_drafts_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] })],
+);
+
+/** Immutable published snapshot (PUB-01). RLS: `form_versions_tenant`. */
+export const formVersions = pgTable(
+  'form_versions',
+  {
+    id: uuid('id').primaryKey(),
+    orgId: uuid('org_id').notNull(),
+    formId: uuid('form_id').notNull(),
+    number: integer('number').notNull(),
+    schemaVersion: integer('schema_version').notNull(),
+    publishedAt: ts('published_at'),
+    publishedBy: uuid('published_by').notNull(),
+    definition: jsonb('definition').$type<Record<string, unknown>>().notNull(),
+    compiled: jsonb('compiled').$type<Record<string, unknown>>().notNull(),
+    contentHash: text('content_hash').notNull(),
+  },
+  (t) => [
+    foreignKey({ name: 'form_versions_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
+    unique('form_versions_form_number_key').on(t.orgId, t.formId, t.number),
+  ],
+);
+
+/** RLS: `form_submissions_tenant`. */
+export const formSubmissions = pgTable(
+  'form_submissions',
+  {
+    id: uuid('id').primaryKey(),
+    orgId: uuid('org_id').notNull(),
+    formId: uuid('form_id').notNull(),
+    answers: jsonb('answers').$type<Record<string, unknown>>().notNull(),
+    fields: jsonb('fields').$type<Array<{ key: string; label: string; value: string }>>().notNull(),
+    locale: text('locale').notNull().default('en-IN'),
+    submittedAt: ts('submitted_at'),
+  },
+  (t) => [
+    foreignKey({ name: 'form_submissions_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
+    index('form_submissions_form_idx').on(t.orgId, t.formId, t.submittedAt),
+  ],
 );

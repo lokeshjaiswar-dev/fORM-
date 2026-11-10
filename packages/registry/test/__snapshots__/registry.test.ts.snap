@@ -46,10 +46,42 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "card_sort": [
+    {
+      "header": "My card sort Card 1",
+      "suffix": ".item_1",
+    },
+    {
+      "header": "My card sort Card 2",
+      "suffix": ".item_2",
+    },
+    {
+      "header": "My card sort Card 3",
+      "suffix": ".item_3",
+    },
+    {
+      "header": "My card sort Card 4",
+      "suffix": ".item_4",
+    },
+  ],
   "consent": [
     {
       "header": "Terms 1",
       "suffix": ".item_1",
+    },
+  ],
+  "constant_sum": [
+    {
+      "header": "My constant sum Option 1",
+      "suffix": ".option_1",
+    },
+    {
+      "header": "My constant sum Option 2",
+      "suffix": ".option_2",
+    },
+    {
+      "header": "My constant sum Option 3",
+      "suffix": ".option_3",
     },
   ],
   "context": [
@@ -92,6 +124,16 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "date_range": [
+    {
+      "header": "My date range start",
+      "suffix": ".start",
+    },
+    {
+      "header": "My date range end",
+      "suffix": ".end",
+    },
+  ],
   "datetime": [
     {
       "header": "My datetime",
@@ -126,6 +168,20 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "likert": [
+    {
+      "header": "My likert Statement 1",
+      "suffix": ".stmt_1",
+    },
+    {
+      "header": "My likert Statement 2",
+      "suffix": ".stmt_2",
+    },
+    {
+      "header": "My likert Statement 3",
+      "suffix": ".stmt_3",
+    },
+  ],
   "linear_scale": [
     {
       "header": "My linear scale",
@@ -138,6 +194,20 @@ exports[`export headers > match the snapshot 1`] = `
       "suffix": "",
     },
   ],
+  "matching": [
+    {
+      "header": "My matching Item 1",
+      "suffix": ".prompt_1",
+    },
+    {
+      "header": "My matching Item 2",
+      "suffix": ".prompt_2",
+    },
+    {
+      "header": "My matching Item 3",
+      "suffix": ".prompt_3",
+    },
+  ],
   "matrix": [
     {
       "header": "My matrix / Row 1",
@@ -146,6 +216,16 @@ exports[`export headers > match the snapshot 1`] = `
     {
       "header": "My matrix / Row 2",
       "suffix": ".row_2",
+    },
+  ],
+  "maxdiff": [
+    {
+      "header": "My maxdiff best",
+      "suffix": ".best",
+    },
+    {
+      "header": "My maxdiff worst",
+      "suffix": ".worst",
     },
   ],
   "multi_choice": [
@@ -174,6 +254,16 @@ exports[`export headers > match the snapshot 1`] = `
     {
       "header": "My number",
       "suffix": "",
+    },
+  ],
+  "number_range": [
+    {
+      "header": "My number range from",
+      "suffix": ".from",
+    },
+    {
+      "header": "My number range to",
+      "suffix": ".to",
     },
   ],
   "phone": [
@@ -216,6 +306,82 @@ exports[`export headers > match the snapshot 1`] = `
     {
       "header": "My repeating group",
       "suffix": "",
+    },
+  ],
+  "schedule_grid": [
+    {
+      "header": "My schedule grid 1 09:00",
+      "suffix": ".1_0900",
+    },
+    {
+      "header": "My schedule grid 1 12:00",
+      "suffix": ".1_1200",
+    },
+    {
+      "header": "My schedule grid 1 15:00",
+      "suffix": ".1_1500",
+    },
+    {
+      "header": "My schedule grid 2 09:00",
+      "suffix": ".2_0900",
+    },
+    {
+      "header": "My schedule grid 2 12:00",
+      "suffix": ".2_1200",
+    },
+    {
+      "header": "My schedule grid 2 15:00",
+      "suffix": ".2_1500",
+    },
+    {
+      "header": "My schedule grid 3 09:00",
+      "suffix": ".3_0900",
+    },
+    {
+      "header": "My schedule grid 3 12:00",
+      "suffix": ".3_1200",
+    },
+    {
+      "header": "My schedule grid 3 15:00",
+      "suffix": ".3_1500",
+    },
+    {
+      "header": "My schedule grid 4 09:00",
+      "suffix": ".4_0900",
+    },
+    {
+      "header": "My schedule grid 4 12:00",
+      "suffix": ".4_1200",
+    },
+    {
+      "header": "My schedule grid 4 15:00",
+      "suffix": ".4_1500",
+    },
+    {
+      "header": "My schedule grid 5 09:00",
+      "suffix": ".5_0900",
+    },
+    {
+      "header": "My schedule grid 5 12:00",
+      "suffix": ".5_1200",
+    },
+    {
+      "header": "My schedule grid 5 15:00",
+      "suffix": ".5_1500",
+    },
+  ],
+  "semantic_differential": [
+    {
+      "header": "My semantic differential Low 1–High 1",
+      "suffix": ".pair_1",
+    },
+    {
+      "header": "My semantic differential Low 2–High 2",
+      "suffix": ".pair_2",
+    },
+    {
+      "header": "My semantic differential Low 3–High 3",
+      "suffix": ".pair_3",
     },
   ],
   "short_text": [
@@ -337,6 +503,17 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "": "number",
     },
   },
+  "card_sort": {
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "choices",
+    },
+  },
   "consent": {
     "operators": {
       "boolean": [
@@ -348,6 +525,24 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "boolean",
+    },
+  },
+  "constant_sum": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
     },
   },
   "context": {
@@ -393,6 +588,26 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "date",
+    },
+  },
+  "date_range": {
+    "operators": {
+      "date": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "before",
+        "after",
+        "on_or_before",
+        "on_or_after",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "date",
+      "end": "date",
+      "start": "date",
     },
   },
   "datetime": {
@@ -496,6 +711,24 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "": "text",
     },
   },
+  "likert": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+    },
+  },
   "linear_scale": {
     "operators": {
       "number": [
@@ -533,6 +766,17 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "": "text",
     },
   },
+  "matching": {
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "choices",
+    },
+  },
   "matrix": {
     "operators": {
       "number": [
@@ -542,6 +786,17 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "number",
+    },
+  },
+  "maxdiff": {
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "choices",
     },
   },
   "multi_choice": {
@@ -624,6 +879,26 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "": "number",
     },
   },
+  "number_range": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+      "from": "number",
+      "to": "number",
+    },
+  },
   "phone": {
     "operators": {
       "text": [
@@ -691,6 +966,35 @@ exports[`operator matrix > matches the snapshot 1`] = `
     "paths": {
       "": "number",
       "count": "number",
+    },
+  },
+  "schedule_grid": {
+    "operators": {
+      "choices": [
+        "is_answered",
+        "is_not_answered",
+      ],
+    },
+    "paths": {
+      "": "choices",
+    },
+  },
+  "semantic_differential": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
     },
   },
   "short_text": {

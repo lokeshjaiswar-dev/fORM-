@@ -5,7 +5,7 @@ export type Phase = 'P0' | 'P1' | 'P2';
 /** Types with a full registry entry: palette, answer schema, operators, export and lint. */
 export const AVAILABLE_TYPES = [
   'short_text', 'long_text', 'full_name', 'email', 'phone', 'address', 'number', 'url', 'single_choice', 'multi_choice',
-  'date', 'datetime', 'time', 'rating', 'linear_scale', 'nps', 'ranking', 'matrix', 'repeating_group', 'file_upload',
+  'date', 'date_range', 'datetime', 'time', 'rating', 'linear_scale', 'nps', 'ranking', 'matching', 'likert', 'constant_sum', 'maxdiff', 'card_sort', 'semantic_differential', 'number_range', 'schedule_grid', 'matrix', 'repeating_group', 'file_upload',
   'signature', 'hidden', 'consent', 'calculation', 'context', 'unique_id', 'appointment', 'captcha', 'heading',
   'paragraph', 'divider', 'section',
 ] as const satisfies readonly BlockType[];

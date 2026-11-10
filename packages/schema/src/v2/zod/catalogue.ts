@@ -5,7 +5,7 @@ export const VALUE_FIELD_TYPES = [...INPUT_FIELD_TYPES, ...COMPUTED_FIELD_TYPES]
 export const BLOCK_TYPES = [...VALUE_FIELD_TYPES, ...TRANSIENT_BLOCK_TYPES, ...CONTENT_BLOCK_TYPES, ...CONTAINER_BLOCK_TYPES] as const;
 export const REPEATABLE_BLOCK_TYPES = [
   'short_text', 'long_text', 'full_name', 'email', 'phone', 'address', 'number', 'url', 'single_choice', 'multi_choice',
-  'date', 'datetime', 'time', 'rating', 'linear_scale', 'nps', 'ranking', 'matrix', 'file_upload', 'signature',
+  'date', 'date_range', 'datetime', 'time', 'rating', 'linear_scale', 'nps', 'ranking', 'matching', 'likert', 'constant_sum', 'maxdiff', 'card_sort', 'semantic_differential', 'number_range', 'schedule_grid', 'matrix', 'file_upload', 'signature',
   'calculation', 'heading', 'paragraph', 'divider',
 ] as const;
 

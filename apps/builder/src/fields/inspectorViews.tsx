@@ -1,6 +1,6 @@
 import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
-import { CONTEXT_SOURCES, DATE_PATTERNS, type BlockOf, type ContextSource, type DecimalString, type MatrixColumnId, type MatrixRowId, type SchemaLike } from '@form/schema';
+import { CONTEXT_SOURCES, DATE_PATTERNS, type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type SchemaLike, type SemanticPairId, type Weekday } from '@form/schema';
 import { patternProblem } from '@form/validation';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
@@ -108,6 +108,39 @@ const M = defineMessages('builder', {
   'inspector.matrix_add_column': 'Add column',
   'inspector.matrix_row_n': 'Row {n}',
   'inspector.matrix_column_n': 'Column {n}',
+  'inspector.allow_same_day': 'Allow the same start and end date',
+  'inspector.min_span': 'Minimum span (days)',
+  'inspector.max_span': 'Maximum span (days)',
+  'inspector.matching_exclusive': 'Each option can pair with only one item',
+  'inspector.matching_prompts': 'Items to match',
+  'inspector.matching_add_prompt': 'Add item',
+  'inspector.prompt_n': 'Item {n}',
+  'inspector.likert_statements': 'Statements',
+  'inspector.likert_add_statement': 'Add statement',
+  'inspector.statement_n': 'Statement {n}',
+  'inspector.sum_target': 'Points to allocate',
+  'inspector.sum_allow_zero': 'Allow zero on an option',
+  'inspector.card_items': 'Cards',
+  'inspector.card_add_item': 'Add card',
+  'inspector.card_item_n': 'Card {n}',
+  'inspector.card_buckets': 'Groups',
+  'inspector.card_add_bucket': 'Add group',
+  'inspector.card_bucket_n': 'Group {n}',
+  'inspector.card_exclusive': 'A card can sit in only one group',
+  'inspector.semantic_pairs': 'Adjective pairs',
+  'inspector.semantic_add': 'Add pair',
+  'inspector.semantic_left': 'Left pole',
+  'inspector.semantic_right': 'Right pole',
+  'inspector.schedule_days': 'Weekdays',
+  'inspector.schedule_slots': 'Time slots',
+  'inspector.schedule_add_slot': 'Add slot',
+  'inspector.weekday_0': 'Sunday',
+  'inspector.weekday_1': 'Monday',
+  'inspector.weekday_2': 'Tuesday',
+  'inspector.weekday_3': 'Wednesday',
+  'inspector.weekday_4': 'Thursday',
+  'inspector.weekday_5': 'Friday',
+  'inspector.weekday_6': 'Saturday',
   'inspector.repeat_min': 'Minimum rows',
   'inspector.repeat_max': 'Maximum rows',
   'inspector.repeat_initial': 'Rows shown at start',
@@ -495,6 +528,25 @@ export function DateGeneral({ block }: InspectorProps<'date'>) {
   );
 }
 
+export function DateRangeGeneral({ block }: InspectorProps<'date_range'>) {
+  return (
+    <>
+      <SelectField label={t(M['inspector.date_pattern'])} value={block.config.pattern} options={DATE_PATTERNS.map((p) => ({ value: p, label: p }))} onChange={(pattern) => setConfig(block, { pattern })} />
+      <SelectField
+        label={t(M['inspector.picker'])}
+        value={block.config.picker}
+        options={[
+          { value: 'calendar', label: t(M['inspector.picker_calendar']) },
+          { value: 'selects', label: t(M['inspector.picker_selects']) },
+          { value: 'native', label: t(M['inspector.picker_native']) },
+        ]}
+        onChange={(picker) => setConfig(block, { picker })}
+      />
+      <ToggleRow label={t(M['inspector.allow_same_day'])} checked={block.config.allowSameDay} onChange={(allowSameDay) => setConfig(block, { allowSameDay })} />
+    </>
+  );
+}
+
 export function TimeGeneral({ block }: InspectorProps<'time'>) {
   return (
     <>
@@ -519,7 +571,7 @@ export function TimeGeneral({ block }: InspectorProps<'time'>) {
   );
 }
 
-export function EndLabels({ block }: { block: BlockOf<'rating' | 'linear_scale' | 'nps'> }) {
+export function EndLabels({ block }: { block: BlockOf<'rating' | 'linear_scale' | 'nps' | 'likert'> }) {
   return (
     <>
       <TextField label={t(M['inspector.low_label'])} value={block.config.lowLabel} onChange={(v) => setConfig(block, { lowLabel: text(v) })} />
@@ -791,7 +843,7 @@ export function DividerGeneral({ block }: InspectorProps<'divider'>) {
   );
 }
 
-export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking'> }) {
+export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'> }) {
   return <OptionsEditor block={block} />;
 }
 
@@ -835,6 +887,186 @@ function LabelList({
         </div>
       ))}
     </div>
+  );
+}
+
+export function MatchingGeneral({ block }: InspectorProps<'matching'>) {
+  return (
+    <>
+      <ToggleRow label={t(M['inspector.matching_exclusive'])} checked={block.config.exclusive} onChange={(exclusive) => setConfig(block, { exclusive })} />
+      <LabelList
+        title={t(M['inspector.matching_prompts'])}
+        addLabel={t(M['inspector.matching_add_prompt'])}
+        items={block.config.prompts}
+        onChange={(prompts) => setConfig(block, { prompts: prompts.map((row, i) => ({ id: row.id as MatchingPromptId, label: row.label || t(M['inspector.prompt_n'], { n: i + 1 }) })) })}
+      />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function LikertGeneral({ block }: InspectorProps<'likert'>) {
+  return (
+    <>
+      <SelectField label={t(M['inspector.scale_max'])} value={String(block.config.max)} options={range(2, 10)} onChange={(v) => setConfig(block, { max: Number(v) })} />
+      <EndLabels block={block} />
+      <LabelList
+        title={t(M['inspector.likert_statements'])}
+        addLabel={t(M['inspector.likert_add_statement'])}
+        items={block.config.statements}
+        onChange={(statements) => setConfig(block, { statements: statements.map((row, i) => ({ id: row.id as LikertStatementId, label: row.label || t(M['inspector.statement_n'], { n: i + 1 }) })) })}
+      />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function ConstantSumGeneral({ block }: InspectorProps<'constant_sum'>) {
+  return (
+    <>
+      <NumberField label={t(M['inspector.sum_target'])} value={block.config.target} parse={parseInteger(1, 10_000)} onChange={(target) => target !== undefined && setConfig(block, { target })} />
+      <ToggleRow label={t(M['inspector.sum_allow_zero'])} checked={block.config.allowZero} onChange={(allowZero) => setConfig(block, { allowZero })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function SemanticDifferentialGeneral({ block }: InspectorProps<'semantic_differential'>) {
+  return (
+    <>
+      <SelectField label={t(M['inspector.scale_max'])} value={String(block.config.max)} options={range(2, 10)} onChange={(v) => setConfig(block, { max: Number(v) })} />
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-medium">{t(M['inspector.semantic_pairs'])}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto px-1 py-0 text-[12px] text-primary"
+            onClick={() => setConfig(block, { pairs: [...block.config.pairs, { id: APP_IDS.newId() as SemanticPairId, left: t(M['inspector.semantic_left']), right: t(M['inspector.semantic_right']) }] })}
+          >
+            {t(M['inspector.semantic_add'])}
+          </Button>
+        </div>
+        {block.config.pairs.map((pair, i) => (
+          <div key={pair.id} className="grid grid-cols-[1fr_1fr_auto] gap-1">
+            <TextField label="" value={pair.left} onChange={(left) => setConfig(block, { pairs: block.config.pairs.map((row, j) => (j === i ? { ...row, left } : row)) })} />
+            <TextField label="" value={pair.right} onChange={(right) => setConfig(block, { pairs: block.config.pairs.map((row, j) => (j === i ? { ...row, right } : row)) })} />
+            {block.config.pairs.length > 1 ? (
+              <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => setConfig(block, { pairs: block.config.pairs.filter((_, j) => j !== i) })}>
+                ×
+              </Button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function NumberRangeValidation({ block }: InspectorProps<'number_range'>) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField label={t(M['inspector.min'])} value={block.config.min} parse={decimal} onChange={(min) => setConfig(block, { min })} />
+        <NumberField label={t(M['inspector.max'])} value={block.config.max} parse={decimal} onChange={(max) => setConfig(block, { max })} />
+      </div>
+      <ToggleRow label={t(M['inspector.integer_only'])} checked={block.config.integerOnly === true} onChange={(on) => setConfig(block, { integerOnly: on || undefined })} />
+      <ToggleRow label={t(M['inspector.allow_negative'])} checked={block.config.allowNegative !== false} onChange={(on) => setConfig(block, { allowNegative: on ? undefined : false })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+const WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
+const WEEKDAY_LABEL = {
+  0: M['inspector.weekday_0'],
+  1: M['inspector.weekday_1'],
+  2: M['inspector.weekday_2'],
+  3: M['inspector.weekday_3'],
+  4: M['inspector.weekday_4'],
+  5: M['inspector.weekday_5'],
+  6: M['inspector.weekday_6'],
+} as const;
+const SLOT = /^\d{2}:\d{2}$/;
+
+export function ScheduleGridGeneral({ block }: InspectorProps<'schedule_grid'>) {
+  const toggleDay = (day: Weekday, on: boolean) => {
+    const weekdays = on ? [...block.config.weekdays, day].sort((a, b) => a - b) : block.config.weekdays.filter((d) => d !== day);
+    if (weekdays.length === 0) return;
+    setConfig(block, { weekdays });
+  };
+  return (
+    <>
+      <div className="space-y-1">
+        <span className="text-[12px] font-medium">{t(M['inspector.schedule_days'])}</span>
+        {WEEKDAYS.map((day) => (
+          <ToggleRow
+            key={day}
+            label={t(WEEKDAY_LABEL[day])}
+            checked={block.config.weekdays.includes(day)}
+            onChange={(on) => toggleDay(day, on)}
+          />
+        ))}
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-medium">{t(M['inspector.schedule_slots'])}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto px-1 py-0 text-[12px] text-primary"
+            onClick={() => setConfig(block, { slots: [...block.config.slots, '09:00' as IsoTime] })}
+          >
+            {t(M['inspector.schedule_add_slot'])}
+          </Button>
+        </div>
+        {block.config.slots.map((slot, i) => (
+          <div key={`${slot}-${i}`} className="flex gap-1">
+            <TextField
+              label=""
+              value={slot}
+              onChange={(raw) => {
+                if (!SLOT.test(raw)) return;
+                setConfig(block, { slots: block.config.slots.map((s, j) => (j === i ? (raw as IsoTime) : s)) });
+              }}
+            />
+            {block.config.slots.length > 1 ? (
+              <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => setConfig(block, { slots: block.config.slots.filter((_, j) => j !== i) })}>
+                ×
+              </Button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
+  return (
+    <>
+      <ToggleRow label={t(M['inspector.card_exclusive'])} checked={block.config.exclusive} onChange={(exclusive) => setConfig(block, { exclusive })} />
+      <LabelList
+        title={t(M['inspector.card_items'])}
+        addLabel={t(M['inspector.card_add_item'])}
+        items={block.config.items}
+        onChange={(items) => setConfig(block, { items: items.map((row, i) => ({ id: row.id as CardItemId, label: row.label || t(M['inspector.card_item_n'], { n: i + 1 }) })) })}
+      />
+      <LabelList
+        title={t(M['inspector.card_buckets'])}
+        addLabel={t(M['inspector.card_add_bucket'])}
+        items={block.config.buckets}
+        onChange={(buckets) => {
+          if (buckets.length < 2) return;
+          setConfig(block, { buckets: buckets.map((row, i) => ({ id: row.id as CardBucketId, label: row.label || t(M['inspector.card_bucket_n'], { n: i + 1 }) })) });
+        }}
+      />
+      <ConfigProblem block={block} />
+    </>
   );
 }
 

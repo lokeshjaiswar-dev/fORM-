@@ -212,6 +212,19 @@ const CASES: Case[] = [
     expected: { type: 'date', value: '2026-10-21' } as AnswerValue,
   },
   {
+    name: 'date_range',
+    block: field('date_range', 'q', { required: true }),
+    answer: async () => {
+      fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-10-21' } });
+      fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-10-24' } });
+    },
+    clear: async () => {
+      fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('End date'), { target: { value: '' } });
+    },
+    expected: { type: 'date_range', value: { start: '2026-10-21', end: '2026-10-24' } } as AnswerValue,
+  },
+  {
     name: 'time',
     block: field('time', 'q', { required: true }),
     answer: async () => void fireEvent.change(screen.getByLabelText(/q/), { target: { value: '09:30' } }),
@@ -261,6 +274,113 @@ const CASES: Case[] = [
     answer: (user) => user.click(screen.getByRole('button', { name: 'Move Option 1 down' })),
     clear: null,
     expected: { type: 'ranking', value: ['option_2', 'option_1', 'option_3'] } as AnswerValue,
+  },
+  {
+    name: 'matching',
+    block: field('matching', 'q', { required: true }),
+    answer: async (user) => {
+      await user.selectOptions(screen.getByLabelText('Item 1'), 'option_1');
+      await user.selectOptions(screen.getByLabelText('Item 2'), 'option_2');
+      await user.selectOptions(screen.getByLabelText('Item 3'), 'option_3');
+    },
+    clear: async (user) => {
+      await user.selectOptions(screen.getByLabelText('Item 1'), '');
+      await user.selectOptions(screen.getByLabelText('Item 2'), '');
+      await user.selectOptions(screen.getByLabelText('Item 3'), '');
+    },
+    expected: { type: 'matching', value: { prompt_1: 'option_1', prompt_2: 'option_2', prompt_3: 'option_3' } } as AnswerValue,
+  },
+  {
+    name: 'likert',
+    block: field('likert', 'q', { required: true }),
+    answer: async (user) => {
+      const radios = screen.getAllByRole('radio');
+      await user.click(radios[0]!);
+      await user.click(radios[5]!);
+      await user.click(radios[10]!);
+    },
+    clear: null,
+    expected: { type: 'likert', value: { stmt_1: 1, stmt_2: 1, stmt_3: 1 } } as AnswerValue,
+  },
+  {
+    name: 'constant_sum',
+    block: field('constant_sum', 'q', { required: true }),
+    answer: async (user) => {
+      await user.type(screen.getByLabelText('Option 1'), '40');
+      await user.type(screen.getByLabelText('Option 2'), '30');
+      await user.type(screen.getByLabelText('Option 3'), '30');
+    },
+    clear: async (user) => {
+      await user.clear(screen.getByLabelText('Option 1'));
+      await user.clear(screen.getByLabelText('Option 2'));
+      await user.clear(screen.getByLabelText('Option 3'));
+    },
+    expected: { type: 'constant_sum', value: { option_1: 40, option_2: 30, option_3: 30 } } as AnswerValue,
+  },
+  {
+    name: 'maxdiff',
+    block: field('maxdiff', 'q', { required: true }),
+    answer: async (user) => {
+      await user.click(screen.getByRole('radio', { name: 'Best: Option 1' }));
+      await user.click(screen.getByRole('radio', { name: 'Worst: Option 3' }));
+    },
+    clear: null,
+    expected: { type: 'maxdiff', value: { best: 'option_1', worst: 'option_3' } } as AnswerValue,
+  },
+  {
+    name: 'card_sort',
+    block: field('card_sort', 'q', { required: true }),
+    answer: async (user) => {
+      await user.selectOptions(screen.getByLabelText('Card 1'), 'bucket_1');
+      await user.selectOptions(screen.getByLabelText('Card 2'), 'bucket_2');
+      await user.selectOptions(screen.getByLabelText('Card 3'), 'bucket_3');
+      await user.selectOptions(screen.getByLabelText('Card 4'), 'bucket_1');
+    },
+    clear: async (user) => {
+      await user.selectOptions(screen.getByLabelText('Card 1'), '');
+      await user.selectOptions(screen.getByLabelText('Card 2'), '');
+      await user.selectOptions(screen.getByLabelText('Card 3'), '');
+      await user.selectOptions(screen.getByLabelText('Card 4'), '');
+    },
+    expected: { type: 'card_sort', value: { item_1: 'bucket_1', item_2: 'bucket_2', item_3: 'bucket_3', item_4: 'bucket_1' } } as AnswerValue,
+  },
+  {
+    name: 'semantic_differential',
+    block: field('semantic_differential', 'q', { required: true }),
+    answer: async (user) => {
+      const radios = screen.getAllByRole('radio');
+      await user.click(radios[0]!);
+      await user.click(radios[7]!);
+      await user.click(radios[14]!);
+    },
+    clear: null,
+    expected: { type: 'semantic_differential', value: { pair_1: 1, pair_2: 1, pair_3: 1 } } as AnswerValue,
+  },
+  {
+    name: 'number_range',
+    block: field('number_range', 'q', { required: true }),
+    answer: async (user) => {
+      await user.type(screen.getByLabelText('From'), '2');
+      await user.type(screen.getByLabelText('To'), '9');
+    },
+    clear: async (user) => {
+      await user.clear(screen.getByLabelText('From'));
+      await user.clear(screen.getByLabelText('To'));
+    },
+    expected: { type: 'number_range', value: { from: '2', to: '9' } } as AnswerValue,
+  },
+  {
+    name: 'schedule_grid',
+    block: field('schedule_grid', 'q', { required: true }),
+    answer: async (user) => {
+      await user.click(screen.getByRole('checkbox', { name: 'Monday 09:00' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Tuesday 12:00' }));
+    },
+    clear: async (user) => {
+      await user.click(screen.getByRole('checkbox', { name: 'Monday 09:00' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Tuesday 12:00' }));
+    },
+    expected: { type: 'schedule_grid', value: [{ weekday: 1, time: '09:00' }, { weekday: 2, time: '12:00' }] } as AnswerValue,
   },
   {
     name: 'repeating_group',

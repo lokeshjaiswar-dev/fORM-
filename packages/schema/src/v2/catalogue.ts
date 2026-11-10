@@ -15,12 +15,21 @@ export const INPUT_FIELD_TYPES = [
   'single_choice',   // FLD-10/12/14/15 (display: radio | dropdown | image)
   'multi_choice',    // FLD-11/13/15  (display: checkbox | dropdown | image)
   'date',            // FLD-16/17
+  'date_range',      // start/end dates with span rules
   'datetime',        // FLD-18
   'time',            // FLD-19 (range mode)
   'rating',          // FLD-20
   'linear_scale',    // FLD-21
   'nps',             // FLD-22
   'ranking',         // FLD-23
+  'matching',        // pair prompts to options (exclusive)
+  'likert',          // statements × numbered scale
+  'constant_sum',    // allocate a budget across options
+  'maxdiff',         // pick best and worst
+  'card_sort',       // assign items to buckets
+  'semantic_differential', // bipolar adjective pairs
+  'number_range',    // from/to numbers
+  'schedule_grid',   // weekdays × time slots
   'matrix',          // FLD-24
   'repeating_group', // FLD-25
   'file_upload',     // FLD-26/27 (capture)

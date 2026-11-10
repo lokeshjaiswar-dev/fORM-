@@ -176,12 +176,21 @@ importers:
       '@form/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@form/logic':
+        specifier: workspace:*
+        version: link:../../packages/logic
       '@form/observability':
         specifier: workspace:*
         version: link:../../packages/observability
       '@form/ports':
         specifier: workspace:*
         version: link:../../packages/ports
+      '@form/registry':
+        specifier: workspace:*
+        version: link:../../packages/registry
+      '@form/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@node-rs/argon2':
         specifier: 2.2.1
         version: 2.2.1

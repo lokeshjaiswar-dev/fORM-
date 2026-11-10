@@ -2,7 +2,7 @@ import type { _ExactKeys } from './_internal.ts';
 import type { ValueFieldType } from './catalogue.ts';
 import type { AddressPart, ContextSource, NamePart } from './config.ts';
 import type { ScalarValue } from './expr.ts';
-import type { BlockId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, Locale, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, Sha256Hex, TimeZone } from './ids.ts';
+import type { BlockId, CardBucketId, CardItemId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, SemanticPairId, Sha256Hex, TimeZone, Weekday } from './ids.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §15  ANSWERS — tagged by block type; shape = f(type) (I2); absent = unanswered (I9)
@@ -44,12 +44,21 @@ export interface AnswerValueMap {
   single_choice: { optionId: OptionId | null /* null + other = "Other" */; other?: string };
   multi_choice: { optionIds: OptionId[]; other?: string };
   date: IsoDate;
+  date_range: { start: IsoDate; end: IsoDate };
   datetime: { local: IsoLocalDateTime; timeZone: TimeZone; instant: IsoInstant };
   time: { start: IsoTime; end?: IsoTime };
   rating: number;
   linear_scale: number;
   nps: number;
   ranking: OptionId[];
+  matching: Partial<Record<MatchingPromptId, OptionId>>;
+  likert: Partial<Record<LikertStatementId, number>>;
+  constant_sum: Partial<Record<OptionId, number>>;
+  maxdiff: { best: OptionId; worst: OptionId };
+  card_sort: Partial<Record<CardItemId, CardBucketId>>;
+  semantic_differential: Partial<Record<SemanticPairId, number>>;
+  number_range: { from: DecimalString; to: DecimalString };
+  schedule_grid: Array<{ weekday: Weekday; time: IsoTime }>;
   matrix: MatrixValue;
   repeating_group: { rows: Array<{ rowId: GroupRowId; values: Partial<Record<BlockId, StoredAnswer>> }> };   // children may be encrypted
   file_upload: FileRef[];

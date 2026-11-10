@@ -188,3 +188,73 @@ describe('GET /v1/forms (RLS demo)', () => {
     expect(res.json()).toMatchObject({ status: 'ok', checks: { db: { status: 'ok' }, clock: { status: 'skipped' } } });
   });
 });
+
+const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as const;
+const asWrite = (user: string, org: string) => ({ ...as(user, org), ...BROWSER });
+
+describe('form drafts', () => {
+  it('stores the v2 definition and returns it, last write wins unless If-Match is sent', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/forms',
+      headers: asWrite(a.owner, a.id),
+      payload: { title: 'Contact' },
+    });
+    expect(created.statusCode).toBe(200);
+    const { id } = created.json<{ id: string }>();
+    const draft = { schemaVersion: 2, title: 'Contact', blocks: { q1: { type: 'short_text' } } };
+
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/v1/forms/${id}/draft`,
+      headers: asWrite(a.owner, a.id),
+      payload: { draft },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({ draftRev: 1 });
+
+    const got = await app.inject({ url: `/v1/forms/${id}/draft`, headers: as(a.owner, a.id) });
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toMatchObject({ draftRev: 1, schemaVersion: 2, draft });
+
+    const conflict = await app.inject({
+      method: 'PUT',
+      url: `/v1/forms/${id}/draft`,
+      headers: { ...asWrite(a.owner, a.id), 'if-match': '99' },
+      payload: { draft: { ...draft, title: 'Stale' } },
+    });
+    expect(conflict.statusCode).toBe(409);
+
+    const next = await app.inject({
+      method: 'PUT',
+      url: `/v1/forms/${id}/draft`,
+      headers: { ...asWrite(a.owner, a.id), 'if-match': '1' },
+      payload: { draft: { ...draft, title: 'Contact v2' } },
+    });
+    expect(next.statusCode).toBe(200);
+    expect(next.json()).toMatchObject({ draftRev: 2 });
+
+    const list = await app.inject({ url: '/v1/forms?lifecycle=active', headers: as(a.owner, a.id) });
+    expect(list.json<{ items: { id: string; title: string }[] }>().items.find((f) => f.id === id)?.title).toBe('Contact v2');
+  });
+
+  it('lets a viewer read a draft and refuses their write', async () => {
+    const viewer = randomUUID();
+    await owner.query('insert into users (id, email, email_norm) values ($1, $2, $2)', [viewer, 'viewer@acme.test']);
+    await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [a.id, viewer, 'viewer']);
+    const missing = await app.inject({ url: `/v1/forms/${a.forms[0]}/draft`, headers: as(viewer, a.id) });
+    expect(missing.statusCode).toBe(404);
+    const write = await app.inject({
+      method: 'PUT',
+      url: `/v1/forms/${a.forms[0]}/draft`,
+      headers: asWrite(viewer, a.id),
+      payload: { draft: { schemaVersion: 2 } },
+    });
+    expect(write.statusCode).toBe(403);
+  });
+
+  it('does not leak another org’s draft', async () => {
+    const res = await app.inject({ url: `/v1/forms/${a.forms[0]}/draft`, headers: as(b.owner, b.id) });
+    expect(res.statusCode).toBe(404);
+  });
+});

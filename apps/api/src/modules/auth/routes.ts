@@ -11,6 +11,7 @@ import {
   authTokenTake,
   authUserByEmail,
   authUserCredentials,
+  createOrg,
   FIRST_FACTORS,
   PLATFORM_ORG_KEY,
   users,
@@ -49,6 +50,7 @@ import {
 } from './context.ts';
 import { base32Encode, hex, randomToken, tokenHash } from './crypto.ts';
 import { LINK_MINUTES } from './mail.ts';
+import { orgNameSchema, slugFrom, withSuffix } from '../orgs/schemas.ts';
 import { hashPassword, passwordProblem, PASSWORD_PROBLEMS, verifyPassword } from './passwords.ts';
 import { hashRecoveryCode, newRecoveryCodes, normaliseRecoveryCode, RECOVERY_CODE } from './recovery.ts';
 import { openTotpSecret, sealTotpSecret } from './secrets.ts';
@@ -69,7 +71,7 @@ const firstFactorOf = (level: MfaLevel): FirstFactor => {
 };
 
 /**
- * `/v1/auth/*` (architecture §3.3, ADR-0017): sign-up and email verification, password and magic-link sign-in,
+ * `/v1/auth/*` (architecture §3.3, ADR-0017): sign-up (session + first org), password and magic-link sign-in,
  * sign-out, password reset, the TOTP second factor with recovery codes, and TOTP enrolment. Answers that could
  * tell whether an address has an account are the same either way; every outcome is audited on the platform chain.
  */
@@ -117,24 +119,25 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
       config: { auth: 'none' },
       schema: {
         tags,
-        summary: 'Create an account; a verification link is emailed',
+        summary: 'Create an account, first organisation, and session',
         description:
-          'The builder shows the platform privacy notice (`GET /v1/privacy/notice`) and sends the version it showed; a stale version is refused with `NOTICE_OUTDATED`, and the version is recorded with the new account (CMP-21).',
+          'Signs the user in immediately. `orgName` becomes the first tenant (owner). Optional `noticeVersion` must match the current notice when sent.',
         body: z.object({
           email: emailSchema,
           password: passwordSchema,
           name: z.string().trim().min(1).max(200).optional(),
-          noticeVersion: z.string().max(32),
+          orgName: orgNameSchema.optional(),
+          noticeVersion: z.string().max(32).optional(),
         }),
-        response: { 202: accepted },
+        response: { 200: signInResult },
       },
     },
     async (request, reply) => {
-      const { email, password, name, noticeVersion } = request.body;
+      const { email, password, name, orgName, noticeVersion } = request.body;
       const emailNorm = normaliseEmail(email);
       const cl = client(c, request);
       await c.throttle.hit(request, reply, [loginLimit(c, cl, emailNorm)], { ipHash: cl.ipHash });
-      if (noticeVersion !== c.notice.version) {
+      if (noticeVersion !== undefined && noticeVersion !== c.notice.version) {
         await audit.appendDetached(c.auditDb, null, {
           actorKind: 'none',
           actorIpHash: hex(cl.ipHash),
@@ -162,14 +165,27 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
         });
         throw new ProblemError('WEAK_PASSWORD', PASSWORD_PROBLEMS[problem]);
       }
-      await c.throttle.hit(request, reply, [mailLimit(c, emailNorm)], { ipHash: cl.ipHash }, MAIL_LIMIT_DETAIL);
       const id = randomUUID();
       const passwordHash = await hashPassword(password);
-      // The account and the record of the notice it was shown are created together, or not at all.
+      const now = c.now();
       const created = await withUser(c.db, { userId: id, requestId: request.id }, async (tx) => {
-        if (!(await authCreateUser(tx, { id, email: email.trim(), emailNorm, name: name ?? null, locale: null, passwordHash, emailVerified: false }))) return null;
+        if (!(await authCreateUser(tx, { id, email: email.trim(), emailNorm, name: name ?? null, locale: null, passwordHash, emailVerified: true }))) return null;
         await recordNoticeAck(tx, { userId: id, notice: c.notice, context: 'signup', client: cl });
-        const m = await verificationMail(c, tx, { id, email: email.trim(), name: name ?? null });
+        let orgId: string | null = null;
+        if (orgName) {
+          const base = slugFrom(orgName);
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            const nextId = randomUUID();
+            const slug = attempt === 0 ? base : withSuffix(base);
+            const outcome = await createOrg(tx, { id: nextId, slug, name: orgName, userId: id });
+            if (outcome === 'created') {
+              orgId = nextId;
+              break;
+            }
+            if (outcome === 'limit') throw new ProblemError('PLAN_LIMIT_REACHED', 'You own the most orgs one account may own (25).');
+          }
+          if (!orgId) throw new ProblemError('SLUG_TAKEN', 'Could not find a free address for this organisation name. Choose another.');
+        }
         await audit.append(tx, PLATFORM_ORG_KEY, {
           actorKind: 'user',
           actorId: id,
@@ -180,16 +196,11 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
           resourceId: id,
           outcome: 'success',
           requestId: request.id,
-          metadata: { noticeVersion: c.notice.version },
+          metadata: { noticeVersion: c.notice.version, ...(orgId ? { orgId } : {}) },
         });
-        return m;
+        return { orgId };
       });
-      if (created) {
-        setSignupCookie(reply, created.proof);
-        c.mail.send(created.mail);
-      } else {
-        // The same cookie either way, so the answer does not tell whether the address was free.
-        setSignupCookie(reply, randomToken());
+      if (!created) {
         const existing = await authUserByEmail(c.db, emailNorm);
         await audit.appendDetached(c.auditDb, null, {
           actorKind: 'none',
@@ -202,11 +213,24 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
           reason: 'email_taken',
           requestId: request.id,
         });
-        if (existing?.status === 'active') {
-          c.mail.send({ kind: 'account_exists', to: { address: existing.email }, link: `${c.config.auth.builderUrl}/auth/sign-in` });
-        }
+        throw new ProblemError('EMAIL_TAKEN', 'That email address already has an account. Sign in instead.');
       }
-      return reply.code(202).send({ status: 'verification_sent' });
+      const user: AuthUser = {
+        id,
+        email: email.trim(),
+        name: name ?? null,
+        status: 'active',
+        emailVerifiedAt: now,
+        passwordHash,
+        totpEnabledAt: null,
+      };
+      return completeFirstFactor(c, request, reply, {
+        user,
+        factor: 'pwd',
+        method: 'password',
+        presented: await presentedAccount(c, request),
+        activeOrgId: created.orgId,
+      });
     },
   );
 
@@ -386,15 +410,6 @@ export function authRoutes(app: FastifyInstance, c: AuthCtx): void {
         throw new ProblemError('INVALID_CREDENTIALS', 'The email address or password is not right.', undefined, { audited: true });
       }
       if (spent) return stepUp(request, reply, cl, user, emailNorm);
-      if (!user.emailVerifiedAt) {
-        if (!(await c.throttle.spent(request, mailLimit(c, emailNorm), { ipHash: cl.ipHash, userId: user.id }))) {
-          const { mail, proof } = await withUser(c.db, { userId: user.id, requestId: request.id }, (tx) => verificationMail(c, tx, user));
-          setSignupCookie(reply, proof);
-          c.mail.send(mail);
-        }
-        await deniedLogin(request, { userId: user.id, reason: 'email_not_verified', method: 'password' });
-        throw new ProblemError('EMAIL_NOT_VERIFIED', 'Confirm your email address first: we sent you a new link.', undefined, { audited: true });
-      }
       return completeFirstFactor(c, request, reply, { user, factor: 'pwd', method: 'password', presented: await presentedAccount(c, request) });
     },
   );

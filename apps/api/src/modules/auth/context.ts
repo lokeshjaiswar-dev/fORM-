@@ -196,7 +196,7 @@ export async function completeFirstFactor(
   c: AuthCtx,
   request: FastifyRequest,
   reply: FastifyReply,
-  o: { user: AuthUser; factor: FirstFactor; method: SignInMethod; presented: Account | null; inTx?: (tx: Tx) => Promise<void> },
+  o: { user: AuthUser; factor: FirstFactor; method: SignInMethod; presented: Account | null; inTx?: (tx: Tx) => Promise<void>; activeOrgId?: string | null },
 ): Promise<SignInResult> {
   const cl = client(c, request);
   const now = c.now();
@@ -224,7 +224,7 @@ export async function completeFirstFactor(
   const session = await withUser(c.db, { userId: user.id, requestId: request.id }, async (tx) => {
     await o.inTx?.(tx);
     if (o.presented?.session && o.presented.userId === user.id) await revokeSession(tx, o.presented.session.id, 'rotated', now);
-    const s = await issueSession(tx, { userId: user.id, mfaLevel: o.factor, client: cl, now });
+    const s = await issueSession(tx, { userId: user.id, mfaLevel: o.factor, client: cl, now, activeOrgId: o.activeOrgId });
     await tx.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
     await audit.append(tx, PLATFORM_ORG_KEY, {
       actorKind: 'user',

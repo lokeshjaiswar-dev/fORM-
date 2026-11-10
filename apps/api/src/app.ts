@@ -15,6 +15,9 @@ import type { ApiConfig } from './config.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { formRoutes } from './routes/forms.ts';
+import { publicFormRoutes } from './routes/public.ts';
+import { publishRoutes } from './routes/publish.ts';
+import { submissionRoutes } from './routes/submissions.ts';
 import { healthRoutes } from './routes/health.ts';
 import { metaRoutes } from './routes/meta.ts';
 import { createLogMailer, createThrottle, DEFAULT_AUTH_LIMITS, hibpBreachCheck, registerAuthModule, registerCsrfGuard } from './modules/auth/index.ts';
@@ -178,6 +181,9 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     clock: deps.clock ?? cachedClockCheck({ servers: config.ntp.servers, maxOffsetMs: config.ntp.maxOffsetMs, ttlMs: 60_000 }),
   });
   formRoutes(app, { db: handle.db });
+  publishRoutes(app, { db: handle.db });
+  publicFormRoutes(app, { db: handle.db, config });
+  submissionRoutes(app, { db: handle.db });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);
   app.get('/v1/openapi.json', { config: { auth: 'none' }, schema: { hide: true } }, async () => app.swagger());

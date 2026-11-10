@@ -12,6 +12,8 @@ import { Tooltip } from '@/components/Tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
 import { useEdition } from '@/edition/edition';
 import { previewStatus, previewUploader, previewVersion } from '@/lib/preview';
+import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
+import { recordSubmission } from '@/persistence/recordSubmission';
 import { useDoc } from '@/state/documentStore';
 import { useOpsStore } from '@/state/opsStore';
 
@@ -23,6 +25,7 @@ const M = defineMessages('builder', {
   'preview.refused': 'This form cannot be previewed yet.',
   'preview.redirect': 'After submit, respondents go to {url}',
   'preview.open_redirect': 'Open in a new tab',
+  'preview.saved_response': 'Response saved',
 });
 
 const OPEN: RuntimeStatus = { state: 'open' };
@@ -51,6 +54,7 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
   const [redirect, setRedirect] = useState<string | null>(null);
   const [now] = useState(() => new Date().toISOString() as IsoInstant);
   const edition = runtimeEdition(useEdition());
+  const submissions = useOptionalSubmissions();
   const build = useMemo(() => previewVersion(definition, OPEN, now, edition), [definition, now, edition]);
   const session = useMemo(() => ({ startedAt: now, device }), [now, device]);
   const shown = status.state === 'password' && unlocked ? OPEN : status;
@@ -65,6 +69,11 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
       session={session}
       onSubmit={(payload: SubmitPayload) => {
         window.dispatchEvent(new CustomEvent('form-preview-submit', { detail: payload }));
+        if (!submissions) return;
+        void recordSubmission(submissions, definition, payload.answers, payload.locale).then(
+          () => toast.success(t(M['preview.saved_response'])),
+          () => undefined,
+        );
       }}
       onUnlock={(attempt) => {
         if (attempt === password) setUnlocked(true);

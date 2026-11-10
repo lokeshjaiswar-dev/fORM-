@@ -4,7 +4,7 @@ import { ADDRESS_PARTS, CONTEXT_SOURCES, NAME_PARTS, OPTION_PRESETS, TEXT_PRESET
 import { ExprSchema, ExprTypeSchema } from './logic.ts';
 import {
   AssetRefSchema, BlockIdSchema, BrandRefSchema, ConnectionIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema,
-  DecimalStringSchema, HolidayCalendarIdSchema, IsoDateSchema, IsoTimeSchema, LocaleSchema, MatrixColumnIdSchema, MatrixRowIdSchema,
+  CardBucketIdSchema, CardItemIdSchema, DecimalStringSchema, HolidayCalendarIdSchema, IsoDateSchema, IsoTimeSchema, LikertStatementIdSchema, LocaleSchema, MatchingPromptIdSchema, MatrixColumnIdSchema, MatrixRowIdSchema, SemanticPairIdSchema,
   MinorUnitsSchema, OptionIdSchema, OriginSchema, ProductIdSchema, ProductOptionIdSchema, PurposeIdSchema, SafeUrlSchema,
   TextAlignSchema, TimeZoneSchema, WeekdaySchema,
 } from './primitives.ts';
@@ -162,6 +162,61 @@ export const DateConfigSchema = z.strictObject({
   picker: z.enum(['calendar', 'selects', 'native']),
   defaultValue: z.discriminatedUnion('kind', [z.strictObject({ kind: z.literal('today') }), z.strictObject({ kind: z.literal('fixed'), date: IsoDateSchema })]).exactOptional(),
   limits: DateLimitsSchema.exactOptional(),
+});
+export const DateRangeConfigSchema = z.strictObject({
+  pattern: DatePatternSchema,
+  picker: z.enum(['calendar', 'selects', 'native']),
+  allowSameDay: z.boolean(),
+  minSpanDays: count.max(3660).exactOptional(),
+  maxSpanDays: count.max(3660).exactOptional(),
+  limits: DateLimitsSchema.exactOptional(),
+});
+export const MatchingPromptSchema = z.strictObject({ id: MatchingPromptIdSchema, label });
+export const MatchingConfigSchema = z.strictObject({
+  prompts: z.array(MatchingPromptSchema).min(1).max(50),
+  options: z.array(ChoiceOptionSchema).min(1).max(100),
+  exclusive: z.boolean(),
+  shuffle: z.boolean().exactOptional(),
+});
+export const LikertStatementSchema = z.strictObject({ id: LikertStatementIdSchema, label });
+export const LikertConfigSchema = z.strictObject({
+  statements: z.array(LikertStatementSchema).min(1).max(50),
+  min: z.literal(1),
+  max: z.number().int().min(2).max(10),
+  lowLabel: label.exactOptional(),
+  highLabel: label.exactOptional(),
+});
+export const ConstantSumConfigSchema = z.strictObject({
+  options: z.array(ChoiceOptionSchema).min(1).max(50),
+  target: z.number().int().min(1).max(10_000),
+  allowZero: z.boolean(),
+});
+export const MaxDiffConfigSchema = z.strictObject({
+  options: z.array(ChoiceOptionSchema).min(3).max(50),
+  shuffle: z.boolean().exactOptional(),
+});
+export const CardSortItemSchema = z.strictObject({ id: CardItemIdSchema, label });
+export const CardSortBucketSchema = z.strictObject({ id: CardBucketIdSchema, label });
+export const CardSortConfigSchema = z.strictObject({
+  items: z.array(CardSortItemSchema).min(1).max(50),
+  buckets: z.array(CardSortBucketSchema).min(2).max(20),
+  exclusive: z.boolean(),
+});
+export const SemanticPairSchema = z.strictObject({ id: SemanticPairIdSchema, left: label, right: label });
+export const SemanticDifferentialConfigSchema = z.strictObject({
+  pairs: z.array(SemanticPairSchema).min(1).max(50),
+  min: z.literal(1),
+  max: z.number().int().min(2).max(10),
+});
+export const NumberRangeConfigSchema = z.strictObject({
+  min: DecimalStringSchema.exactOptional(),
+  max: DecimalStringSchema.exactOptional(),
+  integerOnly: z.boolean().exactOptional(),
+  allowNegative: z.boolean().exactOptional(),
+});
+export const ScheduleGridConfigSchema = z.strictObject({
+  weekdays: z.array(WeekdaySchema).min(1).max(7),
+  slots: z.array(IsoTimeSchema).min(1).max(24),
 });
 export const DateTimeConfigSchema = z.strictObject({
   pattern: DatePatternSchema,
@@ -422,8 +477,10 @@ export const SectionConfigSchema = z.strictObject({
 export const BLOCK_CONFIG_SCHEMAS = {
   short_text: ShortTextConfigSchema, long_text: LongTextConfigSchema, full_name: FullNameConfigSchema, email: EmailConfigSchema,
   phone: PhoneConfigSchema, address: AddressConfigSchema, number: NumberConfigSchema, url: UrlConfigSchema,
-  single_choice: SingleChoiceConfigSchema, multi_choice: MultiChoiceConfigSchema, date: DateConfigSchema, datetime: DateTimeConfigSchema,
+  single_choice: SingleChoiceConfigSchema, multi_choice: MultiChoiceConfigSchema, date: DateConfigSchema, date_range: DateRangeConfigSchema, datetime: DateTimeConfigSchema,
   time: TimeConfigSchema, rating: RatingConfigSchema, linear_scale: LinearScaleConfigSchema, nps: NpsConfigSchema, ranking: RankingConfigSchema,
+  matching: MatchingConfigSchema, likert: LikertConfigSchema, constant_sum: ConstantSumConfigSchema, maxdiff: MaxDiffConfigSchema, card_sort: CardSortConfigSchema,
+  semantic_differential: SemanticDifferentialConfigSchema, number_range: NumberRangeConfigSchema, schedule_grid: ScheduleGridConfigSchema,
   matrix: MatrixConfigSchema, repeating_group: RepeatingGroupConfigSchema, file_upload: FileUploadConfigSchema, signature: SignatureConfigSchema,
   hidden: HiddenConfigSchema, consent: ConsentConfigSchema, payment: PaymentConfigSchema, appointment: AppointmentConfigSchema,
   calculation: CalculationConfigSchema, context: ContextConfigSchema, unique_id: UniqueIdConfigSchema, captcha: CaptchaConfigSchema,

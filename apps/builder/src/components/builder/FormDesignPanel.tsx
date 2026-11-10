@@ -11,6 +11,7 @@ import { useDoc } from '@/state/documentStore';
 import { Button, Input, Label, SearchInput, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
+import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
 import { applyPreset, applyScheme, COLOR_SCHEMES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
 
 const M = defineMessages('builder', {
@@ -22,6 +23,7 @@ const M = defineMessages('builder', {
   'design.themes': 'Themes',
   'design.layout': 'Layout',
   'design.submit': 'Submit',
+  'design.logic': 'Logic',
   'design.schemes': 'Color palette',
   'design.page': 'Page background',
   'design.form': 'Form surface',
@@ -44,7 +46,7 @@ const M = defineMessages('builder', {
   'design.current': 'Current',
 });
 
-const TABS = ['colors', 'styles', 'themes', 'layout', 'submit'] as const;
+const TABS = ['colors', 'styles', 'themes', 'layout', 'logic', 'submit'] as const;
 type Tab = (typeof TABS)[number];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -132,6 +134,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   : id === 'styles' ? t(M['design.styles'])
                   : id === 'themes' ? t(M['design.themes'])
                   : id === 'layout' ? t(M['design.layout'])
+                  : id === 'logic' ? t(M['design.logic'])
                   : t(M['design.submit']);
                 return (
                   <TabsTrigger key={id} value={id} className="text-[10px] uppercase tracking-wide">
@@ -279,6 +282,8 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   ))}
                 </div>
               ) : null}
+
+              {tab === 'logic' ? <FormLogicChecks /> : null}
 
               {tab === 'submit' ? <SubmissionSettings dark /> : null}
               </TabsContent>

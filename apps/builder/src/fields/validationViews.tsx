@@ -47,6 +47,8 @@ const M = defineMessages('builder', {
   'inspector.other_text_required': 'Require text when Other is chosen',
   'inspector.required_part': 'Require {part}',
   'inspector.config_problem': 'Check this setting: {problem}',
+  'inspector.min_span': 'Minimum span (days)',
+  'inspector.max_span': 'Maximum span (days)',
 });
 
 function setConfig(block: Pick<BlockOf<AvailableType>, 'id' | 'config'>, patch: Readonly<Record<string, unknown>>): void {
@@ -249,6 +251,17 @@ export function DateValidation({ block }: InspectorProps<'date'>) {
   return (
     <>
       <DateLimitsEditor limits={block.config.limits} onChange={(limits) => setConfig(block, { limits })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+export function DateRangeValidation({ block }: InspectorProps<'date_range'>) {
+  return (
+    <>
+      <DateLimitsEditor limits={block.config.limits} onChange={(limits) => setConfig(block, { limits })} />
+      <NumberField label={t(M['inspector.min_span'])} value={block.config.minSpanDays} parse={parseInteger(0, 3660)} onChange={(minSpanDays) => setConfig(block, { minSpanDays })} />
+      <NumberField label={t(M['inspector.max_span'])} value={block.config.maxSpanDays} parse={parseInteger(0, 3660)} onChange={(maxSpanDays) => setConfig(block, { maxSpanDays })} />
       <ConfigProblem block={block} />
     </>
   );

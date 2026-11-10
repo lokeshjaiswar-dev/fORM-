@@ -58,6 +58,20 @@ export async function resolveJobOrg(db: Executor, type: JobResourceType, id: str
   return rows[0]?.org_id ?? null;
 }
 
+export interface ResolvedFormSlug {
+  orgId: string;
+  formId: string;
+  liveVersionId: string;
+}
+
+export async function resolveFormSlug(db: Executor, slug: string): Promise<ResolvedFormSlug | null> {
+  const { rows } = await db.execute<{ org_id: string; form_id: string; live_version_id: string }>(
+    sql`select org_id, form_id, live_version_id from resolve_form_slug(${slug})`,
+  );
+  const row = rows[0];
+  return row ? { orgId: row.org_id, formId: row.form_id, liveVersionId: row.live_version_id } : null;
+}
+
 export async function createPartitions(db: Executor, parent: PartitionedTable, months: number): Promise<string[]> {
   const { rows } = await db.execute<{ name: string }>(sql`select name from create_partitions(${`public.${parent}`}::regclass, ${months}) as name`);
   return rows.map((r) => r.name);

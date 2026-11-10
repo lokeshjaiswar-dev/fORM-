@@ -56,17 +56,14 @@ export function totp(secret: string, offset = 0): string {
 export const PASSWORD = 'violet-anchor-teapot-91';
 export const newEmail = () => `e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`;
 
-/** Sign-up through the builder, then the emailed verification link: the browser ends signed in on the forms list. */
+/** Sign-up through the builder: the browser ends signed in on the forms list, with a first organisation. */
 export async function signUpAndVerify(page: Page, email: string): Promise<void> {
   await page.goto('/auth/sign-up');
   await page.getByLabel('Your name').fill('Asha');
-  await page.getByLabel('Work email').fill(email);
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByLabel('Organisation name').fill('Asha org');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('status')).toContainText(`We sent a link to ${email}`);
-  await page.goto(await mailLink(email, '/auth/verify'));
-  // The link names its account and is used only on the click (no silent sign-in from a link someone else sent).
-  await page.getByRole('button', { name: `Continue as ${email}` }).click();
   await page.waitForURL('**/forms');
   await expect(page.getByRole('navigation', { name: 'Account' })).toContainText(email);
 }

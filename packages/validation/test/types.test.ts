@@ -103,6 +103,15 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     valid: [a.date('2026-10-19')],
     invalid: [[a.date('2025-12-31'), 'f date_out_of_range'], [a.date('2026-10-18'), 'f date_not_allowed'], [a.date('2026-02-30'), 'f invalid_date']],
   },
+  date_range: {
+    block: field('date_range', 'f', { config: { allowSameDay: false, minSpanDays: 1, maxSpanDays: 14 } }),
+    blank: [ans.raw('date_range', { start: '', end: '' })],
+    valid: [ans.raw('date_range', { start: '2026-10-19', end: '2026-10-21' })],
+    invalid: [
+      [ans.raw('date_range', { start: '2026-10-21', end: '2026-10-19' }), 'f.end invalid_format'],
+      [ans.raw('date_range', { start: '2026-10-19', end: '2026-10-19' }), 'f.end invalid_format'],
+    ],
+  },
   time: {
     block: field('time', 'f', { config: { hourCycle: 'h23', minuteStep: 5, window: { from: id<S.IsoTime>('09:00'), to: id<S.IsoTime>('17:00') } } }),
     blank: [ans.raw('time', { start: '' }), ans.raw('time', { start: '', end: '' })],
@@ -132,6 +141,60 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     blank: [ans.ranking()],
     valid: [ans.ranking('a', 'b', 'c')],
     invalid: [[ans.ranking('a', 'b', 'c', 'd'), ['f.3 not_in_options', 'f too_many_selected']], [ans.ranking('a', 'b', 'zz'), 'f.2 not_in_options'], [ans.ranking('a', 'b', 'c', 'c'), ['f.3 invalid_format', 'f too_many_selected']], [ans.ranking('a', 'a', 'b'), 'f.1 invalid_format']],
+  },
+  matching: {
+    block: field('matching', 'f'),
+    blank: [ans.raw('matching', {})],
+    valid: [ans.raw('matching', { prompt_1: 'option_1', prompt_2: 'option_2', prompt_3: 'option_3' })],
+    invalid: [
+      [ans.raw('matching', { prompt_1: 'option_1', prompt_2: 'option_1', prompt_3: 'option_3' }), 'f.prompt_2 invalid_format'],
+      [ans.raw('matching', { prompt_1: 'gone' }), 'f.prompt_1 not_in_options'],
+    ],
+  },
+  likert: {
+    block: field('likert', 'f'),
+    blank: [ans.raw('likert', {})],
+    valid: [ans.raw('likert', { stmt_1: 2, stmt_2: 3, stmt_3: 5 })],
+    invalid: [[ans.raw('likert', { stmt_1: 9, stmt_2: 3, stmt_3: 5 }), 'f.stmt_1 above_max']],
+  },
+  constant_sum: {
+    block: field('constant_sum', 'f'),
+    blank: [ans.raw('constant_sum', {})],
+    valid: [ans.raw('constant_sum', { option_1: 40, option_2: 30, option_3: 30 })],
+    invalid: [[ans.raw('constant_sum', { option_1: 50, option_2: 50, option_3: 50 }), 'f above_max']],
+  },
+  maxdiff: {
+    block: field('maxdiff', 'f'),
+    blank: [ans.raw('maxdiff', { best: '', worst: '' })],
+    valid: [ans.raw('maxdiff', { best: 'option_1', worst: 'option_3' })],
+    invalid: [[ans.raw('maxdiff', { best: 'option_1', worst: 'option_1' }), 'f.worst invalid_format']],
+  },
+  card_sort: {
+    block: field('card_sort', 'f'),
+    blank: [ans.raw('card_sort', {})],
+    valid: [ans.raw('card_sort', { item_1: 'bucket_1', item_2: 'bucket_2', item_3: 'bucket_3', item_4: 'bucket_1' })],
+    invalid: [[ans.raw('card_sort', { item_1: 'gone' }), 'f.item_1 not_in_options']],
+  },
+  semantic_differential: {
+    block: field('semantic_differential', 'f'),
+    blank: [ans.raw('semantic_differential', {})],
+    valid: [ans.raw('semantic_differential', { pair_1: 2, pair_2: 4, pair_3: 6 })],
+    invalid: [[ans.raw('semantic_differential', { pair_1: 9, pair_2: 4, pair_3: 6 }), 'f.pair_1 above_max']],
+  },
+  number_range: {
+    block: field('number_range', 'f', { config: { min: decimal('0'), max: decimal('100'), integerOnly: true } }),
+    blank: [ans.raw('number_range', { from: '', to: '' })],
+    valid: [ans.raw('number_range', { from: '1', to: '10' })],
+    invalid: [
+      [ans.raw('number_range', { from: '10', to: '1' }), 'f.to invalid_format'],
+      [ans.raw('number_range', { from: '1.5', to: '2' }), 'f.from not_integer'],
+    ],
+  },
+  schedule_grid: {
+    block: field('schedule_grid', 'f'),
+    blank: [ans.raw('schedule_grid', [])],
+    valid: [ans.raw('schedule_grid', [{ weekday: 1, time: '09:00' }])],
+    invalid: [[ans.raw('schedule_grid', [{ weekday: 0, time: '09:00' }]), 'f.0 not_in_options']],
   },
   matrix: {
     block: field('matrix', 'f'),

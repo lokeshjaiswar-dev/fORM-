@@ -5,8 +5,9 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AppRoutes } from '@/App';
 import { DOCUMENT_FORMAT, LEGACY_FORMAT } from '@/persistence/DocumentRepository';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
+import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 import { newStoredForm } from '@/persistence/openForm';
-import { MemoryRepository, block, formWith, v1Form } from '@/test/fixtures';
+import { MemoryRepository, MemorySubmissions, block, formWith, v1Form } from '@/test/fixtures';
 
 const NOW = '2026-10-19T04:30:00.000Z';
 
@@ -14,13 +15,15 @@ function Where() {
   return <span aria-label="path">{useLocation().pathname}</span>;
 }
 
-function renderApp(repo: MemoryRepository, path: string) {
+function renderApp(repo: MemoryRepository, path: string, submissions = new MemorySubmissions()) {
   return render(
     <RepositoryProvider repo={repo}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-        <Where />
-      </MemoryRouter>
+      <SubmissionsProvider repo={submissions}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+          <Where />
+        </MemoryRouter>
+      </SubmissionsProvider>
     </RepositoryProvider>,
   );
 }
@@ -35,6 +38,12 @@ function stored(id: string, title: string) {
 }
 
 describe('routes', () => {
+  it('keeps /f/:slug as the public fill page', async () => {
+    renderApp(new MemoryRepository(), '/f/hello');
+    expect(await screen.findByText(/Form not found|This form cannot be opened|This link is not a published form/, {}, OPENS)).toBeInTheDocument();
+    expect(path()).toBe('/f/hello');
+  });
+
   it('sends / to the forms list', async () => {
     renderApp(new MemoryRepository(), '/');
     expect(await screen.findByText(/No forms yet/, {}, OPENS)).toBeInTheDocument();
@@ -65,6 +74,26 @@ describe('routes', () => {
     const record = repo.records.get(id);
     expect(record).toMatchObject({ format: DOCUMENT_FORMAT, doc: { formId: id, title: 'Contact us' } });
     expect(Object.keys((record?.doc as { blocks?: object } | undefined)?.blocks ?? {}).length).toBeGreaterThan(3);
+  });
+
+  it('opens responses for a form and shows filled data', async () => {
+    const repo = new MemoryRepository();
+    const submissions = new MemorySubmissions();
+    await repo.save(stored('f1', 'Feedback'));
+    await submissions.create({
+      id: 's1',
+      formId: 'f1',
+      submittedAt: NOW,
+      answers: { q: { type: 'short_text', value: 'Hello' } },
+      fields: [{ key: 'q', label: 'Question', value: 'Hello' }],
+    });
+    renderApp(repo, '/forms', submissions);
+    fireEvent.click(await screen.findByRole('link', { name: /Responses/ }));
+    expect(path()).toBe('/forms/f1/responses');
+    expect(await screen.findByText(/Submitted/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View data' }));
+    expect(await screen.findByText('Question')).toBeInTheDocument();
+    expect(screen.getByText('Hello')).toBeInTheDocument();
   });
 
   it('lists saved forms and opens one', async () => {

@@ -64,6 +64,26 @@ const TABLES: Record<string, TableSpec> = {
   },
   forms: { scope: { by: 'org' }, select: 0, touch: 'title', update: 0, delete: 0 },
   form_drafts: { scope: { by: 'org' }, select: 0, touch: 'draft_rev', update: 0, delete: 0 },
+  form_versions: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'content_hash',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, 9, 2, ${s.a.ownerId}, '{}', '{}', '0')`,
+  },
+  form_submissions: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'locale',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into form_submissions (id, org_id, form_id, answers, fields)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, '{}', '[]')`,
+  },
   audit_log: { scope: { by: 'org' }, select: 0, touch: 'reason', update: 'denied', delete: 'denied' },
   audit_pending: { scope: { by: 'org', column: 'org_key' }, select: 'denied', touch: 'event', update: 'denied', delete: 'denied' },
   audit_heads: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'seq', update: 'denied', delete: 'denied' },

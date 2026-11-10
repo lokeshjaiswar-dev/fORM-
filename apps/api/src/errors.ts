@@ -23,6 +23,7 @@ export const PROBLEMS = {
   METHOD_NOT_ALLOWED: { status: 405, title: 'Method not allowed' },
   DRAFT_REV_CONFLICT: { status: 409, title: 'The draft changed since it was read' },
   SLUG_TAKEN: { status: 409, title: 'The org address is taken' },
+  EMAIL_TAKEN: { status: 409, title: 'That email address already has an account' },
   ALREADY_MEMBER: { status: 409, title: 'Already a member of the org' },
   LAST_OWNER: { status: 409, title: 'An org needs at least one owner' },
   LOCK_VIOLATION: { status: 409, title: 'The change touches locked template content' },

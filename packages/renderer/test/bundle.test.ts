@@ -12,13 +12,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
  * The 90 KB criterion is NOT met, and no renderer change can meet it (BL-129, for the spec owner): the shared
  * engines the renderer has to run (logic evaluation checks answers with the zod twins, decimal.js full build, the ICU
  * parser) load about 96 KB on their own, before the renderer and react-hook-form (about 33 KB). Until the spec
- * owner decides, the initial load and the engines are held to ratchets so they cannot grow.
+ * owner decides, the initial load and the engines are held to ratchets so they cannot grow (raised when native widgets land).
  */
 
 const KB = 1024;
 const SPEC_BUDGET = 90 * KB;
-const INITIAL_RATCHET = 145 * KB;
-const ENGINES_RATCHET = 102 * KB;
+const INITIAL_RATCHET = 152 * KB;
+const ENGINES_RATCHET = 105 * KB;
 const REGEX_CHUNK_CEILING = 50 * KB;
 
 const ENTRY = fileURLToPath(new URL('../src/index.ts', import.meta.url));

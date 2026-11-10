@@ -15,8 +15,11 @@ const plainBlock = <T extends TransientBlockType | ContentBlockType | ContainerB
 export const FIELD_BLOCK_SCHEMAS = {
   short_text: fieldBlock('short_text'), long_text: fieldBlock('long_text'), full_name: fieldBlock('full_name'), email: fieldBlock('email'),
   phone: fieldBlock('phone'), address: fieldBlock('address'), number: fieldBlock('number'), url: fieldBlock('url'),
-  single_choice: fieldBlock('single_choice'), multi_choice: fieldBlock('multi_choice'), date: fieldBlock('date'), datetime: fieldBlock('datetime'),
+  single_choice: fieldBlock('single_choice'), multi_choice: fieldBlock('multi_choice'), date: fieldBlock('date'), date_range: fieldBlock('date_range'), datetime: fieldBlock('datetime'),
   time: fieldBlock('time'), rating: fieldBlock('rating'), linear_scale: fieldBlock('linear_scale'), nps: fieldBlock('nps'), ranking: fieldBlock('ranking'),
+  matching: fieldBlock('matching'), likert: fieldBlock('likert'),
+  constant_sum: fieldBlock('constant_sum'), maxdiff: fieldBlock('maxdiff'), card_sort: fieldBlock('card_sort'),
+  semantic_differential: fieldBlock('semantic_differential'), number_range: fieldBlock('number_range'), schedule_grid: fieldBlock('schedule_grid'),
   matrix: fieldBlock('matrix'), repeating_group: fieldBlock('repeating_group'), file_upload: fieldBlock('file_upload'), signature: fieldBlock('signature'),
   hidden: fieldBlock('hidden'), consent: fieldBlock('consent'), payment: fieldBlock('payment'), appointment: fieldBlock('appointment'),
   calculation: fieldBlock('calculation'), context: fieldBlock('context'), unique_id: fieldBlock('unique_id'),

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   ChevronRight,
   MoreHorizontal,
@@ -14,22 +14,54 @@ import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
+import { AccountMenu } from '@/auth/AccountMenu';
 import { EditionBadge } from '@/edition/EditionBadge';
 import { toast } from 'sonner';
+import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { Button } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/Tooltip';
+import { whenSaved } from '@/persistence/autosave';
+import { fillUrl, getLiveForm, publishForm } from '@/persistence/publishApi';
 
 export function BuilderHeader() {
+  const { id = '' } = useParams();
   const title = useDoc((d) => d.title);
   const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
-  const logicOpen = useUiStore((s) => s.logicOpen);
-  const setLogicOpen = useUiStore((s) => s.setLogicOpen);
   const save = useUiStore((s) => s.save);
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
   const [templates, setTemplates] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
+  async function publish() {
+    setPublishing(true);
+    try {
+      await whenSaved();
+      const live = await publishForm(id);
+      await navigator.clipboard.writeText(fillUrl(live.slug));
+      toast.success('Published. Share link copied');
+    } catch (err) {
+      if (err instanceof ApiUnreachable) toast.error('Sign in and keep the API running to publish.');
+      else if (err instanceof ApiProblem) toast.error(err.message || 'This form cannot be published yet.');
+      else toast.error('This form cannot be published yet.');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function share() {
+    try {
+      const live = await getLiveForm(id);
+      await navigator.clipboard.writeText(fillUrl(live.slug));
+      toast.success('Share link copied');
+    } catch (err) {
+      if (err instanceof ApiProblem && err.status === 404) toast.error('Publish the form first to get a share link.');
+      else if (err instanceof ApiUnreachable) toast.error('Sign in to copy the live share link.');
+      else toast.error('The share link could not be copied.');
+    }
+  }
 
   return (
     <>
@@ -55,11 +87,6 @@ export function BuilderHeader() {
         <EditionBadge className="mr-1" />
 
         <div className="flex items-center gap-0.5">
-          {mode === 'edit' ? (
-            <Button type="button" variant="ghost" size="sm" pressed={logicOpen} onClick={() => setLogicOpen(!logicOpen)}>
-              Logic
-            </Button>
-          ) : null}
           {(['edit', 'preview'] as const).map((m) => (
             <Button key={m} type="button" variant="ghost" size="sm" pressed={mode === m} onClick={() => setMode(m)}>
               {m === 'edit' ? 'Edit' : 'Preview'}
@@ -76,16 +103,11 @@ export function BuilderHeader() {
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>
-        <Tooltip content="Copy share link">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void navigator.clipboard.writeText(window.location.href);
-              toast.success('Share link copied');
-            }}
-          >
+        <Button type="button" variant="ghost" size="sm" disabled={publishing} onClick={() => void publish()}>
+          {publishing ? 'Publishing…' : 'Publish'}
+        </Button>
+        <Tooltip content="Copy public fill link">
+          <Button type="button" variant="ghost" size="sm" onClick={() => void share()}>
             Share
           </Button>
         </Tooltip>
@@ -95,6 +117,7 @@ export function BuilderHeader() {
         <Ghost label="More actions">
           <MoreHorizontal className="size-4" />
         </Ghost>
+        <AccountMenu />
       </header>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
     </>

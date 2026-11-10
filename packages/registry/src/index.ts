@@ -3,10 +3,13 @@ import type { PlainBlockType, PlainDefinition, ValueDefinition } from './define.
 import { address } from './fields/address.ts';
 import { appointment } from './fields/appointment.ts';
 import { calculation } from './fields/calculation.ts';
+import { cardSort } from './fields/card_sort.ts';
+import { constantSum } from './fields/constant_sum.ts';
 import { captcha } from './fields/captcha.ts';
 import { consent } from './fields/consent.ts';
 import { context } from './fields/context.ts';
 import { date } from './fields/date.ts';
+import { dateRange } from './fields/date_range.ts';
 import { datetime } from './fields/datetime.ts';
 import { divider } from './fields/divider.ts';
 import { email } from './fields/email.ts';
@@ -14,18 +17,24 @@ import { fileUpload } from './fields/file_upload.ts';
 import { fullName } from './fields/full_name.ts';
 import { heading } from './fields/heading.ts';
 import { hidden } from './fields/hidden.ts';
+import { likert } from './fields/likert.ts';
 import { linearScale } from './fields/linear_scale.ts';
 import { longText } from './fields/long_text.ts';
+import { matching } from './fields/matching.ts';
+import { maxdiff } from './fields/maxdiff.ts';
 import { matrix } from './fields/matrix.ts';
 import { multiChoice } from './fields/multi_choice.ts';
 import { nps } from './fields/nps.ts';
 import { number } from './fields/number.ts';
+import { numberRange } from './fields/number_range.ts';
 import { paragraph } from './fields/paragraph.ts';
 import { phone } from './fields/phone.ts';
 import { ranking } from './fields/ranking.ts';
 import { repeatingGroup } from './fields/repeating_group.ts';
 import { rating } from './fields/rating.ts';
+import { scheduleGrid } from './fields/schedule_grid.ts';
 import { section } from './fields/section.ts';
+import { semanticDifferential } from './fields/semantic_differential.ts';
 import { shortText } from './fields/short_text.ts';
 import { signature } from './fields/signature.ts';
 import { singleChoice } from './fields/single_choice.ts';
@@ -46,12 +55,21 @@ const VALUE_FIELDS: { readonly [T in ValueFieldType]: ValueDefinition<T> } = {
   single_choice: singleChoice,
   multi_choice: multiChoice,
   date,
+  date_range: dateRange,
   datetime,
   time,
   rating,
   linear_scale: linearScale,
   nps,
   ranking,
+  matching,
+  likert,
+  constant_sum: constantSum,
+  maxdiff,
+  card_sort: cardSort,
+  semantic_differential: semanticDifferential,
+  number_range: numberRange,
+  schedule_grid: scheduleGrid,
   matrix,
   repeating_group: repeatingGroup,
   file_upload: fileUpload,

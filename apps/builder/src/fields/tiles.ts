@@ -30,7 +30,7 @@ export type Tile =
   | { kind: 'page_break'; id: 'page_break'; category: Category; label: string; icon: string; keywords: readonly string[] };
 
 /** Categories in palette order; the registry's other categories (payments, compliance, snippets) have no P0 entries. */
-export const CATEGORIES: readonly Category[] = ['basic', 'choice', 'rating', 'media', 'layout', 'advanced'];
+export const CATEGORIES: readonly Category[] = ['basic', 'choice', 'date_time', 'rating', 'media', 'layout', 'advanced'];
 
 const CATEGORY_LABELS: Partial<Record<Category, MessageId>> = {
   basic: M['palette.category.basic'],

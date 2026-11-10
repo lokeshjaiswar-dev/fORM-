@@ -5,8 +5,8 @@ import { ValueFieldTypeSchema } from './catalogue.ts';
 import { ContextSourceSchema, NamePartSchema } from './config.ts';
 import { ScalarValueSchema } from './logic.ts';
 import {
-  BlockIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema, DecimalStringSchema, EmailAddressSchema, FileIdSchema,
-  GroupRowIdSchema, IsoDateSchema, IsoInstantSchema, IsoLocalDateTimeSchema, IsoTimeSchema, LocaleSchema, MatrixColumnIdSchema,
+  BlockIdSchema, CardBucketIdSchema, CardItemIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema, DecimalStringSchema, EmailAddressSchema, FileIdSchema,
+  GroupRowIdSchema, IsoDateSchema, IsoInstantSchema, IsoLocalDateTimeSchema, IsoTimeSchema, LikertStatementIdSchema, LocaleSchema, MatchingPromptIdSchema, MatrixColumnIdSchema, SemanticPairIdSchema, WeekdaySchema,
   MatrixRowIdSchema, MinorUnitsSchema, OptionIdSchema, ProductIdSchema, ProductOptionIdSchema, Sha256HexSchema, TimeZoneSchema,
 } from './primitives.ts';
 
@@ -84,12 +84,21 @@ const ANSWER_VALUE_SHAPE = {
   multi_choice: z.strictObject({ optionIds: z.array(OptionIdSchema), other: part(10_000).exactOptional() })
     .refine((v) => v.optionIds.length > 0 || v.other !== undefined, 'pick at least one option or give an other text'),
   date: IsoDateSchema,
+  date_range: z.strictObject({ start: IsoDateSchema, end: IsoDateSchema }),
   datetime: z.strictObject({ local: IsoLocalDateTimeSchema, timeZone: TimeZoneSchema, instant: IsoInstantSchema }),
   time: z.strictObject({ start: IsoTimeSchema, end: IsoTimeSchema.exactOptional() }),
   rating: scale,
   linear_scale: scale,
   nps: scale,
   ranking: z.array(OptionIdSchema).min(1),
+  matching: keyed(answered(z.partialRecord(MatchingPromptIdSchema, OptionIdSchema), 'a matching')),
+  likert: keyed(answered(z.partialRecord(LikertStatementIdSchema, z.number().int().min(1).max(10)), 'a likert')),
+  constant_sum: keyed(answered(z.partialRecord(OptionIdSchema, z.number().int().min(0).max(10_000)), 'a constant sum')),
+  maxdiff: z.strictObject({ best: OptionIdSchema, worst: OptionIdSchema }),
+  card_sort: keyed(answered(z.partialRecord(CardItemIdSchema, CardBucketIdSchema), 'a card sort')),
+  semantic_differential: keyed(answered(z.partialRecord(SemanticPairIdSchema, z.number().int().min(1).max(10)), 'a semantic differential')),
+  number_range: z.strictObject({ from: DecimalStringSchema, to: DecimalStringSchema }),
+  schedule_grid: z.array(z.strictObject({ weekday: WeekdaySchema, time: IsoTimeSchema })).min(1).max(168),
   matrix: MatrixValueSchema,
   repeating_group: z.strictObject({
     rows: z.array(z.strictObject({ rowId: GroupRowIdSchema, values: keyed(z.partialRecord(BlockIdSchema, StoredAnswerNode)) })).min(1).max(200),

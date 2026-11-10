@@ -17,7 +17,6 @@ export const calculation = defineField({
   kind: 'computed',
   palette: [
     entry('calculation', null, 'advanced', PALETTE_LABELS['palette.calculation'], 'hash', ['formula', 'total', 'sum', 'calculate', 'arithmetic']),
-    entry('calculation', 'count', 'advanced', PALETTE_LABELS['palette.calculation.count'], 'hash', ['count', 'rows', 'how many', 'total rows']),
   ],
   defaultConfig: () => ({
     expr: { k: 'lit', value: { type: 'number', value: '0' as DecimalString } },
