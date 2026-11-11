@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { StoredAnswer } from '../answers.ts';
 import { depthGuard, guarded, guardedMap, keyed, options, tagged } from './_util.ts';
 import { ValueFieldTypeSchema } from './catalogue.ts';
-import { ContextSourceSchema, NamePartSchema } from './config.ts';
+import { NamePartSchema } from './config.ts';
 import { ScalarValueSchema } from './logic.ts';
 import {
   BlockIdSchema, CardBucketIdSchema, CardItemIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema, DecimalStringSchema, EmailAddressSchema, FileIdSchema,
@@ -95,7 +95,7 @@ const ANSWER_VALUE_SHAPE = {
   likert: keyed(answered(z.partialRecord(LikertStatementIdSchema, z.number().int().min(1).max(10)), 'a likert')),
   constant_sum: keyed(answered(z.partialRecord(OptionIdSchema, z.number().int().min(0).max(10_000)), 'a constant sum')),
   maxdiff: z.strictObject({ best: OptionIdSchema, worst: OptionIdSchema }),
-  card_sort: keyed(answered(z.partialRecord(CardItemIdSchema, CardBucketIdSchema), 'a card sort')),
+  card_sort: keyed(answered(z.partialRecord(CardItemIdSchema, z.union([CardBucketIdSchema, z.array(CardBucketIdSchema).min(1)])), 'a card sort')),
   semantic_differential: keyed(answered(z.partialRecord(SemanticPairIdSchema, z.number().int().min(1).max(10)), 'a semantic differential')),
   number_range: z.strictObject({ from: DecimalStringSchema, to: DecimalStringSchema }),
   schedule_grid: z.array(z.strictObject({ weekday: WeekdaySchema, time: IsoTimeSchema })).min(1).max(168),
@@ -116,7 +116,7 @@ const ANSWER_VALUE_SHAPE = {
   payment: PaymentSelectionSchema,
   appointment: z.strictObject({ start: IsoInstantSchema, end: IsoInstantSchema, respondentTimeZone: TimeZoneSchema, holdToken: z.string().exactOptional() }),
   calculation: ScalarValueSchema,
-  context: keyed(z.partialRecord(ContextSourceSchema, part(10_000)).refine(someValue, 'session details need at least one fact')),
+  context: keyed(z.partialRecord(z.string().min(1).max(64), part(10_000)).refine(someValue, 'session details need at least one fact')),
   unique_id: z.string().min(1).max(128),
 };
 

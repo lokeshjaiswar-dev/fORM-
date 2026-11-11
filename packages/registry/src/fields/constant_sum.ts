@@ -2,7 +2,7 @@ import type { OptionId } from '@form/schema';
 import { defineField, headerOf } from '../define.ts';
 import { PALETTE_LABELS } from '../messages.ts';
 import { NUMBER_OPS } from '../operators.ts';
-import { NULL, countScalar, defaultOptions, entry, hasOption, isRootPath, optionAltLint, optionLabel, optionTexts } from './shared.ts';
+import { NULL, countScalar, defaultOptions, entry, hasOption, isRootPath, optionAltLint, optionLabel, optionTexts, pairLines } from './shared.ts';
 
 const allocated = (value: Partial<Record<OptionId, number>>): number[] =>
   Object.values(value).filter((n): n is number => typeof n === 'number');
@@ -38,6 +38,7 @@ export const constantSum = defineField({
   isEmpty: (value) => allocated(value).length === 0,
   columns: (block) => block.config.options.map((o) => ({ suffix: `.${o.id}`, header: `${headerOf(block)} ${optionLabel(block.config.options, o.id)}` })),
   cells: (value, block) => block.config.options.map((o) => (value[o.id] === undefined ? '' : String(value[o.id]))),
+  text: (value, block) => pairLines(block.config.options.map((o) => [optionLabel(block.config.options, o.id), value[o.id] === undefined ? '' : String(value[o.id])] as const)),
   texts: (block) => optionTexts(block.id, block.config.options),
   content: () => ['/config/options'],
   lint: (block) => optionAltLint(block.id, block.config.options),

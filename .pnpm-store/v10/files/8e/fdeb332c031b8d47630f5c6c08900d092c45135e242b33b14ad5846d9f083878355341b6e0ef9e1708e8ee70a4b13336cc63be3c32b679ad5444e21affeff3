@@ -1,0 +1,85 @@
+import * as React from 'react';
+import { type FieldStatus } from './field';
+export type FileRejectReason = 'type' | 'size' | 'count';
+export interface FileRejection {
+    file: File;
+    /** every rule the file broke; a file can fail on type and size at once */
+    reasons: FileRejectReason[];
+}
+export interface FileValidationRules {
+    /** accepted types: mime types (`application/pdf`), wildcards (`image/*`) and extensions (`.docx`), as an array or the native comma separated string */
+    accept?: string[] | string;
+    /** largest allowed file, in bytes */
+    maxSize?: number;
+    /** most files allowed in total (see `currentCount`) */
+    maxFiles?: number;
+    /** files that are already attached, so `maxFiles` counts them too */
+    currentCount?: number;
+}
+/** 1536 -> "1.5 KB", 2_400_000 -> "2.3 MB". Binary units (1 KB = 1024 B), one decimal below 10, none above. */
+export declare function formatBytes(bytes: number): string;
+/** Split `files` into the ones that pass `rules` and the ones that do not, with the reasons. Order is kept; files that fail on type or size do not use up the count. */
+export declare function validateFiles(files: File[], rules?: FileValidationRules): {
+    accepted: File[];
+    rejected: FileRejection[];
+};
+/** `['.pdf', 'image/*', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']` -> "PDF, Images, DOCX" */
+export declare function formatAccept(accept?: string[] | string): string;
+/** One line for a screen reader or an error list: "big-scan.pdf: larger than 5 MB". */
+export declare function describeRejection({ file, reasons }: FileRejection, rules?: FileValidationRules): string;
+export interface FileDropzoneProps extends Omit<React.ComponentProps<'div'>, 'title' | 'children' | 'onDrop' | 'onDragEnter' | 'onDragOver' | 'onDragLeave' | 'onPaste' | 'onChange' | 'className'>, FileValidationRules {
+    /** allow several files at once (default true); when false the zone takes the first file and rejects the rest with reason `count` */
+    multiple?: boolean;
+    /** called with the files that passed and the ones that did not, after a drop, a paste or the picker; skipped when both are empty */
+    onFilesAdded?: (accepted: File[], rejected: FileRejection[]) => void;
+    /** blocks the picker and drops, dims the zone and removes it from the tab order */
+    disabled?: boolean;
+    /** `compact` is a single row for tight forms */
+    size?: 'default' | 'compact';
+    /** visual state of the zone, same vocabulary as the fields; `loading` shows a spinner and ignores new files */
+    status?: FieldStatus;
+    /** error text under the zone; implies `status="error"` */
+    error?: React.ReactNode;
+    /** main line; defaults to "Drag and drop files, or browse" ("Drop files here" when compact), "Tap to choose files" on touch screens and "Drop to upload" while a file is dragged over it */
+    title?: React.ReactNode;
+    /** second line; defaults to the rules (types, size, count). `null` hides it */
+    description?: React.ReactNode;
+    /** glyph in the round tile (default a cloud with an up arrow) */
+    icon?: React.ReactNode;
+    /** also take files pasted from the clipboard while the zone has focus */
+    pasteable?: boolean;
+    /** class names for the outer wrapper (width, margin); the zone fills it */
+    className?: string;
+}
+/**
+ * File drop zone. Drag files onto it or press Enter / Space to open the picker. It validates type, size and count, reports the result through
+ * `onFilesAdded` and announces rejections in a polite live region. The zone is named by its title unless you pass `aria-label`. The hidden `<input type="file">` is reset after every pick, so the same file
+ * can be chosen again.
+ */
+declare function FileDropzone({ accept, maxSize, maxFiles, currentCount, multiple, onFilesAdded, size, status: statusProp, error, title, description, icon, pasteable, disabled: disabledProp, className, ref, 'aria-describedby': describedByProp, 'aria-invalid': ariaInvalid, 'aria-label': ariaLabel, 'aria-labelledby': labelledByProp, onClick, onKeyDown, ...props }: FileDropzoneProps): React.JSX.Element;
+export type FileUploadStatus = 'idle' | 'uploading' | 'done' | 'error';
+/** The list that holds the rows. A plain `<ul>`; give it an `aria-label` such as "Attached documents". */
+declare function FileUploadList({ className, ...props }: React.ComponentProps<'ul'>): React.JSX.Element;
+export interface FileUploadItemProps extends Omit<React.ComponentProps<'li'>, 'children'> {
+    /** shortcut that fills `name`, `size` and `type` from a `File` */
+    file?: File;
+    /** file name, shown on one line and in full as a tooltip */
+    name?: string;
+    /** size in bytes */
+    size?: number;
+    /** mime type, used with the extension to pick the icon */
+    type?: string;
+    /** `idle` (waiting), `uploading` (shows the progress bar), `done` or `error` */
+    status?: FileUploadStatus;
+    /** 0 to 100 while uploading; without it the bar is indeterminate */
+    progress?: number;
+    /** message shown in the `error` state (default "Upload failed") */
+    error?: React.ReactNode;
+    /** shows the Remove button; while uploading it is labelled "Cancel upload" */
+    onRemove?: () => void;
+    /** shows the Retry button in the `error` state */
+    onRetry?: () => void;
+}
+/** One file: type icon, name, size, status line, optional progress bar and the Retry / Remove buttons. Use inside `FileUploadList`. */
+declare function FileUploadItem({ file, name: nameProp, size, type: typeProp, status, progress, error, onRemove, onRetry, className, ...props }: FileUploadItemProps): React.JSX.Element;
+export { FileDropzone, FileUploadList, FileUploadItem };

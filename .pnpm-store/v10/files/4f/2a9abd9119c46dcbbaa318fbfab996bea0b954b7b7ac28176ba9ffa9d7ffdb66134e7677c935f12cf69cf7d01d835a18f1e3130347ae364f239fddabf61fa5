@@ -1,0 +1,117 @@
+import * as React from 'react';
+import type { Matcher } from 'react-day-picker';
+import { Calendar } from './calendar';
+import { type FieldSize, type FieldStatus } from './field';
+type CalendarProps = React.ComponentProps<typeof Calendar>;
+/** Local Date -> 'YYYY-MM-DD' (no timezone shift). */
+export declare const toISO: (d: Date) => string;
+/** 'YYYY-MM-DD' -> local Date at midnight; undefined when empty or not a real date. */
+export declare function fromISO(s?: string | null): Date | undefined;
+/** 'YYYY-MM-DD' -> 'DD/MM/YYYY' (the format the design system shows in fields and tables). */
+export declare function formatDateDisplay(iso?: string | null): string;
+/** Typed entry: 24/10/2026, 24-10-26, 24.10.2026, 24 Oct 2026, 24-Oct-2026, 24102026, 2026-10-24. */
+export declare function parseDateInput(text: string): string | undefined;
+/** Shared by both pickers: open state that can be controlled (`open`, `onOpenChange`) or started open (`defaultOpen`). */
+interface OpenProps {
+    /** controls the popover: pass with `onOpenChange` */
+    open?: boolean;
+    /** starts with the popover open */
+    defaultOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
+}
+export interface DatePickerProps extends OpenProps {
+    /** ISO date `YYYY-MM-DD`; empty string when cleared */
+    value?: string;
+    defaultValue?: string;
+    onValueChange?: (value: string) => void;
+    min?: string;
+    max?: string;
+    /** extra matcher to disable days (holidays, weekends ...) */
+    disabledDates?: Matcher;
+    placeholder?: string;
+    size?: FieldSize;
+    status?: FieldStatus;
+    disabled?: boolean;
+    readOnly?: boolean;
+    /** show the x button when a date is set (default true) */
+    clearable?: boolean;
+    /** id of the text input; the label's `htmlFor` points at it. Inside a `Field` it defaults to the field's id. */
+    id?: string;
+    /** form field name. The form gets the ISO value (`YYYY-MM-DD`, empty when there is no date) through a hidden input, not the text that is shown. */
+    name?: string;
+    className?: string;
+    align?: 'start' | 'center' | 'end';
+    /** react-day-picker locale: the month names and weekday initials of the calendar. Typed entry stays `DD/MM/YYYY`. */
+    locale?: CalendarProps['locale'];
+    /** ref of the text input */
+    ref?: React.Ref<HTMLInputElement>;
+    /** called when the text input loses or gets focus (validate on blur here) */
+    onBlur?: React.FocusEventHandler<HTMLInputElement>;
+    onFocus?: React.FocusEventHandler<HTMLInputElement>;
+    autoFocus?: boolean;
+    /** the text input is `required` (a native form checks it) */
+    required?: boolean;
+    /** marks the field invalid and draws the error state (a typed date outside `min` / `max` or text that is not a date does too). Inside a `Field` it follows the field's `error`. */
+    'aria-invalid'?: boolean | 'true' | 'false';
+    /** accessible name when there is no visible label */
+    'aria-label'?: string;
+    /** id of the element that names the input, when a `<label for>` does not */
+    'aria-labelledby'?: string;
+    /** id of the hint or error text. Inside a `Field` it is set to the field's message. */
+    'aria-describedby'?: string;
+    /** tells assistive technology a date is required. Inside a `Field` it follows `required`. */
+    'aria-required'?: boolean | 'true' | 'false';
+}
+/**
+ * Date field: typed entry (DD/MM/YYYY and common variants) plus a calendar popover (Figma: Calendar, Date / Month / Year).
+ * Works inside dialogs and sheets (the popover sits above them), with the keyboard (ArrowDown opens and moves into the grid,
+ * Escape closes) and honours `min` / `max`. A typed date outside the range shows the error state, and so does text that is not a date:
+ * it stays in the field (and the value stays as it was) until it is corrected or cleared.
+ */
+declare function DatePicker({ value: valueProp, defaultValue, onValueChange, min, max, disabledDates, placeholder, size, status: statusProp, disabled: disabledProp, readOnly, clearable, id, name, className, align, locale, open: openProp, defaultOpen, onOpenChange, ref, onBlur, onFocus, autoFocus, required, ...aria }: DatePickerProps): React.JSX.Element;
+export interface DateRangeValue {
+    from?: string;
+    to?: string;
+}
+export interface DateRangePickerProps extends OpenProps {
+    value?: DateRangeValue;
+    defaultValue?: DateRangeValue;
+    onValueChange?: (value: DateRangeValue) => void;
+    min?: string;
+    max?: string;
+    disabledDates?: Matcher;
+    placeholder?: string;
+    size?: FieldSize;
+    status?: FieldStatus;
+    disabled?: boolean;
+    /** the range is shown but cannot be changed or cleared */
+    readOnly?: boolean;
+    clearable?: boolean;
+    /** months shown side by side (default 2; one month below 640px wide, where two do not fit) */
+    numberOfMonths?: number;
+    /** id of the trigger button; the label's `htmlFor` points at it. Inside a `Field` it defaults to the field's id. */
+    id?: string;
+    /** form field name. The form gets two hidden inputs, `<name>-from` and `<name>-to`, with ISO dates (`YYYY-MM-DD`). */
+    name?: string;
+    className?: string;
+    align?: 'start' | 'center' | 'end';
+    /** react-day-picker locale: the month names and weekday initials of the calendar */
+    locale?: CalendarProps['locale'];
+    /** marks the field invalid and draws the error state (an end before the start does too). Inside a `Field` it follows the field's `error`. */
+    'aria-invalid'?: boolean | 'true' | 'false';
+    /** accessible name when there is no visible label */
+    'aria-label'?: string;
+    /** id of the element that names the trigger, when a `<label for>` does not */
+    'aria-labelledby'?: string;
+    /** id of the hint or error text. Inside a `Field` it is set to the field's message. */
+    'aria-describedby'?: string;
+    /** tells assistive technology a range is required. Inside a `Field` it follows `required`. */
+    'aria-required'?: boolean | 'true' | 'false';
+}
+/**
+ * From - to date range field: one popover with two months (one on a phone). The first click starts a range, the second ends it and closes the popover
+ * (the same day twice is a one-day range, an earlier day swaps the ends); a complete range starts over on the next click. `onValueChange` only
+ * receives complete ranges. ArrowDown, Enter or Space on the field opens the calendar and moves focus into the day grid.
+ */
+declare function DateRangePicker({ value: valueProp, defaultValue, onValueChange, min, max, disabledDates, placeholder, size, status: statusProp, disabled: disabledProp, readOnly, clearable, numberOfMonths, id, name, className, align, locale, open: openProp, defaultOpen, onOpenChange, ...aria }: DateRangePickerProps): React.JSX.Element;
+export { DatePicker, DateRangePicker };

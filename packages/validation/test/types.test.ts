@@ -198,11 +198,11 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
   },
   matrix: {
     block: field('matrix', 'f'),
-    blank: [ans.raw('matrix', { mode: 'single', rows: {} })],
-    valid: [ans.raw('matrix', { mode: 'single', rows: { row_1: 'column_1', row_2: 'column_2' } })],
+    blank: [ans.raw('matrix', { mode: 'multi', rows: {} })],
+    valid: [ans.raw('matrix', { mode: 'multi', rows: { row_1: ['column_1'], row_2: ['column_2'] } })],
     invalid: [
-      [ans.raw('matrix', { mode: 'multi', rows: { row_1: ['column_1'] } }), 'f invalid_format'],
-      [ans.raw('matrix', { mode: 'single', rows: { row_1: 'nope' } }), 'f.rows.row_1 not_in_options'],
+      [ans.raw('matrix', { mode: 'single', rows: { row_1: 'column_1' } }), 'f invalid_format'],
+      [ans.raw('matrix', { mode: 'multi', rows: { row_1: ['nope'] } }), 'f.rows.row_1.0 not_in_options'],
     ],
   },
   file_upload: {

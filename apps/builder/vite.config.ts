@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: true,
       headers: builderSecurityHeaders({ mode: 'development', connectOrigins, ...reports }),
       proxy,
     },

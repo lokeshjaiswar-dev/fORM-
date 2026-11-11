@@ -219,6 +219,10 @@ describe('export headers', () => {
     expect(REGISTRY.time.export.text({ start: id('09:00'), end: id('10:00') }, fieldBlock('time'))).toBe('09:00–10:00');
     expect(REGISTRY.signature.export.cells({ method: 'typed', typedName: 'Asha', file: file('s.png', 'image/png') }, fieldBlock('signature'))).toEqual(['Asha']);
     expect(REGISTRY.file_upload.export.cells([file('a.pdf', 'application/pdf'), file('b.png', 'image/png')], fieldBlock('file_upload'))).toEqual(['a.pdf; b.png']);
+    const matching = fieldBlock('matching');
+    expect(REGISTRY.matching.export.text({ prompt_1: id('option_1'), prompt_2: id('option_2'), prompt_3: id('option_3') } as never, matching)).toBe('Item 1 - Option 1\nItem 2 - Option 2\nItem 3 - Option 3');
+    const cards = fieldBlock('card_sort', { exclusive: false });
+    expect(REGISTRY.card_sort.export.text({ item_1: [id('bucket_1'), id('bucket_2')], item_2: id('bucket_2'), item_3: id('bucket_3'), item_4: id('bucket_1') } as never, cards)).toBe('Card 1 - Group 1, Group 2\nCard 2 - Group 2\nCard 3 - Group 3\nCard 4 - Group 1');
   });
 });
 

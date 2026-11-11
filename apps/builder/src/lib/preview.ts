@@ -6,6 +6,7 @@ import type {
 } from '@form/schema';
 import type { UploadRequest } from '@form/renderer';
 import { uid } from '@/lib/utils';
+import { putSubmissionFile } from '@/persistence/blobStore';
 import type { LocalOps } from '@/state/opsStore';
 
 /*
@@ -63,15 +64,22 @@ export function previewVersion(definition: FormDefinition, status: RuntimeStatus
 
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
-/** Keeps preview files in the page: a reference with a real SHA-256 (when the context allows it), nothing uploaded. */
+/** Keeps preview files in this browser (IndexedDB) and returns a SHA-256 reference. */
 export async function previewUploader({ file, name }: UploadRequest): Promise<FileRef> {
   const digest = globalThis.crypto?.subtle ? hex(await globalThis.crypto.subtle.digest('SHA-256', await file.arrayBuffer())) : '0'.repeat(64);
-  return {
+  const mime = file.type || 'application/octet-stream';
+  const ref: FileRef = {
     fileId: uid() as FileId,
     name,
     sizeBytes: file.size,
-    mime: file.type || 'application/octet-stream',
+    mime,
     sha256: digest as Sha256Hex,
     scan: 'skipped',
   };
+  try {
+    await putSubmissionFile(ref.fileId, file, name, mime);
+  } catch {
+    /* Tests and locked-down browsers still get a FileRef without a stored blob. */
+  }
+  return ref;
 }

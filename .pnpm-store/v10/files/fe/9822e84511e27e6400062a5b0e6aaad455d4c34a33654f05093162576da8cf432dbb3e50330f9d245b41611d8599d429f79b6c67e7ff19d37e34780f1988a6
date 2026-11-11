@@ -1,0 +1,120 @@
+# @dmacq/ui
+
+The dMACQ design system (Figma: DMacq Design System) as React components. shadcn/ui style: Radix primitives, `cva` variants, Tailwind 4 tokens, light and dark, two densities.
+
+Docs: **ui.dmacq.online** (source in [`docs/`](docs)). Built for the DMS+, FLOW+ and FORMS+ products.
+
+## Use it
+
+Needs React 19 and Tailwind 4 in your app. The package is private and not on a registry yet:
+
+```bash
+# as a git dependency (builds on install, takes a few minutes the first time)
+npm install git+https://github.com/Dmacq-Software-Private-Limited/dMACQ-UI.git
+
+# or from a tarball: in a checkout run `npm install && npm pack`, then
+npm install ../dMACQ-UI/dmacq-ui-0.1.0.tgz
+```
+
+```css
+/* app.css */
+@import "tailwindcss";
+@import "@dmacq/ui/styles.css";   /* tokens, type scale, component CSS; tells Tailwind to scan the package */
+@import "@dmacq/ui/fonts.css";    /* optional: Noto Sans + JetBrains Mono */
+```
+
+```tsx
+import { Button, Badge, Dialog, FileDropzone, Toaster, applyDensity } from '@dmacq/ui'
+import { DataTable, Form, FormField, FilterBar, PageHeader, AppShell } from '@dmacq/ui/patterns'
+
+applyDensity()   // optional: the compact density (about 20% tighter than Figma). Without it you get the exact Figma sizes. (To avoid a layout shift on first paint, set data-density from an inline script in <head>; see the Density guide.)
+```
+
+Dark mode is the `dark` class on `<html>`. Density is `data-density="compact"` on `<html>`; `setDensity('comfortable' | 'compact')` switches and remembers it.
+
+### Type and control sizes
+
+Tailwind's `text-*` sizes are remapped to the Figma body styles, so `text-base` is 14px, not 16px:
+
+| Class | Size / line height |
+|---|---|
+| `text-xxs` | 11 / 14 |
+| `text-xs` | 12 / 16 |
+| `text-sm` (page default) | 13 / 18 |
+| `text-base` | 14 / 20 |
+| `text-lg` | 16 / 24 |
+| `text-xl` / `text-2xl` / `text-3xl` / `text-4xl` | 18 / 20 / 24 / 32 |
+
+Buttons and every field-like control (`Input`, `SearchInput`, `Select`, `Combobox`, `MultiSelect`, `DatePicker`, `TimePicker`, `TagInput`) share one height scale, so a default Button and a default field are the same height:
+
+| `size` | `sm` | `md` (default) | `lg` | `xl` |
+|---|---|---|---|---|
+| Comfortable | 28 | 32 | 40 | 48 |
+| Compact | 24 | 28 | 32 | 36 |
+
+(Button also has `xs`: 24 in both densities.) Phones and windows under 640px use 16px text in fields so iOS Safari does not zoom on focus; touch screens keep the comfortable sizes.
+
+## What is in it
+
+| Entry | Contents |
+|---|---|
+| `@dmacq/ui` | 59 components, one module each in `src/components` (listed below), `cn`, the Indian formatters (`inr`, `inrShort`, `fmtDate` ...), `initials`, density helpers, `useIsMobile` |
+| `@dmacq/ui/patterns` | `DataTable` with column filters, saved views and server mode, and its cell types (Figma Table Cell); the form layer (`Form`, `FormField`, `FormErrorSummary`, `FormSection`, `FormActions`, `useFormState`) and the labelled fields (`TextField`, `SelectField`, `DateField` ...); filters (`FilterBar`, `FacetedFilter`, `SelectFilter`, `DateRangeFilter`, `NumberRangeFilter`, `TextFilter`, `applyFilters`); layout (`PageHeader`, `AppShell`); `ConfirmDialog`, `ReasonDialog`, `AuditLog` and its drawer, `EmptyState`, `StatCard`, `KeyValue`, `UsageBar`, `Money` |
+| `@dmacq/ui/styles.css`, `fonts.css` | Source CSS: tokens (`--bluedark-*`, `--surface-*`, shadcn names), `@theme`, `ds-*.css` |
+
+The components, in the groups the docs sidebar uses:
+
+- **Buttons and atoms (15):** Avatar, Badge, Button, Card, Chip, Label, Link, Loader, Progress, Separator, Skeleton, Switch, Toggle, ToggleGroup, Tooltip
+- **Forms (14):** Calendar, Checkbox, Combobox, DatePicker, Field, FileDropzone and FileUploadList, Input, MultiSelect, RadioGroup, Select, Slider, TagInput, Textarea, TimePicker
+- **Navigation and layout (12):** Accordion, Breadcrumb, Carousel, Collapsible, FolderTree, List, Resizable panels, ScrollArea, Sidebar, Stepper, Tabs, Toolbar
+- **Overlays and feedback (13):** Alert, AlertDialog, Banner, BottomSheet, Command, ContextMenu, Dialog, DropdownMenu, HoverCard, Popover, Sheet, SpotlightPopover, Toaster
+- **Data (5):** DocumentViewer, FileCard with FileGrid and FileTypeIcon, Pagination, Table, Timeline
+
+Patterns use no router, store or app state. `CellLink` takes `href`, `onClick` or `asChild` (`<CellLink asChild><Link to="/x">Open</Link></CellLink>`); `StatCard` takes `href`.
+
+## Not in the library
+
+App-level pieces that need your router, store or domain vocabulary are left to your app, such as a command palette wired to your navigation, a status badge for your own statuses, or an audit-trail adapter for your own entry type.
+
+## Repository layout
+
+```
+src/            the library
+  components/     primitives, one file per component, exported from src/index.ts
+  patterns/       composites (data table, form layer, filters, layout, dialogs, audit log), exported from src/patterns/index.ts
+  lib/, hooks/    cn, formatters, density; useIsMobile
+  styles/         tokens and the ds-*.css component CSS
+docs/           the documentation site (npm workspace @dmacq/docs)
+vercel.json     build settings for hosting the docs
+```
+
+## Develop
+
+```bash
+npm install          # also builds the library (the `prepare` script) and installs the docs workspace
+npm run dev          # docs on http://localhost:5180, running against src/ with hot reload
+npm run typecheck    # library and docs
+npm run build        # library: dist/index.js, dist/patterns.js, shared chunk, .d.ts files
+npm run docs:build   # docs: static site in docs/dist
+```
+
+### The docs site (`docs/`)
+
+Vite, React and react-router, styled with the library itself. Per component page:
+
+- `docs/src/content/components/*.ts`, `content/patterns.ts` and `content/new/*.ts`: one entry per page (description, Figma node, import, examples, API list, notes). `content/index.ts` collects them; the sidebar, search, home page counts and previous/next links all read that list, so a new entry shows up everywhere.
+- `docs/src/examples/<slug>/<name>.tsx`: each example is a real component. The file is the live preview and, read as text, the code shown under it, so the two cannot drift apart.
+- Props tables are generated from the TypeScript source (`docs/scripts/gen-api.mjs`, run by `dev` and `build`), so adding a prop to a component updates its page.
+- `docs/src/gallery/`: the Figma comparison gallery at `/gallery`, one section per Figma page.
+
+To add a component page: add the entry to the right content file (and to `content/index.ts` if it is a new file), add its example files, and check the page at `/docs/components/<slug>` or `/docs/patterns/<slug>`.
+
+### Hosting (ui.dmacq.online)
+
+`docs:build` writes a static single-page app to `docs/dist`. `vercel.json` sets the install command, build command, output directory and the rewrite to `index.html` that client-side routing needs; `docs/public/_redirects` does the same for Netlify. On any other static host, route unknown paths to `/index.html`.
+
+## Notes
+
+- Build is Vite library mode (ES only, dependencies external, `'use client'` banner) plus `tsc` for declarations.
+- `package.json` is `private: true`; remove that, set a registry and a version policy before publishing.
+- Tailwind scans `dist` through the `@source "../../dist"` line in `src/styles/index.css`. If you change where that file ships, change the path.

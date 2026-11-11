@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
+import { Button } from '@dmacq/ui';
 import { FormProvider, useForm, type FieldValues } from 'react-hook-form';
 import { EN_IN, createI18n, type I18n } from '@form/i18n';
 import { isAvailable } from '@form/registry';
@@ -24,6 +25,7 @@ import { EndingScreen } from './screens/Ending.tsx';
 import { StatusScreen } from './screens/Status.tsx';
 import { templateText, urlText } from './text.ts';
 import { themeCssVars } from './theme/cssVars.ts';
+import { coverPhoto, pagePhoto } from './theme/media.ts';
 import type { FormRendererProps, RendererEvent, RendererSession, SubmitPayload } from './types.ts';
 
 const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]';
@@ -106,14 +108,14 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
       ) : null}
       <div className="fr-nav" data-align={isLast ? def.behavior.submit.align : 'left'}>
         {canGoBack && page?.nav?.showBack !== false ? (
-          <button type="button" className="fr-button fr-secondary" onClick={onBack} disabled={sending}>
+          <Button type="button" variant="outline" onClick={onBack} disabled={sending}>
             {text(page?.nav?.backLabel) || t('system:nav.back')}
-          </button>
+          </Button>
         ) : null}
         {page?.nav?.showNext === false && !isLast ? null : (
-          <button type="submit" className="fr-button fr-primary" disabled={sending} aria-disabled={busy || undefined} aria-busy={busy || undefined}>
+          <Button type="submit" disabled={sending} aria-disabled={busy || undefined} aria-busy={busy || undefined} className={isLast && def.behavior.submit.align === 'full' ? 'w-full' : undefined}>
             {sending ? t(MESSAGES['submit.sending']) : nextLabel}
-          </button>
+          </Button>
         )}
       </div>
     </>
@@ -349,17 +351,17 @@ function FormSession({ props, meta, base, onRestart }: {
   } else if (!welcomed && def.welcome) {
     screen = (
       <div className="fr-screen fr-welcome">
+        <CoverArt />
         <div className="fr-rich"><RichTextView doc={def.welcome.content} /></div>
-        <button
+        <Button
           type="button"
-          className="fr-button fr-primary"
           onClick={() => {
             setWelcomed(true);
             emit({ type: 'start' });
           }}
         >
           {def.welcome.startLabel?.trim() || base.t('system:nav.start')}
-        </button>
+        </Button>
       </div>
     );
   } else {
@@ -390,6 +392,13 @@ function FormSession({ props, meta, base, onRestart }: {
   );
 }
 
+function CoverArt() {
+  const { tokens } = useRenderer();
+  const cover = coverPhoto(tokens);
+  if (!cover) return null;
+  return <img className="fr-cover" alt="" src={cover.url} style={{ height: cover.heightPx }} />;
+}
+
 function SessionForm({ formRef, onSubmit, pageId, trail, ...rest }: {
   formRef: RefObject<HTMLFormElement | null>;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
@@ -401,6 +410,7 @@ function SessionForm({ formRef, onSubmit, pageId, trail, ...rest }: {
   const current = pageId ?? state.path[0] ?? (def.pages[0]?.id as PageId);
   return (
     <form ref={formRef} className="fr-form" noValidate tabIndex={-1} onSubmit={onSubmit} aria-label={def.title || undefined}>
+      <CoverArt />
       <PageView current={current} first={trail.length === 0} canGoBack={def.behavior.navigation.allowBack && trail.length > 0} {...rest} />
     </form>
   );
@@ -441,6 +451,7 @@ export function FormRenderer(props: FormRendererProps) {
   const pinned = stableSession.startedAt;
   const restart = useCallback(() => setRun((r) => ({ count: r.count + 1, startedAt: pinned ?? (new Date().toISOString() as IsoInstant) })), [pinned]);
   const dir = def.i18n.locales.find((l) => l.locale === locale)?.direction ?? 'ltr';
+  const photo = pagePhoto(tokens);
   return (
     <div
       className="fr-root"
@@ -453,6 +464,7 @@ export function FormRenderer(props: FormRendererProps) {
       data-layout={(theme ?? def.theme).layout}
       data-mode={mode}
     >
+      {photo ? <img className="fr-page-photo" alt="" src={photo.url} data-fit={photo.fit === 'contain' ? 'contain' : 'cover'} /> : null}
       {status.state === 'open' ? (
         <FormSession key={`${version.versionId}:${run.count}`} props={props} meta={meta} base={base} onRestart={restart} />
       ) : (

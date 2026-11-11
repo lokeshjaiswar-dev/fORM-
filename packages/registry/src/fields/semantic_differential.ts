@@ -2,7 +2,7 @@ import type { SemanticPairId } from '@form/schema';
 import { defineField, headerOf, isBlank } from '../define.ts';
 import { DEFAULT_TEXT, PALETTE_LABELS, message } from '../messages.ts';
 import { NUMBER_OPS } from '../operators.ts';
-import { NULL, countScalar, entry, isRootPath } from './shared.ts';
+import { NULL, countScalar, entry, isRootPath, pairLines } from './shared.ts';
 
 /** Bipolar adjective pairs scored on a shared integer scale. */
 export const semanticDifferential = defineField({
@@ -45,6 +45,7 @@ export const semanticDifferential = defineField({
   isEmpty: (value) => Object.values(value).every(isBlank),
   columns: (block) => block.config.pairs.map((pair) => ({ suffix: `.${pair.id}`, header: `${headerOf(block)} ${pair.left}–${pair.right}` })),
   cells: (value, block) => block.config.pairs.map((pair) => (value[pair.id] === undefined ? '' : String(value[pair.id]))),
+  text: (value, block) => pairLines(block.config.pairs.map((pair) => [`${pair.left} / ${pair.right}`, value[pair.id] === undefined ? '' : String(value[pair.id])] as const)),
   texts: (block) => block.config.pairs.map((p) => `mrow:${block.id}/${p.id}` as const),
   content: () => ['/config/pairs'],
 });

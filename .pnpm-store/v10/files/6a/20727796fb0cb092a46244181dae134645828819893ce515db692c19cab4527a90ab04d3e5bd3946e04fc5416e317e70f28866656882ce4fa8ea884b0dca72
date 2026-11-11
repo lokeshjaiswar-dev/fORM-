@@ -1,0 +1,30 @@
+import * as React from 'react';
+import { Dialog as SheetPrimitive } from 'radix-ui';
+declare function BottomSheet(props: React.ComponentProps<typeof SheetPrimitive.Root>): React.JSX.Element;
+declare function BottomSheetTrigger(props: React.ComponentProps<typeof SheetPrimitive.Trigger>): React.JSX.Element;
+declare function BottomSheetClose(props: React.ComponentProps<typeof SheetPrimitive.Close>): React.JSX.Element;
+declare function BottomSheetOverlay({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Overlay>): React.JSX.Element;
+/** `height="full"` (default) is the Figma sheet, 74px short of the window height; `auto` sizes to the content up to that limit. */
+declare function BottomSheetContent({ className, children, height, onInteractOutside, ...props }: React.ComponentProps<typeof SheetPrimitive.Content> & {
+    height?: 'full' | 'auto';
+}): React.JSX.Element;
+/** Same surface as `BottomSheetContent`, in the page flow and without Radix. */
+declare function BottomSheetPanel({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+declare function BottomSheetHeader({ title, badge, actions, onClose, showClose, className, ...props }: Omit<React.ComponentProps<'div'>, 'title'> & {
+    title: React.ReactNode;
+    badge?: React.ReactNode;
+    /** Search field and buttons shown before the close X. On narrow screens they wrap onto a second line. */
+    actions?: React.ReactNode;
+    /** Used by the static panel; a live sheet closes through Radix. */
+    onClose?: () => void;
+    showClose?: boolean;
+}): React.JSX.Element;
+/** Row of slots under the header (stacks on narrow screens). */
+declare function BottomSheetBody({ className, ref, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+/** Main slot: takes the free width and scrolls. */
+declare function BottomSheetMain({ className, ref, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+/** Side slot (Figma Slot 2, 372px). A plain `div`: an `aside` inside a dialog is not a valid top-level landmark. Give it `role="region"` and an `aria-label` if it deserves a landmark. */
+declare function BottomSheetAside({ className, ref, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+/** Narrow rail (Figma Mini Sidebar, 40px) for icon buttons. Hidden on narrow screens. */
+declare function BottomSheetRail({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+export { BottomSheet, BottomSheetAside, BottomSheetBody, BottomSheetClose, BottomSheetContent, BottomSheetHeader, BottomSheetMain, BottomSheetOverlay, BottomSheetPanel, BottomSheetRail, BottomSheetTrigger, };

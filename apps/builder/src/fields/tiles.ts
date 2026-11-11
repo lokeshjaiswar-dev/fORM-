@@ -78,15 +78,25 @@ function blockTiles(type: AvailableType): Tile[] {
 
 const PAGE_BREAK: Tile = { kind: 'page_break', id: 'page_break', category: 'layout', label: t(M['palette.page_break']), icon: 'file-plus', keywords: ['page', 'break', 'step', 'next'] };
 
-/** Every tile, in category order, then registry order within a category. */
-export const TILES: readonly Tile[] = (() => {
+/** Types kept in the registry for existing forms, but not offered in the picker or slash menu. */
+export const HIDDEN_PALETTE_TYPES = new Set<AvailableType>(['nps', 'likert', 'constant_sum', 'maxdiff', 'semantic_differential', 'captcha', 'linear_scale', 'unique_id', 'hidden']);
+
+/** Palette variants hidden even when their type stays in the picker (e.g. PIN code under short text). */
+export const HIDDEN_PALETTE_IDS = new Set(['short_text.pincode', 'file_upload.photo']);
+
+const allTiles: readonly Tile[] = (() => {
   const all = [...AVAILABLE_TYPES.flatMap(blockTiles), PAGE_BREAK];
   return CATEGORIES.flatMap((c) => all.filter((tile) => tile.category === c));
 })();
 
+/** Palette tiles, in category order: hidden survey types are omitted. */
+export const TILES: readonly Tile[] = allTiles.filter(
+  (tile) => tile.kind === 'page_break' || (!HIDDEN_PALETTE_TYPES.has(tile.choice.type) && !HIDDEN_PALETTE_IDS.has(tile.id)),
+);
+
 /** The tile of a block type (its first palette entry), for the canvas and the drag overlay. */
 export const tileOf = (type: string, overrides?: Readonly<Record<string, unknown>>): Tile | undefined => {
-  const of = TILES.filter((tile) => tile.kind === 'block' && tile.choice.type === type);
+  const of = allTiles.filter((tile) => tile.kind === 'block' && tile.choice.type === type);
   if (overrides) {
     const match = of.find((tile) => tile.kind === 'block' && Object.entries(tile.choice.configOverrides).every(([k, v]) => overrides[k] === v));
     if (match) return match;

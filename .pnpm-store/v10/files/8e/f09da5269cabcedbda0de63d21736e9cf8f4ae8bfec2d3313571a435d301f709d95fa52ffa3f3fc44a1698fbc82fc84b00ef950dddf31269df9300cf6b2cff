@@ -1,0 +1,78 @@
+import * as React from 'react';
+import { useGroupRef, usePanelRef, type GroupImperativeHandle, type GroupProps, type Layout, type LayoutChangedMeta, type PanelImperativeHandle, type PanelProps, type PanelSize, type SeparatorProps } from 'react-resizable-panels';
+/** A size as `<number>%`, or a string with its own unit (`'240px'`, `'20rem'`, `'30vw'`). */
+type PanelSizeValue = number | string;
+interface ResizablePanelGroupProps extends Omit<GroupProps, 'orientation' | 'defaultLayout' | 'disabled' | 'groupRef' | 'onLayoutChange' | 'onLayoutChanged' | 'resizeTargetMinimumSize'> {
+    /** Direction the panels sit in: `horizontal` places them side by side, `vertical` stacks them. */
+    orientation?: 'horizontal' | 'vertical';
+    /** Remembers the layout in `localStorage` under this key, so it comes back after a reload. Give every `ResizablePanel` an `id` too, because the saved sizes are matched by panel id. */
+    autoSaveId?: string;
+    /** Initial sizes as a map of panel `id` to percentage (0 to 100). Ignored when `autoSaveId` finds a saved layout. */
+    defaultLayout?: Layout;
+    /** Stops every handle in the group from resizing its neighbours. */
+    disabled?: boolean;
+    /** Imperative handle with `getLayout()` and `setLayout()`; create it with `useGroupRef()` from `react-resizable-panels`. */
+    groupRef?: React.Ref<GroupImperativeHandle | null>;
+    /** Called on every change while dragging; use `onLayoutChanged` to save. Gets a map of panel `id` to percentage. */
+    onLayoutChange?: (layout: Layout) => void;
+    /** Called once a resize has finished (pointer released, key pressed, or `collapse()` / `expand()` called). The second argument says whether the user caused it. */
+    onLayoutChanged?: (layout: Layout, meta: LayoutChangedMeta) => void;
+    /** Smallest pointer target around each handle, in px, for a mouse (`fine`) and a finger (`coarse`). */
+    resizeTargetMinimumSize?: {
+        coarse: number;
+        fine: number;
+    };
+}
+/**
+ * Container for resizable panels. It fills its parent (`h-full w-full`), so the parent needs a defined height: a fixed
+ * height, a flex or grid cell, or a viewport unit. A height class on the group itself works too. Children are `ResizablePanel` and `ResizableHandle`, in alternating order.
+ */
+declare function ResizablePanelGroup({ autoSaveId, ...props }: ResizablePanelGroupProps): React.JSX.Element;
+interface ResizablePanelProps extends Omit<PanelProps, 'defaultSize' | 'minSize' | 'maxSize' | 'collapsedSize' | 'collapsedThreshold' | 'collapsible' | 'disabled' | 'groupResizeBehavior' | 'id' | 'onResize' | 'panelRef'> {
+    /** Starting size. A number is a percentage of the group; a string takes a unit, like `'240px'`. Panels without one share the space that is left. */
+    defaultSize?: PanelSizeValue;
+    /** Smallest size the panel can be dragged to. Same units as `defaultSize`. Default 0. */
+    minSize?: PanelSizeValue;
+    /** Largest size the panel can be dragged to. Same units as `defaultSize`. Default 100%. */
+    maxSize?: PanelSizeValue;
+    /** Lets the panel snap shut when dragged below `minSize`, or when its handle has focus and Enter is pressed. */
+    collapsible?: boolean;
+    /** Size of the panel while collapsed, for example `'48px'` to leave an icon rail. Default 0. */
+    collapsedSize?: PanelSizeValue;
+    /** How far past `minSize` the panel must be dragged before it collapses (or past `collapsedSize` before it opens). Default half the gap. */
+    collapsedThreshold?: PanelSizeValue;
+    /** Keeps the panel at its size: neither its own handle nor a neighbour's can resize it. */
+    disabled?: boolean;
+    /** What the panel does when the whole group is resized: keep its share (`preserve-relative-size`) or its pixel width (`preserve-pixel-size`). A group needs at least one relative panel. */
+    groupResizeBehavior?: 'preserve-relative-size' | 'preserve-pixel-size';
+    /** Names the panel inside its group. Required for `autoSaveId` and `defaultLayout`, which match sizes by id. */
+    id?: string;
+    /** Called when the size changes, with the new size as a percentage and in pixels. */
+    onResize?: (size: PanelSize, id: string | number | undefined, previous: PanelSize | undefined) => void;
+    /** Imperative handle: `collapse()`, `expand()`, `isCollapsed()`, `getSize()` and `resize()`. Create it with `usePanelRef()` from `react-resizable-panels`. `resize()` reads a bare number as pixels, so pass a string such as `'30%'`. */
+    panelRef?: React.Ref<PanelImperativeHandle | null>;
+}
+/**
+ * One resizable region. `className` styles the inner scroll container, which scrolls on overflow, so long content stays inside the panel.
+ * Must be a direct child of `ResizablePanelGroup`.
+ */
+declare function ResizablePanel({ defaultSize, minSize, maxSize, collapsedSize, collapsedThreshold, ...props }: ResizablePanelProps): React.JSX.Element;
+interface ResizableHandleProps extends Omit<SeparatorProps, 'disabled' | 'disableDoubleClick' | 'id'> {
+    /** Draws a small grip in the middle of the line to show that it can be dragged. */
+    withHandle?: boolean;
+    /** Stops this handle from resizing its neighbours. */
+    disabled?: boolean;
+    /** When true, double-clicking the handle does not reset the panel to its default size. */
+    disableDoubleClick?: boolean;
+    /** Names the handle inside its group. */
+    id?: string;
+}
+/**
+ * The draggable divider between two panels: a 1px control-border line with a wider pointer target. Hover shows a soft bar, dragging a solid primary bar and
+ * keyboard focus the library focus ring. When the panel beside a container edge is collapsed the grip moves inside the container instead of straddling its border. It is focusable
+ * (`role="separator"`), so arrow keys resize, Home and End jump to the limits, and Enter collapses or restores a collapsible panel.
+ * Must be a direct child of `ResizablePanelGroup`. Pass `aria-label` to say what it resizes.
+ */
+declare function ResizableHandle({ withHandle, className, children, disabled, 'aria-label': ariaLabel, ...props }: ResizableHandleProps): React.JSX.Element;
+export { ResizablePanelGroup, ResizablePanel, ResizableHandle, useGroupRef, usePanelRef };
+export type { ResizablePanelGroupProps, ResizablePanelProps, ResizableHandleProps, GroupImperativeHandle, PanelImperativeHandle };

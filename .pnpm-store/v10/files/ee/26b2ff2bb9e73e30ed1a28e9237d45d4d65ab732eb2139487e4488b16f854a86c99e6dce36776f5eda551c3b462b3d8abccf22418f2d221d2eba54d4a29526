@@ -1,0 +1,35 @@
+import * as React from 'react';
+import { ContextMenu as ContextMenuPrimitive } from 'radix-ui';
+/** Right-click menu (Figma: Dropdown Menu, opened from the pointer). Same panel, rows, icons and motion as `DropdownMenu`. */
+declare function ContextMenu(props: React.ComponentProps<typeof ContextMenuPrimitive.Root>): React.JSX.Element;
+/** The area that opens the menu: right-click, long-press on touch, or Shift+F10 / the ContextMenu key while it has focus. */
+declare function ContextMenuTrigger(props: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>): React.JSX.Element;
+declare function ContextMenuPortal(props: React.ComponentProps<typeof ContextMenuPrimitive.Portal>): React.JSX.Element;
+declare function ContextMenuGroup(props: React.ComponentProps<typeof ContextMenuPrimitive.Group>): React.JSX.Element;
+declare function ContextMenuSub(props: React.ComponentProps<typeof ContextMenuPrimitive.Sub>): React.JSX.Element;
+declare function ContextMenuRadioGroup(props: React.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): React.JSX.Element;
+/** Menu panel: 8 radius, 4 padding, 1px highlighted border, mid elevation. Opens at the pointer. */
+declare function ContextMenuContent({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Content>): React.JSX.Element;
+/** Option row: 36 high, 12 / 8 padding, medium 14/20, hover fill, disabled grey. `variant="destructive"` turns it red. */
+declare function ContextMenuItem({ className, inset, variant, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Item> & {
+    /** Indents the label to line up with rows that have a check or an icon. */
+    inset?: boolean;
+    /** `destructive` is for actions that delete or discard. */
+    variant?: 'default' | 'destructive';
+}): React.JSX.Element;
+/** Multi-select row: a checkbox before the label. */
+declare function ContextMenuCheckboxItem({ className, children, checked, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.CheckboxItem>): React.JSX.Element;
+/** Single-select row: the selected option is tinted and ticked at the right. */
+declare function ContextMenuRadioItem({ className, children, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.RadioItem>): React.JSX.Element;
+/** Group label (Figma: Option Group): 28 high, 12px uppercase. */
+declare function ContextMenuLabel({ className, inset, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Label> & {
+    inset?: boolean;
+}): React.JSX.Element;
+declare function ContextMenuSeparator({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Separator>): React.JSX.Element;
+/** Keyboard hint at the right end of a row. Text only: it does not bind the key. */
+declare function ContextMenuShortcut({ className, ...props }: React.ComponentProps<'span'>): React.JSX.Element;
+declare function ContextMenuSubTrigger({ className, inset, children, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.SubTrigger> & {
+    inset?: boolean;
+}): React.JSX.Element;
+declare function ContextMenuSubContent({ className, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>): React.JSX.Element;
+export { ContextMenu, ContextMenuTrigger, ContextMenuPortal, ContextMenuContent, ContextMenuGroup, ContextMenuLabel, ContextMenuItem, ContextMenuCheckboxItem, ContextMenuRadioGroup, ContextMenuRadioItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, };

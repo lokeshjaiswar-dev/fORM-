@@ -44,30 +44,6 @@ test('the URL and the mode follow each other, Back and Forward included (B23)', 
   await expect(page.getByRole('button', { name: 'Preview', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('a v1 import opens as a new form with its notes', async ({ page }) => {
-  await page.goto('/forms');
-  const v1 = {
-    id: 'demo',
-    title: 'Imported survey',
-    description: '',
-    blocks: [{ id: 'name', type: 'text', label: 'Your name', order: 0 }],
-    settings: { redirectUrl: 'http://example.com/thanks' },
-  };
-  await page.getByLabel('v1 JSON file').setInputFiles({ name: 'survey.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(v1)) });
-  await page.waitForURL(/\/builder\/[^/]+$/);
-  expect(page.url()).not.toContain('/builder/demo');
-  await expect(page.getByPlaceholder('Form title')).toHaveValue('Imported survey');
-  const notes = page.getByRole('region', { name: 'Form notes' });
-  await notes.getByRole('button', { name: 'Show' }).click();
-  await expect(notes).toContainText('the redirect URL is not https');
-  await expect(notes).toContainText('a missing value took its default');
-
-  /* The import was migrated once and stored as v2 (BL-143): a reload opens it as it is, with nothing left to note. */
-  await page.reload();
-  await expect(page.getByPlaceholder('Form title')).toHaveValue('Imported survey');
-  await expect(page.getByRole('region', { name: 'Form notes' })).toBeHidden();
-});
-
 test('a second tab on the same form shows a warning', async ({ page, context }) => {
   await openNewForm(page);
   const other = await context.newPage();

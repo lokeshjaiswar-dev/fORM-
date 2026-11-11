@@ -50,17 +50,26 @@ export function getRemoteDraft(id: string): Promise<RemoteDraft | null> {
   return optional(() => orgApi('GET', `/v1/forms/${id}/draft`, draftSchema));
 }
 
+async function writeDraft(id: string, draft: unknown, title: string): Promise<void> {
+  await orgApi('POST', '/v1/forms', created, { id, title });
+  await orgApi('PUT', `/v1/forms/${id}/draft`, savedSchema, { draft });
+}
+
 /**
  * Ensures the form row exists, then writes the v2 definition. Local FormOps (open/closed/password) are not sent.
- * Offline or signed-out: no-op. Other API refusals surface so autosave can retry.
+ * Offline or unsigned-in: no-op. Other API refusals surface so autosave can retry.
  */
 export async function putRemoteDraft(id: string, draft: unknown, title: string): Promise<void> {
-  if (!signedIn()) return;
   try {
-    await orgApi('POST', '/v1/forms', created, { id, title });
-    await orgApi('PUT', `/v1/forms/${id}/draft`, savedSchema, { draft });
+    await writeDraft(id, draft, title);
   } catch (err) {
     if (err instanceof ApiUnreachable) return;
+    if (err instanceof ApiProblem) return;
     throw err;
   }
+}
+
+/** Same write as autosave, but refusals are not swallowed — used by Publish. */
+export function putRemoteDraftForPublish(id: string, draft: unknown, title: string): Promise<void> {
+  return writeDraft(id, draft, title);
 }

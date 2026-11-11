@@ -1,0 +1,49 @@
+import * as React from 'react';
+import { type VariantProps } from 'class-variance-authority';
+type StepStatus = 'completed' | 'active' | 'pending' | 'error' | 'skipped';
+declare const circleVariants: (props?: ({
+    size?: "sm" | "md" | "lg" | null | undefined;
+    status?: "active" | "error" | "completed" | "pending" | "skipped" | null | undefined;
+} & import("class-variance-authority/types").ClassProp) | undefined) => string;
+interface StepItemProps extends Omit<React.ComponentProps<'div'>, 'children'>, VariantProps<typeof circleVariants> {
+    index: number;
+    status: StepStatus;
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    /** circle beside the label (default) or above it, centred */
+    orientation?: 'horizontal' | 'vertical';
+    icon?: React.ReactNode;
+}
+/** One step: numbered circle (check when completed) with a label and an optional description. */
+declare function StepItem({ index, status, label, description, orientation, size, icon, className, ...props }: StepItemProps): React.JSX.Element;
+/** Connector between two steps (Figma Dash): 32px long, completed in positive, otherwise neutral. */
+declare function StepDash({ done, orientation, className, ...props }: {
+    done?: boolean;
+    orientation?: 'horizontal' | 'vertical';
+} & React.ComponentProps<'span'>): React.JSX.Element;
+interface StepperStep {
+    id?: string;
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    /** override the status derived from `current` */
+    status?: StepStatus;
+    icon?: React.ReactNode;
+}
+interface StepperProps extends Omit<React.ComponentProps<'ol'>, 'children'> {
+    steps: StepperStep[];
+    /** 0-based index of the current step: earlier steps are completed, later ones pending. A value of steps.length or more completes them all. */
+    current?: number;
+    orientation?: 'horizontal' | 'vertical';
+    /** where each circle sits relative to its label */
+    itemOrientation?: 'horizontal' | 'vertical';
+    size?: 'sm' | 'md' | 'lg';
+    /** makes completed, error and skipped steps buttons (jump back to a step). The current step and pending steps are never buttons. */
+    onStepClick?: (index: number) => void;
+}
+/**
+ * A horizontal stepper that is wider than its container scrolls sideways (the edge that still has steps fades) and keeps the current step in view; give it a width, or put it in a flex or grid cell, and it needs no wrapper.
+ * With `onStepClick`, completed, error and skipped steps are buttons; the current step and pending steps are not.
+ */
+declare function Stepper({ steps, current, orientation, itemOrientation, size, onStepClick, className, ref, ...props }: StepperProps): React.JSX.Element;
+export { Stepper, StepItem, StepDash, circleVariants as stepCircleVariants };
+export type { StepperProps, StepperStep, StepStatus };

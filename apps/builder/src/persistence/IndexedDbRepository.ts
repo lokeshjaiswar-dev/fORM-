@@ -1,4 +1,4 @@
-import { createStore, get, set, values, type UseStore } from 'idb-keyval';
+import { createStore, del, get, set, values, type UseStore } from 'idb-keyval';
 import { StoredFormSchema, newestFirst, summarize, type DocumentRepository, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
 
 /** Forms in this browser's IndexedDB (idb-keyval), one record per form id. The database opens on first use. */
@@ -37,5 +37,9 @@ export class IndexedDbRepository implements DocumentRepository {
 
   async save(form: StoredForm): Promise<void> {
     await set(form.id, form, this.db());
+  }
+
+  async remove(id: string): Promise<void> {
+    await del(id, this.db());
   }
 }

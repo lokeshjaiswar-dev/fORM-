@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ApiProblem, ApiUnreachable, orgApi } from '@/auth/client';
+import { ApiProblem, ApiUnreachable, api, orgApi } from '@/auth/client';
 import type { StoredSubmission, SubmissionSummary } from '@/persistence/SubmissionsRepository';
 
 const created = z.object({ id: z.string() });
@@ -37,6 +37,14 @@ export async function ensureRemoteForm(id: string, title: string): Promise<void>
 }
 
 export async function postRemoteSubmission(formId: string, record: StoredSubmission): Promise<string | null> {
+  const published = await quiet(() =>
+    api('POST', `/v1/p/by-form/${formId}/submissions`, created, {
+      answers: record.answers,
+      fields: record.fields,
+      locale: record.locale ?? 'en-IN',
+    }),
+  );
+  if (published?.id) return published.id;
   const res = await quiet(() =>
     orgApi('POST', `/v1/forms/${formId}/submissions`, created, {
       answers: record.answers,
@@ -48,11 +56,15 @@ export async function postRemoteSubmission(formId: string, record: StoredSubmiss
 }
 
 export async function listRemoteSubmissions(formId: string): Promise<SubmissionSummary[] | null> {
+  const published = await quiet(() => api('GET', `/v1/p/by-form/${formId}/submissions`, listSchema));
+  if (published) return published.items;
   const res = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions`, listSchema));
   return res?.items ?? null;
 }
 
 export async function getRemoteSubmission(formId: string, id: string): Promise<StoredSubmission | null> {
+  const published = await quiet(() => api('GET', `/v1/p/by-form/${formId}/submissions/${id}`, detailSchema));
+  if (published) return published;
   const res = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions/${id}`, detailSchema));
   return res;
 }

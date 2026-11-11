@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
-  AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionGeneral, SemanticDifferentialGeneral,
+  AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, FullNameGeneral, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionGeneral, SemanticDifferentialGeneral,
   LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
@@ -26,7 +26,7 @@ export interface InspectorView<T extends AvailableType> {
 export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   short_text: { general: ChromeGeneral, validation: ShortTextValidation },
   long_text: { general: LongTextGeneral, validation: LongTextValidation },
-  full_name: { validation: FullNameValidation },
+  full_name: { general: FullNameGeneral, validation: FullNameValidation },
   email: { general: EmailGeneral, validation: EmailValidation },
   phone: { general: PhoneGeneral, validation: PhoneValidation },
   address: { general: AddressGeneral, validation: AddressValidation },

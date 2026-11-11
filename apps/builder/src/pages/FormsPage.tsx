@@ -1,41 +1,38 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Inbox, Plus, Upload } from 'lucide-react';
+import { FileText, Inbox, Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import type { FormDefinition, IsoInstant } from '@form/schema';
+import type { FormDefinition } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
-import { AccountMenu } from '@/auth/AccountMenu';
-import { useSessionStore } from '@/auth/client';
-import { EditionBadge } from '@/edition/EditionBadge';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
+import { gstinDemoDefinition } from '@/lib/gstinDemo';
 import { uid } from '@/lib/utils';
-import { DOCUMENT_FORMAT, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
+import type { FormSummary, StoredForm } from '@/persistence/DocumentRepository';
 import { whenSaved } from '@/persistence/autosave';
-import { importV1, newStoredForm } from '@/persistence/openForm';
+import { newStoredForm } from '@/persistence/openForm';
+import { deleteSubmissionFiles, fileIdsFromAnswers } from '@/persistence/blobStore';
 import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
 import { useRepository } from '@/persistence/repository';
-import { noteImport } from '@/persistence/useFormSession';
 import { builderPath } from '@/pages/useBuilderMode';
 
 const M = defineMessages('builder', {
   'forms.title': 'Forms',
   'forms.new': 'New form',
-  'forms.import': 'Import v1 JSON',
-  'forms.import_label': 'v1 JSON file',
-  'forms.empty': 'No forms yet. Start a new one or import a v1 export.',
+  'forms.empty': 'No forms yet. Start a new one.',
   'forms.untitled': 'Untitled form',
   'forms.responses': 'Responses',
   'forms.responses_n': '{n, plural, one {# response} other {# responses}}',
   'forms.blocks': '{n, plural, one {# block} other {# blocks}}',
   'forms.unreadable': 'Saved forms could not be read.',
   'forms.not_saved': 'The form could not be saved in this browser.',
-  'forms.not_json': '{name} is not JSON.',
   'new.title': 'New form',
   'new.description': 'Start from a blank form or from a template. Templates work offline.',
   'new.blank': 'Blank form',
   'new.blank_hint': 'An empty page to build on',
+  'new.demo_gstin': 'Demo: GSTIN vs State',
+  'new.demo_gstin_hint': 'State codes + GSTIN check. Delete the form when you are done.',
   'new.templates': 'From a template',
 });
 
@@ -46,22 +43,20 @@ function savedWhen(iso: string): string {
   return Number.isNaN(at.getTime()) ? '' : ` · ${dateTime.format(at)}`;
 }
 
-/** The forms saved in this browser: open one, start a new one (blank or from a template), or import a v1 JSON export. */
+/** The forms saved in this browser: open one, or start a new one (blank or from a template). */
 export function FormsPage() {
   const repo = useRepository();
-  const session = useSessionStore((s) => s.status);
   const submissions = useOptionalSubmissions();
   const navigate = useNavigate();
-  const file = useRef<HTMLInputElement>(null);
   const [forms, setForms] = useState<FormSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState<FormSummary | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(preloadGallery, []);
 
   useEffect(() => {
-    if (session === 'unknown') return;
     let live = true;
     whenSaved().then(() => repo.list()).then(
       (list) => live && setForms(list),
@@ -70,7 +65,7 @@ export function FormsPage() {
     return () => {
       live = false;
     };
-  }, [repo, session]);
+  }, [repo]);
 
   useEffect(() => {
     if (!submissions || !forms) return;
@@ -105,54 +100,29 @@ export function FormsPage() {
     await saveThenOpen(doc ? newStoredForm(id, now, doc) : newStoredForm(id, now));
   }
 
-  async function importFile(picked: File) {
-    setError(null);
-    let json: unknown;
+  async function confirmDelete() {
+    if (!removing) return;
+    const id = removing.id;
+    setRemoving(null);
     try {
-      json = JSON.parse(await picked.text());
+      if (submissions) {
+        const gone = await submissions.removeByForm(id);
+        await deleteSubmissionFiles(gone.flatMap((row) => fileIdsFromAnswers(row.answers)));
+      }
+      await repo.remove(id);
+      setForms((list) => list?.filter((form) => form.id !== id) ?? null);
     } catch {
-      setError(t(M['forms.not_json'], { name: picked.name }));
-      return;
+      setError(t(M['forms.unreadable']));
     }
-    const id = uid();
-    const now = new Date().toISOString();
-    const opened = importV1(json, id, now as IsoInstant);
-    if (!opened.ok) {
-      setError(opened.error);
-      return;
-    }
-    noteImport(id, opened.notes);
-    await saveThenOpen({ id, format: DOCUMENT_FORMAT, rev: 0, savedAt: now, doc: opened.doc, ops: opened.ops });
   }
 
   return (
     <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
-      <div className="-mt-12 mb-6 flex justify-end">
-        <AccountMenu />
-      </div>
-      <div className="flex items-baseline justify-between gap-4">
-        <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
-        <EditionBadge />
-      </div>
+      <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
       <div className="mt-6 flex gap-2">
         <Button onClick={() => setCreating(true)}>
           <Plus /> {t(M['forms.new'])}
         </Button>
-        <Button variant="outline" onClick={() => file.current?.click()}>
-          <Upload /> {t(M['forms.import'])}
-        </Button>
-        <input
-          ref={file}
-          type="file"
-          accept="application/json,.json"
-          aria-label={t(M['forms.import_label'])}
-          className="hidden"
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            e.target.value = '';
-            if (picked) void importFile(picked);
-          }}
-        />
       </div>
       {error ? (
         <p role="alert" className="mt-4 text-[14px] text-destructive">
@@ -180,6 +150,15 @@ export function FormsPage() {
                   {counts[form.id] ? ` · ${t(M['forms.responses_n'], { n: counts[form.id] ?? 0 })}` : ''}
                 </Link>
               </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Delete"
+                onClick={() => setRemoving(form)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
             </li>
           ))}
         </ul>
@@ -202,10 +181,40 @@ export function FormsPage() {
               <span className="block text-sm font-normal text-muted-foreground">{t(M['new.blank_hint'])}</span>
             </span>
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void create(gstinDemoDefinition('demo'))}
+            className="mb-4 h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-left"
+          >
+            <FileText className="size-4 shrink-0" />
+            <span>
+              <span className="block font-medium">{t(M['new.demo_gstin'])}</span>
+              <span className="block text-sm font-normal text-muted-foreground">{t(M['new.demo_gstin_hint'])}</span>
+            </span>
+          </Button>
           <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['new.templates'])}</p>
           <Suspense fallback={<GalleryFallback />}>
             <TemplateGallery onCancel={() => setCreating(false)} onUse={(definition) => void create(definition)} />
           </Suspense>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={removing !== null} onOpenChange={(next) => !next && setRemoving(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this form?</DialogTitle>
+            <DialogDescription>
+              "{removing?.title || t(M['forms.untitled'])}" will be removed from this browser. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setRemoving(null)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void confirmDelete()}>
+              Delete form
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </main>

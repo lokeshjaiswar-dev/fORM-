@@ -1,0 +1,193 @@
+import { type ReactNode } from 'react';
+import { type DateRangeValue } from '../components/date-picker';
+/** `select` picks one option, `multi` any number of them, `date-range` a from / to date, `number-range` a min / max, `text` a phrase. */
+export type FilterType = 'select' | 'multi' | 'date-range' | 'number-range' | 'text';
+export interface FilterOption {
+    /** the value stored in the filter and compared with the row's value */
+    value: string;
+    /** what the row shows; may be any node, such as a status badge */
+    label: ReactNode;
+    /** plain text for searching and for the chip when `label` is not a string */
+    text?: string;
+    /** how many rows have this value; shown at the right of the row */
+    count?: number;
+    /** icon before the label */
+    icon?: ReactNode;
+}
+/** Both ends are inclusive; leave one out for an open range. */
+export interface NumberRangeValue {
+    /** lowest number that passes; leave out for no lower limit */
+    min?: number;
+    /** highest number that passes; leave out for no upper limit */
+    max?: number;
+}
+export type TextFilterOperator = 'contains' | 'equals';
+export interface TextFilterValue {
+    /** `contains` finds the phrase anywhere in the value, `equals` needs the whole value to match (both ignore case) */
+    op: TextFilterOperator;
+    /** the phrase to look for */
+    text: string;
+}
+/** `select`: the option value. `multi`: option values. `date-range`: ISO dates (`2026-10-24`). `number-range`: numbers. `text`: operator and phrase. */
+export type FilterValue = string | string[] | DateRangeValue | NumberRangeValue | TextFilterValue;
+/** Active filters by `FilterDef.key`. A filter with no value has no entry, so `{}` means "nothing filtered" and `Object.keys(state).length` is the active count. */
+export type FilterState = Record<string, FilterValue>;
+export interface FilterDef {
+    /** identifies the filter in a `FilterState` and, in `DataTable`, the column it belongs to */
+    key: string;
+    /** name in the Add filter menu and at the start of the chip */
+    label: string;
+    /** which editor the filter uses and how a row value is compared */
+    type: FilterType;
+    /** choices of a `select` or `multi` filter */
+    options?: FilterOption[];
+    /** icon in the Add filter menu and on the chip; defaults to one per `type` */
+    icon?: ReactNode;
+    /** `number-range`: the numbers are rupees, so the inputs get a ₹ prefix and the chip reads "₹1 L to ₹5 L" */
+    currency?: boolean;
+    /** `text`: placeholder of the text box */
+    placeholder?: string;
+    /** `date-range`: the quick choices above the custom range. Default `dateRangePresets`. */
+    presets?: DateRangePreset[];
+}
+/** A named range in the date filter. `range` runs when the filter is used, so "Today" is always today. */
+export interface DateRangePreset {
+    /** stable identifier; a chip shows the preset's label while the range still equals it */
+    id: string;
+    /** name of the quick choice */
+    label: string;
+    /** the dates the preset stands for, read when the preset is chosen */
+    range: () => DateRangeValue;
+}
+/** Today, Yesterday, Last 7 days, Last 30 days, This month, Last month and This financial year (1 April to 31 March). */
+export declare const dateRangePresets: DateRangePreset[];
+/** True when the value narrows anything: a non-empty option list, a date range with an end, a number bound, a phrase. */
+export declare function isFilterActive(def: Pick<FilterDef, 'type'>, value: FilterValue | undefined): boolean;
+/**
+ * Does one row value pass one filter? `candidate` is what the row holds for this filter (a string, number, ISO date or array of strings).
+ * An empty filter lets everything through.
+ */
+export declare function matchesFilter(def: Pick<FilterDef, 'type'>, value: FilterValue | undefined, candidate: unknown): boolean;
+/** Reads the value a filter tests from a row. The default reads `row[key]`. */
+export type FilterAccessor<T> = (row: T, key: string) => unknown;
+/** Rows per option value, for each select / multi filter: `counts[key][optionValue]`. */
+export type FacetCounts = Record<string, Record<string, number>>;
+export interface FilterEvaluation {
+    /** positions in `rows` of the rows that pass every active filter, in the original order */
+    indices: number[];
+    /** only with `withCounts` */
+    counts: FacetCounts;
+}
+/**
+ * One pass over the rows: which ones pass every active filter and, with `withCounts`, how many rows each option of each select / multi filter
+ * would show given the *other* filters (the filter's own choice is ignored, so picking "Approved" does not zero out "Pending").
+ * `DataTable` uses this; call it yourself to filter long lists without copying the rows.
+ */
+export declare function evaluateFilters<T>(rows: readonly T[], defs: readonly FilterDef[], state: FilterState, accessor?: FilterAccessor<T>, withCounts?: boolean): FilterEvaluation;
+/** The rows that pass every active filter. Returns `rows` itself when no filter is active. */
+export declare function applyFilters<T>(rows: T[], defs: readonly FilterDef[], state: FilterState, accessor?: FilterAccessor<T>): T[];
+/** A short text for a chip or a summary: "Approved, Pending", "Last 7 days", "₹1 L to ₹5 L", `contains "master"`. Empty for an inactive filter. */
+export declare function describeFilter(def: FilterDef, value: FilterValue | undefined): string;
+/** Props every standalone filter shares. */
+export interface FilterTriggerProps {
+    /** name on the button and in the editor */
+    label: string;
+    /** icon before the label */
+    icon?: ReactNode;
+    /** the button cannot be opened */
+    disabled?: boolean;
+    /** why the filter is disabled: shown as a tooltip when the button is hovered or focused (the button itself becomes reachable by keyboard) */
+    disabledReason?: ReactNode;
+    /** extra classes for the button */
+    className?: string;
+    /** which edge of the button the panel lines up with (default `start`) */
+    align?: 'start' | 'center' | 'end';
+}
+export interface FacetedFilterProps extends FilterTriggerProps {
+    /** the choices, each with an optional icon and count */
+    options: FilterOption[];
+    /** selected option values; leave out for an uncontrolled filter */
+    value?: string[];
+    /** starting selection of an uncontrolled filter */
+    defaultValue?: string[];
+    /** called with every option value that is selected after a change */
+    onValueChange?: (value: string[]) => void;
+}
+/** Pick any number of options from a searchable list. Rows show their `count`, and the footer says how many are picked and clears them. */
+export declare function FacetedFilter({ label, options, value, defaultValue, onValueChange, ...trigger }: FacetedFilterProps): import("react").JSX.Element;
+export interface SelectFilterProps extends FilterTriggerProps {
+    /** the choices, each with an optional icon and count */
+    options: FilterOption[];
+    /** the selected option value, or an empty string; leave out for an uncontrolled filter */
+    value?: string;
+    /** starting choice of an uncontrolled filter */
+    defaultValue?: string;
+    /** called with the chosen option value, or an empty string when cleared */
+    onValueChange?: (value: string) => void;
+}
+/** Pick one option from a searchable list. Choosing it again, or Clear, removes the filter. The panel closes on a choice. */
+export declare function SelectFilter({ label, options, value, defaultValue, onValueChange, ...trigger }: SelectFilterProps): import("react").JSX.Element;
+export interface DateRangeFilterProps extends FilterTriggerProps {
+    /** ISO dates (`2026-10-24`); leave out for an uncontrolled filter */
+    value?: DateRangeValue;
+    /** starting range of an uncontrolled filter */
+    defaultValue?: DateRangeValue;
+    /** called with the new range; an empty object when cleared */
+    onValueChange?: (value: DateRangeValue) => void;
+    /** quick choices above the custom range (default `dateRangePresets`) */
+    presets?: DateRangePreset[];
+}
+/** Quick ranges (Today, Last 7 days, This month ...) above a custom range picked with the date range picker. */
+export declare function DateRangeFilter({ label, value, defaultValue, onValueChange, presets, ...trigger }: DateRangeFilterProps): import("react").JSX.Element;
+export interface NumberRangeFilterProps extends FilterTriggerProps {
+    /** the range; leave out for an uncontrolled filter */
+    value?: NumberRangeValue;
+    /** starting range of an uncontrolled filter */
+    defaultValue?: NumberRangeValue;
+    /** called with the new range; an empty object when cleared */
+    onValueChange?: (value: NumberRangeValue) => void;
+    /** the numbers are rupees: ₹ prefix on the inputs, Indian grouping in the hint and the summary */
+    currency?: boolean;
+}
+/** Min and max inputs, applied with the Apply button or Enter. Either end may stay empty. */
+export declare function NumberRangeFilter({ label, value, defaultValue, onValueChange, currency, ...trigger }: NumberRangeFilterProps): import("react").JSX.Element;
+export interface TextFilterProps extends FilterTriggerProps {
+    /** the phrase, or `null` for none; leave `value` out for an uncontrolled filter */
+    value?: TextFilterValue | null;
+    /** starting phrase of an uncontrolled filter */
+    defaultValue?: TextFilterValue | null;
+    /** called with the operator and phrase, or `null` when cleared */
+    onValueChange?: (value: TextFilterValue | null) => void;
+    /** placeholder of the text box */
+    placeholder?: string;
+}
+/** A phrase that the value contains or equals (ignoring case). Applied with the Apply button or Enter; `null` when cleared. */
+export declare function TextFilter({ label, value, defaultValue, onValueChange, placeholder, ...trigger }: TextFilterProps): import("react").JSX.Element;
+export interface FilterBarProps {
+    /** the filters that can be added */
+    filters: FilterDef[];
+    /** active filters by key; leave out for an uncontrolled bar */
+    value?: FilterState;
+    /** starting filters of an uncontrolled bar */
+    defaultValue?: FilterState;
+    /** called with the whole new state; a filter that is cleared is removed from it */
+    onValueChange?: (value: FilterState) => void;
+    /** how many rows match; announced to screen readers (politely) whenever it or the active filters change */
+    resultCount?: number;
+    /** what a row is called in that announcement, singular (default `result`) */
+    resultNoun?: string;
+    /** content at the start of the bar, before Add filter: a saved-views menu, say */
+    savedViews?: ReactNode;
+    /** content at the right end of the bar */
+    actions?: ReactNode;
+    /** text of the Add filter button */
+    addLabel?: string;
+    /** extra classes for the bar */
+    className?: string;
+}
+/**
+ * Add filter menu, one chip per active filter ("Status: Approved, Pending") and Clear all. A chip opens its editor on click and has its own
+ * remove button. Picking a filter in the menu adds its chip and opens the editor straight away; if you close it without choosing anything the
+ * chip goes away again. A hidden live region announces the result count.
+ */
+export declare function FilterBar({ filters, value: valueProp, defaultValue, onValueChange, resultCount, resultNoun, savedViews, actions, addLabel, className }: FilterBarProps): import("react").JSX.Element;

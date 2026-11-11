@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
+import { Chip } from '@dmacq/ui';
 import { useFormContext } from 'react-hook-form';
 import { acceptsFile } from '@form/registry';
 import type { AnswerValue, FileRef } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
+import { FileDropzone } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 interface Pending { key: number; name: string; error?: string }
@@ -29,9 +31,9 @@ export function FileUpload({ block, field }: ControlProps<'file_upload'>) {
   };
   const types = [...c.accept.extensions].join(', ');
 
-  const add = (picked: FileList | null) => {
+  const take = (picked: File[]) => {
     const room = Math.max(0, c.maxFiles - files.length - pending.filter((p) => !p.error).length);
-    for (const file of Array.from(picked ?? []).slice(0, room)) {
+    for (const file of picked.slice(0, room)) {
       const key = (next.current += 1);
       const problem = !acceptsFile({ name: file.name, mime: file.type }, c.accept)
         ? t('system:file_type_not_allowed', { types })
@@ -56,44 +58,42 @@ export function FileUpload({ block, field }: ControlProps<'file_upload'>) {
   };
   const extensions = c.accept.extensions.map((e) => `.${e.replace(/^\./, '')}`);
   const locked = field.disabled || field.readOnly;
+  const attrs = inputAttrs(field);
   return (
     <div className="fr-files">
-      <input
+      <FileDropzone
         id={field.ids.input}
-        className="fr-file-input"
-        type="file"
+        accept={[...extensions, ...c.accept.mimeTypes]}
+        maxSize={c.maxFileBytes}
+        maxFiles={c.maxFiles}
+        currentCount={files.length}
         multiple={c.maxFiles > 1}
-        accept={[...extensions, ...c.accept.mimeTypes].join(',') || undefined}
-        capture={c.capture === 'none' ? undefined : c.capture}
-        onChange={(e) => {
-          add(e.target.files);
-          e.target.value = '';
-        }}
-        onBlur={answer.onBlur}
-        {...inputAttrs(field)}
-        readOnly={undefined}
         disabled={locked || files.length >= c.maxFiles}
+        aria-invalid={attrs['aria-invalid']}
+        aria-describedby={attrs['aria-describedby']}
+        onFilesAdded={(accepted) => take(accepted)}
+        size="compact"
       />
       {files.length || pending.length ? (
         <ul className="fr-file-list" aria-live="polite">
           {files.map((f) => (
             <li key={f.fileId} className="fr-file">
-              <span>{t(MESSAGES['file.uploaded'], { name: f.name })}</span>
-              {locked ? null : (
-                <button type="button" className="fr-link-button" onClick={() => remove(f.fileId)}>
-                  {t(MESSAGES['file.remove'], { name: f.name })}
-                </button>
-              )}
+              <Chip kind="input" size="sm" onRemove={locked ? undefined : () => remove(f.fileId)} removeLabel={t(MESSAGES['file.remove'], { name: f.name })}>
+                {f.name}
+              </Chip>
             </li>
           ))}
           {pending.map((p) => (
             <li key={p.key} className="fr-file" data-error={p.error ? '' : undefined}>
-              <span>{p.error ?? t(MESSAGES['file.uploading'], { name: p.name })}</span>
-              {p.error ? (
-                <button type="button" className="fr-link-button" onClick={() => setPending((list) => list.filter((x) => x.key !== p.key))}>
-                  {t(MESSAGES['file.remove'], { name: p.name })}
-                </button>
-              ) : null}
+              <Chip
+                kind="input"
+                size="sm"
+                color={p.error ? 'negative' : 'neutral'}
+                onRemove={p.error ? () => setPending((list) => list.filter((x) => x.key !== p.key)) : undefined}
+                removeLabel={t(MESSAGES['file.remove'], { name: p.name })}
+              >
+                {p.error ?? t(MESSAGES['file.uploading'], { name: p.name })}
+              </Chip>
             </li>
           ))}
         </ul>

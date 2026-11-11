@@ -1,4 +1,5 @@
 import type { MatrixColumnId, MatrixRowId, MatrixValue } from '@form/schema';
+import { DsCheckCell, DsRadioCell } from './ds.tsx';
 import { useAnswer, usePipes, type ControlProps } from './hooks.ts';
 
 /**
@@ -66,14 +67,13 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
                   const checked = value?.mode === 'single' && value.rows[row.id] === col.id;
                   return (
                     <td key={col.id}>
-                      <input
+                      <DsRadioCell
                         id={inputId}
-                        type="radio"
-                        name={`${field.ids.base}-${row.id}`}
-                        aria-label={cellName}
+                        value={col.id}
                         checked={checked}
                         disabled={locked}
-                        onChange={() => setSingle(row.id, col.id)}
+                        aria-label={cellName}
+                        onSelect={() => setSingle(row.id, col.id)}
                         onBlur={answer.onBlur}
                       />
                     </td>
@@ -83,13 +83,12 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
                   const checked = value?.mode === 'multi' && (value.rows[row.id] ?? []).includes(col.id);
                   return (
                     <td key={col.id}>
-                      <input
+                      <DsCheckCell
                         id={inputId}
-                        type="checkbox"
-                        aria-label={cellName}
                         checked={checked}
                         disabled={locked}
-                        onChange={(e) => setMulti(row.id, col.id, e.target.checked)}
+                        aria-label={cellName}
+                        onChange={(on) => setMulti(row.id, col.id, on)}
                         onBlur={answer.onBlur}
                       />
                     </td>

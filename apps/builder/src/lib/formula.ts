@@ -1,7 +1,7 @@
 import type { BlockId, DecimalString, Expr } from '@form/schema';
 
 /*
- * Author-facing formulas for calculation fields: field keys, numbers and + − × ÷ with parentheses.
+ * Author-facing formulas for calculation fields: field keys, numbers, sum(field) and + − × ÷ with parentheses.
  * The AST is the schema Expr; this is only a view of that subset.
  */
 
@@ -39,9 +39,20 @@ export function parseFormula(text: string, fields: ReadonlyMap<string, BlockId>)
     }
     const key = KEY.exec(rest);
     if (key) {
+      i += key[0].length;
+      skip();
+      if (peek() === '(') {
+        if (key[0] !== 'sum') return fail(`Unknown function ‘${key[0]}’`);
+        i += 1;
+        const arg = expr();
+        if (!arg.ok) return arg;
+        skip();
+        if (peek() !== ')') return fail('Close the parenthesis');
+        i += 1;
+        return { ok: true, expr: { k: 'call', fn: 'sum', args: [arg.expr] } };
+      }
       const id = fields.get(key[0]);
       if (!id) return fail(`Unknown field ‘${key[0]}’`);
-      i += key[0].length;
       return { ok: true, expr: { k: 'ref', ref: { kind: 'answer', blockId: id } } };
     }
     return fail('Expected a number, a field key or ‘(’');
@@ -101,6 +112,7 @@ export function formatFormula(expr: Expr, keys: ReadonlyMap<BlockId, string>): s
   const go = (e: Expr, parent: number): string => {
     if (e.k === 'lit' && e.value.type === 'number') return e.value.value;
     if (e.k === 'ref' && e.ref.kind === 'answer') return keys.get(e.ref.blockId) ?? '';
+    if (e.k === 'call' && e.fn === 'sum' && e.args[0]) return `sum(${go(e.args[0], 0)})`;
     if (e.k === 'unary' && e.op === 'neg') return `-${go(e.arg, 3)}`;
     if (e.k === 'binary' && PREC[e.op] !== undefined) {
       const p = PREC[e.op] ?? 0;

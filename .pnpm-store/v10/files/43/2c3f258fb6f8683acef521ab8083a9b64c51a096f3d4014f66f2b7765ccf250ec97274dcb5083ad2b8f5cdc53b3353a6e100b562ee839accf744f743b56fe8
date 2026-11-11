@@ -1,0 +1,13 @@
+import * as React from 'react';
+import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
+import { ChevronDownIcon } from 'lucide-react';
+declare function Collapsible(props: React.ComponentProps<typeof CollapsiblePrimitive.Root>): React.JSX.Element;
+declare function CollapsibleTrigger({ className, ...props }: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleTrigger>): React.JSX.Element;
+/** Eases open and closed like Accordion (height, 200ms, no motion for reduced-motion users). Clipping is only on while it animates, so focus rings of the content are never cut. */
+declare function CollapsibleContent({ className, ...props }: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleContent>): React.JSX.Element;
+/**
+ * A chevron that turns upside down while its `CollapsibleTrigger` is open, so every "show more" does not rewrite the rotation.
+ * Put it inside the trigger (or inside a Button that is the trigger with `asChild`).
+ */
+declare function CollapsibleChevron({ className, ...props }: React.ComponentProps<typeof ChevronDownIcon>): React.JSX.Element;
+export { Collapsible, CollapsibleTrigger, CollapsibleContent, CollapsibleChevron };

@@ -1,10 +1,15 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
+import { CheckboxField } from '@dmacq/ui';
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
+import { ChoicePicture } from './choicePicture.tsx';
+import { DsMultiSelect } from './ds.tsx';
 import { useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
 
-/** FLD-11/13: checkboxes, or a disclosure that opens the same checkboxes (multi-select dropdown); exclusive options clear the rest. */
+const OTHER = '__other__';
+
+/** FLD-11/13: checkboxes, or a multi-select; exclusive options clear the rest. */
 export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   const { t } = useRenderer();
   const { text } = usePipes();
@@ -13,8 +18,6 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   const options = useOptions(block.id, c.options, c.shuffle);
   const other = c.other?.enabled ? c.other : undefined;
   const otherLabel = other?.label?.trim() || t('system:other.label');
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
   const ids = answer.value?.optionIds ?? [];
   const otherOn = answer.value?.other !== undefined;
   const exclusive = new Set<OptionId>(c.exclusiveOptionIds ?? []);
@@ -29,45 +32,96 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   };
   const toggleOther = (on: boolean) => write(on ? ids.filter((x) => !exclusive.has(x)) : ids, on ? (answer.value?.other ?? '') : undefined);
 
-  const panelId = `${field.ids.base}-options`;
-  const dropdown = c.display === 'dropdown';
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!c.searchable || q === '') return options;
-    return options.filter((o) => text(o.label).toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
-  }, [c.searchable, options, query, text]);
-  const list = (
-    <div id={panelId} className="fr-choices" hidden={dropdown && !open} style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
-      {c.searchable ? (
-        <input
-          className="fr-input"
-          type="search"
-          value={query}
+  const applyIds = (next: string[]) => {
+    const hasOther = next.includes(OTHER);
+    const picked = next.filter((id) => id !== OTHER) as OptionId[];
+    const last = picked[picked.length - 1];
+    if (last && exclusive.has(last)) return write([last], undefined);
+    const cleaned = picked.filter((id) => !exclusive.has(id));
+    write(cleaned, hasOther ? (answer.value?.other ?? '') : undefined);
+  };
+
+  if (c.display === 'image') {
+    return (
+      <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
+          {options.map((o, i) => (
+            <label key={o.id} className="fr-image-choice" data-selected={ids.includes(o.id) ? 'true' : undefined}>
+              <CheckboxField
+                id={i === 0 ? field.ids.input : undefined}
+                label=""
+                checked={ids.includes(o.id)}
+                disabled={locked}
+                aria-invalid={field.invalid || undefined}
+                onCheckedChange={(on) => toggle(o.id, on === true)}
+                onBlur={answer.onBlur}
+              />
+              <ChoicePicture image={o.image} label={text(o.label)} />
+              <span>{text(o.label)}</span>
+            </label>
+          ))}
+      </div>
+    );
+  }
+
+  if (c.display === 'dropdown') {
+    const items = [
+      ...options.map((o) => ({ value: o.id as string, label: text(o.label) })),
+      ...(other ? [{ value: OTHER, label: otherLabel }] : []),
+    ];
+    const selected = [...ids, ...(otherOn ? [OTHER] : [])];
+    return (
+      <>
+        <DsMultiSelect
+          id={field.ids.input}
+          value={selected}
+          onChange={applyIds}
+          options={items}
           placeholder={c.placeholder?.trim() || t('system:select.placeholder')}
-          onChange={(e) => setQuery(e.target.value)}
           disabled={locked}
+          aria-invalid={field.invalid || undefined}
+          aria-describedby={field.ids.describedBy}
+          aria-required={field.required || undefined}
+          aria-labelledby={field.ids.label}
         />
-      ) : null}
-      {shown.map((o, i) => (
-        <label key={o.id} className="fr-choice">
+        {other && otherOn ? (
           <input
-            type="checkbox"
-            id={i === 0 ? field.ids.input : undefined}
-            value={o.id}
-            checked={ids.includes(o.id)}
-            disabled={locked}
-            aria-invalid={field.invalid || undefined}
-            onChange={(e) => toggle(o.id, e.target.checked)}
-            onBlur={answer.onBlur}
+            className="fr-input fr-other"
+            type="text"
+            aria-label={t(MESSAGES['choice.other_answer'], { label: otherLabel })}
+            placeholder={other.placeholder?.trim() || t('system:other.placeholder')}
+            maxLength={other.maxLength}
+            value={answer.value?.other ?? ''}
+            disabled={field.disabled}
+            readOnly={field.readOnly || undefined}
+            onChange={(e) => write(ids, e.target.value)}
           />
-          <span>{text(o.label)}</span>
-        </label>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <div className="fr-choices" style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
+      {options.map((o, i) => (
+        <CheckboxField
+          key={o.id}
+          id={i === 0 ? field.ids.input : undefined}
+          label={text(o.label)}
+          checked={ids.includes(o.id)}
+          disabled={locked}
+          aria-invalid={field.invalid || undefined}
+          onCheckedChange={(on) => toggle(o.id, on === true)}
+          onBlur={answer.onBlur}
+        />
       ))}
       {other ? (
-        <label className="fr-choice">
-          <input type="checkbox" checked={otherOn} disabled={locked} aria-invalid={field.invalid || undefined} onChange={(e) => toggleOther(e.target.checked)} />
-          <span>{otherLabel}</span>
-        </label>
+        <CheckboxField
+          label={otherLabel}
+          checked={otherOn}
+          disabled={locked}
+          aria-invalid={field.invalid || undefined}
+          onCheckedChange={(on) => toggleOther(on === true)}
+        />
       ) : null}
       {other && otherOn ? (
         <input
@@ -82,16 +136,6 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
           onChange={(e) => write(ids, e.target.value)}
         />
       ) : null}
-    </div>
-  );
-  if (!dropdown) return list;
-  const count = ids.length + (otherOn ? 1 : 0);
-  return (
-    <div className="fr-disclosure">
-      <button type="button" className="fr-input fr-select fr-disclosure-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>
-        {t(MESSAGES['dropdown.summary'], { count })}
-      </button>
-      {list}
     </div>
   );
 }

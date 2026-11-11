@@ -305,6 +305,44 @@ describe('compile', () => {
     expect(c.requires).toContain('expr@1');
   });
 
+  it('a formula that sums a repeating-group number compiles', () => {
+    const def = form(
+      [
+        field('repeating_group', 'items', { config: { children: [bid('amount')], minRows: 0, maxRows: 10, initialRows: 1, layout: 'stacked' } }),
+        field('number', 'amount'),
+        field('calculation', 'total', {
+          config: {
+            expr: { k: 'call', fn: 'sum', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('amount') } }] },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['items', 'total'])],
+    );
+    const c = compiled(def);
+    expect(c.plan.some((s) => s.kind === 'capture' && s.blockId === 'total')).toBe(true);
+    expect(c.reads['capture:total']?.includes('value:items')).toBe(true);
+  });
+
+  it('a formula that uses a repeating-group number without sum does not compile', () => {
+    const def = form(
+      [
+        field('repeating_group', 'items', { config: { children: [bid('amount')], minRows: 0, maxRows: 10, initialRows: 1, layout: 'stacked' } }),
+        field('number', 'amount'),
+        field('calculation', 'total', {
+          config: {
+            expr: { k: 'ref', ref: { kind: 'answer', blockId: bid('amount') } },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['items', 'total'])],
+    );
+    expect(codes(failure(def))).toEqual(['error:expr_type_error:/blocks/total/config/expr']);
+  });
+
   it('captures hidden values, typed as text', () => {
     const def = form([
       field('short_text', 'name'),

@@ -48,7 +48,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
     <div className="w-full space-y-2" data-canvas-field="">
       {hidden}
       {!block.hideLabel && (
-        <div className="flex min-h-8 min-w-0 items-center gap-1" data-canvas-label="">
+        <div className="flex min-w-0 items-baseline gap-1 text-[length:var(--fr-label-size,1em)] font-medium" data-canvas-label="">
           <InlineEditor
             value={block.label}
             onChange={(label) => updateBlock(block.id, { label })}
@@ -56,11 +56,16 @@ export function EditBlock({ block }: { block: StoredBlock }) {
             autoFocus={focused}
             fill={false}
             editorClassName="whitespace-pre!"
-            className="min-h-8 min-w-[12.5rem] whitespace-nowrap bg-transparent text-left text-[22px] font-semibold leading-8"
+            className="min-w-[12.5rem] whitespace-nowrap bg-transparent text-left text-[length:var(--fr-label-size,1em)] font-medium leading-normal text-[var(--fr-label-color,var(--fr-text))]"
             style={labelStyle(block.style)}
             placeholder={t(block.type === 'hidden' ? M['block.hidden_field'] : M['block.question'])}
           />
-          {block.required && <span className="shrink-0 self-center text-[22px] font-semibold leading-8 text-black">*</span>}
+          {block.required ? (
+            <>
+              {' '}
+              <span className="fr-required shrink-0 self-center" aria-hidden="true">*</span>
+            </>
+          ) : null}
         </div>
       )}
       {block.description ? <p className="text-left text-[13px] text-muted-foreground">{plainText(block.description)}</p> : null}

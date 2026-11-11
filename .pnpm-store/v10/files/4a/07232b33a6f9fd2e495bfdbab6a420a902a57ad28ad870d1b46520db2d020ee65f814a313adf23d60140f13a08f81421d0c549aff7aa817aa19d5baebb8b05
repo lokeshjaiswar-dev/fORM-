@@ -1,0 +1,63 @@
+import { type ReactNode } from 'react';
+import { type TimelineEventKind } from '../components/timeline';
+export interface AuditFieldChange {
+    field: ReactNode;
+    from?: ReactNode;
+    to?: ReactNode;
+}
+export interface AuditEvent {
+    id: string;
+    kind: TimelineEventKind;
+    title: ReactNode;
+    detail?: ReactNode;
+    /** person or system that did it, e.g. "Priya Shah" or "Workflow WF-2041" */
+    actor?: string;
+    /** ISO date-time, e.g. 2026-10-24T09:47:00 (the clock part is read as written, like fmtDateTime does) */
+    at: string;
+    changes?: AuditFieldChange[];
+}
+/** The clock of an event: `12h` is 09:47 AM (the Figma look), `24h` is 09:47, the way the tables print times. */
+export type AuditTimeFormat = '12h' | '24h';
+/** One changed field: name, old value, arrow, new value (Figma: AuditLog / FieldChangeRow). Indented to line up with the event text. */
+export declare function AuditFieldChangeRow({ field, from, to, className }: AuditFieldChange & {
+    className?: string;
+}): import("react").JSX.Element;
+/** The 28px icon badge of an event (Figma: AuditLog / EventRow, iconBadge). */
+export declare function AuditEventIcon({ kind, className }: {
+    kind: TimelineEventKind;
+    className?: string;
+}): import("react").JSX.Element;
+export declare function AuditEventRow({ event, timeFormat, className }: {
+    event: AuditEvent; /** how the clock reads; default `12h` */
+    timeFormat?: AuditTimeFormat;
+    className?: string;
+}): import("react").JSX.Element;
+/** The day label with its rule (Figma: AuditLog / DateHeader). `as` makes the label a heading (`h2` to `h6`) so a screen reader can jump from day to day. */
+export declare function AuditDateHeader({ children, as: Tag, className }: {
+    children: ReactNode;
+    as?: 'div' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+    className?: string;
+}): import("react").JSX.Element;
+export interface AuditLogProps {
+    events: AuditEvent[];
+    /** hide the count / filter / download row */
+    hideToolbar?: boolean;
+    /** called by the download button; the default downloads the shown events as CSV */
+    onDownload?: (events: AuditEvent[]) => void;
+    exportName?: string;
+    empty?: ReactNode;
+    /** clock style of each event: `12h` (09:47 AM, default) or `24h` (09:47, like the tables) */
+    timeFormat?: AuditTimeFormat;
+    /** heading level of the day labels (default 3: the drawer title is the h2) */
+    dayHeadingLevel?: 2 | 3 | 4 | 5 | 6;
+    className?: string;
+}
+export declare function AuditLog({ events, hideToolbar, onDownload, exportName, empty, timeFormat, dayHeadingLevel, className }: AuditLogProps): import("react").JSX.Element;
+/** The 480px side panel: title, record id chip, what the record is, then the log (Figma: Drawer / Record Audit Log). */
+export declare function AuditLogDrawer({ open, onOpenChange, title, recordId, subtitle, ...log }: AuditLogProps & {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title?: string;
+    recordId?: string;
+    subtitle?: ReactNode;
+}): import("react").JSX.Element;

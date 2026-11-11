@@ -81,7 +81,6 @@ test('the preview has no serious or critical axe violations, before and after va
     ['/dropdown', /Dropdown/, 'Favourite colour'],
     ['/check', /Checkboxes/, 'Interests'],
     ['/rating', /Rating/, 'Rate us'],
-    ['/nps', /Net Promoter Score/, 'Recommend us'],
     ['/rank', /Ranking/, 'Rank these'],
     ['/date', /Date/, 'Start date'],
     ['/file', /File upload/, 'Your CV'],

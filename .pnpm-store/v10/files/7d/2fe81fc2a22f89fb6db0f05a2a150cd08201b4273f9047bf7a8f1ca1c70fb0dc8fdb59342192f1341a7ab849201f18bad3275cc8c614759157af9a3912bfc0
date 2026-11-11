@@ -1,0 +1,38 @@
+import * as React from 'react';
+import { type FieldSize, type FieldStatus } from './field';
+export interface InputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
+    /** Field size, the same heights as Button: sm 28, md 32 (default), lg 40, xl 48 (compact density 24 / 28 / 32 / 36). A height class such as `h-11` still overrides it. */
+    size?: FieldSize;
+    /** visual state; `aria-invalid` is treated as `error`, also when it comes from the surrounding `Field`, and a `Field` with a `warning` or `success` message passes that tone on when `status` is left out. `loading` shows a spinner. */
+    status?: FieldStatus;
+    /** icon before the text */
+    startIcon?: React.ReactNode;
+    /** icon / action after the text (the status glyph comes first). A bare `<button>` here gets a pointer, a hover colour, a focus ring and a 24px hit area. */
+    endIcon?: React.ReactNode;
+    /** short text before the value, such as a currency symbol (`₹`). It is part of the box and a press on it focuses the input. */
+    prefixText?: React.ReactNode;
+    /** short text after the value, such as a unit (`kg`, `%`, `days`) */
+    suffixText?: React.ReactNode;
+    /** class of the inner <input>; `className` styles the field box around it */
+    inputClassName?: string;
+}
+/**
+ * Text input (Figma: TextField). It renders the field box with a borderless <input> inside, in every state, so the <input> stays the same
+ * element when a status or an error appears or goes: focus, caret and selection survive validation while the user types. `className` styles
+ * the box and `inputClassName` the input; `startIcon`, `prefixText`, `suffixText`, `endIcon` and the status glyph sit inside the box. Inside a `Field` it takes its `id`,
+ * `aria-describedby`, `aria-invalid`, `aria-required` and `disabled` from the field, and the box takes the warning / success tone of the field's message.
+ * `status="error"` also sets `aria-invalid`. `type="date"` and `type="time"` render the dMACQ pickers
+ * (popover calendar, typed entry) and still call `onChange` with an event whose `target.value` is `YYYY-MM-DD` / `HH:mm`, so existing screens keep working;
+ * `onBlur`, `onFocus`, `autoFocus`, `required` and `ref` reach their text input.
+ */
+declare function Input({ className, type, size, status: statusProp, startIcon, endIcon, prefixText, suffixText, inputClassName, ...props }: InputProps): React.JSX.Element;
+/**
+ * Search bar: a field with a search glyph, the same heights and radii as `Input` (`size` sm 28, md 32 default, lg 40, xl 48). Clears with the x button when `onValueChange` is given.
+ * (Figma Search Bar is 32 high with 12px text; it now follows the field scale so it lines up with Buttons and Selects in a toolbar.)
+ * It carries the field's states (hover, focus ring, disabled). Clearing puts the focus back in the input, and Escape clears natively (`type="search"`).
+ */
+declare function SearchInput({ className, size, value, onValueChange, onChange, placeholder, ref, ...props }: Omit<React.ComponentProps<'input'>, 'size' | 'type'> & {
+    size?: FieldSize;
+    onValueChange?: (value: string) => void;
+}): React.JSX.Element;
+export { Input, SearchInput };

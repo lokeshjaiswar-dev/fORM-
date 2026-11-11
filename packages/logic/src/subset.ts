@@ -7,8 +7,8 @@ import { OPERAND_OPERATORS, UNARY, baseOperator } from './operators.ts';
 /*
  * Static typing of the P0 subset (delivery plan WP-0.07): condition groups with every comparison
  * operator, operands that are answers, request metadata, literals, typed option sets and expressions
- * made of `lit`, `ref`, numeric `+ - * /` and comparisons. Everything else is reported as `missing_capability`, which
- * compile() treats as fatal (ADR-0002 §2), until WP-2.01–2.03 bring it.
+ * made of `lit`, `ref`, numeric `+ - * /`, comparisons and `sum(...)` over repeating-group children.
+ * Everything else is reported as `missing_capability`, which compile() treats as fatal (ADR-0002 §2), until WP-2.01–2.03 bring it.
  */
 
 export type ValueKind = ComparableKind | 'option_set' | 'null';
@@ -21,6 +21,8 @@ export interface Typed {
   blockType?: StoredBlock['type'];
   /** Literals: a non-negative integer number (count operators). */
   count?: boolean;
+  /** A repeating-group child outside a row scope is a list of that kind (schema §3.1). */
+  list?: boolean;
 }
 
 export interface TypeContext {
@@ -92,10 +94,22 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
     return null;
   }
   for (const c of ctx.valueReads(ref.blockId)) reads.add(c);
+  const group = repeatingGroupOf(ctx.def, ref.blockId);
+  if (group) {
+    for (const c of ctx.valueReads(group.id)) reads.add(c);
+    return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type, list: true };
+  }
   return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type };
 }
 
-/** Expressions in the P0 subset: `lit`, `ref`, numeric arithmetic and comparisons of those. */
+function repeatingGroupOf(def: FormDefinition, blockId: BlockId): Extract<StoredBlock, { type: 'repeating_group' }> | undefined {
+  for (const block of Object.values(def.blocks)) {
+    if (block?.type === 'repeating_group' && block.config.children.includes(blockId)) return block;
+  }
+  return undefined;
+}
+
+/** Expressions in the P0 subset: `lit`, `ref`, numeric arithmetic, `sum` of a list, and comparisons of those. */
 export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<string>): Typed | null {
   let nodes = 0;
   let tooLarge = false;
@@ -119,8 +133,22 @@ export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<
         if (e.op !== 'neg') break;
         const arg = visit(e.arg, `${at}/arg`, depth + 1);
         if (!arg) return null;
+        if (arg.kind !== 'number' || arg.list) {
+          ctx.issue('expr_type_error', at, `'neg' needs a number, not ${arg.list ? 'a list' : arg.kind}`);
+          return null;
+        }
+        return { kind: 'number', source: 'expr' };
+      }
+      case 'call': {
+        if (e.fn !== 'sum') break;
+        if (e.args.length !== 1 || e.args[0] === undefined) {
+          ctx.issue('expr_type_error', at, "'sum' takes one field");
+          return null;
+        }
+        const arg = visit(e.args[0], `${at}/args/0`, depth + 1);
+        if (!arg) return null;
         if (arg.kind !== 'number') {
-          ctx.issue('expr_type_error', at, `'neg' needs a number, not ${arg.kind}`);
+          ctx.issue('expr_type_error', at, `'sum' needs numbers, not ${arg.kind}`);
           return null;
         }
         return { kind: 'number', source: 'expr' };
@@ -130,8 +158,10 @@ export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<
           const left = visit(e.left, `${at}/left`, depth + 1);
           const right = visit(e.right, `${at}/right`, depth + 1);
           if (!left || !right) return null;
-          if (left.kind !== 'number' || right.kind !== 'number') {
-            ctx.issue('expr_type_error', at, `'${e.op}' needs numbers, not ${left.kind} and ${right.kind}`);
+          if (left.kind !== 'number' || right.kind !== 'number' || left.list || right.list) {
+            const leftKind = left.list ? `list of ${left.kind}` : left.kind;
+            const rightKind = right.list ? `list of ${right.kind}` : right.kind;
+            ctx.issue('expr_type_error', at, `'${e.op}' needs numbers, not ${leftKind} and ${rightKind}; use sum(field) to add every row`);
             return null;
           }
           return { kind: 'number', source: 'expr' };

@@ -62,7 +62,12 @@ export function SlashMenu({
   if (!open) return null;
 
   return (
-    <div ref={rootRef} className="absolute left-0 top-full z-40 mt-1 w-[324px]">
+    <div
+      ref={rootRef}
+      data-slash-menu=""
+      className="absolute left-0 top-full z-40 mt-1 w-[324px]"
+      style={{ color: 'var(--popover-foreground)', fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: '20px' }}
+    >
       <Command label={t(M['slash.label'])} shouldFilter={false}>
         <CommandInput
           ref={inputRef}
@@ -70,6 +75,7 @@ export function SlashMenu({
           {...(onQueryChange ? { onValueChange: onQueryChange } : {})}
           placeholder={t(M['slash.filter'])}
           variant="menu"
+          className="border-0 shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0"
         />
         <CommandList className="max-h-80">
           <CommandEmpty>{t(M['slash.empty'])}</CommandEmpty>

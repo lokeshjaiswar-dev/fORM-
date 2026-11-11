@@ -1,0 +1,22 @@
+import * as React from 'react';
+/**
+ * Card. Spacing, radius and the title / description sizes are variables (--card-gap, --card-py, --card-px, --card-radius, --card-title-fs,
+ * --card-description-fs, set per density in ds-density.css), so a className such as `py-0`, `rounded-lg` or `text-2xl` on a part always wins,
+ * in comfortable and compact density alike.
+ */
+declare function Card({ className, interactive, ...props }: React.ComponentProps<'div'> & {
+    /** hover feedback (border and shadow) for a card that acts as one link or button, such as a document tile. The card does not become clickable by itself: put the link or button inside it. Its own focus ring stays, and the card edge turns to the focus colour as well. */
+    interactive?: boolean;
+}): React.JSX.Element;
+declare function CardHeader({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+type CardTitleProps = React.ComponentProps<'div'> & {
+    /** element to render. Default `div`; pass `h2` / `h3` ... to make the title a heading, at the level that fits the page outline. */
+    as?: 'div' | 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+};
+declare function CardTitle({ className, as: Tag, ...props }: CardTitleProps): React.JSX.Element;
+declare function CardDescription({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+declare function CardAction({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+declare function CardContent({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+declare function CardFooter({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+export { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent };
+export type { CardTitleProps };

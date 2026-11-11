@@ -23,6 +23,7 @@ export interface SubmissionsRepository {
   listByForm(formId: string): Promise<SubmissionSummary[]>;
   get(formId: string, id: string): Promise<StoredSubmission | null>;
   create(record: StoredSubmission): Promise<void>;
+  removeByForm(formId: string): Promise<StoredSubmission[]>;
 }
 
 export function summarizeSubmission(record: StoredSubmission): SubmissionSummary {

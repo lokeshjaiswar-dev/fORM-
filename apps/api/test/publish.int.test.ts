@@ -90,4 +90,31 @@ describe('publish and public fill', () => {
     const res = await app.inject({ url: '/v1/p/missing-form' });
     expect(res.statusCode).toBe(404);
   });
+
+  it('publishes without a session so another device can fill the form', async () => {
+    const id = randomUUID();
+    const published = await app.inject({
+      method: 'POST',
+      url: '/v1/p/publish',
+      payload: { id, draft: publishableDraft(id, 'Phone form') },
+    });
+    expect(published.statusCode).toBe(200);
+    const live = published.json<{ slug: string; versionId: string }>();
+    const publicGet = await app.inject({ url: `/v1/p/${live.slug}` });
+    expect(publicGet.statusCode).toBe(200);
+    expect(publicGet.json()).toMatchObject({ formId: id });
+
+    const versionId = publicGet.json<{ version: { versionId: string } }>().version.versionId;
+    const submit = await app.inject({
+      method: 'POST',
+      url: `/v1/p/${live.slug}/submissions`,
+      payload: { formVersionId: versionId, answers: {}, fields: [{ key: 'name', label: 'Name', value: 'Ada' }], locale: 'en-IN' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const list = await app.inject({ url: `/v1/p/by-form/${id}/submissions` });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toEqual({
+      items: [expect.objectContaining({ formId: id, fieldCount: 1 })],
+    });
+  });
 });

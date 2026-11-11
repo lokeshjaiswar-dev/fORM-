@@ -1,0 +1,12 @@
+import * as React from 'react';
+import { type FieldSize, type FieldStatus } from './field';
+/**
+ * Multi-line field: the TextField box (8 radius, 1px border, same states), growing with its content up to about 24rem (`max-h-none` lifts the cap, `resize-y`
+ * lets the user drag it taller). `rows` sets the height it starts at; `size` sets the type size and padding like `Input` (the height follows the content). Inside a `Field` it takes its `id`, `aria-describedby`, `aria-invalid`, `aria-required` and `disabled` from the field,
+ * and the box takes the warning / success tone of the field's message. `status` draws the state with a border and a glyph in the corner; `status="error"` also sets `aria-invalid`.
+ */
+declare function Textarea({ className, size, status: statusProp, rows, style, ...props }: Omit<React.ComponentProps<'textarea'>, 'size'> & {
+    size?: FieldSize;
+    status?: FieldStatus;
+}): React.JSX.Element;
+export { Textarea };

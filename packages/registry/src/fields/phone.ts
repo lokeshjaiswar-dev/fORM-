@@ -1,7 +1,7 @@
 import { configTexts, defineField } from '../define.ts';
 import { PALETTE_LABELS, regionOf } from '../messages.ts';
 import { TEXT_OPS } from '../operators.ts';
-import { matchesCallingCode } from '../util/calling-codes.ts';
+import { isValidPhoneNumber } from '../util/calling-codes.ts';
 import { NULL, entry, isRootPath } from './shared.ts';
 
 /** FLD-05 (basic): E.164 plus country, whose calling code must prefix the number; per-country number rules (libphonenumber) arrive in P2. */
@@ -17,7 +17,7 @@ export const phone = defineField({
   checkAnswer: (value, block, _state, report) => {
     const allowed = block.config.allowedCountries;
     if (allowed?.length && !allowed.includes(value.country)) report('country_not_allowed', ['country']);
-    if (!matchesCallingCode(value.e164, value.country)) report('invalid_phone', ['e164']);
+    if (!isValidPhoneNumber(value.e164, value.country)) report('invalid_phone', ['e164']);
   },
   paths: { '': 'text', e164: 'text', country: 'text' },
   operators: { text: TEXT_OPS },

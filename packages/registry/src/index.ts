@@ -127,5 +127,5 @@ export { formatUniqueId } from './fields/unique_id.ts';
 export { IN_STATES } from './fields/address.ts';
 export { COUNTRY_OPTIONS } from './fields/countries.ts';
 export { DEFAULT_TEXT, PALETTE_LABELS } from './messages.ts';
-export { CALLING_CODE_REGIONS, callingCodeOf } from './util/calling-codes.ts';
+export { CALLING_CODE_REGIONS, callingCodeOf, isValidPhoneNumber } from './util/calling-codes.ts';
 export { CHOICES_OPS, CHOICE_OPS, FILE_OPS, NUMBER_OPS, PRESENCE_OPS, TEMPORAL_OPS, TEXT_OPS } from './operators.ts';

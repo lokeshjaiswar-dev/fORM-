@@ -9,19 +9,21 @@ import { cn } from '@/lib/utils';
 import { setTheme } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Button, Input, Label, SearchInput, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
+import { Tooltip } from '@/components/Tooltip';
 import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
 import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
-import { applyPreset, applyScheme, COLOR_SCHEMES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
+import { ImagesSection } from '@/components/builder/design/ImagesSection';
+import { applyImageTemplate, applyPreset, applyScheme, COLOR_SCHEMES, IMAGE_TEMPLATES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
+import { themeImageUrl } from '@form/renderer';
 
 const M = defineMessages('builder', {
-  'design.open': 'Form design',
+  'design.open': 'Form settings',
   'design.close': 'Close',
-  'design.title': 'Form design',
+  'design.title': 'Form settings',
   'design.colors': 'Colors',
   'design.styles': 'Styles',
   'design.themes': 'Themes',
-  'design.layout': 'Layout',
   'design.submit': 'Submit',
   'design.logic': 'Logic',
   'design.schemes': 'Color palette',
@@ -38,15 +40,12 @@ const M = defineMessages('builder', {
   'design.radius': 'Corners',
   'design.inputs': 'Input style',
   'design.progress': 'Progress bar',
-  'design.classic': 'Classic',
-  'design.classic_hint': 'All questions on one page, stacked',
-  'design.cards': 'Cards',
-  'design.cards_hint': 'Each question sits on its own rounded card',
   'design.search': 'Search themes',
   'design.current': 'Current',
+  'design.image_themes': 'Image templates',
 });
 
-const TABS = ['colors', 'styles', 'themes', 'layout', 'logic', 'submit'] as const;
+const TABS = ['colors', 'styles', 'themes', 'logic', 'submit'] as const;
 type Tab = (typeof TABS)[number];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -72,14 +71,11 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
   useEffect(() => {
     if (!open) return;
     const onDown = (event: PointerEvent) => {
-      const node = event.target as Node;
-      if (panelRef.current?.contains(node)) return;
-      const el = node instanceof Element ? node : node.parentElement;
-      if (el?.closest('[data-nice-select],[data-slot="select-content"],[data-slot="select-trigger"],[role="listbox"]')) return;
+      if (eventFromPanel(event, panelRef.current)) return;
       setOpen(false);
     };
-    document.addEventListener('pointerdown', onDown);
-    return () => document.removeEventListener('pointerdown', onDown);
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
   }, [open]);
 
   const patch = (next: Theme) => setTheme(next);
@@ -101,15 +97,17 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {children}
         {!open ? (
-          <Button
-            type="button"
-            size="icon-lg"
-            aria-label={t(M['design.open'])}
-            onClick={() => setOpen(true)}
-            className="absolute right-5 top-5 z-20 rounded-full shadow-lg"
-          >
-            <Paintbrush className="size-5" />
-          </Button>
+          <Tooltip content={t(M['design.open'])} side="left" className="absolute right-5 top-5 z-20">
+            <Button
+              type="button"
+              size="icon-lg"
+              aria-label={t(M['design.open'])}
+              onClick={() => setOpen(true)}
+              className="rounded-full shadow-lg"
+            >
+              <Paintbrush className="size-5" />
+            </Button>
+          </Tooltip>
         ) : null}
       </div>
       <aside className={cn('min-h-0 shrink-0 overflow-hidden transition-[width] duration-300 ease-out', open ? 'w-[min(100%,380px)]' : 'w-0')}>
@@ -133,7 +131,6 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   id === 'colors' ? t(M['design.colors'])
                   : id === 'styles' ? t(M['design.styles'])
                   : id === 'themes' ? t(M['design.themes'])
-                  : id === 'layout' ? t(M['design.layout'])
                   : id === 'logic' ? t(M['design.logic'])
                   : t(M['design.submit']);
                 return (
@@ -174,6 +171,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   <ColorField label={t(M['design.text'])} value={tokens.colors.text} fallback={DEFAULT_COLORS.text} onChange={(v) => setColor('text', v)} />
                   <ColorField label={t(M['design.accent'])} value={tokens.colors.accent} fallback={DEFAULT_COLORS.accent} onChange={(v) => setColor('accent', v)} />
                   <ColorField label={t(M['design.input'])} value={tokens.colors.inputBg} fallback={DEFAULT_COLORS.inputBg} onChange={(v) => setColor('inputBg', v)} />
+                  <ImagesSection theme={theme} onChange={patch} />
                 </div>
               ) : null}
 
@@ -222,6 +220,28 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                     placeholder={t(M['design.search'])}
                     aria-label={t(M['design.search'])}
                   />
+                  <p className="text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.image_themes'])}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {IMAGE_TEMPLATES.filter((template) => template.name.toLowerCase().includes(query.trim().toLowerCase())).map((template) => {
+                      const selected = presetId === template.id;
+                      const preview = themeImageUrl(template.scene);
+                      return (
+                        <button
+                          key={template.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => patch(applyImageTemplate(theme, template))}
+                          className={cn('flex w-full flex-col overflow-hidden rounded-xl border-2 text-left', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
+                        >
+                          <div className="relative h-24 w-full">
+                            {preview ? <img alt="" src={preview} className="absolute inset-0 h-full w-full object-cover" /> : null}
+                            <div className="absolute inset-x-3 bottom-3 h-10 rounded-md bg-white/90 shadow-sm" />
+                          </div>
+                          <p className="bg-sidebar-accent/50 px-3 py-2 text-[12px] font-medium leading-5">{template.name}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     {themes.map((preset) => {
                       const page = hexOf(preset.tokens.colors.page, DEFAULT_COLORS.page);
@@ -255,34 +275,6 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                 </div>
               ) : null}
 
-              {tab === 'layout' ? (
-                <div className="grid gap-3">
-                  {([
-                    ['classic', M['design.classic'], M['design.classic_hint'], '#f59e0b'],
-                    ['cards', M['design.cards'], M['design.cards_hint'], '#60a5fa'],
-                  ] as const).map(([id, title, hint, tint]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      aria-pressed={theme.layout === id}
-                      onClick={() => patch({ ...theme, layout: id })}
-                      className={cn(
-                        'flex w-full flex-col overflow-hidden rounded-xl border-2 text-left',
-                        theme.layout === id ? 'border-sidebar-primary' : 'border-sidebar-border',
-                      )}
-                    >
-                      <div className="flex h-28 w-full items-center justify-center p-4" style={{ background: tint }}>
-                        <div className={cn('bg-white shadow-md', id === 'cards' ? 'h-20 w-24 rounded-2xl' : 'h-[88px] w-28 rounded-md')} />
-                      </div>
-                      <div className="bg-sidebar-accent/50 px-3 py-2">
-                        <p className="text-[13px] font-semibold leading-5">{t(title)}</p>
-                        <p className="text-[12px] leading-5 text-sidebar-muted">{t(hint)}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
               {tab === 'logic' ? <FormLogicChecks /> : null}
 
               {tab === 'submit' ? <SubmissionSettings dark /> : null}
@@ -294,6 +286,16 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
       </aside>
     </div>
   );
+}
+
+const FLOATING_UI = '[data-nice-select],[data-slot="select-content"],[data-slot="select-item"],[data-slot="select-trigger"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"],[data-radix-popper-content-wrapper],[role="listbox"]';
+
+function eventFromPanel(event: PointerEvent, panel: HTMLElement | null): boolean {
+  const path = event.composedPath();
+  if (panel && path.includes(panel)) return true;
+  const target = event.target;
+  if (target instanceof Node && !document.contains(target)) return true;
+  return path.some((node) => node instanceof Element && node.closest(FLOATING_UI));
 }
 
 function Pair({ children }: { children: ReactNode }) {

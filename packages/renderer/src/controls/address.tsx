@@ -2,6 +2,7 @@ import type { AddressPart, CountryCode } from '@form/schema';
 import { COUNTRY_OPTIONS, IN_STATES } from '@form/registry';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
+import { DsCombobox, DsSelect, DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 const AUTO: Partial<Record<AddressPart, string>> = {
@@ -52,12 +53,17 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
           return (
             <label key={part} className="fr-address-part" htmlFor={id}>
               <span>{label}</span>
-              <select id={id} className="fr-input fr-select" value={country} onChange={(e) => setPart('country', e.target.value, { state: '', stateCode: '' })} onBlur={answer.onBlur} {...attrs}>
-                <option value="" />
-                {options.map((o) => (
-                  <option key={o.id} value={o.id}>{typeof o.label === 'string' ? o.label : o.id}</option>
-                ))}
-              </select>
+              <DsCombobox
+                id={id}
+                value={country}
+                onChange={(next) => setPart('country', next, { state: '', stateCode: '' })}
+                options={options.map((o) => ({ value: o.id, label: typeof o.label === 'string' ? o.label : o.id }))}
+                placeholder={label}
+                disabled={attrs.disabled}
+                aria-invalid={attrs['aria-invalid']}
+                aria-describedby={attrs['aria-describedby']}
+                aria-required={attrs['aria-required']}
+              />
             </label>
           );
         }
@@ -65,36 +71,38 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
           return (
             <label key={part} className="fr-address-part" htmlFor={id}>
               <span>{label}</span>
-              <select
+              <DsSelect
                 id={id}
-                className="fr-input fr-select"
                 value={value.stateCode ?? ''}
-                onChange={(e) => {
-                  const code = e.target.value;
-                  const name = IN_STATES.find(([id]) => id === code)?.[1] ?? '';
+                onChange={(code) => {
+                  const name = IN_STATES.find(([item]) => item === code)?.[1] ?? '';
                   setPart('state', name, { stateCode: code });
                 }}
                 onBlur={answer.onBlur}
-                {...attrs}
-              >
-                <option value="" />
-                {IN_STATES.map(([code, name]) => (
-                  <option key={code} value={code}>{name}</option>
-                ))}
-              </select>
+                options={IN_STATES.map(([code, name]) => ({ value: code, label: name }))}
+                placeholder={label}
+                disabled={attrs.disabled}
+                aria-invalid={attrs['aria-invalid']}
+                aria-describedby={attrs['aria-describedby']}
+                aria-required={attrs['aria-required']}
+              />
             </label>
           );
         }
         return (
           <label key={part} className="fr-address-part" htmlFor={id} data-part={part}>
             <span>{label}</span>
-            <input
+            <DsText
               id={id}
-              className="fr-input"
               type="text"
               autoComplete={AUTO[part]}
               value={value[part] ?? ''}
-              onChange={(e) => setPart(part, e.target.value)}
+              onChange={(e) => {
+                const next = part === 'postalCode' && country === 'IN' ? e.target.value.replace(/\D/g, '').slice(0, 6) : e.target.value;
+                setPart(part, next);
+              }}
+              inputMode={part === 'postalCode' ? 'numeric' : undefined}
+              maxLength={part === 'postalCode' && country === 'IN' ? 6 : undefined}
               onBlur={answer.onBlur}
               {...attrs}
             />

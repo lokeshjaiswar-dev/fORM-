@@ -34,6 +34,9 @@ describe('IndexedDbRepository', () => {
       { id: 'b', title: '', savedAt: b.savedAt, blocks: 0 },
       { id: 'a', title: 'First', savedAt: a.savedAt, blocks: 1 },
     ]);
+    await repo.remove('a');
+    expect(await repo.load('a')).toBeNull();
+    expect((await repo.list()).map((f) => f.id)).toEqual(['b']);
   });
 
   it('refuses a record that is not a stored form, and lists around it', async () => {

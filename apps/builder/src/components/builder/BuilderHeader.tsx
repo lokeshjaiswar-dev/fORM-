@@ -1,27 +1,20 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import {
-  ChevronRight,
-  MoreHorizontal,
-  Redo2,
-  Undo2,
-  LayoutTemplate,
-  Star,
-  PanelLeft,
-} from 'lucide-react';
-import { useDoc } from '@/state/documentStore';
+import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { runtimeEdition } from '@form/config';
+import { useDoc, currentDoc } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
-import { AccountMenu } from '@/auth/AccountMenu';
-import { EditionBadge } from '@/edition/EditionBadge';
-import { toast } from 'sonner';
-import { ApiProblem, ApiUnreachable } from '@/auth/client';
-import { Button } from '@dmacq/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/Tooltip';
-import { whenSaved } from '@/persistence/autosave';
-import { fillUrl, getLiveForm, publishForm } from '@/persistence/publishApi';
+import { useEdition } from '@/edition/edition';
+import { previewVersion } from '@/lib/preview';
+import { ApiProblem, ApiUnreachable } from '@/auth/client';
+import { flushAutosave } from '@/persistence/autosave';
+import { fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
 
 export function BuilderHeader() {
   const { id = '' } = useParams();
@@ -33,33 +26,60 @@ export function BuilderHeader() {
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
   const [templates, setTemplates] = useState(false);
-  const [publishing, setPublishing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [link, setLink] = useState<string | null>(() => {
+    const slug = rememberedSlug(id);
+    return slug ? fillUrl(slug) : null;
+  });
+  const [error, setError] = useState<string | null>(null);
+  const edition = useEdition();
 
-  async function publish() {
-    setPublishing(true);
+  useEffect(() => {
+    const slug = rememberedSlug(id);
+    setLink(slug ? fillUrl(slug) : null);
+  }, [id]);
+
+  async function onPublish() {
+    setBusy(true);
+    setError(null);
     try {
-      await whenSaved();
-      const live = await publishForm(id);
-      await navigator.clipboard.writeText(fillUrl(live.slug));
-      toast.success('Published. Share link copied');
+      await flushAutosave();
+      const doc = currentDoc();
+      const built = previewVersion(doc, { state: 'open' }, new Date().toISOString(), runtimeEdition(edition));
+      if (!built.ok) {
+        const first = built.issues.find((i) => i.severity === 'error') ?? built.issues[0];
+        setError(first?.message ?? 'This form cannot be published yet.');
+        setShareOpen(true);
+        return;
+      }
+      const live = await publishLive(id, doc, doc.title);
+      const url = fillUrl(live.slug);
+      setLink(url);
+      setShareOpen(true);
     } catch (err) {
-      if (err instanceof ApiUnreachable) toast.error('Sign in and keep the API running to publish.');
-      else if (err instanceof ApiProblem) toast.error(err.message || 'This form cannot be published yet.');
-      else toast.error('This form cannot be published yet.');
+      setShareOpen(true);
+      if (err instanceof ApiUnreachable) setError('The API is not running, so this form cannot be shared yet.');
+      else if (err instanceof ApiProblem) {
+        setError(
+          err.code === 'SERVICE_UNAVAILABLE' || err.code === 'INTERNAL'
+            ? 'The database did not answer in time. Try Publish again.'
+            : err.message || 'This form could not be published.',
+        );
+      }
+      else setError(err instanceof Error ? err.message : 'This form could not be published.');
     } finally {
-      setPublishing(false);
+      setBusy(false);
     }
   }
 
-  async function share() {
+  async function copyLink() {
+    if (!link) return;
     try {
-      const live = await getLiveForm(id);
-      await navigator.clipboard.writeText(fillUrl(live.slug));
-      toast.success('Share link copied');
-    } catch (err) {
-      if (err instanceof ApiProblem && err.status === 404) toast.error('Publish the form first to get a share link.');
-      else if (err instanceof ApiUnreachable) toast.error('Sign in to copy the live share link.');
-      else toast.error('The share link could not be copied.');
+      await navigator.clipboard.writeText(link);
+      toast('Link copied');
+    } catch {
+      setError('The link could not be copied.');
     }
   }
 
@@ -84,8 +104,6 @@ export function BuilderHeader() {
           </span>
         </div>
 
-        <EditionBadge className="mr-1" />
-
         <div className="flex items-center gap-0.5">
           {(['edit', 'preview'] as const).map((m) => (
             <Button key={m} type="button" variant="ghost" size="sm" pressed={mode === m} onClick={() => setMode(m)}>
@@ -103,23 +121,41 @@ export function BuilderHeader() {
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>
-        <Button type="button" variant="ghost" size="sm" disabled={publishing} onClick={() => void publish()}>
-          {publishing ? 'Publishing…' : 'Publish'}
+        <Button type="button" size="sm" className="ml-1" disabled={busy || !id} onClick={() => void onPublish()}>
+          {busy ? 'Publishing…' : 'Publish'}
         </Button>
-        <Tooltip content="Copy public fill link">
-          <Button type="button" variant="ghost" size="sm" onClick={() => void share()}>
+        {link ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
             Share
           </Button>
-        </Tooltip>
-        <Ghost label="Add to favorites">
-          <Star className="size-4" />
-        </Ghost>
-        <Ghost label="More actions">
-          <MoreHorizontal className="size-4" />
-        </Ghost>
-        <AccountMenu />
+        ) : null}
       </header>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{link ? 'Share form' : 'Publish form'}</DialogTitle>
+            <DialogDescription>
+              {link
+                ? 'Anyone with this link can fill the form on a phone or another computer. They do not need to sign in.'
+                : 'Publish this form to get a link you can open on any device.'}
+            </DialogDescription>
+          </DialogHeader>
+          {error ? (
+            <p role="alert" className="text-[14px] text-destructive">
+              {error}
+            </p>
+          ) : null}
+          {link ? (
+            <div className="flex gap-2">
+              <Input readOnly value={link} aria-label="Share link" />
+              <Button type="button" onClick={() => void copyLink()}>
+                Copy
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

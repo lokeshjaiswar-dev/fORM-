@@ -74,6 +74,7 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
     valid: [{ e164: '+919812345678', country: 'IN' }],
     invalid: [
       [{ e164: '+14155550100', country: 'US' }, 'country_not_allowed'], [{ e164: '+14155550100', country: 'IN' }, 'invalid_phone'], [{ e164: '+4498123', country: 'IN' }, 'invalid_phone'],
+      [{ e164: '+915012345678', country: 'IN' }, 'invalid_phone'], [{ e164: '+91981234567', country: 'IN' }, 'invalid_phone'],
       [{ e164: '9812345678', country: 'IN' }, TWIN], [{ e164: '', country: 'IN' }, TWIN], [{ e164: '+919812345678' }, TWIN], ['+919812345678', TWIN],
     ],
     empty: [{ e164: '', country: 'IN' }],
@@ -279,6 +280,7 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
     invalid: [
       [{ item_1: 'bucket_1' }, 'too_few_selected'],
       [{ item_1: 'gone', item_2: 'bucket_2', item_3: 'bucket_3', item_4: 'bucket_1' }, 'not_in_options'],
+      [{ item_1: ['bucket_1', 'bucket_2'], item_2: 'bucket_2', item_3: 'bucket_3', item_4: 'bucket_1' }, 'too_many_selected'],
       [{ gone: 'bucket_1' }, 'not_in_options'],
       [{}, TWIN],
       ['bucket_1', TWIN],
@@ -304,16 +306,16 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
   },
   matrix: {
     required: true,
-    valid: [{ mode: 'single', rows: { row_1: 'column_1', row_2: 'column_2' } }],
+    valid: [{ mode: 'multi', rows: { row_1: ['column_1'], row_2: ['column_2'] } }],
     invalid: [
-      [{ mode: 'multi', rows: { row_1: ['column_1'] } }, 'invalid_format'],
-      [{ mode: 'single', rows: { row_1: 'nope', row_2: 'column_1' } }, 'not_in_options'],
-      [{ mode: 'single', rows: { gone: 'column_1' } }, 'not_in_options'],
-      [{ mode: 'single', rows: { row_1: 'column_1' } }, 'too_few_selected'],
-      [{ mode: 'single', rows: {} }, TWIN],
+      [{ mode: 'single', rows: { row_1: 'column_1' } }, 'invalid_format'],
+      [{ mode: 'multi', rows: { row_1: ['nope'], row_2: ['column_1'] } }, 'not_in_options'],
+      [{ mode: 'multi', rows: { gone: ['column_1'] } }, 'not_in_options'],
+      [{ mode: 'multi', rows: { row_1: ['column_1'] } }, 'too_few_selected'],
+      [{ mode: 'multi', rows: {} }, TWIN],
       ['row_1', TWIN],
     ],
-    empty: [{ mode: 'single', rows: {} }],
+    empty: [{ mode: 'multi', rows: {} }],
   },
   file_upload: {
     config: { maxFiles: 2, minFileBytes: 1 },
@@ -487,6 +489,18 @@ describe('answer issues carry validation codes', () => {
     const schema = valueDefinition('signature').answerSchema(fieldBlock('signature'), { required: false });
     expect(schema.safeParse({ method: 'typed', file: png, typedName: 'Asha Rao' }).success).toBe(true);
     expect(schema.safeParse({ method: 'typed', file: png, typedName: '  ' }).success).toBe(false);
+  });
+
+  it('card_sort: a card may sit in several groups when exclusive is off', () => {
+    const block = fieldBlock('card_sort', { exclusive: false });
+    const schema = valueDefinition('card_sort').answerSchema(block, { required: true });
+    expect(schema.safeParse({
+      item_1: ['bucket_1', 'bucket_2'],
+      item_2: 'bucket_2',
+      item_3: ['bucket_3'],
+      item_4: 'bucket_1',
+    }).success).toBe(true);
+    expect(schema.safeParse({ item_1: ['bucket_1', 'bucket_1'], item_2: 'bucket_2', item_3: 'bucket_3', item_4: 'bucket_1' }).success).toBe(false);
   });
 
   it('file_upload: empty allowlists accept any type; minFiles applies', () => {

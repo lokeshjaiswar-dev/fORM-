@@ -48,7 +48,7 @@ export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'insp
   activeBlockId: null,
   inspectorOpen: false,
   inspectorWidth: 400,
-  sidebarOpen: false,
+  sidebarOpen: true,
   started: false,
   insertFocusKey: 0,
   pendingDelete: null,
@@ -72,7 +72,7 @@ export const useUiStore = create<UiState>()((set) => ({
   dismissConflict: () => set({ conflict: null }),
 }));
 
-/** A fresh UI for a newly opened form; the sidebar width and visibility and the copied block are kept. */
+/** A fresh UI for a newly opened form; the inspector width and the copied block are kept. The field sidebar opens with the canvas. */
 export function resetUi(patch: Partial<Pick<UiState, 'started' | 'notes'>> = {}): void {
-  useUiStore.setState((s) => ({ ...INITIAL_UI, inspectorWidth: s.inspectorWidth, sidebarOpen: s.sidebarOpen, clipboard: s.clipboard, ...patch }));
+  useUiStore.setState((s) => ({ ...INITIAL_UI, inspectorWidth: s.inspectorWidth, clipboard: s.clipboard, ...patch }));
 }

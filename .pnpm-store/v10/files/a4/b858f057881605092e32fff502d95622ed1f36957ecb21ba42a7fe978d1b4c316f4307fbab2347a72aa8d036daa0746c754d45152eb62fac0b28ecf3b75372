@@ -1,0 +1,55 @@
+import type { ReactNode } from 'react';
+import { type StatusTone } from '../lib/tone';
+/** A rupee amount with paise (`decimals={false}` drops them). A missing value (null or undefined) shows a dash, not ₹0.00. */
+export declare function Money({ value, className, decimals, muted }: {
+    value: number | undefined | null;
+    className?: string;
+    decimals?: boolean;
+    muted?: boolean;
+}): import("react").JSX.Element;
+/**
+ * A panel for "nothing here": a glyph, a title, a line of explanation and the action that fixes it. `bordered` (default) is the dashed card; turn it off
+ * where it sits inside a card or a table. `size="sm"` is the tight version for panels and menus.
+ */
+export declare function EmptyState({ title, description, action, icon, size, bordered, className, }: {
+    title: ReactNode;
+    description?: ReactNode;
+    action?: ReactNode;
+    icon?: ReactNode;
+    size?: 'sm' | 'md';
+    bordered?: boolean;
+    className?: string;
+}): import("react").JSX.Element;
+/**
+ * A small figure tile: label, value and a one-line hint (the full hint shows as a tooltip). Kept compact so a row of them reads at a glance.
+ * `href` makes the tile a plain link; for client-side routing wrap the tile in your router's link instead.
+ */
+export declare function StatCard({ label, value, hint, tone, href, icon, }: {
+    label: string;
+    value: ReactNode;
+    hint?: ReactNode;
+    tone?: 'default' | 'success' | 'warning' | 'danger' | StatusTone;
+    href?: string;
+    icon?: ReactNode;
+}): import("react").JSX.Element;
+/** Label / value pairs in a grid: the label is a small muted line right above its value, and the pairs sit a full line apart, so each label reads with the value below it. */
+export declare function KeyValue({ items, cols, className }: {
+    items: {
+        label: string;
+        value: ReactNode;
+    }[];
+    cols?: 1 | 2 | 3 | 4;
+    className?: string;
+}): import("react").JSX.Element;
+/** Usage bar with the warning threshold and the 100% block marked. The tick follows the bar height, and the bar turns amber at the warning threshold and red at 100%. */
+export declare function UsageBar({ pct, warnPct, label }: {
+    pct: number;
+    warnPct?: number;
+    label?: ReactNode;
+}): import("react").JSX.Element;
+/** A status pill: a `Badge`. `tone` takes the older names (success, danger, brand, ...) and the shared ones (positive, negative, neutral, primary). */
+export declare function Pill({ children, tone }: {
+    children: ReactNode;
+    tone?: 'outline' | 'success' | 'warning' | 'danger' | 'info' | 'brand' | 'secondary' | 'orange' | 'positive' | 'negative' | 'neutral' | 'primary';
+}): import("react").JSX.Element;
+export declare function NewTag(): import("react").JSX.Element;

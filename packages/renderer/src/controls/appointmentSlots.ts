@@ -43,6 +43,28 @@ function instantOf(day: IsoDate, time: IsoTime, timeZone: string): IsoInstant {
   return new Date(utc - offsetMs(new Date(utc), timeZone)).toISOString().replace(/\.\d{3}Z$/, 'Z') as IsoInstant;
 }
 
+function part(parts: Intl.DateTimeFormatPart[], type: string): string {
+  return parts.find((p) => p.type === type)?.value ?? '';
+}
+
+/** Wall clock `YYYY-MM-DDTHH:mm` of an instant in `timeZone`. Invalid input gives `''`. */
+export function toWallDateTime(instant: string, timeZone: string): string {
+  const at = new Date(instant);
+  if (Number.isNaN(at.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const date = `${part(parts, 'year')}-${part(parts, 'month')}-${part(parts, 'day')}`;
+  const time = `${part(parts, 'hour')}:${part(parts, 'minute')}`;
+  return date.includes('undefined') || time.includes('undefined') ? '' : `${date}T${time}`;
+}
+
 export interface AppointmentSlot {
   start: IsoInstant;
   end: IsoInstant;

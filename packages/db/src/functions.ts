@@ -72,6 +72,60 @@ export async function resolveFormSlug(db: Executor, slug: string): Promise<Resol
   return row ? { orgId: row.org_id, formId: row.form_id, liveVersionId: row.live_version_id } : null;
 }
 
+export interface GuestPublishHome {
+  orgId: string;
+  ownerUserId: string;
+}
+
+/** The form's org if it exists, otherwise the first active org with an owner (anonymous publish). */
+export async function guestPublishHome(db: Executor, formId: string): Promise<GuestPublishHome | null> {
+  const { rows } = await db.execute<{ org_id: string; owner_user_id: string }>(
+    sql`select org_id, owner_user_id from guest_publish_home(${formId}::uuid)`,
+  );
+  const row = rows[0];
+  return row ? { orgId: row.org_id, ownerUserId: row.owner_user_id } : null;
+}
+
+export interface GuestPublished {
+  slug: string;
+  versionId: string;
+  number: number;
+}
+
+/** Inserts the form, draft and live version in one statement. */
+export async function guestPublishForm(
+  db: Executor,
+  o: {
+    formId: string;
+    title: string;
+    slug: string;
+    draft: Record<string, unknown>;
+    definition: Record<string, unknown>;
+    compiled: Record<string, unknown>;
+    contentHash: string;
+    schemaVersion: number;
+    sizeBytes: number;
+    versionId: string;
+  },
+): Promise<GuestPublished | null> {
+  const { rows } = await db.execute<{ slug: string; version_id: string; number: number }>(sql`
+    select slug, version_id, number from guest_publish_form(
+      ${o.formId}::uuid,
+      ${o.title},
+      ${o.slug},
+      ${JSON.stringify(o.draft)}::jsonb,
+      ${JSON.stringify(o.definition)}::jsonb,
+      ${JSON.stringify(o.compiled)}::jsonb,
+      ${o.contentHash},
+      ${o.schemaVersion},
+      ${o.sizeBytes},
+      ${o.versionId}::uuid
+    )
+  `);
+  const row = rows[0];
+  return row ? { slug: row.slug, versionId: row.version_id, number: row.number } : null;
+}
+
 export async function createPartitions(db: Executor, parent: PartitionedTable, months: number): Promise<string[]> {
   const { rows } = await db.execute<{ name: string }>(sql`select name from create_partitions(${`public.${parent}`}::regclass, ${months}) as name`);
   return rows.map((r) => r.name);

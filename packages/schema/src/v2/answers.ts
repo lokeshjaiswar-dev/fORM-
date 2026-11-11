@@ -1,6 +1,6 @@
 import type { _ExactKeys } from './_internal.ts';
 import type { ValueFieldType } from './catalogue.ts';
-import type { AddressPart, ContextSource, NamePart } from './config.ts';
+import type { AddressPart, NamePart } from './config.ts';
 import type { ScalarValue } from './expr.ts';
 import type { BlockId, CardBucketId, CardItemId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, SemanticPairId, Sha256Hex, TimeZone, Weekday } from './ids.ts';
 
@@ -55,7 +55,8 @@ export interface AnswerValueMap {
   likert: Partial<Record<LikertStatementId, number>>;
   constant_sum: Partial<Record<OptionId, number>>;
   maxdiff: { best: OptionId; worst: OptionId };
-  card_sort: Partial<Record<CardItemId, CardBucketId>>;
+  /** One bucket when exclusive; several when a card may sit in more than one group. */
+  card_sort: Partial<Record<CardItemId, CardBucketId | CardBucketId[]>>;
   semantic_differential: Partial<Record<SemanticPairId, number>>;
   number_range: { from: DecimalString; to: DecimalString };
   schedule_grid: Array<{ weekday: Weekday; time: IsoTime }>;
@@ -68,7 +69,7 @@ export interface AnswerValueMap {
   payment: PaymentSelection;
   appointment: { start: IsoInstant; end: IsoInstant; respondentTimeZone: TimeZone; holdToken?: string };
   calculation: ScalarValue;
-  context: Partial<Record<ContextSource, string>>;
+  context: Partial<Record<string, string>>;
   unique_id: string;
 }
 export const _answersComplete: _ExactKeys<AnswerValueMap, ValueFieldType> = true;

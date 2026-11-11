@@ -1,0 +1,63 @@
+import * as React from 'react';
+import { type VariantProps } from 'class-variance-authority';
+/**
+ * Banner. Figma Banner page 4003:1027: a 360px card (12px radius, mid shadow) with a 48px header (title + chevron), an optional 32px status strip
+ * (Neutral, Alert, Positive, Negative, Primary), a body (text, optional 40px loader or status icon, optional action buttons)
+ * and, when collapsed, a thin progress bar along the bottom edge.
+ *
+ * A banner is a static card by default. Pass `live` when its text changes while people are on the page (progress, completion), so a screen reader announces it politely.
+ *
+ * <Banner title="Import" collapsible progress={64}>
+ *   <BannerStrip tone="primary" label="Step 2 of 3" actionLabel="Details" onAction={...} />
+ *   <BannerBody indicator={<BannerLoader kind="progress" value={64} showValue />}>Checking your file.</BannerBody>
+ * </Banner>
+ */
+type BannerProgressTone = 'primary' | 'positive' | 'negative' | 'notice';
+declare function Banner({ title, collapsible, open, defaultOpen, onOpenChange, progress, progressTone, summary, live, className, children, ...props }: Omit<React.ComponentProps<'section'>, 'title'> & {
+    title: React.ReactNode;
+    /** Adds the chevron and lets the header fold the strip and body away. */
+    collapsible?: boolean;
+    open?: boolean;
+    defaultOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    /** 0 to 100. Drawn as a bar along the bottom edge while the banner is collapsed. */
+    progress?: number;
+    /** Colour of the collapsed progress bar. Default `primary`, and `positive` once `progress` reaches 100. Use `negative` or `notice` when the job failed or needs attention. */
+    progressTone?: BannerProgressTone;
+    /** Short status shown in the header while the banner is collapsed (for example "Failed" or "2 rows need attention"), so folding the banner does not hide its state. */
+    summary?: React.ReactNode;
+    /** Announce changes to the banner's text politely (`role="status"`). Off by default, because most banners are static. */
+    live?: boolean;
+}): React.JSX.Element;
+declare const stripVariants: (props?: ({
+    tone?: "primary" | "positive" | "negative" | "notice" | "neutral" | null | undefined;
+} & import("class-variance-authority/types").ClassProp) | undefined) => string;
+/** Figma Status-Strip: a 32px line under the header with a tone-coloured label and a text action at the end. */
+declare function BannerStrip({ tone, label, actionLabel, onAction, className, ...props }: Omit<React.ComponentProps<'div'>, 'children'> & VariantProps<typeof stripVariants> & {
+    label: React.ReactNode;
+    actionLabel?: string;
+    onAction?: () => void;
+}): React.JSX.Element;
+declare function BannerBody({ indicator, actions, className, children, ...props }: React.ComponentProps<'div'> & {
+    indicator?: React.ReactNode;
+    actions?: React.ReactNode;
+}): React.JSX.Element;
+/** Button for the banner body: `text` is the plain primary-coloured "Secondary", `filled` is the 28px "Primary". */
+declare function BannerButton({ className, variant, type, ...props }: React.ComponentProps<'button'> & {
+    variant?: 'text' | 'filled';
+}): React.JSX.Element;
+type BannerStatus = 'completed' | 'alert' | 'error' | 'pause';
+/**
+ * Figma Loader Icon, 40x40. `spinner` turns, `progress` is a ring filled to `value` (0 to 100, with the number in the middle when `showValue`),
+ * `status` is a round icon: completed, alert, error or pause.
+ */
+declare function BannerLoader({ kind, value, showValue, status, label, className, }: {
+    kind?: 'spinner' | 'progress' | 'status';
+    value?: number;
+    showValue?: boolean;
+    status?: BannerStatus;
+    label?: string;
+    className?: string;
+}): React.JSX.Element;
+export { Banner, BannerBody, BannerButton, BannerLoader, BannerStrip };
+export type { BannerStatus, BannerProgressTone };

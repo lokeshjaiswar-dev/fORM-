@@ -1,0 +1,31 @@
+import * as React from 'react';
+import { Toggle as TogglePrimitive } from 'radix-ui';
+/**
+ * Toggle: a two-state button (pressed or not). Sizes follow the buttons, 28 / 32 / 40 high, and drop one step in the compact density, and the
+ * corner radius follows the Button of the same size (6 / 8 / 8), so a Toggle beside a Button looks like part of the same row.
+ * Pressed is a solid primary fill by default (`appearance="solid"`, the same as `ToggleGroupItem`), which is the clearest state for an icon that
+ * has no label; `appearance="tinted"` is the quieter primary-faded fill with a 3:1 edge that a pressed Button wears. `outline` adds a hairline
+ * border and the low shadow of the group.
+ * `toggleVariants` is shared with `ToggleGroupItem` and `ToolbarToggleItem`, so a toggle in a group or toolbar looks the same as one on its own.
+ * `focus="inset"` is set by `Toolbar` items (white ring on a solid pressed fill) so the ring survives a scrolling or clipped toolbar.
+ * `grouped` is set by those containers: the item sits inside a frame with 2px padding, so its radius is the frame's minus that padding.
+ */
+declare const toggleVariants: (props?: ({
+    variant?: "default" | "outline" | null | undefined;
+    size?: "sm" | "md" | "lg" | null | undefined;
+    appearance?: "solid" | "tinted" | null | undefined;
+    grouped?: boolean | null | undefined;
+    focus?: "inset" | "outside" | null | undefined;
+} & import("class-variance-authority/types").ClassProp) | undefined) => string;
+type ToggleProps = React.ComponentProps<typeof TogglePrimitive.Root> & {
+    /** `default` is flat until hovered; `outline` adds a border. */
+    variant?: 'default' | 'outline';
+    /** Height of the button: `sm` 28, `md` 32 (default), `lg` 40. One step smaller in the compact density. */
+    size?: 'sm' | 'md' | 'lg';
+    /** Pressed look: `solid` primary fill (default) or `tinted`, the faded primary fill with a primary edge that a pressed Button has. */
+    appearance?: 'solid' | 'tinted';
+};
+/** A two-state button. Give an icon-only toggle an `aria-label`; it is announced as "pressed" or "not pressed". */
+declare function Toggle({ className, variant, size, appearance, ...props }: ToggleProps): React.JSX.Element;
+export { Toggle, toggleVariants };
+export type { ToggleProps };

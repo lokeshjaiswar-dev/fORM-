@@ -1,3 +1,4 @@
+import { RadioGroup, RadioGroupItem } from '@dmacq/ui';
 import type { LikertStatementId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
@@ -32,16 +33,20 @@ export function LikertField({ block, field }: ControlProps<'likert'>) {
               <th scope="row">{stmt.label}</th>
               {points.map((n, ci) => (
                 <td key={n}>
-                  <input
-                    id={ri === 0 && ci === 0 ? field.ids.input : undefined}
-                    type="radio"
-                    name={`${field.ids.base}-${stmt.id}`}
-                    aria-label={t(MESSAGES['likert.point'], { statement: stmt.label, value: n, max: block.config.max })}
-                    checked={scores[stmt.id] === n}
-                    onChange={() => setScore(stmt.id, n)}
-                    onBlur={answer.onBlur}
-                    {...attrs}
-                  />
+                  <RadioGroup
+                    className="flex justify-center"
+                    value={scores[stmt.id] === n ? String(n) : undefined}
+                    onValueChange={() => setScore(stmt.id, n)}
+                    disabled={attrs.disabled}
+                    aria-invalid={attrs['aria-invalid']}
+                  >
+                    <RadioGroupItem
+                      id={ri === 0 && ci === 0 ? field.ids.input : undefined}
+                      value={String(n)}
+                      aria-label={t(MESSAGES['likert.point'], { statement: stmt.label, value: n, max: block.config.max })}
+                      onBlur={answer.onBlur}
+                    />
+                  </RadioGroup>
                 </td>
               ))}
             </tr>

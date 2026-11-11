@@ -1,0 +1,23 @@
+import * as React from 'react';
+import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
+type ToggleGroupItemSize = 'sm' | 'md' | 'lg';
+type ToggleGroupItemVariant = 'default' | 'outline';
+type ToggleGroupAppearance = 'solid' | 'tinted';
+type ToggleGroupProps = React.ComponentProps<typeof ToggleGroupPrimitive.Root> & {
+    /** Height of the items: `sm` 28 (default), `md` 32, `lg` 40, one step less in the compact density. Same scale as `Toggle` and `Button`. */
+    size?: ToggleGroupItemSize;
+    /** `default` is one framed segmented control; `outline` is a row of separate outlined toggles with no frame. */
+    variant?: ToggleGroupItemVariant;
+    /** Pressed look of the items: `solid` primary fill (default) or `tinted`. */
+    appearance?: ToggleGroupAppearance;
+};
+/** One framed row of toggles: `type="single"` for one pressed at a time, `"multiple"` for independent ones. */
+declare function ToggleGroup({ className, children, size, variant, appearance, ...props }: ToggleGroupProps): React.JSX.Element;
+declare function ToggleGroupItem({ className, children, size, variant, ...props }: React.ComponentProps<typeof ToggleGroupPrimitive.Item> & {
+    /** Overrides the size of the group for this item. */
+    size?: ToggleGroupItemSize;
+    /** Overrides the variant of the group for this item. */
+    variant?: ToggleGroupItemVariant;
+}): React.JSX.Element;
+export { ToggleGroup, ToggleGroupItem };
+export type { ToggleGroupProps };

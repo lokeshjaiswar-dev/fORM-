@@ -1,0 +1,10 @@
+import * as React from 'react';
+/**
+ * Tells which edges of a horizontally scrolling element still have content past them, so the list can fade those edges (class `ds-scroll-fade-x`)
+ * and the reader sees that more is there. Returns a ref callback (merged with `external`) and `{ start, end }`; spread `data-scroll-start` and
+ * `data-scroll-end` from them onto the element. It re-measures on scroll and when the element or its children change size.
+ */
+export declare function useScrollEdges<T extends HTMLElement>(external?: React.Ref<T>): readonly [(node: T | null) => void, {
+    start: boolean;
+    end: boolean;
+}];

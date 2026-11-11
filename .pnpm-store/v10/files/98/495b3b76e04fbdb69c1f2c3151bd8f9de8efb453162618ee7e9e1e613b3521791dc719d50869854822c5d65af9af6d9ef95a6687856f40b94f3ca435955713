@@ -1,0 +1,8 @@
+/**
+ * The status vocabulary the components share: positive, negative, warning, info, neutral, primary (the names `Badge` uses).
+ * Older components kept their own spellings; each of them still accepts them and maps them with `toStatusTone`:
+ *   success -> positive, danger -> negative, notice | alert -> warning, information -> info, default | secondary -> neutral, brand -> primary.
+ */
+export type StatusTone = 'positive' | 'negative' | 'warning' | 'info' | 'neutral' | 'primary';
+/** The shared tone name for any spelling the library has used, or undefined for a name it does not know. */
+export declare function toStatusTone(tone: string | null | undefined): StatusTone | undefined;

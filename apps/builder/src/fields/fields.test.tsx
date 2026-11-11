@@ -8,7 +8,7 @@ import type { BlockId, PaletteEntry } from '@form/schema';
 import { CANVAS } from '@/fields/canvas';
 import { ICONS } from '@/fields/icons';
 import { INSPECTOR } from '@/fields/inspector';
-import { CATEGORIES, TILES, matchTiles, tileAvailable, tileOf, type Tile } from '@/fields/tiles';
+import { CATEGORIES, HIDDEN_PALETTE_IDS, HIDDEN_PALETTE_TYPES, TILES, matchTiles, tileAvailable, tileOf, type Tile } from '@/fields/tiles';
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { useUiStore } from '@/state/uiStore';
@@ -28,7 +28,11 @@ describe('registry views (FND-03)', () => {
   });
 
   it('the palette is the registry palette: one tile per entry of every available type, plus the page break', () => {
-    const entries = AVAILABLE_TYPES.flatMap((type) => (REGISTRY[type].palette as ReadonlyArray<PaletteEntry<typeof type>>).map((e) => e.id));
+    const entries = AVAILABLE_TYPES.flatMap((type) =>
+      HIDDEN_PALETTE_TYPES.has(type)
+        ? []
+        : (REGISTRY[type].palette as ReadonlyArray<PaletteEntry<typeof type>>).map((e) => e.id).filter((id) => !HIDDEN_PALETTE_IDS.has(id)),
+    );
     expect(TILES.filter((t) => t.kind === 'block').map((t) => t.id).sort()).toEqual([...entries].sort());
     expect(TILES.filter((t) => t.kind === 'page_break')).toHaveLength(1);
     expect(TILES.every((t) => CATEGORIES.includes(t.category))).toBe(true);
@@ -37,9 +41,9 @@ describe('registry views (FND-03)', () => {
 
   it('tiles are labelled from the builder catalogue and found by label, id or keyword', () => {
     expect(tileOf('short_text')?.label).toBe('Short answer');
-    expect(tileOf('single_choice', { display: 'dropdown' })?.label).toBe('Dropdown');
+    expect(tileOf('single_choice', { display: 'dropdown', searchable: true })?.label).toBe('Dropdown');
     const saas = editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'saas' }));
-    expect(matchTiles('nps', saas).map((t) => t.id)).toEqual(['nps']);
+    expect(matchTiles('nps', saas).map((t) => t.id)).toEqual([]);
     expect(matchTiles('dob', saas).map((t) => t.id)).toEqual(['date']);
     expect(matchTiles('page', saas).map((t) => t.id)).toContain('page_break');
     expect(matchTiles('', saas)).toHaveLength(TILES.length);

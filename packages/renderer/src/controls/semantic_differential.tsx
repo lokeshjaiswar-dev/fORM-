@@ -1,3 +1,4 @@
+import { RadioGroup, RadioGroupItem } from '@dmacq/ui';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { inputAttrs, range, useAnswer, type ControlProps } from './hooks.ts';
@@ -28,16 +29,20 @@ export function SemanticDifferentialField({ block, field }: ControlProps<'semant
               <th scope="row">{pair.left}</th>
               {points.map((n, ci) => (
                 <td key={n}>
-                  <input
-                    id={ri === 0 && ci === 0 ? field.ids.input : undefined}
-                    type="radio"
-                    name={`${field.ids.base}-${pair.id}`}
-                    aria-label={t(MESSAGES['semantic.point'], { left: pair.left, right: pair.right, value: n, max: block.config.max })}
-                    checked={scores[pair.id] === n}
-                    onChange={() => answer.set({ ...scores, [pair.id]: n } as typeof scores)}
-                    onBlur={answer.onBlur}
-                    {...attrs}
-                  />
+                  <RadioGroup
+                    className="flex justify-center"
+                    value={scores[pair.id] === n ? String(n) : undefined}
+                    onValueChange={() => answer.set({ ...scores, [pair.id]: n } as typeof scores)}
+                    disabled={attrs.disabled}
+                    aria-invalid={attrs['aria-invalid']}
+                  >
+                    <RadioGroupItem
+                      id={ri === 0 && ci === 0 ? field.ids.input : undefined}
+                      value={String(n)}
+                      aria-label={t(MESSAGES['semantic.point'], { left: pair.left, right: pair.right, value: n, max: block.config.max })}
+                      onBlur={answer.onBlur}
+                    />
+                  </RadioGroup>
                 </td>
               ))}
               <th scope="row">{pair.right}</th>

@@ -153,12 +153,11 @@ describe('BlockInspector validation', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('read-only field needs a default value');
   });
 
-  it('writes a short-text mask and a unique constraint', async () => {
+  it('writes a unique constraint', async () => {
     resetStore([block('short_text', 'code')]);
     const user = open('code');
     await user.click(screen.getByRole('tab', { name: 'Validation' }));
-    await user.type(screen.getByRole('textbox', { name: 'Input mask' }), 'AAA-####');
-    expect(get('code').config['mask']).toEqual({ pattern: 'AAA-####', storeMasked: true });
+    expect(screen.queryByRole('textbox', { name: 'Input mask' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('switch', { name: 'Must be unique on this form' }));
     expect(get('code')['unique']).toEqual({ normalize: 'trim_lower' });
   });

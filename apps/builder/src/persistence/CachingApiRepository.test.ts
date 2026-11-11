@@ -23,6 +23,14 @@ describe('CachingApiRepository', () => {
     putRemoteDraft.mockReset().mockResolvedValue(undefined);
   });
 
+  it('still saves locally when the API refuses the draft', async () => {
+    putRemoteDraft.mockRejectedValue(new Error('no org'));
+    const cache = new MemoryRepository();
+    const form = newStoredForm('f1', NOW, { ...formWith([]), title: 'Hello' });
+    await new CachingApiRepository(cache).save(form);
+    expect(await cache.load('f1')).toEqual(form);
+  });
+
   it('saves the definition through the API and keeps ops only in the local cache', async () => {
     const cache = new MemoryRepository();
     const repo = new CachingApiRepository(cache);

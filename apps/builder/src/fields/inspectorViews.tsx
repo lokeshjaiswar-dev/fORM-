@@ -1,10 +1,10 @@
 import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
-import { CONTEXT_SOURCES, DATE_PATTERNS, type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type SchemaLike, type SemanticPairId, type Weekday } from '@form/schema';
+import { CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS, type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday } from '@form/schema';
 import { patternProblem } from '@form/validation';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
-import { NumberField, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { Field, NumberField, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
@@ -13,8 +13,8 @@ import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions'
 import { currentDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
-import { ChoiceOtherValidation, FileMinLimits, MaskFields } from '@/fields/validationViews';
-import { Button } from '@dmacq/ui';
+import { ChoiceOtherValidation, FileMinLimits } from '@/fields/validationViews';
+import { Button, Input } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
 
@@ -46,7 +46,9 @@ const M = defineMessages('builder', {
   'inspector.max': 'Maximum',
   'inspector.step': 'Step',
   'inspector.integer_only': 'Whole numbers only',
+  'inspector.integer_only_hint': 'Letters are blocked while typing. Turn this on to also block decimals.',
   'inspector.allow_negative': 'Allow negative numbers',
+  'inspector.phone_format_hint': 'Only digits can be typed. Indian numbers must be 10 digits starting with 6–9.',
   'inspector.country': 'Default country (ISO code)',
   'inspector.country_select': 'Show the country picker',
   'inspector.min_selected': 'Minimum selected',
@@ -102,6 +104,8 @@ const M = defineMessages('builder', {
   'inspector.matrix_mode_single': 'One choice per row',
   'inspector.matrix_mode_multi': 'Several choices per row',
   'inspector.matrix_mode_grid': 'Text in each cell',
+  'inspector.matrix_multi': 'Select multiple columns per row',
+  'inspector.matrix_multi_hint': 'When on, a respondent can tick more than one column in the same row.',
   'inspector.matrix_rows': 'Rows',
   'inspector.matrix_columns': 'Columns',
   'inspector.matrix_add_row': 'Add row',
@@ -162,11 +166,18 @@ const M = defineMessages('builder', {
   'inspector.calc_display': 'Show on the form',
   'inspector.calc_hidden': 'Keep in the answers only',
   'inspector.calc_formula': 'Formula',
-  'inspector.calc_formula_hint': 'Use field keys with + − × ÷. Click a field below to insert it.',
+  'inspector.calc_formula_hint': 'Use field keys with + − × ÷. Use sum(field) to add every row of a list number. Click a field below to insert it.',
   'inspector.calc_fields': 'Insert a field',
   'inspector.calc_no_fields': 'Add a number, rating or scale field first.',
   'inspector.context_facts': 'Facts to capture',
   'inspector.context_strip': 'Drop the query string from URLs',
+  'inspector.context_hidden': 'Do not show this field on the form',
+  'inspector.context_url_params': 'URL parameter names',
+  'inspector.context_url_params_hint': 'Comma-separated query names to capture, for example ref, affiliate',
+  'inspector.context_static': 'Fixed values',
+  'inspector.context_static_key': 'Key',
+  'inspector.context_static_value': 'Value',
+  'inspector.context_static_add': 'Add a fixed value',
   'inspector.display_image': 'Image choices',
   'inspector.unique_prefix': 'Prefix',
   'inspector.unique_pad': 'Digit padding',
@@ -177,14 +188,18 @@ const M = defineMessages('builder', {
   'inspector.unique_reset_month': 'Each month',
   'inspector.consent_notice': 'Checkbox only — add a notice later if you need one',
   'inspector.slot_minutes': 'Slot length (minutes)',
+  'inspector.hours_from': 'Hours from',
+  'inspector.hours_to': 'Hours to',
   'inspector.rolling_days': 'Days ahead',
-  'inspector.min_notice': 'Minimum notice (minutes)',
   'inspector.collapsible': 'Collapsible',
   'inspector.initially_collapsed': 'Start collapsed',
   'inspector.postal_validate': 'Validate PIN / postal code',
   'inspector.country_mode': 'Country',
   'inspector.country_fixed': 'Fixed (India by default)',
   'inspector.country_any': 'Respondent picks any country',
+  'inspector.parent_name': 'Father or mother name',
+  'inspector.parent_name_hint': 'Adds a field between first and last name. It is optional unless you require it under Validation.',
+  'inspector.parent_name_label': 'Father / Mother name',
 });
 
 const MIB = 1024 * 1024;
@@ -236,6 +251,32 @@ export function ChromeGeneral({ block }: { block: Chrome }) {
   );
 }
 
+const PARENT_PART: NamePart = 'middle';
+
+function orderedNameParts(parts: readonly NamePart[], include: NamePart, on: boolean): NamePart[] {
+  const next = new Set(on ? [...parts, include] : parts.filter((part) => part !== include));
+  return NAME_PARTS.filter((part) => next.has(part));
+}
+
+export function FullNameGeneral({ block }: InspectorProps<'full_name'>) {
+  const on = block.config.parts.includes(PARENT_PART);
+  return (
+    <ToggleRow
+      label={t(M['inspector.parent_name'])}
+      hint={t(M['inspector.parent_name_hint'])}
+      checked={on}
+      onChange={(checked) => {
+        const parts = orderedNameParts(block.config.parts, PARENT_PART, checked);
+        const requiredParts = checked ? block.config.requiredParts : block.config.requiredParts.filter((part) => part !== PARENT_PART);
+        const sublabels = { ...block.config.sublabels };
+        if (checked) sublabels[PARENT_PART] = t(M['inspector.parent_name_label']);
+        else delete sublabels[PARENT_PART];
+        setConfig(block, { parts, requiredParts, sublabels: Object.keys(sublabels).length ? sublabels : undefined });
+      }}
+    />
+  );
+}
+
 export function EmailGeneral({ block }: InspectorProps<'email'>) {
   return (
     <>
@@ -267,7 +308,6 @@ export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
         error={problem ? t(M['inspector.pattern_invalid'], { problem }) : null}
         onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
       />
-      <MaskFields value={block.config.mask} onChange={(mask) => setConfig(block, { mask })} />
       <ConfigProblem block={block} />
     </>
   );
@@ -348,7 +388,7 @@ export function NumberValidation({ block }: InspectorProps<'number'>) {
         <NumberField label={t(M['inspector.max'])} value={block.config.max} parse={decimal} onChange={(max) => setConfig(block, { max })} />
       </div>
       <NumberField label={t(M['inspector.step'])} value={block.config.step} parse={decimal} onChange={(step) => setConfig(block, { step })} />
-      <ToggleRow label={t(M['inspector.integer_only'])} checked={block.config.integerOnly === true} onChange={(on) => setConfig(block, { integerOnly: on || undefined })} />
+      <ToggleRow label={t(M['inspector.integer_only'])} hint={t(M['inspector.integer_only_hint'])} checked={block.config.integerOnly === true} onChange={(on) => setConfig(block, { integerOnly: on || undefined })} />
       <ToggleRow label={t(M['inspector.allow_negative'])} checked={block.config.allowNegative !== false} onChange={(on) => setConfig(block, { allowNegative: on ? undefined : false })} />
       <ConfigProblem block={block} />
     </>
@@ -361,7 +401,7 @@ export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'mul
     <>
       <SelectField
         label={t(M['inspector.display'])}
-        value={block.config.display === 'dropdown' ? 'dropdown' : list}
+        value={block.config.display === 'dropdown' || block.config.display === 'image' ? block.config.display : list}
         options={[
           { value: list, label: t(list === 'radio' ? M['inspector.display_radio'] : M['inspector.display_checkbox']) },
           { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
@@ -441,12 +481,31 @@ export function ConsentGeneral({ block }: InspectorProps<'consent'>) {
   return <p className="text-[13px] leading-5 text-muted-foreground">{t(M['inspector.consent_notice'])} ({block.config.mode})</p>;
 }
 
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DEFAULT_HOURS = { from: '09:00' as IsoTime, to: '17:00' as IsoTime };
+
 export function AppointmentGeneral({ block }: InspectorProps<'appointment'>) {
+  const window = block.config.weekly[0] ?? DEFAULT_HOURS;
+  const setHours = (from: IsoTime, to: IsoTime) => {
+    const days = block.config.weekly.length > 0 ? block.config.weekly : ([1, 2, 3, 4, 5] as Weekday[]).map((weekday) => ({ weekday, from, to }));
+    setConfig(block, { weekly: days.map((day) => ({ ...day, from, to })) });
+  };
   return (
     <>
       <NumberField label={t(M['inspector.slot_minutes'])} value={block.config.slotMinutes} parse={parseInteger(5, 480)} onChange={(slotMinutes) => slotMinutes !== undefined && setConfig(block, { slotMinutes })} />
       <NumberField label={t(M['inspector.rolling_days'])} value={block.config.rollingDays} parse={parseInteger(1, 365)} onChange={(rollingDays) => rollingDays !== undefined && setConfig(block, { rollingDays })} />
-      <NumberField label={t(M['inspector.min_notice'])} value={block.config.minNoticeMinutes} parse={parseInteger(0, 10_080)} onChange={(minNoticeMinutes) => minNoticeMinutes !== undefined && setConfig(block, { minNoticeMinutes })} />
+      <Field label={t(M['inspector.hours_from'])}>
+        <Input type="time" value={window.from} onChange={(e) => {
+          const next = e.target.value.slice(0, 5);
+          if (TIME.test(next)) setHours(next as IsoTime, window.to);
+        }} />
+      </Field>
+      <Field label={t(M['inspector.hours_to'])}>
+        <Input type="time" value={window.to} onChange={(e) => {
+          const next = e.target.value.slice(0, 5);
+          if (TIME.test(next)) setHours(window.from, next as IsoTime);
+        }} />
+      </Field>
     </>
   );
 }
@@ -703,11 +762,17 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
 
 const CALC_SOURCES = new Set(['number', 'rating', 'linear_scale', 'nps', 'repeating_group', 'calculation']);
 
+function listParentOf(id: string): boolean {
+  return Object.values(currentDoc().blocks).some((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never));
+}
+
 export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const doc = currentDoc();
   const sources = Object.values(doc.blocks).flatMap((b) => {
     if (!b || b.id === block.id || !isField(b) || !CALC_SOURCES.has(b.type)) return [];
-    return [{ id: b.id, key: b.key, label: plainText(b.label) || b.key }];
+    const list = listParentOf(b.id);
+    const insert = list ? `sum(${b.key})` : b.key;
+    return [{ id: b.id, key: b.key, insert, label: list ? `sum(${plainText(b.label) || b.key})` : plainText(b.label) || b.key }];
   });
   const keys = new Map(sources.map((s) => [s.key, s.id]));
   const labels = new Map(sources.map((s) => [s.id, s.key]));
@@ -741,7 +806,7 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
               variant="outline"
               size="sm"
               onClick={() => {
-                const text = draft.trim() ? `${draft.trimEnd()} ${source.key}` : source.key;
+                const text = draft.trim() ? `${draft.trimEnd()} ${source.insert}` : source.insert;
                 setDraft(text);
                 const next = parseFormula(text, keys);
                 if (next.ok) setConfig(block, { expr: next.expr });
@@ -783,16 +848,25 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   );
 }
 
+const PARAM_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
+
 export function ContextGeneral({ block }: InspectorProps<'context'>) {
   const selected = new Set(block.config.sources);
+  const extras = (block.config.urlParams?.length ?? 0) + (block.config.staticFacts?.length ?? 0);
   const toggle = (source: ContextSource, on: boolean) => {
     const next = CONTEXT_SOURCES.filter((item) => (item === source ? on : selected.has(item)));
-    if (next.length === 0) return;
+    if (next.length === 0 && extras === 0) return;
     setConfig(block, { sources: [...next] });
   };
   const urls = selected.has('page_url') || selected.has('referrer');
+  const facts = block.config.staticFacts ?? [];
   return (
     <>
+      <ToggleRow
+        label={t(M['inspector.context_hidden'])}
+        checked={block.config.display === 'hidden'}
+        onChange={(on) => setConfig(block, { display: on ? 'hidden' : 'visible' })}
+      />
       <SectionTitle>{t(M['inspector.context_facts'])}</SectionTitle>
       {CONTEXT_SOURCES.map((source) => (
         <ToggleRow
@@ -805,6 +879,45 @@ export function ContextGeneral({ block }: InspectorProps<'context'>) {
       {urls ? (
         <ToggleRow label={t(M['inspector.context_strip'])} checked={block.config.stripQuery === true} onChange={(on) => setConfig(block, { stripQuery: on || undefined })} />
       ) : null}
+      <TextField
+        label={t(M['inspector.context_url_params'])}
+        hint={t(M['inspector.context_url_params_hint'])}
+        value={(block.config.urlParams ?? []).join(', ')}
+        onChange={(text) => {
+          const urlParams = text.split(',').map((part) => part.trim()).filter((name) => PARAM_NAME.test(name));
+          setConfig(block, { urlParams: urlParams.length > 0 ? [...new Set(urlParams)] : undefined });
+        }}
+      />
+      <SectionTitle>{t(M['inspector.context_static'])}</SectionTitle>
+      {facts.map((fact, i) => (
+        <div key={`${fact.key}-${i}`} className="grid grid-cols-2 gap-2">
+          <TextField
+            label={t(M['inspector.context_static_key'])}
+            value={fact.key}
+            onChange={(key) => {
+              if (!PARAM_NAME.test(key) && key !== '') return;
+              const next = facts.map((item, j) => (j === i ? { ...item, key } : item));
+              setConfig(block, { staticFacts: next });
+            }}
+          />
+          <TextField
+            label={t(M['inspector.context_static_value'])}
+            value={fact.value}
+            onChange={(value) => {
+              const next = facts.map((item, j) => (j === i ? { ...item, value } : item));
+              setConfig(block, { staticFacts: next.filter((item) => item.key && item.value) });
+            }}
+          />
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setConfig(block, { staticFacts: [...facts, { key: `value_${facts.length + 1}`, value: 'fixed' }] })}
+      >
+        {t(M['inspector.context_static_add'])}
+      </Button>
     </>
   );
 }
@@ -972,7 +1085,7 @@ export function NumberRangeValidation({ block }: InspectorProps<'number_range'>)
         <NumberField label={t(M['inspector.min'])} value={block.config.min} parse={decimal} onChange={(min) => setConfig(block, { min })} />
         <NumberField label={t(M['inspector.max'])} value={block.config.max} parse={decimal} onChange={(max) => setConfig(block, { max })} />
       </div>
-      <ToggleRow label={t(M['inspector.integer_only'])} checked={block.config.integerOnly === true} onChange={(on) => setConfig(block, { integerOnly: on || undefined })} />
+      <ToggleRow label={t(M['inspector.integer_only'])} hint={t(M['inspector.integer_only_hint'])} checked={block.config.integerOnly === true} onChange={(on) => setConfig(block, { integerOnly: on || undefined })} />
       <ToggleRow label={t(M['inspector.allow_negative'])} checked={block.config.allowNegative !== false} onChange={(on) => setConfig(block, { allowNegative: on ? undefined : false })} />
       <ConfigProblem block={block} />
     </>
@@ -1073,24 +1186,33 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
 export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
   const mode = block.config.mode;
   const inputFor = (next: typeof mode) => (next === 'single' ? 'choice' as const : next === 'multi' ? 'checkbox' as const : 'text' as const);
+  const setMode = (next: typeof mode) => {
+    const input = inputFor(next);
+    setConfig(block, {
+      mode: next,
+      columns: block.config.columns.map((col) => ({ id: col.id, label: col.label, input })),
+    });
+  };
   return (
     <>
-      <SelectField
-        label={t(M['inspector.matrix_mode'])}
-        value={mode}
-        options={[
-          { value: 'single', label: t(M['inspector.matrix_mode_single']) },
-          { value: 'multi', label: t(M['inspector.matrix_mode_multi']) },
-          { value: 'grid', label: t(M['inspector.matrix_mode_grid']) },
-        ]}
-        onChange={(next) => {
-          const input = inputFor(next);
-          setConfig(block, {
-            mode: next,
-            columns: block.config.columns.map((col) => ({ id: col.id, label: col.label, input })),
-          });
-        }}
+      <ToggleRow
+        label={t(M['inspector.matrix_multi'])}
+        hint={t(M['inspector.matrix_multi_hint'])}
+        checked={mode !== 'single'}
+        onChange={(on) => setMode(on ? (mode === 'grid' ? 'grid' : 'multi') : 'single')}
       />
+      {mode === 'grid' ? (
+        <SelectField
+          label={t(M['inspector.matrix_mode'])}
+          value={mode}
+          options={[
+            { value: 'single', label: t(M['inspector.matrix_mode_single']) },
+            { value: 'multi', label: t(M['inspector.matrix_mode_multi']) },
+            { value: 'grid', label: t(M['inspector.matrix_mode_grid']) },
+          ]}
+          onChange={setMode}
+        />
+      ) : null}
       <LabelList
         title={t(M['inspector.matrix_rows'])}
         addLabel={t(M['inspector.matrix_add_row'])}

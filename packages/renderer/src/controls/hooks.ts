@@ -90,6 +90,18 @@ export function inputAttrs(field: FieldState) {
   } as const;
 }
 
+/** Same as `inputAttrs`, omitting unset keys so dmacq-ui pickers keep `exactOptionalPropertyTypes`. */
+export function pickerAttrs(field: FieldState) {
+  return {
+    disabled: field.disabled,
+    ...(field.readOnly ? { readOnly: true as const } : {}),
+    ...(field.invalid ? { 'aria-invalid': true as const } : {}),
+    ...(field.ids.describedBy ? { 'aria-describedby': field.ids.describedBy } : {}),
+    ...(field.required ? { 'aria-required': true as const } : {}),
+    ...(field.autoFocus ? { autoFocus: true as const } : {}),
+  };
+}
+
 /** Pipes in labels and rich text, resolved against the current evaluation. */
 export function usePipes(): { ctx: PipeContext; text: (label: LabelText | undefined) => string; resolve: RichTextResolvers } {
   const { def, meta } = useRenderer();

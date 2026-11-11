@@ -3,7 +3,7 @@ import { ANSWER_VALUE_SCHEMAS, VALUE_FIELD_TYPES } from '@form/schema';
 import type {
   Action, AnswerValue, Answers, BlockId, CompiledForm, Condition, ConditionGroup, ContextConfig, EndingId, EvalMeta, EvalState, Evaluate, Expr, FieldBlock,
   FormDefinition, FormVersion, Literal, Operand, PageId, PlanStep, PublicFormDefinition, Rule, RuleId, RuntimeFormVersion, ScalarValue,
-  ServerAction, StoredBlock, ValueFieldType, ValueRef,
+  ScalarType, ServerAction, StoredAnswer, StoredBlock, ValueFieldType, ValueRef,
 } from '@form/schema';
 import { actionWrites, isClientAction } from './analyze.ts';
 import { cell, stepKey } from './cells.ts';
@@ -38,6 +38,7 @@ interface Prepared {
   steps: Step[];
   writers: Map<string, number[]>;
   readers: Map<string, number[]>;
+  parentOf: CompiledForm['parentOf'];
   blocks: ReadonlyMap<string, StoredBlock>;
   /** Value blocks in document order. */
   fields: FieldBlock[];
@@ -132,7 +133,7 @@ function prepare(version: EvaluableVersion): Prepared {
   }
   const pageKeys = def.pages.map((pg) => ({ visible: cell.visible(pg.id), onPath: cell.onPath(pg.id), jump: cell.jump(pg.id) }));
   const p: Prepared = {
-    def, steps, writers, readers, blocks, fields, documentOrder: compiled.documentOrder, pageIds: def.pages.map((pg) => pg.id), pageIndex,
+    def, steps, writers, readers, parentOf: compiled.parentOf, blocks, fields, documentOrder: compiled.documentOrder, pageIds: def.pages.map((pg) => pg.id), pageIndex,
     keys, pageKeys, staticCells, valueCells, stepWrites,
   };
   prepared.set(version.compiled, p);
@@ -189,6 +190,28 @@ function arithmetic(a: ScalarValue, b: ScalarValue, op: '+' | '-' | '*' | '/'): 
   }
   const v = formatDecimal(z);
   return v === null ? NULL : { t: 'number', v: v as never };
+}
+
+function sumNumbers(value: ScalarValue): ScalarValue {
+  if (value.t === 'null') return NULL;
+  if (value.t === 'number') return value;
+  if (value.t !== 'list') return NULL;
+  let acc: DecimalValue | null = null;
+  for (const item of value.items) {
+    if (item.t === 'null') continue;
+    if (item.t !== 'number') return NULL;
+    const n = parseDecimal(item.v);
+    if (!n) return NULL;
+    acc = acc === null ? n : acc.add(n);
+  }
+  if (acc === null) return { t: 'number', v: '0' as never };
+  const text = formatDecimal(acc);
+  return text === null ? NULL : { t: 'number', v: text as never };
+}
+
+function asAnswer(stored: StoredAnswer | undefined, type: string): AnswerValue | undefined {
+  if (!stored || !('value' in stored) || stored.type !== type) return undefined;
+  return stored;
 }
 
 class Session {
@@ -263,6 +286,25 @@ class Session {
     }
     const block = this.p.blocks.get(ref.blockId);
     if (!isField(block) || !this.visibleEff(ref.blockId)) return NULL;
+    const parentId = this.p.parentOf[ref.blockId];
+    const parent = parentId === undefined ? undefined : this.p.blocks.get(parentId);
+    if (parent?.type === 'repeating_group' && ref.row !== 'current') {
+      const group = this.answerOf(parent.id);
+      if (!group || group.type !== 'repeating_group') return NULL;
+      const items: ScalarValue[] = [];
+      let of: ScalarType | undefined;
+      for (const row of group.value.rows) {
+        const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
+        if (!cellAnswer) continue;
+        const scalar = answerScalar(block as never, cellAnswer.value as never, ref.path);
+        if (scalar.t === 'null') continue;
+        if (scalar.t === 'list' || scalar.t === 'option') return NULL;
+        if (of !== undefined && of !== scalar.t) return NULL;
+        of = scalar.t;
+        items.push(scalar);
+      }
+      return { t: 'list', of: of ?? 'number', items };
+    }
     const answer = this.answerOf(ref.blockId);
     if (!answer) return NULL;
     return answerScalar(block as never, answer.value as never, ref.path);
@@ -314,6 +356,10 @@ class Session {
         if (!n) return NULL;
         const text = formatDecimal(n.neg());
         return text === null ? NULL : { t: 'number', v: text as never };
+      }
+      case 'call': {
+        if (expr.fn !== 'sum' || expr.args[0] === undefined) break;
+        return sumNumbers(this.exprValue(expr.args[0], depth + 1));
       }
       case 'binary': {
         const op = expr.op;
@@ -465,10 +511,20 @@ class Session {
     }
     if (block?.type === 'context') {
       const stripQuery = block.config.stripQuery === true;
-      const value: Partial<Record<(typeof block.config.sources)[number], string>> = {};
+      const value: Partial<Record<string, string>> = {};
       for (const source of block.config.sources) {
         const text = this.contextText(source, stripQuery)?.trim();
         if (text) value[source] = text;
+      }
+      for (const name of block.config.urlParams ?? []) {
+        if (Object.hasOwn(this.meta.urlParams, name)) {
+          const text = this.meta.urlParams[name]?.trim();
+          if (text) value[name] = text;
+        }
+      }
+      for (const fact of block.config.staticFacts ?? []) {
+        const text = fact.value.trim();
+        if (text) value[fact.key] = text;
       }
       if (Object.keys(value).length === 0) return null;
       return prev?.type === 'context' && JSON.stringify(prev.value) === JSON.stringify(value) ? prev : { type: 'context', value };
@@ -516,6 +572,12 @@ class Session {
         return m.timeZone;
       case 'embed_origin':
         return m.embedOrigin;
+      case 'utm_source':
+      case 'utm_medium':
+      case 'utm_campaign':
+      case 'utm_term':
+      case 'utm_content':
+        return Object.hasOwn(m.urlParams, source) ? m.urlParams[source] : undefined;
     }
   }
 

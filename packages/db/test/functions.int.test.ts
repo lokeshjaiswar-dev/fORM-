@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   audit,
   createPartitions,
+  guestPublishHome,
   listUserOrgs,
   membershipFor,
   orgsDueFor,
@@ -35,7 +36,16 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
     expect(await listUserOrgs(t.app.db, randomUUID())).toEqual([]);
   });
 
-  it('membership_for validates X-FR-Org', async () => {
+  it('guest_publish_home returns an existing form org, else the first active owner', async () => {
+    expect(await guestPublishHome(t.app.db, seed.a.formIds[0])).toEqual({
+      orgId: seed.a.orgId,
+      ownerUserId: seed.a.ownerId,
+    });
+    const home = await guestPublishHome(t.app.db, randomUUID());
+    expect(home).toMatchObject({ orgId: expect.any(String), ownerUserId: expect.any(String) });
+  });
+
+  it('membership_for validates X-FR-Org', async () => {}
     expect(await membershipFor(t.app.db, seed.a.ownerId, seed.a.orgId)).toEqual({ role: 'owner', grants: [] });
     expect(await membershipFor(t.app.db, seed.a.ownerId, seed.b.orgId)).toBeNull();
     expect(await membershipFor(t.app.db, seed.a.editorId, seed.b.orgId)).toBeNull();
@@ -111,6 +121,8 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'auth_user_credentials',
       'create_org',
       'create_partitions',
+      'guest_publish_form',
+      'guest_publish_home',
       'invite_accept',
       'invite_by_token',
       'list_user_orgs',
@@ -118,6 +130,7 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'member_sessions_revoke',
       'membership_for',
       'orgs_due_for',
+      'resolve_form_slug',
       'resolve_job_org',
       'template_delete',
       'template_for_binding',

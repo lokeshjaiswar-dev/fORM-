@@ -1,0 +1,135 @@
+import { type ReactNode } from 'react';
+import { type DateRangePreset, type FilterOption, type FilterState, type FilterType } from './filters';
+/** How a column takes part in the table's filters (see `DataTable` `filters`). */
+export interface ColumnFilter<T> {
+    /** which editor the filter uses: `select`, `multi`, `date-range`, `number-range` or `text` */
+    type: FilterType;
+    /** name in the Add filter menu and on the chip; defaults to the header when that is a string, else the key */
+    label?: string;
+    /** the value tested for each row: a string, number, ISO date or (for `multi`) an array of strings. Defaults to the column's `sort` accessor. */
+    accessor?: (row: T) => unknown;
+    /** choices for `select` and `multi`; left out, they are the distinct values of the loaded rows, each with the number of rows that have it */
+    options?: FilterOption[];
+    /** `number-range`: the numbers are rupees */
+    currency?: boolean;
+    /** `date-range`: quick choices (default Today, Last 7 days, This month ...) */
+    presets?: DateRangePreset[];
+    /** `text`: placeholder of the text box */
+    placeholder?: string;
+    /** icon in the Add filter menu and on the chip */
+    icon?: ReactNode;
+}
+export interface Column<T> {
+    key: string;
+    header: ReactNode;
+    cell: (row: T) => ReactNode;
+    /** value used for sorting (enables the sort toggle on the header) */
+    sort?: (row: T) => string | number;
+    /** plain value for CSV export; defaults to nothing for that column */
+    csv?: (row: T) => string | number;
+    align?: 'left' | 'right' | 'center';
+    className?: string;
+    hidden?: boolean;
+    /** adds the information glyph to the header; the text is its hover title */
+    info?: string;
+    /**
+     * Pins the column: it shows the pin glyph and stays in view at the start edge while the table scrolls sideways (the row's hover and selected tints still show).
+     * Put pinned columns first. A pinned column that is followed by another pinned one needs a numeric `width`, so the next one knows where to stick.
+     */
+    pinned?: boolean;
+    /** column width: a number is pixels, a string any CSS length. With `virtualize` (or any column that has a width) the table uses fixed layout, so columns stop moving as rows scroll in and out. */
+    width?: number | string;
+    /** makes the column filterable: it appears in the Add filter menu of a table with `filters` and is tested when `filterValues` has a value for its `key` */
+    filter?: ColumnFilter<T>;
+}
+export interface DataTableSort {
+    key: string;
+    dir: 'asc' | 'desc';
+}
+/** What the server needs to answer for: sent to `onQueryChange` whenever the user changes the search, the sort, the page or the page size. */
+export interface DataTableQuery {
+    /** 0-based; always 0 with `virtualize` */
+    page: number;
+    pageSize: number;
+    sort?: DataTableSort;
+    /** trimmed search box text, debounced */
+    search: string;
+    /** the active filters by column key; the table always sends it (without empty entries). Optional so a query you build by hand still compiles. */
+    filters?: FilterState;
+}
+export interface DataTableProps<T> {
+    /** Accessible name of the table. It also names the pagination bar ("<label> pagination"), so two tables on one page keep distinct landmarks. */
+    label?: string;
+    /** Define these outside the component (or `useMemo` them): rows only skip re-rendering while `columns` keeps its identity. */
+    columns: Column<T>[];
+    rows: T[];
+    rowId: (row: T) => string;
+    /** text the search box matches against; read once per row when `rows` changes, so it may be an inline function */
+    searchText?: (row: T) => string;
+    searchPlaceholder?: string;
+    onRowClick?: (row: T) => void;
+    toolbar?: ReactNode;
+    pageSize?: number;
+    /** adds the "Rows per page" menu to the pagination bar with these choices (the current `pageSize` should be one of them) */
+    pageSizeOptions?: number[];
+    /** shown when there are no rows (a string becomes the panel title) */
+    empty?: ReactNode;
+    /** title and text of the empty panel; the defaults are the Figma copy */
+    emptyTitle?: ReactNode;
+    emptyDescription?: ReactNode;
+    /** title of the error panel (default "Could not load records"); the text is `error` when that is a string */
+    errorTitle?: ReactNode;
+    rowClassName?: (row: T) => string | undefined;
+    selectable?: boolean;
+    selected?: string[];
+    onSelectedChange?: (ids: string[]) => void;
+    exportName?: string;
+    footer?: ReactNode;
+    dense?: boolean;
+    className?: string;
+    defaultSort?: DataTableSort;
+    /** show skeleton rows instead of the data (in server mode the rows already on screen stay, dimmed, while the next page loads) */
+    loading?: boolean;
+    /** show the error panel; a string is used as its text */
+    error?: boolean | string;
+    onRetry?: () => void;
+    /** adds the "Configure columns" menu to the toolbar */
+    columnToggle?: boolean;
+    /** when given and rows are selected, the toolbar switches to the selection bar ("N items selected", Deselect all) with these actions on the right */
+    selectionActions?: (selectedIds: string[]) => ReactNode;
+    /**
+     * Windowing for long lists: no pages, the table scrolls inside `maxHeight` with a sticky header and only the rows in view are in the DOM,
+     * so 100,000 rows cost the same as 30. Rows must keep one height (cells truncate instead of wrapping) and columns should have a `width`.
+     */
+    virtualize?: boolean;
+    /** Scroll the table body inside this height (px or CSS length) with a sticky header. Default 560 with `virtualize`, none otherwise. */
+    maxHeight?: number | string;
+    /** Row height in px for `virtualize`; measured from the first row when left out. */
+    rowHeight?: number;
+    /** Rows rendered above and below the viewport with `virtualize`. Default 8. */
+    overscan?: number;
+    /** Called when the scroll gets near the last loaded row of a `virtualize` table that still has more (`rows.length < totalRows`): load the next batch. */
+    onEndReached?: () => void;
+    /**
+     * Server mode: the total number of rows on the server. `rows` is then only the current page (or, with `virtualize`, everything loaded so far),
+     * already searched and sorted by the server. The table stops filtering, sorting and slicing, and asks you for data through `onQueryChange`.
+     */
+    totalRows?: number;
+    /** Server mode: the search, sort, page or page size changed. It is not called for the initial state, which is yours to fetch. */
+    onQueryChange?: (query: DataTableQuery) => void;
+    /** Server mode: wait this long after the last keystroke before calling `onQueryChange`. Default 300 ms. */
+    searchDelay?: number;
+    /** Shows the filter bar under the toolbar (Add filter menu, chips, Clear all) for the columns that define `filter`. Client mode filters the rows before the search and sorting; server mode sends them in `onQueryChange`. */
+    filters?: boolean;
+    /** Active filters by column key. Pass it with `onFilterChange` to control them (saved views, the URL); without it the table keeps them itself. Filtering applies even with `filters` off. */
+    filterValues?: FilterState;
+    /** Starting filters of an uncontrolled table. */
+    defaultFilterValues?: FilterState;
+    /** The filters changed (through the bar, a chip or Clear all). The table goes back to page 1. */
+    onFilterChange?: (filters: FilterState) => void;
+    /** Content at the start of the filter bar, before Add filter: a saved-views menu, say. */
+    savedViews?: ReactNode;
+    /** Export button handler for server mode, where the browser has only one page of rows. Shows the Export button without `exportName`. */
+    onExport?: (query: DataTableQuery) => void;
+}
+export declare function DataTable<T>({ columns, rows, rowId, searchText, searchPlaceholder, onRowClick, toolbar, pageSize, pageSizeOptions, empty, emptyTitle, emptyDescription, errorTitle, rowClassName, selectable, selected, onSelectedChange, exportName, footer, dense, className, defaultSort, loading, error, onRetry, columnToggle, selectionActions, virtualize, maxHeight, rowHeight, overscan, onEndReached, totalRows, onQueryChange, searchDelay, onExport, filters: showFilters, filterValues, defaultFilterValues, onFilterChange, savedViews, label, }: DataTableProps<T>): import("react").JSX.Element;

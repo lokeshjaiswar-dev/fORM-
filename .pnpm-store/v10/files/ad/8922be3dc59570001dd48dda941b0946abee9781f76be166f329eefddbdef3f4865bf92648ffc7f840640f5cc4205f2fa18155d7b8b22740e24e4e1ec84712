@@ -1,0 +1,58 @@
+import * as React from 'react';
+/**
+ * Carousel. Figma Carousel page 3709:322: a row of items that scrolls one item at a time, with previous / next buttons (32px, 8px radius)
+ * and page dots (6px dots, the active one is an 18px pill; each dot is a 24px-wide button, so the marks sit about 13px apart). `navigation="bottom"` puts buttons and dots in a row under the items,
+ * `navigation="side"` puts the buttons beside the items and the dots under them. `visibleItems` is 1, 2, 3 or `auto` (items keep their own width).
+ * `tone` is the Figma state of the controls: `primary`, `neutral`, or `onPrimary` for use on a blue surface.
+ * `minItemWidth` (px) makes `visibleItems` a maximum: the count drops so items never get narrower than that, so a 3-up carousel is 2-up or 1-up on a phone.
+ * `labels` replaces the English button and dot labels.
+ *
+ * <Carousel visibleItems={3} navigation="bottom" aria-label="Featured templates">
+ *   <TemplateCard /> <TemplateCard /> <TemplateCard /> <TemplateCard />
+ * </Carousel>
+ */
+type CarouselTone = 'primary' | 'neutral' | 'onPrimary';
+type CarouselVisible = 1 | 2 | 3 | 'auto';
+/** The words the controls speak. Every key is optional; the defaults are English. */
+type CarouselLabels = {
+    previous: string;
+    next: string;
+    /** The name of the group of page dots. */
+    dots: string;
+    /** The name of one dot, 1-based. */
+    goTo: (page: number) => string;
+    /** The name of one item. */
+    slide: (index: number, count: number) => string;
+};
+declare function CarouselButton({ tone, direction, className, ...props }: React.ComponentProps<'button'> & {
+    tone?: CarouselTone;
+    direction: 'prev' | 'next';
+}): React.JSX.Element;
+/**
+ * The page dots on their own (Figma Carousel Indicators). Plain buttons in a labelled group (so every dot is in the tab order, not a tablist that would
+ * promise arrow-key navigation); the current one has `aria-current`. Each dot is a 24px button around the 6px mark (WCAG 2.5.8).
+ */
+declare function CarouselDots({ count, index, tone, onSelect, labels, className, }: {
+    count: number;
+    index: number;
+    tone?: CarouselTone;
+    onSelect?: (index: number) => void;
+    labels?: Partial<Pick<CarouselLabels, 'dots' | 'goTo'>>;
+    className?: string;
+}): React.JSX.Element;
+declare function Carousel({ visibleItems, navigation, tone, gap, showDots, minItemWidth, labels, className, children, ...props }: Omit<React.ComponentProps<'div'>, 'children'> & {
+    visibleItems?: CarouselVisible;
+    navigation?: 'bottom' | 'side';
+    tone?: CarouselTone;
+    /** Space between items, in px (Figma 24). */
+    gap?: number;
+    /** false is Figma "Slider=False": the buttons only, no dots. */
+    showDots?: boolean;
+    /** Smallest item width in px. `visibleItems` then acts as a maximum and the count shrinks on narrow containers (a 3-up carousel is 1-up on a phone). */
+    minItemWidth?: number;
+    /** Replace the English control labels. */
+    labels?: Partial<CarouselLabels>;
+    children: React.ReactNode;
+}): React.JSX.Element;
+export { Carousel, CarouselButton, CarouselDots };
+export type { CarouselLabels, CarouselTone, CarouselVisible };

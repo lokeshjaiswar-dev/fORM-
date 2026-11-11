@@ -3,7 +3,7 @@ import { defineField, headerOf, isBlank } from '../define.ts';
 import { DEFAULT_TEXT, PALETTE_LABELS, message } from '../messages.ts';
 import { PRESENCE_OPS } from '../operators.ts';
 import { labelText } from '../util/text.ts';
-import { NULL, countScalar, entry, isRootPath } from './shared.ts';
+import { NULL, countScalar, entry, isRootPath, pairLines } from './shared.ts';
 
 const noRows = (rows: object): boolean => Object.values(rows).every(isBlank);
 
@@ -17,12 +17,12 @@ export const matrix = defineField({
   type: 'matrix',
   palette: [entry('matrix', null, 'rating', PALETTE_LABELS['palette.matrix'], 'table', ['matrix', 'table', 'input table', 'grid', 'likert', 'survey'])],
   defaultConfig: (locale) => ({
-    mode: 'single',
+    mode: 'multi',
     rows: [1, 2].map((n) => ({ id: `row_${n}` as MatrixRowId, label: message(locale, DEFAULT_TEXT['defaults.matrix_row'], { n }) })),
     columns: [1, 2, 3].map((n) => ({
       id: `column_${n}` as MatrixColumnId,
       label: message(locale, DEFAULT_TEXT['defaults.matrix_column'], { n }),
-      input: 'choice' as const,
+      input: 'checkbox' as const,
     })),
     requireEach: 'none',
   }),
@@ -92,6 +92,15 @@ export const matrix = defineField({
     }
     return Object.entries(cell as Record<string, unknown>).map(([id, v]) => `${block.config.columns.find((c) => c.id === id)?.label ?? id}: ${String(v)}`).join('; ');
   }),
+  text: (value, block) => pairLines(block.config.rows.map((row) => {
+    const cell = value.rows[row.id];
+    if (cell === undefined) return [labelText(row.label), ''] as const;
+    if (value.mode === 'single') return [labelText(row.label), block.config.columns.find((c) => c.id === cell)?.label ?? String(cell)] as const;
+    if (value.mode === 'multi') {
+      return [labelText(row.label), (cell as MatrixColumnId[]).map((id) => block.config.columns.find((c) => c.id === id)?.label ?? id).join(', ')] as const;
+    }
+    return [labelText(row.label), Object.entries(cell as Record<string, unknown>).map(([id, v]) => `${block.config.columns.find((c) => c.id === id)?.label ?? id}: ${String(v)}`).join(', ')] as const;
+  })),
   texts: (block) => [
     ...block.config.rows.flatMap((row) => (typeof row.label === 'string' && row.label.trim() ? [`mrow:${block.id}/${row.id}` as const] : [])),
     ...block.config.columns.flatMap((col) => (col.label.trim() ? [`mcol:${block.id}/${col.id}` as const] : [])),

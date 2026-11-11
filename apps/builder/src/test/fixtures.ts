@@ -101,6 +101,10 @@ export class MemoryRepository implements DocumentRepository {
   async save(form: StoredForm): Promise<void> {
     this.records.set(form.id, structuredClone(form));
   }
+
+  async remove(id: string): Promise<void> {
+    this.records.delete(id);
+  }
 }
 
 export class MemorySubmissions implements SubmissionsRepository {
@@ -120,6 +124,16 @@ export class MemorySubmissions implements SubmissionsRepository {
 
   async create(record: StoredSubmission): Promise<void> {
     this.records.set(record.id, structuredClone(record));
+  }
+
+  async removeByForm(formId: string): Promise<StoredSubmission[]> {
+    const removed: StoredSubmission[] = [];
+    for (const [id, row] of this.records) {
+      if (row.formId !== formId) continue;
+      removed.push(structuredClone(row));
+      this.records.delete(id);
+    }
+    return removed;
   }
 }
 

@@ -1,0 +1,41 @@
+import * as React from 'react';
+import { Slider as SliderPrimitive } from 'radix-ui';
+import { type FieldSize } from './field';
+/** A tick on the slider, with an optional label under it. */
+export interface SliderMark {
+    value: number;
+    label?: React.ReactNode;
+}
+type SliderProps = Omit<React.ComponentProps<typeof SliderPrimitive.Root>, 'value' | 'defaultValue' | 'onValueChange' | 'aria-label' | 'aria-labelledby'> & {
+    /** Current value, one number per thumb: `[40]` for a single thumb, `[20, 80]` for a range. Makes the slider controlled. */
+    value?: number[];
+    /** Initial value when uncontrolled. Defaults to `[min]`. */
+    defaultValue?: number[];
+    /** Called on every move with the new values. */
+    onValueChange?: (value: number[]) => void;
+    /** Same height as the fields and Buttons: `sm`, `md` (default), `lg` and `xl` are 16, 18, 20 and 22 px thumbs on a 28 / 32 / 40 / 48 px hit area (compact density: 24 / 28 / 32 / 36 and a 2 px smaller thumb). */
+    size?: FieldSize;
+    /** Shows the value in a bubble above each thumb: `true` keeps it visible, `'active'` shows it while the thumb is hovered or focused. Horizontal sliders only. */
+    showValue?: boolean | 'active';
+    /** Turns a value into text, for the bubble, the tick labels and the `aria-valuetext` that screen readers read. Defaults to the number. */
+    formatValue?: (value: number) => string;
+    /** Ticks under the track: `true` puts one on every step (up to 50 steps), an array puts them at those values, or `{ value, label }` objects add a label. */
+    marks?: boolean | Array<number | SliderMark>;
+    /** Accessible name. With a range, each thumb gets it followed by "minimum" or "maximum" unless `thumbLabels` says otherwise. Inside a `Field` it is optional: the field's label names the slider. */
+    'aria-label'?: string;
+    /** Id of the element that names the slider; applied to every thumb. With a range, "minimum" or "maximum" is added to it. */
+    'aria-labelledby'?: string;
+    /** Accessible name per thumb, in order, for ranges whose thumbs mean different things ("From amount", "To amount"). */
+    thumbLabels?: string[];
+    /** Marks the thumbs and the filled track as invalid (negative colour) and sets `aria-invalid`. Inside a `Field` it follows the field's `error`. */
+    invalid?: boolean;
+    /** Id of the hint or error text, applied to every thumb. Inside a `Field` it is set to the field's message. */
+    'aria-describedby'?: string;
+};
+/**
+ * Slider: a track with one thumb, or two for a range. The track is the faded primary of the switch (one step stronger), the filled part is primary, and the
+ * thumb is a white disc with a primary ring that takes the 3px focus ring. Arrow keys move one step, Page Up / Down ten, Home / End jump to the ends.
+ */
+declare function Slider({ className, size, value: valueProp, defaultValue, onValueChange, min, max, step, showValue, formatValue, marks, thumbLabels, invalid: invalidProp, disabled: disabledProp, orientation, minStepsBetweenThumbs, onKeyDown, onPointerDown, 'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledby, 'aria-describedby': ariaDescribedby, ...props }: SliderProps): React.JSX.Element;
+export { Slider };
+export type { SliderProps };

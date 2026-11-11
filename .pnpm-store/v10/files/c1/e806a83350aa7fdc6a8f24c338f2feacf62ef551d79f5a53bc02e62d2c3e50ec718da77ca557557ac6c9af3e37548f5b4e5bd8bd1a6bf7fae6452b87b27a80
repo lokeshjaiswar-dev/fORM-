@@ -1,0 +1,29 @@
+import * as React from 'react';
+import { DayPicker } from 'react-day-picker';
+interface PanelLimits {
+    /** first month that can be picked (react-day-picker `startMonth`) */
+    startMonth?: Date;
+    /** last month that can be picked (`endMonth`) */
+    endMonth?: Date;
+}
+/** The month grid. `onBack` returns to the days; `onYear` (optional) opens the year grid. Months outside `startMonth` / `endMonth` are disabled. */
+declare function MonthPanel({ month, onPick, onBack, onYear, startMonth, endMonth, locale }: {
+    month: Date;
+    onPick: (monthIndex: number) => void;
+    onBack: () => void;
+    onYear?: () => void;
+    locale?: string;
+} & PanelLimits): React.JSX.Element;
+/** The year grid (15 years per page). `onBack` (optional) turns the range label into a button that returns to the days. Years outside `startMonth` / `endMonth` are disabled and the arrows stop there. */
+declare function YearPanel({ month, onPick, onBack, startMonth, endMonth }: {
+    month: Date;
+    onPick: (year: number) => void;
+    onBack?: () => void;
+} & PanelLimits): React.JSX.Element;
+/**
+ * Calendar (Figma: Calendar, Varient=Date / Month / Year). 40px cells, 16px padding (32 and 12 in compact density), 312 wide; the header switches to a month
+ * grid and a year grid, which Escape (or the header button) leaves again. Accepts every react-day-picker prop (single, multiple and range selection, disabled
+ * matchers ...); `startMonth` / `endMonth` also limit the month and year grids. Month names and weekday initials follow `locale`.
+ */
+declare function Calendar({ className, classNames, showOutsideDays, fixedWeeks, month: monthProp, defaultMonth, onMonthChange, components, formatters, ...props }: React.ComponentProps<typeof DayPicker>): React.JSX.Element;
+export { Calendar, MonthPanel as CalendarMonths, YearPanel as CalendarYears };

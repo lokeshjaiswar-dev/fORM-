@@ -1,3 +1,4 @@
+import { CheckboxField } from '@dmacq/ui';
 import type { ConsentItemId, Locale, RichDoc } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { RichTextView } from '../richtext/RichTextView.tsx';
@@ -44,17 +45,16 @@ export function ConsentField({ block, field }: ControlProps<'consent'>) {
       {block.config.items.map((item, i) => {
         const id = `${field.ids.input}-${item.id}`;
         return (
-          <label key={item.id} className="fr-consent-item" htmlFor={id}>
-            <input
-              id={i === 0 ? field.ids.input : id}
-              type="checkbox"
-              checked={items[item.id] === true}
-              onChange={(e) => write({ ...items, [item.id as ConsentItemId]: e.target.checked })}
-              onBlur={answer.onBlur}
-              {...attrs}
-            />
-            <span className="fr-rich"><RichTextView doc={item.label} inline resolve={resolve} /></span>
-          </label>
+          <CheckboxField
+            key={item.id}
+            id={i === 0 ? field.ids.input : id}
+            className="fr-consent-item"
+            checked={items[item.id] === true}
+            disabled={attrs.disabled}
+            onCheckedChange={(on) => write({ ...items, [item.id as ConsentItemId]: on === true })}
+            onBlur={answer.onBlur}
+            label={<span className="fr-rich"><RichTextView doc={item.label} inline resolve={resolve} /></span>}
+          />
         );
       })}
     </div>

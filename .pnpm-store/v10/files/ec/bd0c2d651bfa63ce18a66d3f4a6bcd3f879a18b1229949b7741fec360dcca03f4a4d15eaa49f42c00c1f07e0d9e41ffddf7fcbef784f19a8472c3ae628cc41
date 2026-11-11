@@ -1,0 +1,60 @@
+/* navigation & layout: component-level CSS for the dMACQ design system (Sidebar 1821:11260, Topbar 4059:5774, Breadcrumb 226:86, Tabs 1785:11908,
+   Step Wizard 3386:477, Accordion 1785:11907, Folder Tree 3769:986, List 3711:256). Owned by the navigation fork. */
+
+:root,
+.ov-theme-light {
+  /* sidebar cell: dark navy in both themes (Figma: surface/icon + text grey/muted on neutral/bluedark/1300) */
+  --sidebar-item: #6c849d;
+  --sidebar-item-hover-bg: #305eff17;      /* interactive.background.primary.disabled */
+  --sidebar-item-active-fg: #ffffffe5;     /* interactive.text.onPrimary.subtle */
+  --sidebar-bar: #2950da;                  /* interactive.border.primary.default */
+  --sidebar-title: #ffffff;
+  /* tabs: hover text (interactive.text.neutral.subtle on the tab, #2f4256 in light) */
+  --tab-hover-text: #2f4256;
+  --tab-track: #6c849d17;                  /* interactive.border.gray.faded */
+  /* kept as an alias for old consumers: navigation focus is the shared --focus-ring (index.css) */
+  --nav-focus-ring: var(--focus-ring);
+  /* folder icon amber (Figma Folder Icon) */
+  --folder-front: #ffb02e;
+  --folder-back: #f59a0c;
+  /* step wizard connector */
+  --step-dash-pending: #cbd5e2;            /* neutral/bluedark/300 (light theme; dark has its own below) */
+  --step-dash-done: #167b59;               /* feedback.background.positive.intense */
+}
+
+.dark,
+.ov-theme-dark {
+  --step-dash-done: #25b484;               /* feedback.background.positive.intense (dark) */
+  --step-dash-pending: #40566d;            /* a quiet neutral on the dark surfaces: the light-theme #cbd5e2 would be the loudest line on the screen */
+  --tab-hover-text: #e3eaf3;
+}
+
+/* selected sidebar cell: faded primary highlight fading to the navy background (Figma: State=Selected) */
+@utility nav-selected {
+  background-image: linear-gradient(90deg, var(--sidebar-accent) 0%, #305eff00 100%);
+}
+
+/* the sidebar is navy in both themes, so its scrollbar uses the light-on-dark thumb colours */
+[data-slot='sidebar-content'] {
+  --scroll-thumb: #90a5bb33;
+  --scroll-thumb-near: #90a5bb66;
+  --scroll-thumb-hover: #90a5bb99;
+  --scroll-thumb-active: #b1c1d2cc;
+}
+
+/* the sidebar is navy in both themes: focus there uses the light ring (7.7:1 on #070f19), whatever the page theme is */
+[data-slot='sidebar'],
+[data-slot='sidebar-flyout'] {
+  --focus-ring: var(--focus-ring-on-dark);
+}
+
+/* a horizontally scrolling list fades the edge that still has content past it (see useScrollEdges); the fade is off until the list really overflows */
+.ds-scroll-fade-x[data-scroll-start],
+.ds-scroll-fade-x[data-scroll-end] {
+  --fade-l: 0px;
+  --fade-r: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+}
+.ds-scroll-fade-x[data-scroll-start] { --fade-l: 1.5rem; }
+.ds-scroll-fade-x[data-scroll-end] { --fade-r: 1.5rem; }

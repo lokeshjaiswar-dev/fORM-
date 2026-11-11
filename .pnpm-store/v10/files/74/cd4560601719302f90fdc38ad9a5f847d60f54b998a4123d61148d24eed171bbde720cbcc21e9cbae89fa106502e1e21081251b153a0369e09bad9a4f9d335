@@ -1,0 +1,4 @@
+import * as React from 'react';
+export declare function useScrollable<T extends HTMLElement>(external?: React.Ref<T>, { unlessFocusable }?: {
+    unlessFocusable?: boolean;
+}): readonly [(node: T | null) => void, boolean];

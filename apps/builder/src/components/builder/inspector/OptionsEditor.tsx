@@ -1,9 +1,13 @@
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { useRef } from 'react';
+import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import type { BlockOf, ChoiceOption, OptionId } from '@form/schema';
+import { themeImageUrl } from '@form/renderer';
+import type { AssetId, BlockOf, ChoiceOption, OptionId } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
+import { fileToThemeImage, storeThemeImage } from '@/components/builder/design/uploads';
 import { APP_IDS } from '@/lib/definition';
+import { uid } from '@/lib/utils';
 import { updateBlock } from '@/state/actions';
 import { Button, Input, Label } from '@dmacq/ui';
 import { ToggleRow } from '@/components/builder/inspector/parts';
@@ -21,6 +25,8 @@ const M = defineMessages('builder', {
   'options.other': 'Add an “Other” option',
   'options.shuffle': 'Shuffle the options for each respondent',
   'options.codes_hint': 'Answers store each option’s id, never its label: renaming an option keeps its answers and its code.',
+  'options.image': 'Upload image for option {n}',
+  'options.image_remove': 'Remove image from option {n}',
 });
 
 type ChoiceBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'> | BlockOf<'ranking'> | BlockOf<'matching'> | BlockOf<'constant_sum'> | BlockOf<'maxdiff'>;
@@ -32,6 +38,7 @@ type ChoiceBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'> | BlockOf<
  */
 export function OptionsEditor({ block }: { block: ChoiceBlock }) {
   const options = block.config.options;
+  const images = (block.type === 'single_choice' || block.type === 'multi_choice') && block.config.display === 'image';
   const write = (next: ChoiceOption[], extra: Record<string, unknown> = {}) => updateBlock(block.id, { config: { ...block.config, options: next, ...extra } });
 
   const edit = (i: number, patch: Partial<ChoiceOption>) => {
@@ -39,6 +46,7 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
       if (j !== i) return o;
       const merged = { ...o, ...patch };
       if (merged.code === '') delete merged.code;
+      if (merged.image === undefined) delete merged.image;
       return merged;
     });
     write(next);
@@ -92,6 +100,7 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
                 <ChevronDown className="size-3" />
               </Button>
             </div>
+            {images ? <OptionImage opt={opt} index={i} onChange={(image) => edit(i, { image })} /> : null}
             <Input aria-label={t(M['options.label'], { n: i + 1 })} value={labelString(opt.label)} onChange={(e) => edit(i, { label: e.target.value })} />
             <Input
               aria-label={t(M['options.code'], { n: i + 1 })}
@@ -127,6 +136,46 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
           checked={block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? block.config.shuffle === true : block.config.shuffle !== undefined && block.config.shuffle !== false}
           onChange={(on) => updateBlock(block.id, { config: { ...block.config, shuffle: on ? (block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? true : { keepLast: 0 }) : undefined } })}
         />
+      ) : null}
+    </div>
+  );
+}
+
+function OptionImage({ opt, index, onChange }: { opt: ChoiceOption; index: number; onChange: (image: ChoiceOption['image']) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const url = themeImageUrl(opt.image?.assetId);
+  const n = index + 1;
+  return (
+    <div className="relative shrink-0">
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        aria-label={t(M['options.image'], { n })}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (!file) return;
+          void fileToThemeImage(file).then((data) => {
+            const assetId = uid() as AssetId;
+            storeThemeImage(assetId, data);
+            onChange({ assetId, alt: labelString(opt.label) || undefined, decorative: true });
+          });
+        }}
+      />
+      <button
+        type="button"
+        className="flex size-10 items-center justify-center overflow-hidden rounded-[6px] border border-border bg-state-hover"
+        aria-label={t(M['options.image'], { n })}
+        onClick={() => input.current?.click()}
+      >
+        {url ? <img src={url} alt="" className="size-full object-cover" /> : <ImagePlus className="size-4 text-muted-foreground" />}
+      </button>
+      {opt.image ? (
+        <Button type="button" variant="ghost" size="icon-xs" className="absolute -right-1 -top-1" aria-label={t(M['options.image_remove'], { n })} onClick={() => onChange(undefined)}>
+          <Trash2 className="size-3" />
+        </Button>
       ) : null}
     </div>
   );

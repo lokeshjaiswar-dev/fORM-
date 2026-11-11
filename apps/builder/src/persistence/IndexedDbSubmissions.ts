@@ -1,4 +1,4 @@
-import { createStore, get, set, values, type UseStore } from 'idb-keyval';
+import { createStore, del, get, set, values, type UseStore } from 'idb-keyval';
 import {
   newestSubmissionFirst,
   storedSubmissionSchema,
@@ -41,5 +41,17 @@ export class IndexedDbSubmissions implements SubmissionsRepository {
 
   async create(record: StoredSubmission): Promise<void> {
     await set(key(record.formId, record.id), record, this.db());
+  }
+
+  async removeByForm(formId: string): Promise<StoredSubmission[]> {
+    const records = await values(this.db());
+    const removed: StoredSubmission[] = [];
+    for (const record of records) {
+      const parsed = storedSubmissionSchema.safeParse(record);
+      if (!parsed.success || parsed.data.formId !== formId) continue;
+      removed.push(parsed.data);
+      await del(key(formId, parsed.data.id), this.db());
+    }
+    return removed;
   }
 }

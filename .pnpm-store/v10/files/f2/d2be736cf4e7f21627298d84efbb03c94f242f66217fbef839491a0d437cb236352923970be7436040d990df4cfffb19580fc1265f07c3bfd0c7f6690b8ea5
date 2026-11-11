@@ -1,0 +1,65 @@
+import * as React from 'react';
+/**
+ * Document viewer for DMS+: previews one file from a URL or blob URL.
+ * Images are drawn by the component (zoom, rotate, drag to pan). PDFs are handed to the browser's own viewer in an <iframe>, so there is no
+ * dependency; the toolbar steers it through the `#page=` and `#zoom=` fragment. Plain text is fetched and shown in a <pre>. Anything else
+ * shows a fallback with a Download button. The toolbar is a Radix Toolbar (role="toolbar", arrow-key roving) built from the library Button and Tooltip.
+ */
+/** What a file is previewed as; `auto` reads it from `mimeType`, then the file name, then the URL. */
+export type DocumentViewerType = 'auto' | 'pdf' | 'image' | 'text';
+/** A toolbar group: `page` (PDF), `zoom`, `fit` (fit and actual size), `rotate` (image), `download`, `open` (new tab), `fullscreen`. */
+export type DocumentViewerTool = 'page' | 'zoom' | 'fit' | 'rotate' | 'download' | 'open' | 'fullscreen';
+export interface DocumentViewerProps extends Omit<React.ComponentProps<'div'>, 'children' | 'onError'> {
+    /** URL or blob URL of the file */
+    src: string;
+    /** file name, shown in the header and used for the download */
+    name: string;
+    /** how to preview it; `auto` detects from `mimeType`, then the file name, then the URL */
+    type?: DocumentViewerType;
+    /** MIME type of the file, e.g. `application/pdf`; takes priority over the file extension */
+    mimeType?: string;
+    /** `true` shows every tool that fits the file type, `false` hides the toolbar, or list the tool groups to show */
+    toolbar?: boolean | DocumentViewerTool[];
+    /** header slot after the name, for buttons such as Approve and Reject */
+    actions?: React.ReactNode;
+    /** second line of the header; defaults to the file type (and the pixel size of an image) */
+    meta?: React.ReactNode;
+    /** shows a skeleton instead of the file, e.g. while the URL is still being fetched */
+    loading?: boolean;
+    /** shows the error state; `true` uses a default message, or pass the message to show */
+    error?: React.ReactNode;
+    /** called when Retry is pressed in the error state (a failed image or text file also reloads itself) */
+    onRetry?: () => void;
+    /** runs when Download is pressed; call `event.preventDefault()` to replace the default download */
+    onDownload?: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+    /** height of the viewer; a number is px. Use `100%` inside a sized parent */
+    height?: number | string;
+    /** PDF page shown (1-based); pass with `onPageChange` to control it */
+    page?: number;
+    /** initial PDF page when uncontrolled */
+    defaultPage?: number;
+    /** called when the page changes through the toolbar */
+    onPageChange?: (page: number) => void;
+    /** number of pages in the PDF if you know it; shows "of N" and stops Next at the last page */
+    pageCount?: number;
+    /** keep the browser's own PDF toolbar (print, thumbnails) next to ours; hidden by default */
+    nativeToolbar?: boolean;
+    /** called when the viewer enters or leaves fullscreen */
+    onFullscreenChange?: (fullscreen: boolean) => void;
+}
+declare function DocumentViewer({ src, name, type, mimeType, toolbar, actions, meta, loading, error, onRetry, onDownload, height, page: pageProp, defaultPage, onPageChange, pageCount, nativeToolbar, onFullscreenChange, className, style, onKeyDown, ...props }: DocumentViewerProps): React.JSX.Element;
+export interface DocumentViewerDialogProps extends Omit<DocumentViewerProps, 'title' | 'height'> {
+    /** whether the dialog is open; pass with `onOpenChange` to control it */
+    open?: boolean;
+    /** called when the dialog opens or closes */
+    onOpenChange?: (open: boolean) => void;
+    /** accessible title of the dialog; defaults to the file name */
+    title?: string;
+    /** accessible description read out when the dialog opens */
+    description?: string;
+    /** element that opens the dialog when pressed (rendered with `asChild`) */
+    trigger?: React.ReactNode;
+}
+/** The viewer in a large Dialog. The close button sits in the viewer header after `actions`. */
+declare function DocumentViewerDialog({ open, onOpenChange, title, description, trigger, actions, className, ...viewer }: DocumentViewerDialogProps): React.JSX.Element;
+export { DocumentViewer, DocumentViewerDialog };

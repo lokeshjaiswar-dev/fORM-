@@ -184,7 +184,7 @@ export interface MaxDiffConfig {
 }
 export interface CardSortItem { id: CardItemId; label: string }
 export interface CardSortBucket { id: CardBucketId; label: string }
-/** Closed card sort: each item maps to one bucket. */
+/** Closed card sort: each item maps to one bucket, or several when `exclusive` is false. */
 export interface CardSortConfig {
   items: CardSortItem[];
   buckets: CardSortBucket[];
@@ -390,9 +390,21 @@ export interface AppointmentConfig {
 
 /* Computed */
 export interface CalculationConfig { expr: Expr; resultType: ExprType; format?: ValueFormat; display: 'visible' | 'hidden'; declassify?: { reason: string } }
-export const CONTEXT_SOURCES = ['page_url', 'referrer', 'user_agent', 'started_at', 'submitted_at', 'locale', 'time_zone', 'embed_origin'] as const;
+export const CONTEXT_SOURCES = [
+  'page_url', 'referrer', 'user_agent', 'started_at', 'submitted_at', 'locale', 'time_zone', 'embed_origin',
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+] as const;
 export type ContextSource = (typeof CONTEXT_SOURCES)[number];
-export interface ContextConfig { sources: ContextSource[]; stripQuery?: boolean }
+export interface ContextStaticFact { key: string; value: string }
+export interface ContextConfig {
+  sources: ContextSource[];
+  stripQuery?: boolean;
+  /** Missing on older forms: those stay visible. New blocks default to capture-only. */
+  display?: 'visible' | 'hidden';
+  /** Extra query-string names (in addition to the UTM facts). */
+  urlParams?: string[];
+  staticFacts?: ContextStaticFact[];
+}
 export interface UniqueIdConfig { prefix: PlainTemplate; padTo: number; startAt: number; resetEvery: 'never' | 'year' | 'month'; showOnEnding: boolean }
 
 /* Content and container */

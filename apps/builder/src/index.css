@@ -1,6 +1,62 @@
 @import "tailwindcss";
 @import "@dmacq/ui/styles.css";
 @import "@dmacq/ui/fonts.css";
+@import "@form/renderer/styles.css";
+
+/* Canvas uses renderer field styles without the fill-root flex column, which pinned the card to the viewport. */
+.fr-root.fr-builder-canvas {
+  display: block;
+  min-height: 100%;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-input],
+.fr-root.fr-builder-canvas .ds-field {
+  background-color: var(--fr-inputBg, #fff) !important;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) {
+  display: grid;
+  grid-template-columns: auto minmax(10rem, 1fr);
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) > [data-canvas-label] {
+  margin: 0;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) > .fr-appointment {
+  display: contents;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) .fr-appointment-slots {
+  grid-column: 1 / -1;
+}
+
+[data-slash-menu] .ds-menu-search,
+[data-slash-menu] .ds-menu-search:focus,
+[data-slash-menu] .ds-menu-search:focus-visible,
+[data-slash-menu] .ds-menu-search:has(:focus-visible),
+[data-slash-menu] input,
+[data-slash-menu] input:focus,
+[data-slash-menu] input:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The menu sits on the themed canvas; keep cmdk on builder chrome, not form tokens. */
+.fr-root.fr-builder-canvas [data-slash-menu],
+.fr-root.fr-builder-canvas [data-slash-menu] * {
+  font-family: var(--font-sans);
+}
+.fr-root.fr-builder-canvas [data-slash-menu] .ds-field,
+.fr-root.fr-builder-canvas [data-slash-menu] input {
+  background-color: transparent !important;
+  color: inherit;
+  font-size: inherit;
+}
 
 html,
 body,

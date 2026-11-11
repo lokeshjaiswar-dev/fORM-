@@ -1,0 +1,52 @@
+import * as React from 'react';
+import { type ComboboxOption } from './combobox';
+import { type FieldSize, type FieldStatus } from './field';
+/**
+ * Value chip inside a field (Figma: Select Trigger, Chip Row). `disabled` greys it with the disabled recipe and drops the remove button.
+ * The remove button is for pointer users and is hidden from assistive technology (a button inside a `role="combobox"` is not valid ARIA): keyboard and screen reader users
+ * untick the option in the list, or press Backspace on the field to remove the last chip (Ctrl/Cmd+Backspace clears all when `clearable`).
+ */
+declare function ValueChip({ children, onRemove, disabled, className }: {
+    children: React.ReactNode;
+    onRemove?: () => void;
+    disabled?: boolean;
+    className?: string;
+}): React.JSX.Element;
+export interface MultiSelectProps {
+    options: ComboboxOption[];
+    value?: string[];
+    defaultValue?: string[];
+    onValueChange?: (value: string[]) => void;
+    placeholder?: string;
+    searchPlaceholder?: string;
+    emptyText?: string;
+    loading?: boolean;
+    /** chips shown before the "+N" overflow chip; the field never grows (default 2) */
+    maxVisible?: number;
+    size?: FieldSize;
+    status?: FieldStatus;
+    disabled?: boolean;
+    readOnly?: boolean;
+    /** x button that clears every picked value (default false) */
+    clearable?: boolean;
+    /** shows a "load more" row at the end of the menu */
+    onLoadMore?: () => void;
+    /** id of the field element. Inside a `Field` it defaults to the field's id. */
+    id?: string;
+    className?: string;
+    contentClassName?: string;
+    align?: 'start' | 'center' | 'end';
+    /** marks the field invalid and draws the error state. Inside a `Field` it follows the field's `error`. */
+    'aria-invalid'?: boolean | 'true' | 'false';
+    /** accessible name when there is no visible label */
+    'aria-label'?: string;
+    /** id of the element that names the field. The field is a `div` with `role="combobox"`, which a `<label for>` cannot name, so inside a `Field` it defaults to the field's label. */
+    'aria-labelledby'?: string;
+    /** id of the hint or error text. Inside a `Field` it is set to the field's message. */
+    'aria-describedby'?: string;
+    /** tells assistive technology an answer is required. Inside a `Field` it follows `required`. */
+    'aria-required'?: boolean | 'true' | 'false';
+}
+/** Multi-select with chips (Figma: Select Trigger, Chip Row + Dropdown Menu with checkbox rows). Value is an array of option values. */
+declare function MultiSelect({ options, value: valueProp, defaultValue, onValueChange, placeholder, searchPlaceholder, emptyText, loading, maxVisible, size, status: statusProp, disabled: disabledProp, readOnly, clearable, onLoadMore, id, className, contentClassName, align, ...aria }: MultiSelectProps): React.JSX.Element;
+export { MultiSelect, ValueChip };

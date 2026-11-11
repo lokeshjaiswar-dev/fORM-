@@ -37,6 +37,7 @@ export interface DocumentRepository {
   list(): Promise<FormSummary[]>;
   load(id: string): Promise<StoredForm | null>;
   save(form: StoredForm): Promise<void>;
+  remove(id: string): Promise<void>;
 }
 
 export const StoredFormSchema = z.strictObject({

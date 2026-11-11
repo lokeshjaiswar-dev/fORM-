@@ -107,6 +107,8 @@ export function createDb(url: string, options: DbOptions = {}): DbHandle {
     max: options.max ?? 10,
     application_name: options.applicationName ?? 'form',
     connectionTimeoutMillis: options.connectionTimeoutMs ?? 10_000,
+    keepAlive: true,
+    idleTimeoutMillis: 20_000,
     ...(options.statementTimeoutMs ? { statement_timeout: options.statementTimeoutMs } : {}),
   });
   pool.on('error', (err) => options.onError?.(err));

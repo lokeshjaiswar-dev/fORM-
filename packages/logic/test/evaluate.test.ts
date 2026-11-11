@@ -143,6 +143,27 @@ describe('evaluate', () => {
     expect(state.trace?.[0]).toEqual({ step: { kind: 'on_path', pageId: 'p1' }, fired: null });
   });
 
+  it('captures session details from the page, UTM tags, URL parameters and static values', () => {
+    const def = form([
+      field('context', 'session', {
+        config: {
+          sources: ['page_url', 'locale', 'utm_campaign'],
+          urlParams: ['ref'],
+          staticFacts: [{ key: 'channel', value: 'web' }],
+        },
+      }),
+    ], [page('p1', ['session'])]);
+    const state = evaluate(versionOf(def), {}, {
+      ...META,
+      pageUrl: 'https://example.test/form?ref=ad',
+      urlParams: { ref: 'ad', utm_campaign: 'diwali' },
+    }, 'client');
+    expect(state.values[bid('session')]).toEqual({
+      type: 'context',
+      value: { page_url: 'https://example.test/form?ref=ad', locale: 'en-IN', utm_campaign: 'diwali', ref: 'ad', channel: 'web' },
+    });
+  });
+
   it('captures hidden values from the URL, UTM tags, static text and expressions', () => {
     const def = form([
       field('short_text', 'name'),
@@ -333,6 +354,30 @@ describe('evaluate', () => {
     );
     const state = evaluate(versionOf(def), { [bid('qty')]: a.number('3'), [bid('price')]: a.number('4.5') }, META, 'client');
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '13.5' } });
+  });
+
+  it('a formula sums every row of a repeating-group number', () => {
+    const def = form(
+      [
+        field('repeating_group', 'items', { config: { children: [bid('amount')], minRows: 0, maxRows: 10, initialRows: 1, layout: 'stacked' } }),
+        field('number', 'amount'),
+        field('calculation', 'total', {
+          config: {
+            expr: { k: 'call', fn: 'sum', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('amount') } }] },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['items', 'total'])],
+    );
+    const rows = a.group([
+      { rowId: 'row_1', values: { [bid('amount')]: a.number('10') } },
+      { rowId: 'row_2', values: { [bid('amount')]: a.number('20') } },
+      { rowId: 'row_3', values: {} },
+    ]);
+    const state = evaluate(versionOf(def), { [bid('items')]: rows }, META, 'client');
+    expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '30' } });
   });
 
   it('blocks submit when a text field does not start with another field’s option code', () => {

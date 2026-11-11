@@ -1,0 +1,114 @@
+import * as React from 'react';
+import { Avatar as AvatarPrimitive } from 'radix-ui';
+import { PopoverContent, type LazyPopoverTrigger } from './popover';
+/**
+ * Avatar (Figma 1438:1365). Types: initials, image, icon. Sizes: xsmall 18, small 20, medium 24, large 32 (default), xlarge 40, 2xlarge 48.
+ * AvatarGroup overlaps avatars with a surface-coloured ring and collapses the rest into "+N" (Figma avatar_group, "Visible Members").
+ * Old usage (Avatar / AvatarImage / AvatarFallback with a size-* class) keeps working.
+ */
+export type AvatarSize = 'xsmall' | 'small' | 'medium' | 'large' | 'xlarge' | '2xlarge';
+/** Short names for the sizes, the vocabulary of Button, Loader and Progress: xs 18, sm 20, md 24, lg 32, xl 40, 2xl 48. */
+export type AvatarSizeShort = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+/** The long size name for either spelling. */
+export declare function avatarSizeName(size: AvatarSize | AvatarSizeShort): AvatarSize;
+export type AvatarTone = 'orange' | 'blue' | 'green' | 'red' | 'info' | 'neutral';
+/** Stable colour for a name, so the same person always gets the same initials colour. */
+declare function avatarToneFor(name: string): AvatarTone;
+/** Up to two initials from a display name. */
+declare function initialsOf(name: string): string;
+export type AvatarProps = Omit<React.ComponentProps<typeof AvatarPrimitive.Root>, 'onClick'> & {
+    /** diameter from `xsmall` (18 px) to `2xlarge` (48 px), or the short names `xs` ... `2xl`. Inside an `AvatarGroup` it follows the group; otherwise `large` (32 px). */
+    size?: AvatarSize | AvatarSizeShort;
+    /** render a `button` with hover, press and focus states. On by default when `onClick` is set. */
+    interactive?: boolean;
+    onClick?: React.MouseEventHandler<HTMLElement>;
+    /** interactive avatars only */
+    disabled?: boolean;
+};
+declare function Avatar({ className, size, interactive, disabled, children, ...props }: AvatarProps): React.JSX.Element;
+declare function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>): React.JSX.Element;
+declare function AvatarFallback({ className, tone, ...props }: React.ComponentProps<typeof AvatarPrimitive.Fallback> & {
+    /** background and text colour of the initials. `avatarToneFor(name)` picks one per person. */
+    tone?: AvatarTone;
+}): React.JSX.Element;
+/** Icon avatar (Figma type=Icon): a person glyph on a neutral disc, or pass any icon as children. */
+declare function AvatarIcon({ className, children, ...props }: React.ComponentProps<typeof AvatarPrimitive.Fallback>): React.JSX.Element;
+declare function AvatarGroup({ size: sizeProp, max, tone, moreLabel, className, children, ...props }: Omit<React.ComponentProps<'div'>, 'children'> & {
+    /** size given to every avatar in the group */
+    size?: AvatarSize | AvatarSizeShort;
+    /** how many avatars to show; the rest collapse into a `+N` avatar */
+    max?: number;
+    /** colour of the `+N` avatar (default `neutral`, so it does not read as another person) */
+    tone?: AvatarTone;
+    /** accessible name of the `+N` avatar, given the number of hidden avatars. Default `"3 more"`; use it to translate. */
+    moreLabel?: (hidden: number) => string;
+    /** the avatars */
+    children: React.ReactNode;
+}): React.JSX.Element;
+/** A person as the interactive avatars take it. Only `name` is required; initials and colour come from it. */
+export interface AvatarPerson {
+    /** React key in lists; the name is used when it is missing */
+    id?: string | number;
+    name: string;
+    /** picture URL; the initials show while it loads or if it fails */
+    src?: string;
+    /** initials colour. Default: avatarToneFor(name) */
+    tone?: AvatarTone;
+    /** second line: job title, team or role */
+    subtext?: React.ReactNode;
+    /** shown as a mailto link on the card */
+    email?: string;
+    /** extra card content under the details: a status badge, a phone number, last seen */
+    meta?: React.ReactNode;
+}
+export type PersonCardProps = AvatarPerson & Omit<React.ComponentProps<'div'>, 'id'> & {
+    /** buttons along the bottom of the card, e.g. Message and View profile */
+    actions?: React.ReactNode;
+};
+/** The card a PersonAvatar opens: a 40 px avatar, name, subtext, email, `meta` and `actions`. Usable on its own in a HoverCard or a panel. */
+declare function PersonCard({ id: _id, name, src, tone, subtext, email, meta, actions, className, children, ...props }: PersonCardProps): React.JSX.Element;
+export type PersonAvatarProps = AvatarPerson & Omit<AvatarProps, 'id' | 'children' | 'content'> & {
+    /** `click` (default) opens the card on press, `hover` also on pointer hover, `none` makes a plain avatar (clickable when `onClick` is set) */
+    card?: LazyPopoverTrigger | 'none';
+    /** buttons at the bottom of the default card */
+    actions?: React.ReactNode;
+    /** replaces the default PersonCard */
+    content?: React.ReactNode;
+    side?: React.ComponentProps<typeof PopoverContent>['side'];
+    align?: React.ComponentProps<typeof PopoverContent>['align'];
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+};
+/**
+ * An avatar for a person that is clickable out of the box: pressing it opens a PersonCard. The card machinery mounts on first open
+ * (LazyPopover), so long lists and tables of avatars stay cheap. `onClick` still runs; call `event.preventDefault()` in it to keep the card shut.
+ */
+declare function PersonAvatar({ id, name, src, tone, subtext, email, meta, actions, content, card, side, align, open, onOpenChange, size, ...props }: PersonAvatarProps): React.JSX.Element;
+export interface PeopleListProps extends Omit<React.ComponentProps<'div'>, 'onClick'> {
+    people: AvatarPerson[];
+    /** heading above the rows, e.g. "4 more" or "Approvers" */
+    heading?: React.ReactNode;
+    /** makes each row a button */
+    onPersonClick?: (person: AvatarPerson) => void;
+}
+/** A scrolling list of people (avatar, name, subtext). The +N popover of PersonAvatarGroup uses it; rows skip layout and paint while off-screen. */
+declare function PeopleList({ people, heading, onPersonClick, className, ...props }: PeopleListProps): React.JSX.Element;
+export interface PersonAvatarGroupProps extends Omit<React.ComponentProps<'div'>, 'children'> {
+    people: AvatarPerson[];
+    /** avatars shown before the rest collapse into +N (default 4) */
+    max?: number;
+    size?: AvatarSize | AvatarSizeShort;
+    /** colour of the +N avatar (default `neutral`) */
+    tone?: AvatarTone;
+    /** accessible name of the +N button and the heading of its list, given the number of hidden people. Default `"55 more"`; the names are in the list, not in the label. */
+    moreLabel?: (hidden: number) => string;
+    /** how each avatar opens its card; `none` turns the cards off (the +N list still opens) */
+    card?: PersonAvatarProps['card'];
+    /** buttons for each person's card */
+    actions?: (person: AvatarPerson) => React.ReactNode;
+    /** runs when a row of the +N list is pressed */
+    onPersonClick?: (person: AvatarPerson) => void;
+}
+/** AvatarGroup from data: every avatar opens its PersonCard and the +N avatar opens a scrolling list of the people it hides. */
+declare function PersonAvatarGroup({ people, max, size, tone, moreLabel, card, actions, onPersonClick, ...props }: PersonAvatarGroupProps): React.JSX.Element;
+export { Avatar, AvatarImage, AvatarFallback, AvatarIcon, AvatarGroup, PersonAvatar, PersonAvatarGroup, PersonCard, PeopleList, avatarToneFor, initialsOf, };

@@ -83,7 +83,7 @@ async function send(method: Method, path: string, body?: unknown, o: { org?: str
       credentials: 'include',
       headers: {
         accept: 'application/json',
-        ...DEV_USER_HEADERS,
+        ...(path.startsWith('/v1/p/') ? {} : DEV_USER_HEADERS),
         ...(method === 'GET' ? {} : CLIENT_HEADERS),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         ...(o.org ? { [ORG_HEADER]: o.org } : {}),

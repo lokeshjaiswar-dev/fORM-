@@ -436,10 +436,17 @@ export const CalculationConfigSchema = z.strictObject({
   declassify: z.strictObject({ reason: z.string().min(1).max(1000) }).exactOptional(),
 });
 export const ContextSourceSchema = z.enum(CONTEXT_SOURCES);
+const ContextParamNameSchema = z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/);
 export const ContextConfigSchema = z.strictObject({
-  sources: z.array(ContextSourceSchema).min(1).max(CONTEXT_SOURCES.length),
+  sources: z.array(ContextSourceSchema).max(CONTEXT_SOURCES.length),
   stripQuery: z.boolean().exactOptional(),
-}).refine((config) => new Set(config.sources).size === config.sources.length, 'sources must be unique');
+  display: z.enum(['visible', 'hidden']).exactOptional(),
+  urlParams: z.array(ContextParamNameSchema).max(20).exactOptional(),
+  staticFacts: z.array(z.strictObject({ key: ContextParamNameSchema, value: z.string().min(1).max(10_000) })).max(20).exactOptional(),
+}).refine((config) => new Set(config.sources).size === config.sources.length, 'sources must be unique')
+  .refine((config) => !config.urlParams || new Set(config.urlParams).size === config.urlParams.length, 'url params must be unique')
+  .refine((config) => !config.staticFacts || new Set(config.staticFacts.map((f) => f.key)).size === config.staticFacts.length, 'static keys must be unique')
+  .refine((config) => config.sources.length > 0 || (config.urlParams?.length ?? 0) > 0 || (config.staticFacts?.length ?? 0) > 0, 'session details need at least one fact');
 export const UniqueIdConfigSchema = z.strictObject({
   prefix: PlainTemplateSchema,
   padTo: count.max(20),

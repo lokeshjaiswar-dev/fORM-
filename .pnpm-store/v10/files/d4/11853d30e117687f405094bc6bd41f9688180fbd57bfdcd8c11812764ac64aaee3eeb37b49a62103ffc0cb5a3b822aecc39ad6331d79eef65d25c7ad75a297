@@ -1,0 +1,8 @@
+import * as React from 'react';
+/**
+ * Moves focus into a portalled panel (a picker popover) after it was opened from the keyboard. Bump `tick` to ask for it: the panel mounts a
+ * frame or two after `open` flips, so the first match of `selector` inside `ref` is retried for up to 30 frames. Internal.
+ */
+export declare function useFocusInto(ref: React.RefObject<HTMLElement | null>, tick: number, selector: string): void;
+/** True when the viewport is at least `px` wide (false on the server). Internal. */
+export declare function useMinWidth(px: number): boolean;

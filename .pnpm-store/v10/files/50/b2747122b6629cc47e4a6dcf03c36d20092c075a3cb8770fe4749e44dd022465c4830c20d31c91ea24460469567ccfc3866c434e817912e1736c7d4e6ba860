@@ -1,0 +1,29 @@
+import * as React from 'react';
+/**
+ * Skeleton loader (Figma 3570:7027): gray placeholder blocks that fade between the initial (#6c849d at 9%) and final (18%) state.
+ * Blocks have an 8 radius, lines 2, avatars are circles. `animation="pulse"` is a plain opacity pulse, `none` is the static initial state.
+ * The fade is defined in src/styles/ds-atoms.css (.ds-shimmer) and follows the theme.
+ * Old usage (<Skeleton className="h-4 w-24" />) keeps working.
+ * Each block is `aria-hidden` (a page of them would be noise for a screen reader). The presets announce the wait once instead: a hidden "Loading" status
+ * per group, whose text you can change with `label` or switch off with `label={false}` when a parent already says it (a list of rows, a `Card aria-busy`).
+ */
+export type SkeletonShape = 'rect' | 'text' | 'circle';
+declare function Skeleton({ className, shape, animation, ...props }: React.ComponentProps<'div'> & {
+    shape?: SkeletonShape;
+    animation?: 'shimmer' | 'pulse' | 'none';
+}): React.JSX.Element;
+type PresetProps = {
+    className?: string;
+    animation?: 'shimmer' | 'pulse' | 'none';
+    /** screen-reader text for the group (default "Loading"); `false` for none */
+    label?: string | false;
+};
+/** Paragraph placeholder; the last line is shorter. */
+declare function SkeletonText({ lines, className, animation, label }: PresetProps & {
+    lines?: number;
+}): React.JSX.Element;
+/** Avatar + two lines, the usual list-row placeholder. */
+declare function SkeletonRow({ className, animation, label }: PresetProps): React.JSX.Element;
+/** Card placeholder: image block, title and a short paragraph. */
+declare function SkeletonCard({ className, animation, label }: PresetProps): React.JSX.Element;
+export { Skeleton, SkeletonText, SkeletonRow, SkeletonCard };

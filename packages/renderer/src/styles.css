@@ -14,11 +14,14 @@
   container: fr / inline-size;
   inline-size: 100%;
   box-sizing: border-box;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100%;
   background: var(--fr-page);
   background-image: var(--fr-page-image, none);
+  background-size: cover;
+  background-position: center;
   color: var(--fr-text);
   font-family: var(--fr-font);
   font-size: var(--fr-size);
@@ -32,9 +35,8 @@
   box-sizing: inherit;
 }
 
-.fr-root :focus-visible {
-  outline: 2px solid var(--fr-accent);
-  outline-offset: 2px;
+.fr-root[data-mode] :focus-visible:not(.fr-blank-input) {
+  outline: none;
 }
 
 :where(.fr-root) .fr-sr-only {
@@ -49,8 +51,45 @@
   border: 0;
 }
 
+:where(.fr-root) .fr-page-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+:where(.fr-root) .fr-page-photo[data-fit='contain'] {
+  object-fit: contain;
+}
+
+:where(.fr-root) .fr-form:has(.fr-cover),
+:where(.fr-root) .fr-screen:has(.fr-cover) {
+  overflow: hidden;
+}
+
+:where(.fr-root) .fr-cover {
+  display: block;
+  width: calc(100% + 64px);
+  max-width: none;
+  height: 200px;
+  margin: -40px -32px 28px;
+  object-fit: cover;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+.fr-root[data-layout='cards'] .fr-cover {
+  width: calc(100% + 72px);
+  margin: -52px -36px 32px;
+}
+
 :where(.fr-root) .fr-form,
 :where(.fr-root) .fr-screen {
+  position: relative;
+  z-index: 1;
   width: calc(100% - 48px);
   max-width: var(--fr-width);
   margin: 48px auto;
@@ -67,6 +106,16 @@
 .fr-root[data-layout='cards'] .fr-screen {
   border-radius: 24px;
   padding: 52px 36px 56px;
+}
+
+/* Live fill is the preview card on a full window: themed page behind, surface card in the middle. */
+.fr-root[data-mode='live'] {
+  min-height: 100svh;
+}
+
+.fr-root[data-mode='live'] .fr-form,
+.fr-root[data-mode='live'] .fr-screen {
+  margin-block: clamp(40px, 7vh, 96px);
 }
 
 .fr-root[data-layout='cards'] .fr-cell {
@@ -426,16 +475,36 @@
   gap: 16px;
 }
 
+:where(.fr-root) .fr-field[data-type='appointment'] {
+  display: grid;
+  grid-template-columns: auto minmax(10rem, 1fr);
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+}
+
+:where(.fr-root) .fr-field[data-type='appointment'] > .fr-label {
+  margin: 0;
+}
+
+:where(.fr-root) .fr-field[data-type='appointment'] > .fr-description,
+:where(.fr-root) .fr-field[data-type='appointment'] > .fr-error {
+  grid-column: 1 / -1;
+}
+
 :where(.fr-root) .fr-appointment {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: contents;
+}
+
+:where(.fr-root) .fr-appointment > :first-child {
+  min-width: 0;
 }
 
 :where(.fr-root) .fr-appointment-slots {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  grid-column: 1 / -1;
 }
 
 :where(.fr-root) .fr-appointment-slot {
@@ -468,9 +537,11 @@
 }
 
 :where(.fr-root) .fr-blank-input {
-  flex: 1 1 8rem;
-  min-width: 8rem;
+  flex: 0 1 auto;
+  width: 12ch;
+  min-width: 6ch;
   max-width: 18rem;
+  field-sizing: content;
   margin: 0;
   padding: 0 2px 2px;
   border: none;
@@ -480,11 +551,21 @@
   color: inherit;
   font: inherit;
   text-align: center;
+  outline: none;
+  box-shadow: none;
 }
 
-:where(.fr-root) .fr-blank-input:focus {
+:where(.fr-root) .fr-blank-input:focus,
+:where(.fr-root) .fr-blank-input:focus-visible {
   outline: none;
+  box-shadow: none;
   border-bottom-color: var(--fr-accent);
+}
+
+.fr-root[data-mode] .fr-blank-input:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
 }
 
 :where(.fr-root) .fr-image-choices {
@@ -508,6 +589,8 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--fr-accent) 35%, transparent);
 }
 
+:where(.fr-root) .fr-image-choice [role='radio'],
+:where(.fr-root) .fr-image-choice [role='checkbox'],
 :where(.fr-root) .fr-image-choice input {
   position: absolute;
   opacity: 0;
@@ -532,14 +615,22 @@
 }
 
 :where(.fr-root) .fr-affix > .fr-input,
-:where(.fr-root) .fr-phone > .fr-input:last-child {
+:where(.fr-root) .fr-phone > :not(.fr-phone-country) {
   flex: 1;
   min-width: 0;
 }
 
 :where(.fr-root) .fr-phone-country {
-  flex: 0 0 auto;
-  width: auto;
+  flex: 0 0 7rem;
+  width: 7rem;
+  max-width: 7rem;
+  min-width: 0;
+}
+
+:where(.fr-root) .fr-phone-country .ds-field,
+:where(.fr-root) .fr-phone-country button {
+  width: 100%;
+  min-width: 0;
 }
 
 :where(.fr-root) .fr-range {

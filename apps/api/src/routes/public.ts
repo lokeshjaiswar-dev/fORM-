@@ -1,3 +1,5 @@
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -14,33 +16,125 @@ const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
 const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string() });
 
+type PublicPayload = { slug: string; formId: string; version: unknown };
+
+const LIVE_DIR = path.resolve(process.cwd(), '.data/published');
+const SUB_DIR = path.resolve(process.cwd(), '.data/submissions');
+const SLUG_FILE = /^[a-z0-9][a-z0-9-]{0,127}$/i;
+const FORM_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const LIVE_TTL_MS = 60_000;
+const liveCache = new Map<string, { at: number; body: PublicPayload }>();
+const liveInflight = new Map<string, Promise<PublicPayload>>();
+
+type DiskSubmission = {
+  id: string;
+  formId: string;
+  submittedAt: string;
+  locale: string;
+  answers: Record<string, unknown>;
+  fields: Array<{ key: string; label: string; value: string }>;
+};
+
+function livePath(slug: string): string {
+  return path.join(LIVE_DIR, `${slug}.json`);
+}
+
+export async function savePublished(body: PublicPayload): Promise<void> {
+  if (!SLUG_FILE.test(body.slug)) return;
+  liveCache.set(body.slug, { at: Date.now(), body });
+  await mkdir(LIVE_DIR, { recursive: true });
+  await writeFile(livePath(body.slug), JSON.stringify(body));
+}
+
+export function forgetPublished(slug?: string): void {
+  if (slug) {
+    liveCache.delete(slug);
+    void unlink(livePath(slug)).catch(() => undefined);
+  } else liveCache.clear();
+}
+
+async function readPublishedFile(slug: string): Promise<PublicPayload | null> {
+  if (!SLUG_FILE.test(slug)) return null;
+  try {
+    const parsed = JSON.parse(await readFile(livePath(slug), 'utf8')) as PublicPayload;
+    if (parsed?.slug === slug && parsed.formId && parsed.version) return parsed;
+  } catch {
+    /* Missing or unreadable. */
+  }
+  return null;
+}
+
+function versionIdOf(version: unknown): string | undefined {
+  if (typeof version !== 'object' || version === null || !('versionId' in version)) return undefined;
+  const id = (version as { versionId: unknown }).versionId;
+  return typeof id === 'string' ? id : undefined;
+}
+
+function formKey(formId: string): string {
+  return formId.toLowerCase();
+}
+
+function subPath(formId: string): string {
+  return path.join(SUB_DIR, `${formKey(formId)}.json`);
+}
+
+async function readSubmissions(formId: string): Promise<DiskSubmission[]> {
+  const id = formKey(formId);
+  if (!FORM_FILE.test(id)) return [];
+  try {
+    const parsed = JSON.parse(await readFile(subPath(id), 'utf8')) as { items?: DiskSubmission[] };
+    return Array.isArray(parsed.items) ? parsed.items.filter((row) => row && formKey(row.formId) === id && row.id) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveSubmission(row: DiskSubmission): Promise<void> {
+  const formId = formKey(row.formId);
+  if (!FORM_FILE.test(formId)) return;
+  const items = (await readSubmissions(formId)).filter((item) => item.id !== row.id);
+  items.unshift({ ...row, formId });
+  await mkdir(SUB_DIR, { recursive: true });
+  await writeFile(subPath(formId), JSON.stringify({ items }));
+}
+
+async function peekLive(slug: string): Promise<PublicPayload | null> {
+  const cached = liveCache.get(slug);
+  if (cached) return cached.body;
+  return readPublishedFile(slug);
+}
+
 export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig }): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const edition: RuntimeEdition = runtimeEdition(editionSummary(deps.config.edition));
 
-  r.get(
-    '/v1/p/:slug',
-    {
-      config: { auth: 'none' },
-      schema: {
-        tags: ['runtime'],
-        summary: 'Public runtime projection of the live version',
-        params: slugParam,
-        response: {
-          200: z.object({
-            slug: z.string(),
-            formId: z.uuid(),
-            version: z.unknown(),
-          }),
-        },
-      },
-    },
-    async (request) => {
-      const found = await resolveFormSlug(deps.db, request.params.slug);
+  async function loadLive(slug: string, requestId: string): Promise<PublicPayload> {
+    const cached = liveCache.get(slug);
+    if (cached && Date.now() - cached.at < LIVE_TTL_MS) return cached.body;
+    const fromDisk = await readPublishedFile(slug);
+    if (fromDisk) {
+      liveCache.set(slug, { at: Date.now(), body: fromDisk });
+      return fromDisk;
+    }
+    const pending = liveInflight.get(slug);
+    if (pending) return pending;
+    const load = (async () => {
+      const found = await resolveFormSlug(deps.db, slug);
       if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      const rows = await withTenant(deps.db, { orgId: found.orgId, actor: 'system', requestId: request.id, readOnly: true }, (tx) =>
+      const rows = await withTenant(deps.db, { orgId: found.orgId, actor: 'system', requestId, readOnly: true }, (tx) =>
         tx
-          .select()
+          .select({
+            id: formVersions.id,
+            orgId: formVersions.orgId,
+            formId: formVersions.formId,
+            number: formVersions.number,
+            schemaVersion: formVersions.schemaVersion,
+            publishedAt: formVersions.publishedAt,
+            publishedBy: formVersions.publishedBy,
+            definition: formVersions.definition,
+            compiled: formVersions.compiled,
+            contentHash: formVersions.contentHash,
+          })
           .from(formVersions)
           .where(and(eq(formVersions.id, found.liveVersionId), eq(formVersions.formId, found.formId)))
           .limit(1),
@@ -61,8 +155,8 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         templateLineage: [],
         variablesSnapshot: { variables: {} },
       };
-      return {
-        slug: request.params.slug,
+      const body: PublicPayload = {
+        slug,
         formId: found.formId,
         version: projectForRuntime(version, { state: 'open' }, {
           edition,
@@ -71,7 +165,31 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
           thirdPartyTrackingAllowed: false,
         }),
       };
+      await savePublished(body);
+      return body;
+    })().finally(() => liveInflight.delete(slug));
+    liveInflight.set(slug, load);
+    return load;
+  }
+
+  r.get(
+    '/v1/p/:slug',
+    {
+      config: { auth: 'none' },
+      schema: {
+        tags: ['runtime'],
+        summary: 'Public runtime projection of the live version',
+        params: slugParam,
+        response: {
+          200: z.object({
+            slug: z.string(),
+            formId: z.uuid(),
+            version: z.unknown(),
+          }),
+        },
+      },
     },
+    async (request) => loadLive(request.params.slug, request.id),
   );
 
   r.post(
@@ -92,30 +210,138 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       },
     },
     async (request) => {
-      const found = await resolveFormSlug(deps.db, request.params.slug);
-      if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      if (request.body.formVersionId !== found.liveVersionId) {
+      const live = (await peekLive(request.params.slug)) ?? (await loadLive(request.params.slug, request.id).catch(() => null));
+      if (!live) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+      const expected = versionIdOf(live.version);
+      if (expected && request.body.formVersionId !== expected) {
         throw new ProblemError('NOTICE_OUTDATED', 'This form was updated. Reload and try again.');
       }
       const id = randomUUID();
-      await withTenant(deps.db, { orgId: found.orgId, actor: 'system', requestId: request.id }, async (tx) => {
-        await tx.insert(formSubmissions).values({
-          id,
-          orgId: found.orgId,
-          formId: found.formId,
-          answers: request.body.answers,
-          fields: request.body.fields,
-          locale: request.body.locale,
-        });
-        await tx
-          .update(forms)
-          .set({
-            submissionCount: sql`${forms.submissionCount} + 1`,
-            lastSubmissionAt: new Date(),
-          })
-          .where(eq(forms.id, found.formId));
+      const row: DiskSubmission = {
+        id,
+        formId: live.formId,
+        submittedAt: new Date().toISOString(),
+        locale: request.body.locale,
+        answers: request.body.answers,
+        fields: request.body.fields,
+      };
+      await saveSubmission(row);
+      void persistSubmissionToDb(deps.db, request.params.slug, request.id, row).catch(() => undefined);
+      return { id };
+    },
+  );
+
+  r.post(
+    '/v1/p/by-form/:formId/submissions',
+    {
+      config: { auth: 'none' },
+      schema: {
+        tags: ['runtime'],
+        summary: 'Store a submission for a form id when the public slug is not used',
+        params: z.object({ formId: z.uuid() }),
+        body: z.object({
+          answers: z.record(z.string(), z.unknown()),
+          fields: z.array(fieldRow).default([]),
+          locale: z.string().min(2).max(35).default('en-IN'),
+        }),
+        response: { 200: z.object({ id: z.uuid() }) },
+      },
+    },
+    async (request) => {
+      const id = randomUUID();
+      await saveSubmission({
+        id,
+        formId: request.params.formId,
+        submittedAt: new Date().toISOString(),
+        locale: request.body.locale,
+        answers: request.body.answers,
+        fields: request.body.fields,
       });
       return { id };
     },
   );
+
+  r.get(
+    '/v1/p/by-form/:formId/submissions',
+    {
+      config: { auth: 'none' },
+      schema: {
+        tags: ['runtime'],
+        summary: 'List submissions for a published form (no sign-in)',
+        params: z.object({ formId: z.uuid() }),
+        response: {
+          200: z.object({
+            items: z.array(
+              z.object({
+                id: z.uuid(),
+                formId: z.uuid(),
+                submittedAt: z.string(),
+                fieldCount: z.number().int(),
+              }),
+            ),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      const items = await readSubmissions(request.params.formId);
+      return {
+        items: items.map((row) => ({
+          id: row.id,
+          formId: row.formId,
+          submittedAt: row.submittedAt,
+          fieldCount: row.fields.length,
+        })),
+      };
+    },
+  );
+
+  r.get(
+    '/v1/p/by-form/:formId/submissions/:id',
+    {
+      config: { auth: 'none' },
+      schema: {
+        tags: ['runtime'],
+        summary: 'Read one public submission',
+        params: z.object({ formId: z.uuid(), id: z.uuid() }),
+        response: {
+          200: z.object({
+            id: z.uuid(),
+            formId: z.uuid(),
+            submittedAt: z.string(),
+            locale: z.string(),
+            answers: z.record(z.string(), z.unknown()),
+            fields: z.array(fieldRow),
+          }),
+        },
+      },
+    },
+    async (request) => {
+      const row = (await readSubmissions(request.params.formId)).find((item) => item.id === request.params.id);
+      if (!row) throw new ProblemError('NOT_FOUND', 'That submission is not on this form.');
+      return row;
+    },
+  );
+}
+
+async function persistSubmissionToDb(db: Db, slug: string, requestId: string, row: DiskSubmission): Promise<void> {
+  const found = await resolveFormSlug(db, slug);
+  if (!found) return;
+  await withTenant(db, { orgId: found.orgId, actor: 'system', requestId }, async (tx) => {
+    await tx.insert(formSubmissions).values({
+      id: row.id,
+      orgId: found.orgId,
+      formId: found.formId,
+      answers: row.answers,
+      fields: row.fields,
+      locale: row.locale,
+    });
+    await tx
+      .update(forms)
+      .set({
+        submissionCount: sql`${forms.submissionCount} + 1`,
+        lastSubmissionAt: new Date(),
+      })
+      .where(eq(forms.id, found.formId));
+  });
 }

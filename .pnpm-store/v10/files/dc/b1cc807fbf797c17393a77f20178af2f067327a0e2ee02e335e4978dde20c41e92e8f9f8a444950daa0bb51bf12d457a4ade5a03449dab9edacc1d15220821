@@ -1,0 +1,408 @@
+/*
+ * @dmacq/ui styles: dMACQ design tokens (Figma: DMacq Design System), the shadcn variable names mapped onto them, the type scale and the
+ * component CSS the primitives rely on (ds-*.css).
+ *
+ * Use it from a Tailwind 4 app:
+ *   @import "tailwindcss";
+ *   @import "@dmacq/ui/styles.css";
+ * Tailwind has to see the class names inside the components, so the @source line below points at the built package.
+ */
+@import "tw-animate-css";
+@import "./ds-atoms.css";
+@import "./ds-forms.css";
+@import "./ds-navigation.css";
+@import "./ds-overlays.css";
+@import "./ds-data.css";
+@import "./ds-density.css";
+@import "./ds-scroll.css";
+
+@source "../../dist";
+/* matches the .dark element itself as well as everything inside it */
+@custom-variant dark (&:where(.dark, .dark *));
+/* `compact:` applies inside [data-density='compact'] (on <html> or any container), except on touch screens, which keep the comfortable sizes (see ds-density.css) */
+@custom-variant compact {
+  @media not (pointer: coarse) {
+    :where([data-density='compact']) & {
+      @slot;
+    }
+  }
+}
+
+/* =====================================================================================================================
+   dMACQ design tokens (Figma: DMacq Design System, Tokens page 0:1 and the component pages).
+   Layer 1: primitives (scales). Layer 2: semantic tokens that change with the theme. Layer 3: shadcn variable names mapped to semantics.
+   ===================================================================================================================== */
+:root {
+  /* ---- primitives: neutral (blue-dark) */
+  --bluedark-000: #ffffff; --bluedark-050: #f8fafc; --bluedark-100: #f1f5fa; --bluedark-200: #e3eaf3; --bluedark-300: #cbd5e2; --bluedark-400: #b1c1d2;
+  --bluedark-500: #90a5bb; --bluedark-600: #768ea7; --bluedark-700: #6c849d; --bluedark-800: #58728d; --bluedark-900: #40566d; --bluedark-1000: #2f4256;
+  --bluedark-1100: #243547; --bluedark-1200: #192839; --bluedark-1300: #0c1927;
+  --bluedark-a25: #6c849d0f; --bluedark-a50: #6c849d17; --bluedark-a100: #6c849d2e; --bluedark-a200: #6c849d52;
+  /* ---- primitives: chromatic */
+  --blue-050: #f5f8ff; --blue-100: #d8e4fd; --blue-200: #b4cdfd; --blue-300: #75a3ff; --blue-400: #4d7fff; --blue-500: #305eff; --blue-600: #2950da;
+  --blue-700: #2243b6; --blue-800: #1b3591; --blue-900: #14286d; --blue-1000: #0d1a48;
+  --blue-a25: #305eff17; --blue-a50: #305eff1f; --blue-a100: #305eff2e; --blue-a150: #305eff3d; --blue-a200: #305eff52;
+  --amber-050: #fff3eb; --amber-100: #ffe1cc; --amber-200: #ffc499; --amber-300: #ffac70; --amber-400: #ff9040; --amber-500: #ff7a1a; --amber-600: #e9690c;
+  --amber-700: #c65c10; --amber-800: #a24d10; --amber-900: #813e0e; --amber-1000: #5d2c09;
+  --orange-050: #fff5f2; --orange-100: #ffded4; --orange-200: #ffc9b9; --orange-300: #ffb199; --orange-400: #ff8c69; --orange-500: #ff7348; --orange-600: #fc5523;
+  --orange-700: #f2400a; --orange-800: #cd3609; --orange-900: #9e2b08;
+  --red-400: #ff7070; --red-500: #ff5757; --red-600: #d44a4a; --red-700: #be3a3a; --red-900: #702121;
+  --green-400: #25b484; --green-500: #1f936c; --green-600: #167b59; --green-700: #136449; --green-900: #0d4532;
+  --info-500: #0087da; --info-400: #33a9f3;
+
+  /* ---- semantic tokens (light). The theme blocks below are `:root, .ov-theme-light` and `.dark, .ov-theme-dark`, so a light or dark panel nested
+     in a page of the other theme re-resolves everything (no hand-copied palettes). */
+}
+
+/* ---- scales that do not change with the theme: focus geometry, motion, stacking.
+   Focus: one recipe (`.ds-focus`, `.ds-focus-inset`, see ds-atoms.css) draws a solid 2px outline in --focus-ring, offset 2px (inset: drawn inside the box).
+   Motion: four durations and one easing; overlay enter / exit, hover and focus transitions all come from here, and prefers-reduced-motion
+   collapses them (see the base layer).
+   Stacking: sticky chrome < 50 overlays (dialog, sheet, scrim) < 60 popovers and menus < 70 tooltips < 100 toasts, so a tooltip on a control inside
+   a popover, or a popover opened from a dialog, never ends up behind its parent, and a toast sits over everything the library renders. */
+:root {
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --dur-fast: 100ms;      /* colour, background, border on hover and press */
+  --dur-base: 150ms;      /* toggles, switches, small movements */
+  --dur-moderate: 200ms;  /* popovers, menus, dialogs, tooltips: enter and exit */
+  --dur-slow: 300ms;      /* sheets and the sidebar */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --z-overlay: 50;
+  --z-popover: 60;
+  --z-tooltip: 70;
+  --z-toast: 100;
+}
+
+:root,
+.ov-theme-light {
+  /* ---- semantic: surfaces and text (light) */
+  --surface-page: #ffffff;        /* the app canvas (--background); the lowest rung of the dark ladder */
+  --surface-intense: #ffffff;     /* surface/bg/grey/intense (cards) */
+  --surface-moderate: #f8fafc;    /* surface/bg/grey/moderate */
+  --surface-subtle: #f1f5fa;      /* surface/bg/grey/subtle */
+  --surface-highlighted: #e3eaf3; /* surface/bg/grey/highlighted */
+  --surface-popover: #ffffff;     /* menus, popovers, tooltips-on-light */
+  --surface-primary-subtle: #f5f8ff;
+  --text-normal: #0c1927;         /* interactive.text.neutral.normal */
+  --text-subtle: #40566d;         /* interactive.text.neutral.subtle (8.0:1 on white) */
+  --text-muted: #58728d;          /* interactive.text.neutral.muted (5.0:1 on white, 4.6:1 on --surface-subtle; do not use on --surface-highlighted) */
+  --text-disabled: #7189a2;       /* interactive.text.neutral.disabled: disabled controls only (3.6:1 on white) */
+  --icon-normal: #0c1927;
+  --icon-muted: #6c849d;          /* 3.9:1 on white: meaningful icons need 3:1 */
+  --icon-disabled: #90a5bb;
+  --border-subtle: #cbd5e2;       /* surface/border/grey/subtle */
+  --border-faded: #6c849d2e;      /* interactive.border.neutral.faded: hairline dividers, card edges */
+  --border-default: #6c849d52;    /* interactive.border.neutral.default: stronger dividers */
+  --separator: var(--border-faded); /* Separator hairline: the faded border in light, the stronger default in dark (a token so a className bg-* can still override it) */
+  /* the edge of an interactive control (field, unchecked box / radio, switch / slider track, outline button): opaque and >= 3:1 on every surface (WCAG 1.4.11) */
+  --border-control: #768ea7;
+  --border-control-hover: #6c849d;
+  /* keyboard focus: a solid outline, >= 3:1 on every surface of the theme (6.5:1 on white, 5.3:1 on --surface-highlighted). --focus-ring-inverse is for
+     solid coloured fills (toast, intense Alert / Banner, white buttons); --focus-ring-on-dark is for the sidebar, which is navy in both themes. */
+  --focus-ring: #2950da;
+  --focus-ring-inverse: #ffffff;
+  --focus-ring-on-dark: #75a3ff;
+  /* neutral hover and pressed fills for rows, list items and ghost / icon controls: one pair library-wide (menu options keep --option-hover, the 18%
+     step, because it doubles as the keyboard highlight) */
+  --state-hover: #6c849d17;
+  --state-pressed: #6c849d2e;
+  /* disabled recipe, one for every control: opaque fill, hairline border, readable (not invisible) text */
+  --disabled-bg: #e8eef5;
+  --disabled-fg: var(--text-disabled);
+  --disabled-border: #d5dde8;
+
+  /* ---- semantic: interactive (light) */
+  --primary-default: #2950da;     /* interactive.background.primary.default */
+  --primary-faded: #305eff17;     /* ...primary.faded */
+  --primary-faded-highlighted: #305eff3d;
+  --primary-border-highlighted: #305eff52;
+  --primary-text: #2950da;
+  /* tone colours double as text on their own 9% tint, so each one is >= 4.5:1 on white and on its --*-faded fill.
+     --notice is the amber identity colour (fills, borders, icons on white); use --notice-text for text and icons on tints. */
+  --positive: #146e4f; --positive-bg: #1f936c; --positive-faded: #146e4f17; --positive-subtle: #146e4f2e;
+  --negative: #be3a3a; --negative-faded: #be3a3a17; --negative-subtle: #be3a3a2e;
+  --notice: #e9690c; --notice-text: #a84a06; --notice-faded: #e9690c17; --notice-subtle: #e9690c2e;
+  --information: #006fb4; --information-faded: #006fb417; --information-subtle: #006fb42e;
+  --neutral-intense: #243547; --neutral-subtle: #6c849d2e;
+  /* solid fills carrying white text (>= 4.5:1), the same in both themes; hover steps one shade deeper */
+  --positive-solid: #167b59; --positive-solid-hover: #136449;
+  --negative-solid: #be3a3a; --negative-solid-hover: #a32f2f;
+  --notice-solid: #bf5000; --notice-solid-hover: #9c4100;
+  --information-solid: #006fb4; --information-solid-hover: #005a93;
+  --brand-orange-solid: #cd3609; --brand-orange-text: #cd3609;
+
+  /* ---- elevation */
+  --elevation-xs: 0 1px 2px 0 #1928390d;   /* controls: card, switch thumb, toolbar */
+  --elevation-low: 0 2px 16px 0 #19283917; /* soft ambient lift (the Tailwind shadow-sm step) */
+  --elevation-mid: 0 8px 24px 0 #1928391f;
+  --elevation-high: 0 16px 48px -4px #1928392e;
+
+  /* sidebar: dark navy in both themes (Figma: Sidebar 1821:11260); in dark it drops below the page so the rail still separates */
+  --sidebar: #0c1927;
+  --sidebar-border: #6c849d2e;
+}
+
+.dark,
+.ov-theme-dark {
+  /* dark surface ladder, lowest to highest: page #0a1521 < card #122338 < popover / menu #162a40 < subtle #1c2f45 < highlighted #2b3f56 */
+  --surface-page: #0a1521;
+  --surface-intense: #122338;
+  --surface-moderate: #162a40;
+  --surface-subtle: #1c2f45;
+  --surface-highlighted: #2b3f56;
+  --surface-popover: #162a40;
+  --surface-primary-subtle: #305eff17;
+  --text-normal: #f8fafc;
+  --text-subtle: #b1c1d2;
+  --text-muted: #90a5bb;
+  --text-disabled: #6c849d;
+  --icon-normal: #f8fafc;
+  --icon-muted: #90a5bb;
+  --icon-disabled: #58728d;
+  --border-subtle: #40566d;
+  --border-faded: #6c849d40;
+  --border-default: #6c849d66;
+  --separator: var(--border-default);
+  --border-control: #6c849d;
+  --border-control-hover: #7e95ad;
+  --focus-ring: #75a3ff;           /* 7.4:1 on the page, 6.4:1 on a card, 5.9:1 on a popover, 5.5:1 on --surface-subtle, 4.3:1 on --surface-highlighted */
+  --focus-ring-inverse: #ffffff;
+  --focus-ring-on-dark: #75a3ff;
+  --state-hover: #6c849d1f;
+  --state-pressed: #6c849d38;
+  --disabled-bg: #1b2d42;
+  --disabled-fg: var(--text-disabled);
+  --disabled-border: #2b4058;
+
+  --primary-default: #305eff;
+  --primary-faded: #305eff2e;
+  --primary-faded-highlighted: #305eff52;
+  --primary-border-highlighted: #305eff2e;
+  --primary-text: #75a3ff;
+  --positive: #2cc08e; --positive-bg: #25b484; --positive-faded: #167b593d; --positive-subtle: #167b592e;
+  --negative: #ff7070; --negative-faded: #d44a4a2e; --negative-subtle: #d44a4a2e;
+  --notice: #ff9040; --notice-text: #ff9040; --notice-faded: #e9690c2e; --notice-subtle: #e9690c52;
+  --information: #45b4f6; --information-faded: #0087da3d; --information-subtle: #0087da2e;
+  --neutral-intense: #f8fafc; --neutral-subtle: #6c849d2e;
+  --brand-orange-text: #ff8c69;
+
+  --elevation-xs: 0 1px 2px 0 #00000066;
+  --elevation-low: 0 2px 16px 0 #00000040;
+  --elevation-mid: 0 8px 24px 0 #00000059;
+  --elevation-high: 0 16px 48px -4px #00000073;
+
+  --sidebar: #070f19;
+  --sidebar-border: #6c849d3d;
+}
+
+/* ---- shadcn variables: the shadcn names mapped onto the semantics above. Declared on every theme root so each one resolves against its own
+   theme tokens (a .dark panel inside a light page, or the reverse, switches without any copied tables). */
+:root,
+.dark,
+.ov-theme-light,
+.ov-theme-dark {
+  --radius: 8px;
+  --background: var(--surface-page);
+  --foreground: var(--text-normal);
+  --card: var(--surface-intense);
+  --card-foreground: var(--text-normal);
+  --popover: var(--surface-popover);
+  --popover-foreground: var(--text-normal);
+  --primary: var(--primary-default);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-subtle);
+  --secondary-foreground: var(--text-normal);
+  --muted: var(--surface-subtle);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--primary-faded);
+  --accent-foreground: var(--primary-text);
+  --destructive: var(--negative);
+  --border: var(--border-faded);
+  --input: var(--border-control);
+  --ring: var(--focus-ring);
+  --chart-1: var(--blue-500);
+  --chart-2: var(--orange-600);
+  --chart-3: var(--green-600);
+  --chart-4: var(--info-500);
+  --chart-5: var(--bluedark-700);
+  --sidebar-foreground: #cbd5e2;
+  --sidebar-primary: #305eff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #305eff3d;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-ring: var(--focus-ring-on-dark);
+  --sidebar-muted: #90a5bb;
+  /* status colours used by badges, clocks and flags */
+  --success: var(--positive);
+  --warning: var(--notice-text);
+  --danger: var(--negative);
+  --info: var(--information);
+  --brand-orange: var(--orange-600);
+}
+
+.dark,
+.ov-theme-dark {
+  --accent-foreground: #b4cdfd;
+  --chart-1: var(--blue-400);
+  --chart-2: var(--orange-500);
+  --chart-3: var(--green-400);
+  --chart-4: var(--info-400);
+  --chart-5: var(--bluedark-500);
+}
+
+@theme inline {
+  --font-sans: "Noto Sans Variable", "Noto Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* derived from --radius (8px), so one variable re-skins every corner: xs 2, sm 4, md 6, lg 8, xl 12 */
+  --radius-xs: calc(var(--radius) - 6px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-low);
+  --shadow-md: var(--elevation-mid);
+  --shadow-lg: var(--elevation-high);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  /* status */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-text: var(--brand-orange-text);
+  --color-brand-orange-solid: var(--brand-orange-solid);
+
+  /* dMACQ semantic utilities: bg-surface-subtle, text-subtle, border-faded, bg-primary-faded ... */
+  --color-surface: var(--surface-intense);
+  --color-surface-page: var(--surface-page);
+  --color-surface-popover: var(--surface-popover);
+  --color-surface-moderate: var(--surface-moderate);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-highlighted: var(--surface-highlighted);
+  --color-surface-primary-subtle: var(--surface-primary-subtle);
+  --color-text-normal: var(--text-normal);
+  --color-text-subtle: var(--text-subtle);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-icon-normal: var(--icon-normal);
+  --color-icon-muted: var(--icon-muted);
+  --color-icon-disabled: var(--icon-disabled);
+  --color-state-hover: var(--state-hover);
+  --color-state-pressed: var(--state-pressed);
+  --color-border-faded: var(--border-faded);
+  --color-border-default: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-control: var(--border-control);
+  --color-border-control-hover: var(--border-control-hover);
+  --color-disabled: var(--disabled-bg);
+  --color-disabled-foreground: var(--disabled-fg);
+  --color-disabled-border: var(--disabled-border);
+  --color-primary-faded: var(--primary-faded);
+  --color-primary-faded-highlighted: var(--primary-faded-highlighted);
+  --color-primary-highlighted: var(--primary-border-highlighted);
+  --color-primary-text: var(--primary-text);
+  --color-positive: var(--positive);
+  --color-positive-faded: var(--positive-faded);
+  --color-positive-subtle: var(--positive-subtle);
+  --color-negative: var(--negative);
+  --color-negative-faded: var(--negative-faded);
+  --color-negative-subtle: var(--negative-subtle);
+  --color-notice: var(--notice);
+  --color-notice-text: var(--notice-text);
+  --color-notice-faded: var(--notice-faded);
+  --color-notice-subtle: var(--notice-subtle);
+  --color-information: var(--information);
+  --color-information-faded: var(--information-faded);
+  --color-information-subtle: var(--information-subtle);
+  --color-neutral-intense: var(--neutral-intense);
+  --color-neutral-subtle: var(--neutral-subtle);
+}
+
+/* Type scale (Figma Body styles), in px. Declared in @theme so Tailwind's text-* utilities use it: text-sm is Body S 13/18. */
+@theme {
+  --text-xxs: 11px; --text-xxs--line-height: 14px;
+  --text-xs: 12px; --text-xs--line-height: 16px;
+  --text-sm: 13px; --text-sm--line-height: 18px;
+  --text-base: 14px; --text-base--line-height: 20px;
+  --text-lg: 16px; --text-lg--line-height: 24px;
+  --text-xl: 18px; --text-xl--line-height: 26px;
+  --text-2xl: 20px; --text-2xl--line-height: 28px;
+  --text-3xl: 24px; --text-3xl--line-height: 32px;
+  --text-4xl: 32px; --text-4xl--line-height: 40px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring;
+  }
+  html {
+    font-size: 16px;
+  }
+  /* A grid with no column class (the phone layout of `lg:grid-cols-3` and friends) gets one column that may shrink, so a wide table inside it
+     scrolls in its own box instead of stretching the page. A grid that asks for its own column shape opts out (grid-flow-*, grid-auto-cols-*,
+     grid-template-areas / -columns, so `grid grid-flow-col` behaves as in plain Tailwind). A grid-cols-* utility always wins (utilities are a
+     later layer), and so does any unlayered consumer CSS. */
+  .grid:where(:not([class*='grid-flow'], [class*='grid-auto-cols'], [class*='grid-template-areas'], [class*='grid-template-columns'])) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---- reduced motion: users who ask for less movement get no zoom / slide / fade choreography. Overlay enter and exit (tw-animate-css, on any element
+   Radix marks with data-state / data-side, and Sonner toasts) and hover transitions collapse to a near-instant change; the end state is unchanged, so
+   Radix Presence still sees animationend. Loaders and the skeleton shimmer are status indicators, not choreography: they have their own slower
+   reduced-motion rules (ds-atoms.css, ds-overlays.css). Radix marks the indeterminate Progress indicator with data-state, so indeterminate / loading
+   states and ds-loader-* are excluded here; without that exclusion the infinite bar would strobe at 0.01ms. */
+@media (prefers-reduced-motion: reduce) {
+  :is([data-state], [data-side], [data-sonner-toast], [data-sonner-toaster]):not([data-state='indeterminate'], [data-state='loading'], [class*='ds-loader']),
+  :is([data-state], [data-side], [data-sonner-toast]):not([data-state='indeterminate'], [data-state='loading'], [class*='ds-loader'])::before,
+  :is([data-state], [data-side], [data-sonner-toast]):not([data-state='indeterminate'], [data-state='loading'], [class*='ds-loader'])::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+  * { scroll-behavior: auto !important; }
+}

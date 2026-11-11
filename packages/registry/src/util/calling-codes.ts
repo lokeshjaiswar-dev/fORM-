@@ -39,3 +39,22 @@ export const matchesCallingCode = (e164: string, country: CountryCode): boolean 
   const code = callingCodeOf(country);
   return code === undefined || e164.startsWith(`+${code}`);
 };
+
+/** National significant number after the calling code. */
+export const nationalNumberOf = (e164: string, country: CountryCode): string => {
+  const code = callingCodeOf(country);
+  if (!code || !e164.startsWith(`+${code}`)) return e164.replace(/^\+/, '');
+  return e164.slice(code.length + 1);
+};
+
+/**
+ * Country-aware E.164 check. India is a 10-digit mobile (starts with 6–9). Other regions must
+ * match the calling code and have 4–14 national digits (ITU E.164).
+ */
+export const isValidPhoneNumber = (e164: string, country: CountryCode): boolean => {
+  if (!/^\+[1-9]\d{4,14}$/.test(e164) || !matchesCallingCode(e164, country)) return false;
+  const national = nationalNumberOf(e164, country);
+  if (country === 'IN') return /^[6-9]\d{9}$/.test(national);
+  if (country === 'US' || country === 'CA') return /^\d{10}$/.test(national);
+  return /^\d{4,14}$/.test(national);
+};

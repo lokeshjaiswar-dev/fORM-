@@ -2,7 +2,7 @@ import type { MatchingPromptId, OptionId } from '@form/schema';
 import { defineField, headerOf } from '../define.ts';
 import { DEFAULT_TEXT, PALETTE_LABELS, message } from '../messages.ts';
 import { PRESENCE_OPS } from '../operators.ts';
-import { NULL, defaultOptions, entry, hasOption, isRootPath, optionAltLint, optionLabel, optionList, optionTexts } from './shared.ts';
+import { NULL, defaultOptions, entry, hasOption, isRootPath, optionAltLint, optionLabel, optionList, optionTexts, pairLines } from './shared.ts';
 
 /** Pair each prompt with one option; exclusive matching forbids reusing an option. */
 export const matching = defineField({
@@ -44,6 +44,10 @@ export const matching = defineField({
     const id = value[prompt.id];
     return id === undefined ? '' : optionLabel(block.config.options, id);
   }),
+  text: (value, block) => pairLines(block.config.prompts.map((prompt) => {
+    const id = value[prompt.id];
+    return [prompt.label, id === undefined ? '' : optionLabel(block.config.options, id)] as const;
+  })),
   texts: (block) => [
     ...optionTexts(block.id, block.config.options),
     ...block.config.prompts.map((p) => `mrow:${block.id}/${p.id}` as const),

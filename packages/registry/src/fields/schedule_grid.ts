@@ -51,4 +51,5 @@ export const scheduleGrid = defineField({
     const picked = new Set(value.map((c) => keyOf(c.weekday, c.time)));
     return block.config.weekdays.flatMap((day) => block.config.slots.map((slot) => (picked.has(keyOf(day, slot)) ? 'yes' : '')));
   },
+  text: (value) => value.map((cell) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][cell.weekday] ?? cell.weekday} ${cell.time}`).join(', '),
 });

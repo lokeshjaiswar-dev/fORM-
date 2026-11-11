@@ -6,6 +6,7 @@ import type { FormDefinition, IsoInstant, TemplateVariable } from '@form/schema'
 import { localizationOf, type Formpack, type FormpackTemplate } from '@form/templates';
 import { useEdition } from '@/edition/edition';
 import { t } from '@/i18n';
+import { HIDDEN_PALETTE_TYPES } from '@/fields/tiles';
 import { GALLERY_LOCALE, formFromTemplate, loadSystemPack, type VariableAnswers } from '@/lib/systemPack';
 import { uid } from '@/lib/utils';
 import { Button, Field, Input, Label, Switch, TextLink } from '@dmacq/ui';
@@ -137,7 +138,10 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
   }
 
   /* A template the edition cannot run is hidden, like its features in the palette (architecture §1.5). */
-  const forms = pack.templates.filter((tpl) => tpl.file.payload.kind === 'form');
+  const forms = pack.templates.filter((tpl) => {
+    if (tpl.file.payload.kind !== 'form') return false;
+    return !Object.values(tpl.file.payload.document.blocks).some((block) => block && HIDDEN_PALETTE_TYPES.has(block.type as never));
+  });
   const usable = forms.filter((tpl) => missingEditionFeatures(edition, tpl.entry.requiredFeatures).length === 0);
   return (
     <div className="grid gap-3 sm:grid-cols-2">

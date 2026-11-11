@@ -1,0 +1,20 @@
+import * as React from 'react';
+import { RadioGroup as RadioGroupPrimitive } from 'radix-ui';
+import { type CheckSize } from './checkbox';
+/**
+ * Inside a `Field` the group is named by the field's label, pointed at its message, and takes its `error` (every radio turns red) and `disabled`; set `aria-invalid` or `disabled` on the group yourself
+ * to do the same without a Field.
+ */
+declare function RadioGroup({ className, disabled, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Root>): React.JSX.Element;
+/** Radio button (Figma: Radio Base). Default size is small (16). Error uses `aria-invalid`, which it takes from its `RadioGroup` (and so from the `Field` around it) unless set on the item. */
+declare function RadioGroupItem({ className, size, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Item> & {
+    size?: CheckSize;
+}): React.JSX.Element;
+/** Radio with its label and optional supporting text; place inside a RadioGroup (Figma: Radio Button). The description is announced with the radio (`aria-describedby`). */
+declare function RadioField({ label, description, size, id, className, labelClassName, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Item> & {
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    size?: CheckSize;
+    labelClassName?: string;
+}): React.JSX.Element;
+export { RadioGroup, RadioGroupItem, RadioField };

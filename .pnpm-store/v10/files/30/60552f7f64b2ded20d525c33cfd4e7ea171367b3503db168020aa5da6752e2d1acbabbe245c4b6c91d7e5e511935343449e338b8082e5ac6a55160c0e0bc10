@@ -1,0 +1,29 @@
+import * as React from 'react';
+import { Dialog as SheetPrimitive } from 'radix-ui';
+declare function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>): React.JSX.Element;
+declare function SheetTrigger(props: React.ComponentProps<typeof SheetPrimitive.Trigger>): React.JSX.Element;
+declare function SheetClose(props: React.ComponentProps<typeof SheetPrimitive.Close>): React.JSX.Element;
+/** Width of a left or right sheet from 640px up (under that it is 75% of the window). Top and bottom sheets always span the window. */
+type SheetSize = 'sm' | 'md' | 'lg' | 'xl';
+/**
+ * Side panel. Structure it like `Dialog`: `SheetHeader` (divider below), `SheetBody` (scrolls, 16px padding) and `SheetFooter` (divider above, pinned).
+ * `size` is the width of a left or right sheet: `sm` 384 (default), `md` 480, `lg` 640, `xl` 800.
+ */
+declare function SheetContent({ className, children, side, size, onInteractOutside, ...props }: React.ComponentProps<typeof SheetPrimitive.Content> & {
+    side?: 'top' | 'right' | 'bottom' | 'left';
+    size?: SheetSize;
+}): React.JSX.Element;
+declare function SheetHeader({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+/** Scrollable middle of the sheet, 16px padding. Takes the free height between the header and the footer. */
+declare function SheetBody({ className, ref, ...props }: React.ComponentProps<'div'>): React.JSX.Element;
+/**
+ * Pinned at the bottom of a left or right sheet. Under 640px it stacks: `stack="reverse"` (default) puts the first child last (Cancel / Primary pair),
+ * `stack="normal"` keeps source order. It clears the home indicator on phones.
+ */
+declare function SheetFooter({ className, stack, ...props }: React.ComponentProps<'div'> & {
+    stack?: 'reverse' | 'normal';
+}): React.JSX.Element;
+declare function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Title>): React.JSX.Element;
+declare function SheetDescription({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Description>): React.JSX.Element;
+export { Sheet, SheetBody, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger };
+export type { SheetSize };

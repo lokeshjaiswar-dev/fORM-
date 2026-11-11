@@ -97,7 +97,10 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     if (block.type === 'calculation') {
       const reads = new Set<string>();
       if (block.config.expr.k !== 'lit') usesExpr = true;
-      typeExpr(ctx, block.config.expr, at('expr'), reads);
+      const typed = typeExpr(ctx, block.config.expr, at('expr'), reads);
+      if (typed?.list) {
+        ctx.issue('expr_type_error', at('expr'), 'a formula is a number; use sum(field) to add every row of a list field');
+      }
       const step: PlanStep = { kind: 'capture', blockId };
       steps.push({
         step, key: stepKey(step), reads: [...reads].sort(), writes: [cell.value(blockId)], ruleIndex: -1,

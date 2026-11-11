@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { BlockId } from '@form/schema';
 import { setTheme, updateBlock } from '@/state/actions';
+import { applyImageTemplate, IMAGE_TEMPLATES, THEME_PRESETS } from '@/components/builder/design/presets';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc } from '@/lib/definition';
 import { useBlockClipboard } from '@/components/builder/useBlockClipboard';
@@ -24,7 +25,7 @@ describe('FormCanvas', () => {
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/drop');
     const menu = screen.getByRole('listbox');
-    expect(within(menu).getAllByRole('option').map((o) => o.textContent)).toEqual(['Dropdown', 'Multi-select dropdown']);
+    expect(within(menu).getAllByRole('option').map((o) => o.textContent)).toEqual(['Dropdown', 'Searchable multi-select']);
     await user.click(within(menu).getByRole('option', { name: 'Dropdown' }));
     const added = blockIds()[2] as string;
     expect(doc().blocks[added as BlockId]).toMatchObject({ type: 'single_choice', config: { display: 'dropdown' } });
@@ -72,6 +73,32 @@ describe('FormCanvas', () => {
     const canvas = title.closest('[data-layout]');
     expect(canvas).toHaveStyle({ '--fr-accent': '#7c3aed', '--fr-page': '#fef3c7', '--fr-text': '#111827', color: 'var(--fr-text)', backgroundColor: 'var(--fr-page)' });
     expect(screen.getByRole('button', { name: /submit/i })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
+  });
+
+  it('keeps the slash menu unclipped and on builder chrome after a cover theme', async () => {
+    renderCanvas();
+    act(() => {
+      setTheme(applyImageTemplate(doc().theme, IMAGE_TEMPLATES.find((t) => t.id === 'tpl-bloom') ?? IMAGE_TEMPLATES[0]!));
+    });
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/short');
+    const menu = screen.getByRole('listbox').closest('[data-slash-menu]');
+    expect(menu).toBeTruthy();
+    expect(menu).toHaveStyle({ color: 'var(--popover-foreground)', fontSize: '14px' });
+    const card = screen.getByLabelText('Form title').parentElement;
+    expect(card).not.toHaveStyle({ overflow: 'hidden' });
+    expect(within(screen.getByRole('listbox')).getByRole('option', { name: 'Short answer' })).toBeInTheDocument();
+  });
+
+  it('keeps slash-menu chrome readable on a dark form theme', async () => {
+    renderCanvas();
+    act(() => {
+      const midnight = THEME_PRESETS.find((p) => p.id === 'midnight');
+      if (midnight) setTheme({ ...doc().theme, layout: midnight.layout, tokens: midnight.tokens });
+    });
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/');
+    expect(screen.getByRole('listbox').closest('[data-slash-menu]')).toHaveStyle({ color: 'var(--popover-foreground)' });
   });
 
   it('typing text on the insert line adds a paragraph', async () => {

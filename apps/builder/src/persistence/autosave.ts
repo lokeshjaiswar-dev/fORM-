@@ -13,6 +13,11 @@ export function whenSaved(): Promise<void> {
   return writes;
 }
 
+/** Writes a pending change now so Publish sends the document on screen. */
+export function flushAutosave(): Promise<void> {
+  return active?.flush() ?? writes;
+}
+
 /** The autosave of the form open in this page. */
 let active: Autosave | null = null;
 

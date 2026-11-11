@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { IsoInstant } from '@form/schema';
 import { loadDocument } from '@/state/history';
 import { loadOps } from '@/state/opsStore';
+import { blockOrder } from '@/lib/definition';
 import { resetUi, useUiStore, type LoadNote, type TabConflict } from '@/state/uiStore';
 import { startAutosave, whenSaved, type Autosave } from '@/persistence/autosave';
 import { openStored } from '@/persistence/openForm';
@@ -61,6 +62,8 @@ export function useFormSession(id: string): Session {
       loadOps(result.ops);
       const started = result.doc.pages.some((p) => p.children.length > 0);
       resetUi({ started, notes: [...imported, ...result.notes] });
+      const first = blockOrder(result.doc)[0];
+      if (first) useUiStore.getState().openInspector(first);
       const watch = watchTabs(id, raise);
       tabs = watch;
       autosave = startAutosave({ repo, id, rev, onState: (save) => useUiStore.setState({ save }), onSaved: watch.saved });

@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { Alert, AlertDescription, Card, CardContent, CardDescription, CardHeader, CardTitle, Field, TextLink } from '@dmacq/ui';
-import { EditionBadge } from '@/edition/EditionBadge';
 import { cn } from '@/lib/utils';
 
 const M = defineMessages('builder', {
@@ -29,11 +28,10 @@ export function AuthLayout({
   return (
     <main className={cn('flex min-h-screen items-start justify-center bg-surface-moderate px-4 text-foreground', wide ? 'py-[6vh]' : 'pt-[12vh]')}>
       <div className={cn('w-full', wide ? 'max-w-[680px]' : 'max-w-[400px]')}>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4">
           <TextLink asChild size="medium" underline={false} className="font-semibold tracking-tight">
             <Link to="/forms">{t(M['auth.brand'])}</Link>
           </TextLink>
-          <EditionBadge />
         </div>
         <Card>
           <CardHeader>

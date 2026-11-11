@@ -10,8 +10,8 @@ const NOON = 12 * 60;
 export const time = defineField({
   type: 'time',
   palette: [
-    entry('time', null, 'basic', PALETTE_LABELS['palette.time'], 'clock', ['time', 'hour', 'clock', 'slot']),
-    entry('time', 'range', 'basic', PALETTE_LABELS['palette.time.range'], 'clock', ['time range', 'start', 'end', 'duration', 'from to'], { range: { enabled: true } }),
+    entry('time', null, 'date_time', PALETTE_LABELS['palette.time'], 'clock', ['time', 'hour', 'clock', 'slot']),
+    entry('time', 'range', 'date_time', PALETTE_LABELS['palette.time.range'], 'clock', ['time range', 'start', 'end', 'duration', 'from to'], { range: { enabled: true } }),
   ],
   defaultConfig: (locale) => ({ hourCycle: hourCycleFor(locale), minuteStep: 5 }),
   checkConfig: (config, report) => {

@@ -2,9 +2,15 @@ import type { CardBucketId, CardItemId } from '@form/schema';
 import { defineField, headerOf } from '../define.ts';
 import { DEFAULT_TEXT, PALETTE_LABELS, message } from '../messages.ts';
 import { PRESENCE_OPS } from '../operators.ts';
-import { NULL, countScalar, entry, isRootPath } from './shared.ts';
+import { NULL, countScalar, entry, isRootPath, pairLines } from './shared.ts';
 
-/** Closed card sort: each item is placed in a bucket. */
+const asBuckets = (value: CardBucketId | CardBucketId[] | undefined): CardBucketId[] =>
+  value === undefined ? [] : Array.isArray(value) ? value : [value];
+
+const bucketLabel = (buckets: ReadonlyArray<{ id: CardBucketId; label: string }>, id: CardBucketId): string =>
+  buckets.find((b) => b.id === id)?.label ?? id;
+
+/** Closed card sort: each item is placed in a bucket, or several when exclusive is off. */
 export const cardSort = defineField({
   type: 'card_sort',
   palette: [entry('card_sort', null, 'choice', PALETTE_LABELS['palette.card_sort'], 'columns-3', ['card sort', 'buckets', 'categorise', 'group', 'classify'])],
@@ -28,24 +34,29 @@ export const cardSort = defineField({
   checkAnswer: (value, block, state, report) => {
     const itemIds = new Set(block.config.items.map((i) => i.id));
     const bucketIds = new Set(block.config.buckets.map((b) => b.id));
-    const used = new Map<CardBucketId, number>();
-    for (const [itemId, bucketId] of Object.entries(value) as Array<[CardItemId, CardBucketId | undefined]>) {
-      if (bucketId === undefined) continue;
+    for (const [itemId, raw] of Object.entries(value) as Array<[CardItemId, CardBucketId | CardBucketId[] | undefined]>) {
+      const picked = asBuckets(raw);
+      if (picked.length === 0) continue;
       if (!itemIds.has(itemId)) report('not_in_options', [itemId]);
-      if (!bucketIds.has(bucketId)) report('not_in_options', [itemId]);
-      used.set(bucketId, (used.get(bucketId) ?? 0) + 1);
+      if (block.config.exclusive && picked.length > 1) report('too_many_selected', [itemId]);
+      const seen = new Set<CardBucketId>();
+      const listed = Array.isArray(raw);
+      picked.forEach((bucketId, i) => {
+        const at = listed ? [itemId, i] : [itemId];
+        if (!bucketIds.has(bucketId)) report('not_in_options', at);
+        else if (seen.has(bucketId)) report('invalid_format', at);
+        seen.add(bucketId);
+      });
     }
-    if (state.required && block.config.items.some((i) => value[i.id] === undefined)) report('too_few_selected');
+    if (state.required && block.config.items.some((i) => asBuckets(value[i.id]).length === 0)) report('too_few_selected');
   },
   paths: { '': 'choices' },
   operators: { choices: PRESENCE_OPS },
-  toScalar: (value, path) => (isRootPath(path) ? countScalar(Object.values(value).filter(Boolean).length) : NULL),
-  isEmpty: (value) => Object.values(value).every((id) => id === undefined),
+  toScalar: (value, path) => (isRootPath(path) ? countScalar(Object.values(value).filter((v) => asBuckets(v as CardBucketId | CardBucketId[] | undefined).length > 0).length) : NULL),
+  isEmpty: (value) => Object.values(value).every((id) => asBuckets(id as CardBucketId | CardBucketId[] | undefined).length === 0),
   columns: (block) => block.config.items.map((item) => ({ suffix: `.${item.id}`, header: `${headerOf(block)} ${item.label}` })),
-  cells: (value, block) => block.config.items.map((item) => {
-    const bucketId = value[item.id];
-    return bucketId === undefined ? '' : (block.config.buckets.find((b) => b.id === bucketId)?.label ?? bucketId);
-  }),
+  cells: (value, block) => block.config.items.map((item) => asBuckets(value[item.id]).map((id) => bucketLabel(block.config.buckets, id)).join(', ')),
+  text: (value, block) => pairLines(block.config.items.map((item) => [item.label, asBuckets(value[item.id]).map((id) => bucketLabel(block.config.buckets, id)).join(', ')] as const)),
   texts: (block) => [
     ...block.config.items.map((i) => `mrow:${block.id}/${i.id}` as const),
     ...block.config.buckets.map((b) => `mcol:${block.id}/${b.id}` as const),

@@ -77,7 +77,7 @@ export function addBlock(choice: BlockChoice, at: PageSlot = endSlot(), patch: B
   ops.push({ op: 'add_block', block, parent: { pageId: at.pageId }, index: at.index });
   const result = dispatch({ type: 'apply_ops', ops });
   if (!result.ok) return '';
-  useUiStore.setState({ activeBlockId: block.id, started: true });
+  useUiStore.setState({ activeBlockId: block.id, started: true, inspectorOpen: true });
   focusLabelEnd(block.id);
   return block.id;
 }
@@ -115,7 +115,7 @@ export function addRepeatingGroup(choice: BlockChoice, at: PageSlot = endSlot())
   children.forEach((child, i) => ops.push({ op: 'add_block', block: child, parent: { blockId: group.id }, index: i }));
   const result = dispatch({ type: 'apply_ops', ops });
   if (!result.ok) return '';
-  useUiStore.setState({ activeBlockId: group.id, started: true });
+  useUiStore.setState({ activeBlockId: group.id, started: true, inspectorOpen: true });
   focusLabelEnd(group.id);
   return group.id;
 }

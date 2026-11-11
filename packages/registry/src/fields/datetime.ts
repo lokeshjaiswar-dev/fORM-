@@ -13,7 +13,7 @@ const dateOf = (local: IsoLocalDateTime): string => local.slice(0, 10);
  */
 export const datetime = defineField({
   type: 'datetime',
-  palette: [entry('datetime', null, 'basic', PALETTE_LABELS['palette.datetime'], 'calendar-clock', ['datetime', 'date time', 'timestamp', 'appointment', 'schedule'])],
+  palette: [entry('datetime', null, 'date_time', PALETTE_LABELS['palette.datetime'], 'calendar-clock', ['datetime', 'date time', 'timestamp', 'appointment', 'schedule'])],
   defaultConfig: (locale) => ({
     pattern: datePatternFor(locale),
     hourCycle: hourCycleFor(locale),

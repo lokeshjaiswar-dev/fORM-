@@ -2,7 +2,7 @@ import type { LikertStatementId } from '@form/schema';
 import { configTexts, defineField, headerOf, isBlank } from '../define.ts';
 import { DEFAULT_TEXT, PALETTE_LABELS, message } from '../messages.ts';
 import { NUMBER_OPS } from '../operators.ts';
-import { NULL, countScalar, entry, isRootPath } from './shared.ts';
+import { NULL, countScalar, entry, isRootPath, pairLines } from './shared.ts';
 
 /** One integer on a shared scale for each statement. */
 export const likert = defineField({
@@ -42,6 +42,7 @@ export const likert = defineField({
   isEmpty: (value) => Object.values(value).every(isBlank),
   columns: (block) => block.config.statements.map((stmt) => ({ suffix: `.${stmt.id}`, header: `${headerOf(block)} ${stmt.label}` })),
   cells: (value, block) => block.config.statements.map((stmt) => (value[stmt.id] === undefined ? '' : String(value[stmt.id]))),
+  text: (value, block) => pairLines(block.config.statements.map((stmt) => [stmt.label, value[stmt.id] === undefined ? '' : String(value[stmt.id])] as const)),
   texts: (block) => [
     ...configTexts(block, ['lowLabel', 'highLabel']),
     ...block.config.statements.map((s) => `mrow:${block.id}/${s.id}` as const),

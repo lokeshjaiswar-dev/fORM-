@@ -50,6 +50,19 @@ describe('routes', () => {
     expect(path()).toBe('/forms');
   });
 
+  it('New form → Demo GSTIN vs State opens a form with the check', async () => {
+    const repo = new MemoryRepository();
+    renderApp(repo, '/forms');
+    await screen.findByText(/No forms yet/, {}, OPENS);
+    fireEvent.click(screen.getByRole('button', { name: 'New form' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Demo: GSTIN vs State/ }, OPENS));
+    expect(await screen.findByDisplayValue('Demo: GSTIN vs State', {}, OPENS)).toBeInTheDocument();
+    const id = path()?.replace('/builder/', '') ?? '';
+    const record = repo.records.get(id);
+    expect(record?.doc).toMatchObject({ formId: id, title: 'Demo: GSTIN vs State' });
+    expect((record?.doc as { logic?: { rules?: unknown[] } }).logic?.rules).toHaveLength(1);
+  });
+
   it('New form → Blank opens an empty v2 form at its own id (B23)', async () => {
     const repo = new MemoryRepository();
     renderApp(repo, '/forms');
@@ -92,8 +105,19 @@ describe('routes', () => {
     expect(path()).toBe('/forms/f1/responses');
     expect(await screen.findByText(/Submitted/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'View data' }));
-    expect(await screen.findByText('Question')).toBeInTheDocument();
-    expect(screen.getByText('Hello')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Submitted answers' })).toBeInTheDocument();
+    expect(screen.getAllByText('Question').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Hello').length).toBeGreaterThan(0);
+  });
+
+  it('deletes a form from the list', async () => {
+    const repo = new MemoryRepository();
+    await repo.save(stored('f1', 'Feedback'));
+    renderApp(repo, '/forms');
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete form' }));
+    expect(await screen.findByText(/No forms yet/)).toBeInTheDocument();
+    expect(repo.records.has('f1')).toBe(false);
   });
 
   it('lists saved forms and opens one', async () => {
@@ -140,30 +164,6 @@ describe('routes', () => {
     await repo.save({ id: 'odd', format: 'v9', rev: 1, savedAt: NOW, doc: {} });
     renderApp(repo, '/builder/odd');
     expect(await screen.findByRole('heading', { name: 'This form cannot be opened' })).toBeInTheDocument();
-  });
-
-  it('a v1 import opens as a new v2 form and shows its notes', async () => {
-    const repo = new MemoryRepository();
-    renderApp(repo, '/forms');
-    await screen.findByText(/No forms yet/);
-    const v1 = v1Form([{ id: 'name', type: 'text', label: 'Name' }], { redirectUrl: 'http://example.com' });
-    const file = new File([JSON.stringify(v1)], 'old.json', { type: 'application/json' });
-    fireEvent.change(screen.getByLabelText('v1 JSON file'), { target: { files: [file] } });
-    expect(await screen.findByDisplayValue('Old form', {}, OPENS)).toBeInTheDocument();
-    const notes = screen.getByRole('region', { name: 'Form notes' });
-    fireEvent.click(screen.getByRole('button', { name: 'Show' }));
-    expect(notes).toHaveTextContent('the redirect URL is not https');
-    const id = path()?.replace('/builder/', '') ?? '';
-    expect(repo.records.get(id)).toMatchObject({ format: DOCUMENT_FORMAT, doc: { formId: id, title: 'Old form', schemaVersion: 2 } });
-  });
-
-  it('a file that is not a v1 form is refused on the list', async () => {
-    const repo = new MemoryRepository();
-    renderApp(repo, '/forms');
-    await screen.findByText(/No forms yet/);
-    fireEvent.change(screen.getByLabelText('v1 JSON file'), { target: { files: [new File(['{"schemaVersion":2}'], 'new.json')] } });
-    expect(await screen.findByRole('alert')).toHaveTextContent('not a v1 form');
-    expect(path()).toBe('/forms');
   });
 
   it('says so when this browser cannot save a new form', async () => {

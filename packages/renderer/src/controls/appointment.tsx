@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Chip } from '@dmacq/ui';
 import { slotsOf } from './appointmentSlots.ts';
 import type { IsoDate, IsoInstant, TimeZone } from '@form/schema';
 import { useRenderer } from '../context.ts';
-import { MESSAGES } from '../messages.ts';
+import { DsSelect } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 function respondentZone(): TimeZone {
@@ -15,7 +16,7 @@ function respondentZone(): TimeZone {
 
 /** FLD-35: pick a day, then a slot generated from weekly hours. */
 export function AppointmentField({ block, field }: ControlProps<'appointment'>) {
-  const { t } = useRenderer();
+  const { i18n } = useRenderer();
   const answer = useAnswer(block);
   const attrs = inputAttrs(field);
   const slots = useMemo(() => slotsOf(block.config), [block.config]);
@@ -32,31 +33,34 @@ export function AppointmentField({ block, field }: ControlProps<'appointment'>) 
 
   return (
     <div className="fr-appointment">
-      <label className="fr-label" htmlFor={`${field.ids.input}-day`}>{t(MESSAGES['appointment.day'])}</label>
-      <select
-        id={`${field.ids.input}-day`}
-        className="fr-input"
+      <DsSelect
+        id={field.ids.input}
         value={day ?? ''}
-        onChange={(e) => setDay((e.target.value || undefined) as IsoDate | undefined)}
+        allowEmpty={false}
+        onChange={(next) => setDay((next || undefined) as IsoDate | undefined)}
         onBlur={answer.onBlur}
-        {...attrs}
-      >
-        {days.map((d) => <option key={d} value={d}>{d}</option>)}
-      </select>
+        options={days.map((d) => ({ value: d, label: i18n.formatDate(d, 'D MMM YYYY') || d }))}
+        disabled={attrs.disabled}
+        aria-invalid={attrs['aria-invalid']}
+        aria-describedby={attrs['aria-describedby']}
+        aria-required={attrs['aria-required']}
+      />
       <div className="fr-appointment-slots" role="list">
         {shown.map((slot) => (
-          <button
+          <Chip
             key={slot.start}
-            type="button"
+            kind="filter"
+            size="md"
+            color="primary"
+            selected={selectedStart === slot.start}
             role="listitem"
-            className="fr-appointment-slot"
-            aria-pressed={selectedStart === slot.start}
-            aria-label={`${slot.time} ${slot.day}`}
+            aria-label={`${i18n.formatTime(slot.time, 'h12')} ${i18n.formatDate(slot.day, 'D MMM YYYY')}`}
             disabled={attrs.disabled || attrs.readOnly}
             onClick={() => pick(slot.start, slot.end)}
+            onBlur={answer.onBlur}
           >
-            {slot.time}
-          </button>
+            {i18n.formatTime(slot.time, 'h12')}
+          </Chip>
         ))}
       </div>
     </div>

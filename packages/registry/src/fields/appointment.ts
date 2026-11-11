@@ -16,7 +16,7 @@ export const appointment = defineField({
     slotMinutes: 30,
     bufferMinutes: 0,
     weekly: WORKDAYS.map((weekday) => ({ weekday, from: '09:00' as IsoTime, to: '17:00' as IsoTime })),
-    minNoticeMinutes: 60,
+    minNoticeMinutes: 0,
     rollingDays: 30,
     capacityPerSlot: 1,
     attachIcs: true,

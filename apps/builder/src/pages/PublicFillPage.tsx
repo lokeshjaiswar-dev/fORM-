@@ -24,20 +24,28 @@ export function PublicFillPage() {
 
   useEffect(() => {
     let live = true;
-    fetch(`${API_BASE}/v1/p/${encodeURIComponent(slug)}`, { headers: { accept: 'application/json' } })
-      .then(async (res) => {
-        if (res.status === 404) return { status: 'missing' as const };
-        if (!res.ok) return { status: 'error' as const, message: 'This form could not be loaded.' };
-        const parsed = payloadSchema.safeParse(await res.json());
-        if (!parsed.success) return { status: 'error' as const, message: 'This form could not be read.' };
-        return { status: 'ready' as const, version: parsed.data.version, slug: parsed.data.slug };
-      })
-      .then((next) => {
-        if (live) setLoad(next);
-      })
-      .catch(() => {
-        if (live) setLoad({ status: 'error', message: 'This form could not be loaded.' });
-      });
+    const loadOnce = async (): Promise<Load> => {
+      const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(slug)}`, { headers: { accept: 'application/json' } });
+      if (res.status === 404) return { status: 'missing' };
+      if (!res.ok) return { status: 'error', message: 'This form could not be loaded.' };
+      const parsed = payloadSchema.safeParse(await res.json());
+      if (!parsed.success) return { status: 'error', message: 'This form could not be read.' };
+      return { status: 'ready', version: parsed.data.version, slug: parsed.data.slug };
+    };
+    const open = async () => {
+      let last: Load = { status: 'error', message: 'This form could not be loaded.' };
+      for (let attempt = 0; attempt < 4 && live; attempt++) {
+        try {
+          last = await loadOnce();
+          if (last.status === 'ready' || last.status === 'missing') break;
+        } catch {
+          last = { status: 'error', message: 'This form could not be loaded.' };
+        }
+        if (attempt < 3) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      }
+      if (live) setLoad(last);
+    };
+    void open();
     return () => {
       live = false;
     };
@@ -54,30 +62,28 @@ export function PublicFillPage() {
   }
 
   return (
-    <main className="min-h-svh bg-white text-foreground">
-      <div className="mx-auto max-w-[720px] px-4 py-10">
-        <FormRenderer
-          version={load.version}
-          mode="live"
-          status={load.version.status}
-          locale={BUILDER_LOCALE}
-          uploader={previewUploader}
-          session={{ startedAt, pageUrl: window.location.href }}
-          onSubmit={async (payload: SubmitPayload) => {
-            const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(load.slug)}/submissions`, {
-              method: 'POST',
-              headers: { accept: 'application/json', 'content-type': 'application/json' },
-              body: JSON.stringify({
-                formVersionId: payload.formVersionId,
-                answers: payload.answers,
-                fields: answerRows(load.version.definition, payload.answers),
-                locale: payload.locale,
-              }),
-            });
-            if (!res.ok) throw new Error('submit failed');
-          }}
-        />
-      </div>
+    <main className="min-h-svh">
+      <FormRenderer
+        version={load.version}
+        mode="live"
+        status={load.version.status}
+        locale={BUILDER_LOCALE}
+        uploader={previewUploader}
+        session={{ startedAt, pageUrl: window.location.href }}
+        onSubmit={async (payload: SubmitPayload) => {
+          const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(load.slug)}/submissions`, {
+            method: 'POST',
+            headers: { accept: 'application/json', 'content-type': 'application/json' },
+            body: JSON.stringify({
+              formVersionId: payload.formVersionId,
+              answers: payload.answers,
+              fields: answerRows(load.version.definition, payload.answers),
+              locale: payload.locale,
+            }),
+          });
+          if (!res.ok) throw new Error('submit failed');
+        }}
+      />
     </main>
   );
 }

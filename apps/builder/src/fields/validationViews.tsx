@@ -9,9 +9,6 @@ import { updateBlock } from '@/state/actions';
 type InspectorProps<T extends AvailableType> = { block: BlockOf<T> };
 
 const M = defineMessages('builder', {
-  'inspector.mask': 'Input mask',
-  'inspector.mask_hint': 'Use # for a digit, @ for a letter, * for either. Optional tail in [brackets].',
-  'inspector.mask_store': 'Store the mask characters (spaces and dashes)',
   'inspector.limit_unit': 'Count',
   'inspector.limit_characters': 'Characters',
   'inspector.limit_words': 'Words',
@@ -22,9 +19,9 @@ const M = defineMessages('builder', {
   'inspector.email_domains_hint': 'Comma-separated, e.g. company.com, org.in. Empty allows any domain.',
   'inspector.url_https': 'Allow https',
   'inspector.url_http': 'Allow http',
-  'inspector.phone_mask': 'Input mask',
   'inspector.phone_countries': 'Allowed country codes',
   'inspector.phone_countries_hint': 'Comma-separated ISO codes, e.g. IN, US. Empty allows any country.',
+  'inspector.phone_format_hint': 'Only digits can be typed. Indian numbers must be 10 digits starting with 6–9.',
   'inspector.date_earliest': 'Earliest date',
   'inspector.date_latest': 'Latest date',
   'inspector.bound_none': 'No limit',
@@ -68,37 +65,6 @@ function ConfigProblem({ block }: { block: BlockOf<AvailableType> }) {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-export function MaskFields({
-  value,
-  onChange,
-}: {
-  value: { pattern: string; storeMasked: boolean } | undefined;
-  onChange: (mask: { pattern: string; storeMasked: boolean } | undefined) => void;
-}) {
-  const pattern = value?.pattern ?? '';
-  return (
-    <>
-      <TextField
-        label={t(M['inspector.mask'])}
-        hint={t(M['inspector.mask_hint'])}
-        value={pattern}
-        placeholder="AAA-####"
-        onChange={(next) => {
-          if (!next) onChange(undefined);
-          else if (next.length <= 64) onChange({ pattern: next, storeMasked: value?.storeMasked !== false });
-        }}
-      />
-      {pattern ? (
-        <ToggleRow
-          label={t(M['inspector.mask_store'])}
-          checked={value?.storeMasked !== false}
-          onChange={(on) => onChange({ pattern, storeMasked: on })}
-        />
-      ) : null}
-    </>
-  );
-}
 
 type BoundSlot = 'min' | 'max';
 
@@ -232,7 +198,7 @@ export function UrlValidation({ block }: InspectorProps<'url'>) {
 export function PhoneValidation({ block }: InspectorProps<'phone'>) {
   return (
     <>
-      <MaskFields value={block.config.mask} onChange={(mask) => setConfig(block, { mask })} />
+      <p className="text-[12px] text-[var(--fr-muted)]">{t(M['inspector.phone_format_hint'])}</p>
       <TextField
         label={t(M['inspector.phone_countries'])}
         hint={t(M['inspector.phone_countries_hint'])}
@@ -308,7 +274,7 @@ export function FullNameValidation({ block }: InspectorProps<'full_name'>) {
       {block.config.parts.map((part) => (
         <ToggleRow
           key={part}
-          label={t(M['inspector.required_part'], { part })}
+          label={t(M['inspector.required_part'], { part: block.config.sublabels?.[part] || part })}
           checked={block.config.requiredParts.includes(part)}
           onChange={(on) => {
             const requiredParts = on

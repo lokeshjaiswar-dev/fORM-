@@ -1,0 +1,39 @@
+import * as React from 'react';
+/**
+ * Badge (Figma 2532:21380). Figma axes: size (large 24, medium 20, small 16) x color (positive, negative, warning, info, neutral) x type
+ * (subtle, intense, outline) x border (circular, squared). Mapped here to `size`, `tone`, `appearance` and `shape`.
+ * Old variants keep working: default (primary intense), secondary (neutral subtle), destructive (negative intense), outline (neutral outline),
+ * success / warning / danger / info (subtle), brand (primary subtle), orange (brand orange subtle).
+ * Use `warning` for status. `orange` is the brand accent, a hue 15 degrees from `warning`, so a page should not use both to mean different things.
+ * A bare <Badge> is a solid primary block: for a quiet label use `variant="secondary"`.
+ */
+export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'danger' | 'info' | 'brand' | 'orange';
+export type BadgeTone = 'positive' | 'negative' | 'warning' | 'info' | 'neutral' | 'primary' | 'orange';
+export type BadgeAppearance = 'subtle' | 'intense' | 'outline';
+/** `lg` `md` `sm` are short names for large, medium and small (the vocabulary of Button). */
+export type BadgeSize = 'large' | 'medium' | 'small' | 'lg' | 'md' | 'sm';
+export type BadgeShape = 'squared' | 'circular';
+export interface BadgeStyleOptions {
+    variant?: BadgeVariant | null;
+    tone?: BadgeTone | null;
+    appearance?: BadgeAppearance | null;
+    size?: BadgeSize | null;
+    shape?: BadgeShape | null;
+    className?: string;
+}
+/** Class string for anything that must look like a Badge. */
+declare function badgeVariants({ variant, tone, appearance, size, shape, className }?: BadgeStyleOptions): string;
+export interface BadgeProps extends React.ComponentProps<'span'>, Omit<BadgeStyleOptions, 'className'> {
+    asChild?: boolean;
+    /** leading status dot in the badge colour. The dot is decoration: colour alone must not carry the meaning, so always give the badge text */
+    dot?: boolean;
+}
+declare function Badge({ className, variant, tone, appearance, size, shape, dot, asChild, children, ...props }: BadgeProps): React.JSX.Element;
+/** Numeric count pill (Figma "Count / Quantity"): notifications, tab counters, list totals. Values above `max` read as `max+`. */
+declare function CountBadge({ count, max, tone, appearance, size, className, label, ...props }: Omit<BadgeProps, 'children' | 'asChild' | 'dot' | 'shape'> & {
+    count: number;
+    max?: number;
+    /** what is being counted ("unread", "alerts"): read by screen readers after the number, hidden on screen */
+    label?: string;
+}): React.JSX.Element;
+export { Badge, CountBadge, badgeVariants };

@@ -25,6 +25,7 @@ export const maxdiff = defineField({
     return [{ suffix: '.best', header: `${header} best` }, { suffix: '.worst', header: `${header} worst` }];
   },
   cells: (value, block) => [optionLabel(block.config.options, value.best), optionLabel(block.config.options, value.worst)],
+  text: (value, block) => `Best - ${optionLabel(block.config.options, value.best)}\nWorst - ${optionLabel(block.config.options, value.worst)}`,
   texts: (block) => optionTexts(block.id, block.config.options),
   content: () => ['/config/options'],
   lint: (block) => optionAltLint(block.id, block.config.options),

@@ -22,11 +22,11 @@ const stateGstin = () => [
 
 beforeEach(() => resetStore(stateGstin()));
 
-describe('Form design Logic', () => {
-  it('adds a GSTIN vs State check from Form design', async () => {
+describe('Form settings Logic', () => {
+  it('adds a GSTIN vs State check from Form settings', async () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
-    await user.click(screen.getByRole('button', { name: 'Form design' }));
+    await user.click(screen.getByRole('button', { name: 'Form settings' }));
     await user.click(screen.getByRole('tab', { name: 'Logic' }));
     await user.click(screen.getByRole('button', { name: 'Add a check' }));
     const rule = doc().logic.rules[0];
@@ -39,7 +39,7 @@ describe('Form design Logic', () => {
   it('blocks preview submit when GSTIN does not match the state code, and allows a match', async () => {
     const user = userEvent.setup();
     const panel = render(<FormDesignPanel />);
-    await user.click(screen.getByRole('button', { name: 'Form design' }));
+    await user.click(screen.getByRole('button', { name: 'Form settings' }));
     await user.click(screen.getByRole('tab', { name: 'Logic' }));
     await user.click(screen.getByRole('button', { name: 'Add a check' }));
     panel.unmount();

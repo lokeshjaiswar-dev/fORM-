@@ -1,0 +1,25 @@
+import * as React from 'react';
+import { Switch as SwitchPrimitive } from 'radix-ui';
+import { type VariantProps } from 'class-variance-authority';
+import { type CheckSize } from './checkbox';
+/**
+ * Toggle / Switch (Figma 913:62). Sizes small 28x16 (default, the size used in the Figma tables), medium 35x20, large 42x24; the knob is white,
+ * 2px inside the track. Off: the control-border track (>= 3:1 against the page, white knob), hover a step darker. On: primary track, hover the highlighted primary. Disabled: on is
+ * the disabled grey, off is the hairline disabled track, and the knob stays white. Focus shows the 3px primary ring.
+ */
+declare const switchVariants: (props?: ({
+    size?: "sm" | "md" | "lg" | null | undefined;
+} & import("class-variance-authority/types").ClassProp) | undefined) => string;
+/** Inside a `Field` it takes the field's `disabled` and is pointed at the field's message, like the other controls. */
+declare function Switch({ className, size, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root> & VariantProps<typeof switchVariants>): React.JSX.Element;
+/**
+ * Switch with its label and optional supporting text, the same row as `CheckboxField` and `RadioField` (13 / 14 / 16 px label for sm / md / lg, switch first). The label is tied to the
+ * switch and the description is announced with it. For the settings-row layout (label left, switch right) pass `className="flex-row-reverse justify-between"`.
+ */
+declare function SwitchField({ label, description, size, id, className, labelClassName, ...props }: Omit<React.ComponentProps<typeof SwitchPrimitive.Root>, 'size'> & {
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    size?: CheckSize;
+    labelClassName?: string;
+}): React.JSX.Element;
+export { Switch, SwitchField, switchVariants };

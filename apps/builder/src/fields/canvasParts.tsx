@@ -1,77 +1,189 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { Badge, Button, Checkbox, CheckboxField, Chip, DatePicker, FileDropzone, Input, MultiSelect, RadioField, RadioGroup, RadioGroupItem, Select as DsSelect, SelectTrigger, SelectValue, Slider, Textarea, TimePicker } from '@dmacq/ui';
 import { defineMessages } from '@form/i18n';
+import { themeImageUrl } from '@form/renderer';
 import type { BlockStyle, ChoiceOption } from '@form/schema';
 import { t } from '@/i18n';
-import { cn } from '@/lib/utils';
 import { css, inputStyle, labelString } from '@/fields/style';
 
-/* Static previews of respondent controls, shared by the canvas views in fields/canvas.tsx. */
+/* Static previews of respondent controls, using the same renderer classes as fill/preview. */
 
 const M = defineMessages('builder', {
   'canvas.answer': 'Your answer',
   'canvas.select': 'Select…',
   'canvas.other': 'Other…',
+  'canvas.rank_hint': 'Order the options with the move buttons.',
 });
 
-const box = 'pointer-events-none flex min-h-10 w-full items-center border px-3 text-[15px]';
-const controlStyle = {
-  backgroundColor: 'var(--fr-inputBg)',
-  borderColor: 'var(--fr-inputBorder)',
-  color: 'var(--fr-muted)',
-  borderRadius: 'var(--fr-radius)',
-} as const;
+const controlStyle = (block?: { style?: BlockStyle }) => ({ ...inputStyle(block?.style) }) as CSSProperties;
 
 export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: { style?: BlockStyle }; placeholder?: string | undefined; prefix?: string | undefined; suffix?: string | undefined; tall?: boolean }) {
+  const color = css(block.style?.placeholderColor) ?? 'var(--fr-muted)';
+  if (tall) {
+    return (
+      <Textarea
+        readOnly
+        tabIndex={-1}
+        className="pointer-events-none bg-transparent"
+        data-canvas-input=""
+        placeholder={placeholder || t(M['canvas.answer'])}
+        rows={4}
+        style={{ ...controlStyle(block), color, backgroundColor: controlStyle(block).backgroundColor ?? 'transparent' }}
+      />
+    );
+  }
   return (
-    <div data-canvas-input="" className={cn(box, tall && 'h-24 items-start py-2')} style={{ ...controlStyle, ...inputStyle(block.style) }}>
-      {prefix ? <span className="mr-1 text-[var(--fr-muted)]">{prefix}</span> : null}
-      <span className="truncate" style={{ color: css(block.style?.placeholderColor) ?? 'var(--fr-muted)' }}>
-        {placeholder || t(M['canvas.answer'])}
-      </span>
-      {suffix ? <span className="ml-auto text-[var(--fr-muted)]">{suffix}</span> : null}
+    <Input
+      readOnly
+      tabIndex={-1}
+      className="pointer-events-none bg-transparent"
+      data-canvas-input=""
+      placeholder={placeholder || t(M['canvas.answer'])}
+      prefixText={prefix}
+      suffixText={suffix}
+      style={{ ...controlStyle(block), color, backgroundColor: controlStyle(block).backgroundColor ?? 'transparent' }}
+    />
+  );
+}
+
+export function OptionList({
+  options,
+  shape,
+  numbered,
+  other,
+  pictures,
+  columns,
+}: {
+  options: readonly ChoiceOption[];
+  shape: 'round' | 'square';
+  numbered?: boolean;
+  other?: boolean;
+  pictures?: boolean;
+  columns?: 1 | 2 | 3 | 4 | undefined;
+}) {
+  if (pictures) {
+    return (
+      <div className="fr-image-choices pointer-events-none" style={{ '--fr-columns': columns ?? 2 } as CSSProperties}>
+        {options.map((opt) => {
+          const src = themeImageUrl(opt.image?.assetId);
+          return (
+            <div key={opt.id} className="fr-image-choice">
+              {shape === 'round' ? (
+                <RadioGroup disabled>
+                  <RadioField value={opt.id} label="" disabled />
+                </RadioGroup>
+              ) : (
+                <CheckboxField label="" disabled />
+              )}
+              {src ? <img src={src} alt="" /> : <span className="fr-image-choice-fallback" />}
+              <span>{labelString(opt.label)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  const labels = [
+    ...options.map((opt, i) => ({ id: opt.id, label: numbered ? `${i + 1}. ${labelString(opt.label)}` : labelString(opt.label) })),
+    ...(other ? [{ id: '__other__', label: t(M['canvas.other']) }] : []),
+  ];
+  if (shape === 'round') {
+    return (
+      <RadioGroup className="fr-choices pointer-events-none" style={{ '--fr-columns': columns ?? 1 } as CSSProperties} disabled>
+        {labels.map((opt) => (
+          <RadioField key={opt.id} value={opt.id} label={opt.label} disabled />
+        ))}
+      </RadioGroup>
+    );
+  }
+  return (
+    <div className="fr-choices pointer-events-none" style={{ '--fr-columns': columns ?? 1 } as CSSProperties}>
+      {labels.map((opt) => (
+        <CheckboxField key={opt.id} label={opt.label} disabled />
+      ))}
     </div>
   );
 }
 
-export function OptionList({ options, shape, numbered, other }: { options: readonly ChoiceOption[]; shape: 'round' | 'square'; numbered?: boolean; other?: boolean }) {
+export function Select({ placeholder }: { block: { style?: BlockStyle }; placeholder?: string | undefined }) {
   return (
-    <ul className="space-y-2 pt-1">
-      {options.map((opt, i) => (
-        <li key={opt.id} className="flex items-center gap-2 text-[15px]">
-          <span className={cn('inline-flex size-4 items-center justify-center border text-[10px] text-[var(--fr-muted)]', shape === 'round' ? 'rounded-full' : 'rounded-[3px]')} style={{ backgroundColor: 'var(--fr-inputBg)', borderColor: 'var(--fr-inputBorder)' }}>
-            {numbered ? i + 1 : null}
+    <DsSelect>
+      <SelectTrigger fullWidth className="pointer-events-none bg-transparent" data-canvas-input="" tabIndex={-1}>
+        <SelectValue placeholder={placeholder || t(M['canvas.select'])} />
+      </SelectTrigger>
+    </DsSelect>
+  );
+}
+
+export function MultiSelectBox({ placeholder }: { placeholder?: string | undefined }) {
+  return <MultiSelect readOnly options={[]} value={[]} placeholder={placeholder || t(M['canvas.select'])} className="pointer-events-none bg-transparent" />;
+}
+
+export function Points({ from, to, low, high, variant = 'boxes' }: { from: number; to: number; low?: string | undefined; high?: string | undefined; variant?: 'boxes' | 'icons' }): ReactNode {
+  return (
+    <div className="fr-points pointer-events-none" data-variant={variant}>
+      {low ? <span className="fr-point-label">{low}</span> : null}
+      <div className="fr-point-row">
+        {Array.from({ length: to - from + 1 }, (_, i) => (
+          <span key={i} className="fr-point" aria-checked="false">
+            {from + i}
           </span>
-          {labelString(opt.label)}
-        </li>
-      ))}
-      {other ? (
-        <li className="flex items-center gap-2 text-[15px] text-[var(--fr-muted)]">
-          <span className={cn('inline-block size-4 border', shape === 'round' ? 'rounded-full' : 'rounded-[3px]')} style={{ borderColor: 'var(--fr-inputBorder)' }} /> {t(M['canvas.other'])}
-        </li>
-      ) : null}
-    </ul>
-  );
-}
-
-export function Select({ block, placeholder }: { block: { style?: BlockStyle }; placeholder?: string | undefined }) {
-  return (
-    <div data-canvas-input="" className={cn(box, 'justify-between')} style={{ ...controlStyle, ...inputStyle(block.style) }}>
-      <span style={{ color: css(block.style?.placeholderColor) ?? 'var(--fr-muted)' }}>{placeholder || t(M['canvas.select'])}</span>
-      <span aria-hidden>▾</span>
+        ))}
+      </div>
+      {high ? <span className="fr-point-label">{high}</span> : null}
     </div>
   );
 }
 
-export function Points({ from, to, low, high }: { from: number; to: number; low?: string | undefined; high?: string | undefined }): ReactNode {
+export function CanvasRadio() {
   return (
-    <div className="flex flex-wrap items-center gap-1 pt-1">
-      {low ? <span className="mr-1 text-[12px] text-[var(--fr-muted)]">{low}</span> : null}
-      {Array.from({ length: to - from + 1 }, (_, i) => (
-        <span key={i} className="flex size-8 items-center justify-center border text-[13px] text-[var(--fr-muted)]" style={controlStyle}>
-          {from + i}
-        </span>
-      ))}
-      {high ? <span className="ml-1 text-[12px] text-[var(--fr-muted)]">{high}</span> : null}
+    <RadioGroup className="flex justify-center pointer-events-none" disabled>
+      <RadioGroupItem value="preview" disabled aria-hidden tabIndex={-1} />
+    </RadioGroup>
+  );
+}
+
+export function CanvasCheck() {
+  return <Checkbox disabled aria-hidden tabIndex={-1} className="pointer-events-none" />;
+}
+
+export function CanvasDate() {
+  return <DatePicker readOnly clearable={false} className="pointer-events-none" />;
+}
+
+export function CanvasTime() {
+  return <TimePicker readOnly clearable={false} className="pointer-events-none" />;
+}
+
+export function CanvasDateTime() {
+  return (
+    <div className="fr-range pointer-events-none">
+      <CanvasDate />
+      <CanvasTime />
     </div>
   );
 }
+
+export function RankingList({ options }: { options: readonly ChoiceOption[] }) {
+  return (
+    <div className="pointer-events-none">
+      <p className="fr-hint">{t(M['canvas.rank_hint'])}</p>
+      <ol className="fr-ranking">
+        {options.map((opt, i) => (
+          <li key={opt.id} className="fr-rank">
+            <Badge appearance="subtle" size="sm" shape="circular" aria-hidden>{i + 1}</Badge>
+            <span className="fr-rank-label">{labelString(opt.label)}</span>
+            <Button type="button" variant="outline" size="sm" disabled tabIndex={-1} aria-hidden>
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M6 15l6-6 6 6" /></svg>
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled tabIndex={-1} aria-hidden>
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M6 9l6 6 6-6" /></svg>
+            </Button>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+export { Chip, FileDropzone, Slider };

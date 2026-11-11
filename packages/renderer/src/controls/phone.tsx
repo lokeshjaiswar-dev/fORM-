@@ -3,7 +3,9 @@ import { CALLING_CODE_REGIONS, callingCodeOf } from '@form/registry';
 import type { CountryCode } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
+import { DsCombobox, DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
+import { sanitizePhoneNational } from './sanitize.ts';
 
 /** The region's flag: two regional-indicator symbols, so the picker needs no translated country names. */
 const flag = (region: string) => String.fromCodePoint(...[...region].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
@@ -40,34 +42,33 @@ export function Phone({ block, field }: ControlProps<'phone'>) {
   return (
     <div className="fr-phone">
       {c.showCountrySelect ? (
-        <select
-          className="fr-input fr-select fr-phone-country"
+        <DsCombobox
+          className="fr-phone-country"
           aria-label={t(MESSAGES['phone.country'])}
           value={country}
           disabled={attrs.disabled || field.readOnly}
-          onChange={(e) => {
-            const region = e.target.value as CountryCode;
+          onChange={(next) => {
+            const region = next as CountryCode;
             setPicked(region);
             update(typed, region);
           }}
-        >
-          {regions.map((region) => (
-            <option key={region} value={region}>{`${flag(region)} +${callingCodeOf(region) ?? ''}`}</option>
-          ))}
-        </select>
+          options={regions.map((region) => ({ value: region, label: `${flag(region)} +${callingCodeOf(region) ?? ''}` }))}
+          placeholder={t(MESSAGES['phone.country'])}
+        />
       ) : null}
-      <input
+      <DsText
         id={field.ids.input}
-        className="fr-input"
         type="tel"
-        inputMode="tel"
+        inputMode="numeric"
         autoComplete="tel-national"
         value={typed}
         placeholder={c.placeholder}
         onChange={(e) => {
-          setTyped(e.target.value);
-          update(e.target.value, country);
+          const next = sanitizePhoneNational(e.target.value, country);
+          setTyped(next);
+          update(next, country);
         }}
+        maxLength={country === 'IN' || country === 'US' || country === 'CA' ? 10 : 16}
         onBlur={answer.onBlur}
         {...attrs}
       />

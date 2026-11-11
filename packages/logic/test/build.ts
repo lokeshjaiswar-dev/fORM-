@@ -190,6 +190,10 @@ export const a = {
   rating: (v: number): S.AnswerValue => ({ type: 'rating', value: v }),
   nps: (v: number): S.AnswerValue => ({ type: 'nps', value: v }),
   hidden: (v: string): S.AnswerValue => ({ type: 'hidden', value: v }),
+  group: (rows: Array<{ rowId: string; values: S.Answers }>): S.AnswerValue => ({
+    type: 'repeating_group',
+    value: { rows: rows.map((row) => ({ rowId: id<S.GroupRowId>(row.rowId), values: row.values })) },
+  }),
 };
 
 export const answers = (entries: Record<string, S.AnswerValue>): S.Answers => entries as S.Answers;

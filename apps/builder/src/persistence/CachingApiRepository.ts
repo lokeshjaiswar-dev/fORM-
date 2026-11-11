@@ -58,6 +58,14 @@ export class CachingApiRepository implements DocumentRepository {
   async save(form: StoredForm): Promise<void> {
     await this.cache.save(form);
     const title = summarize(form).title;
-    await putRemoteDraft(form.id, form.doc, title);
+    try {
+      await putRemoteDraft(form.id, form.doc, title);
+    } catch {
+      /* Local save is enough; org/API refusals must not block creating a form in this browser. */
+    }
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.cache.remove(id);
   }
 }

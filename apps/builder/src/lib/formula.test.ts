@@ -31,4 +31,11 @@ describe('parseFormula', () => {
   it('rejects an unknown key', () => {
     expect(parseFormula('qty * missing', fields)).toMatchObject({ ok: false });
   });
+
+  it('parses sum of a field key', () => {
+    const parsed = parseFormula('sum(qty) + tax', fields);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(formatFormula(parsed.expr, keys)).toBe('sum(qty) + tax');
+  });
 });

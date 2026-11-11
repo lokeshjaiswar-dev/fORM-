@@ -1,6 +1,7 @@
 import type { MatchingPromptId, OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
+import { DsSelect } from './ds.tsx';
 import { inputAttrs, useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
 
 /** Pair each prompt with one option; exclusive rows hide already chosen options. */
@@ -28,19 +29,18 @@ export function MatchingField({ block, field }: ControlProps<'matching'>) {
         return (
           <div key={prompt.id} className="fr-matching-row">
             <label className="fr-label" htmlFor={i === 0 ? field.ids.input : `${field.ids.base}-${prompt.id}`}>{prompt.label}</label>
-            <select
+            <DsSelect
               id={i === 0 ? field.ids.input : `${field.ids.base}-${prompt.id}`}
-              className="fr-input"
               value={chosen}
-              onChange={(e) => setPair(prompt.id, e.target.value as OptionId | '')}
+              onChange={(value) => setPair(prompt.id, value as OptionId | '')}
               onBlur={answer.onBlur}
-              {...attrs}
-            >
-              <option value="">{t(MESSAGES['matching.pick'])}</option>
-              {choices.map((option) => (
-                <option key={option.id} value={option.id}>{typeof option.label === 'string' ? option.label : text(option.label)}</option>
-              ))}
-            </select>
+              options={choices.map((option) => ({ value: option.id, label: typeof option.label === 'string' ? option.label : text(option.label) }))}
+              placeholder={t(MESSAGES['matching.pick'])}
+              disabled={attrs.disabled}
+              aria-invalid={attrs['aria-invalid']}
+              aria-describedby={attrs['aria-describedby']}
+              aria-required={attrs['aria-required']}
+            />
           </div>
         );
       })}

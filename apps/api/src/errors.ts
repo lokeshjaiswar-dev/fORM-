@@ -122,6 +122,27 @@ interface Outcome {
   audited?: boolean;
 }
 
+function errorText(err: unknown): string {
+  const parts: string[] = [];
+  let cur: unknown = err;
+  for (let i = 0; i < 6 && cur; i++) {
+    if (typeof cur === 'object') {
+      const o = cur as { message?: unknown; code?: unknown; cause?: unknown };
+      if (typeof o.message === 'string') parts.push(o.message);
+      if (typeof o.code === 'string' || typeof o.code === 'number') parts.push(String(o.code));
+      cur = o.cause;
+    } else {
+      parts.push(String(cur));
+      break;
+    }
+  }
+  return parts.join('\n');
+}
+
+function isDbUnreachable(err: unknown): boolean {
+  return /timeout|EHOSTUNREACH|ECONNREFUSED|terminated unexpectedly|ECONNRESET|ENETUNREACH|connect E/i.test(errorText(err));
+}
+
 function classify(err: FastifyError, request: FastifyRequest): Outcome {
   if (err instanceof ProblemError) return { code: err.code, detail: err.detail, denial: err.denial, audited: err.audited };
   if (hasZodFastifySchemaValidationErrors(err)) {
@@ -131,6 +152,10 @@ function classify(err: FastifyError, request: FastifyRequest): Outcome {
   if (isResponseSerializationError(err)) {
     request.log.error({ err }, 'response did not match its schema');
     return { code: 'INTERNAL' };
+  }
+  if (isDbUnreachable(err)) {
+    request.log.error({ err }, 'request failed');
+    return { code: 'SERVICE_UNAVAILABLE', detail: 'The database did not answer in time. Try Publish again.' };
   }
   const status = typeof err.statusCode === 'number' ? err.statusCode : 500;
   if (status >= 500) {
@@ -148,7 +173,7 @@ export function registerErrorHandling(app: FastifyInstance, o: { auditWriter: Db
   app.setErrorHandler(async (err: FastifyError, request, reply) => {
     const out = classify(err, request);
     const { status } = PROBLEMS[out.code];
-    if ((status === 403 || status >= 500) && !out.audited) {
+    if ((status === 403 || status >= 500) && !out.audited && out.code !== 'SERVICE_UNAVAILABLE') {
       try {
         await auditProblem(o.auditWriter, request, status, out.code, out.denial);
       } catch (auditErr) {

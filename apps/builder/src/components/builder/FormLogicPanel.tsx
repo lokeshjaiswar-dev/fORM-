@@ -316,7 +316,7 @@ function CheckEditor({ rule, fields, defaults, def }: { rule: Rule; fields: Fiel
   );
 }
 
-/** When / Then checks for Form design → Logic. */
+/** When / Then checks for Form settings → Logic. */
 export function FormLogicChecks() {
   const def = useDoc((d) => d);
   const rules = useDoc((d) => d.logic.rules);

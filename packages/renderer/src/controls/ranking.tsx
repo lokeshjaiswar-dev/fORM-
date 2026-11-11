@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { Badge, Button } from '@dmacq/ui';
 import { rankCount } from '@form/registry';
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
@@ -15,7 +16,7 @@ export function Ranking({ block, field }: ControlProps<'ranking'>) {
   const answer = useAnswer(block);
   const c = block.config;
   const shown = useOptions(block.id, c.options, c.shuffle === true);
-  const buttons = useRef(new Map<string, HTMLButtonElement | null>());
+  const buttons = useRef(new Map<string, HTMLElement | null>());
   const ranked = answer.value ?? [];
   const order = [...ranked.filter((id) => shown.some((o) => o.id === id)), ...shown.map((o) => o.id).filter((id) => !ranked.includes(id))];
   const total = order.length;
@@ -38,30 +39,32 @@ export function Ranking({ block, field }: ControlProps<'ranking'>) {
           const label = text(shown.find((o) => o.id === id)?.label);
           return (
             <li key={id} className="fr-rank">
-              <span className="fr-rank-position" aria-hidden="true">{i + 1}</span>
+              <Badge appearance="subtle" size="sm" shape="circular" aria-hidden="true">{i + 1}</Badge>
               <span className="fr-rank-label">{label}</span>
               <span className="fr-sr-only">{t(MESSAGES['ranking.position'], { position: i + 1, total })}</span>
-              <button
+              <Button
                 type="button"
-                className="fr-rank-move"
+                variant="outline"
+                size="sm"
                 ref={(el) => void buttons.current.set(`${id}:up`, el)}
                 aria-label={t(MESSAGES['ranking.move_up'], { label })}
                 disabled={locked || i === 0}
                 onClick={() => move(i, -1)}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 15l6-6 6 6" /></svg>
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 id={i === 0 ? field.ids.input : undefined}
-                className="fr-rank-move"
                 ref={(el) => void buttons.current.set(`${id}:down`, el)}
                 aria-label={t(MESSAGES['ranking.move_down'], { label })}
                 disabled={locked || i === total - 1}
                 onClick={() => move(i, 1)}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" /></svg>
-              </button>
+              </Button>
             </li>
           );
         })}

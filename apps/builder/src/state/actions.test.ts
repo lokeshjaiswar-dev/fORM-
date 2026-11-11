@@ -33,6 +33,8 @@ describe('builder actions', () => {
   it('addBlock inserts a registry block at a page position, with a fresh key and the form purpose, and selects it', () => {
     resetStore([block('short_text', 'a'), block('short_text', 'b')]);
     const added = addBlock({ type: 'email', configOverrides: {} }, { pageId: 'page_1' as PageId, index: 1 });
+    expect(ui().inspectorOpen).toBe(true);
+    expect(ui().activeBlockId).toBe(added);
     expect(blockIds()).toEqual(['a', added, 'b']);
     expect(get(added)).toMatchObject({ type: 'email', key: 'email', required: false, compliance: { classification: 'personal', purposeIds: [PURPOSE] } });
     expect(ui().activeBlockId).toBe(added);

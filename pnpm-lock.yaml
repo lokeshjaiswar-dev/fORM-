@@ -811,6 +811,9 @@ importers:
 
   packages/renderer:
     dependencies:
+      '@dmacq/ui':
+        specifier: file:../../dmacq-ui-0.1.0.tgz
+        version: file:dmacq-ui-0.1.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwindcss@4.3.3)
       '@form/i18n':
         specifier: workspace:*
         version: link:../i18n

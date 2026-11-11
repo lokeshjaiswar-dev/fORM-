@@ -46,6 +46,10 @@ export function otherTexts(blockId: string, other: OtherOption | undefined): Tex
   return keys;
 }
 
+/** Human-readable pairs, one per line: `Dog - Bark`. */
+export const pairLines = (rows: Array<readonly [string, string]>): string =>
+  rows.filter(([, right]) => right !== '').map(([left, right]) => `${left} - ${right}`).join('\n');
+
 export const optionLabel = (options: readonly ChoiceOption[], id: OptionId): string => {
   const option = options.find((o) => o.id === id);
   return option ? labelText(option.label) : id;

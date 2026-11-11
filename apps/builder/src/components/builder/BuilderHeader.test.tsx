@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { BuilderHeader } from '@/components/builder/BuilderHeader';
@@ -6,6 +6,12 @@ import { addBlock } from '@/state/actions';
 import { undo, useHistoryShortcuts } from '@/state/history';
 import { useUiStore } from '@/state/uiStore';
 import { blockIds, resetStore } from '@/test/fixtures';
+import { publishLive } from '@/persistence/publishApi';
+
+vi.mock('@/persistence/publishApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/persistence/publishApi')>();
+  return { ...actual, publishLive: vi.fn() };
+});
 
 function Where() {
   return <span aria-label="path">{useLocation().pathname}</span>;
@@ -75,5 +81,14 @@ describe('BuilderHeader', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Saving…');
     fireEvent.click(screen.getByRole('link', { name: 'Forms' }));
     expect(screen.getByLabelText('path')).toHaveTextContent('/forms');
+  });
+
+  it('publishes and shows a share link anyone can open', async () => {
+    vi.mocked(publishLive).mockResolvedValue({ slug: 'hello-form', versionId: 'v1', number: 1 });
+    renderHeader();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(await screen.findByRole('dialog', { name: 'Share form' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Share link')).toHaveValue(`${window.location.origin}/f/hello-form`);
+    expect(publishLive).toHaveBeenCalled();
   });
 });

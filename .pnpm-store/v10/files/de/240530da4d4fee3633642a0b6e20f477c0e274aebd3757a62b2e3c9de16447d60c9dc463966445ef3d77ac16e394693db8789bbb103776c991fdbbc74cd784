@@ -1,0 +1,4 @@
+export type Density = 'compact' | 'comfortable';
+export declare function getDensity(): Density;
+export declare function applyDensity(d?: Density): void;
+export declare function setDensity(d: Density): void;

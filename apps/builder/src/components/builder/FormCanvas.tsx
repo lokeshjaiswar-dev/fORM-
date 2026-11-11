@@ -3,7 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ArrowRight, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { packRows, themeCssVars } from '@form/renderer';
+import { coverPhoto, packRows, pagePhoto, themeCssVars } from '@form/renderer';
 import type { BlockId, BlockLayout, FormDefinition, PageId } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
@@ -82,6 +82,8 @@ export function FormCanvas() {
   const insertFocusKey = useUiStore((s) => s.insertFocusKey);
   const activeBlockId = useUiStore((s) => s.activeBlockId);
   const showStart = !started && ids.length === 0 && pages.length === 1;
+  const photo = pagePhoto(tokens);
+  const cover = coverPhoto(tokens);
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop' });
 
   useEffect(() => {
@@ -105,7 +107,7 @@ export function FormCanvas() {
       data-label-align={tokens.labelAlign}
       data-density={tokens.density}
       data-input-style={tokens.inputStyle}
-      className="h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+      className="fr-root fr-builder-canvas relative h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
       style={{
         ...themeCssVars(tokens),
         backgroundColor: isOver ? 'color-mix(in srgb, var(--fr-text) 4%, var(--fr-page))' : 'var(--fr-page)',
@@ -117,15 +119,35 @@ export function FormCanvas() {
       }}
       onClick={() => setActiveBlock(null)}
     >
-      <div className="flex min-h-full justify-center px-[72px] py-16 pb-24">
+      {photo ? (
+        <img
+          alt=""
+          src={photo.url}
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          style={{ objectFit: photo.fit === 'contain' ? 'contain' : 'cover' }}
+        />
+      ) : null}
+      <div className="relative flex min-h-full items-start justify-center px-[72px] py-16 pb-24">
         <div
-          className="relative w-full px-[7.5rem] py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
+          className="relative h-auto w-full self-start px-[7.5rem] py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
           style={{
             maxWidth: 'calc(var(--fr-width) + 10rem)',
             backgroundColor: 'var(--fr-surface)',
             borderRadius: layout === 'cards' ? '24px' : 'min(24px, calc(var(--fr-radius) + 10px))',
           }}
         >
+        {cover ? (
+          <div
+            className="pointer-events-none -mx-[7.5rem] -mt-12 mb-8 overflow-hidden"
+            style={{
+              height: cover.heightPx,
+              borderTopLeftRadius: 'inherit',
+              borderTopRightRadius: 'inherit',
+            }}
+          >
+            <img alt="" src={cover.url} className="block h-full w-full object-cover" />
+          </div>
+        ) : null}
         {tokens.progress !== 'none' ? (
           <div className="absolute inset-x-0 top-0 h-1.5 overflow-hidden" style={{ borderTopLeftRadius: 'inherit', borderTopRightRadius: 'inherit' }} aria-hidden>
             <div className="h-full w-full bg-[color-mix(in_srgb,var(--fr-text)_10%,transparent)]">
@@ -152,7 +174,7 @@ export function FormCanvas() {
           }}
           placeholder={t(M['canvas.title_placeholder'])}
           aria-label={t(M['canvas.title_placeholder'])}
-          className="mb-8 w-full bg-transparent text-left text-[40px] font-bold leading-[1.15] tracking-[-0.02em] outline-none placeholder:text-[color-mix(in_srgb,var(--fr-text)_35%,transparent)]"
+          className="mb-8 w-full border-0 bg-transparent text-left text-[40px] font-bold leading-[1.15] tracking-[-0.02em] shadow-none outline-none placeholder:text-[color-mix(in_srgb,var(--fr-text)_35%,transparent)]"
           style={{ color: 'var(--fr-text)', fontFamily: 'var(--fr-heading-font)' }}
         />
 
@@ -230,7 +252,7 @@ export function FormCanvas() {
                   }}
                   placeholder={t(M['canvas.insert_placeholder'])}
                   aria-label={t(M['canvas.insert_placeholder'])}
-                  className="h-8 w-full bg-transparent text-[16px] leading-8 outline-none placeholder:text-[#c5c4c1]"
+                  className="h-8 w-full border-0 bg-transparent text-[16px] leading-8 shadow-none outline-none placeholder:text-[#c5c4c1]"
                 />
                 <SlashMenu
                   open={slashOpen}

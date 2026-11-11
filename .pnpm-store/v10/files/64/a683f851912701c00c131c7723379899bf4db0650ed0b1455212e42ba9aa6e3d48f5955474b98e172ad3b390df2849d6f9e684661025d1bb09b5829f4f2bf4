@@ -1,0 +1,107 @@
+import * as React from 'react';
+import { type FieldSize, type FieldStatus } from './field';
+export interface ComboboxOption {
+    value: string;
+    label: React.ReactNode;
+    /** plain text used for searching and for chips when `label` is not a string */
+    text?: string;
+    /** supporting line under the label */
+    description?: React.ReactNode;
+    icon?: React.ReactNode;
+    /** initials shown in a small avatar before the label */
+    avatar?: string;
+    /** text at the right of the row */
+    trailing?: React.ReactNode;
+    disabled?: boolean;
+    /** options with the same group are listed under a group label */
+    group?: string;
+}
+export declare const optionText: (o: ComboboxOption) => string;
+/** Round avatar with initials (Figma: Avatar, light peach). */
+export declare function OptionAvatar({ initials, className }: {
+    initials: string;
+    className?: string;
+}): React.JSX.Element;
+/** Row content shared by Combobox and MultiSelect: avatar / icon, label with optional description, trailing text, tick or checkbox. */
+declare function OptionContent({ option, selected, checkbox }: {
+    option: ComboboxOption;
+    selected: boolean;
+    checkbox?: boolean;
+}): React.JSX.Element;
+/** "Load more" row at the end of a long menu (Figma: Menu Load More Row, 32 high). */
+export declare function LoadMoreRow({ onClick, loading }: {
+    onClick: () => void; /** fetching: the row shows a spinner, is disabled (no double fire) and the list above it stays in place */
+    loading?: boolean;
+}): React.JSX.Element;
+declare function OptionList({ options, isSelected, onPick, checkbox, searchPlaceholder, emptyText, loading, footer, label, labelledBy, multiple, }: {
+    options: ComboboxOption[];
+    isSelected: (o: ComboboxOption) => boolean;
+    onPick: (o: ComboboxOption) => void;
+    checkbox?: boolean;
+    searchPlaceholder: string;
+    emptyText: string;
+    loading?: boolean;
+    footer?: React.ReactNode;
+    /** accessible name of the listbox */
+    label?: string;
+    labelledBy?: string;
+    /** the listbox allows several selected options */
+    multiple?: boolean;
+}): React.JSX.Element;
+export interface ComboboxProps {
+    options: ComboboxOption[];
+    value?: string;
+    defaultValue?: string;
+    onValueChange?: (value: string, option?: ComboboxOption) => void;
+    placeholder?: string;
+    searchPlaceholder?: string;
+    emptyText?: string;
+    loading?: boolean;
+    size?: FieldSize;
+    status?: FieldStatus;
+    disabled?: boolean;
+    readOnly?: boolean;
+    /** x button that clears the selection (default false) */
+    clearable?: boolean;
+    startIcon?: React.ReactNode;
+    /** shows a "load more" row at the end of the menu */
+    onLoadMore?: () => void;
+    /** id of the trigger button; the label's `htmlFor` points at it. Inside a `Field` it defaults to the field's id. */
+    id?: string;
+    className?: string;
+    contentClassName?: string;
+    align?: 'start' | 'center' | 'end';
+    /** marks the field invalid and draws the error state. Inside a `Field` it follows the field's `error`. */
+    'aria-invalid'?: boolean | 'true' | 'false';
+    /** accessible name when there is no visible label */
+    'aria-label'?: string;
+    /** id of the element that names the trigger, when a `<label for>` does not */
+    'aria-labelledby'?: string;
+    /** id of the hint or error text. Inside a `Field` it is set to the field's message. */
+    'aria-describedby'?: string;
+    /** tells assistive technology an answer is required. Inside a `Field` it follows `required`. */
+    'aria-required'?: boolean | 'true' | 'false';
+}
+/** Searchable select (Figma: Select Trigger openSearch + Dropdown Menu with search row). Value is the option's `value` string. */
+declare function Combobox({ options, value: valueProp, defaultValue, onValueChange, placeholder, searchPlaceholder, emptyText, loading, size, status: statusProp, disabled: disabledProp, readOnly, clearable, startIcon, onLoadMore, id, className, contentClassName, align, ...aria }: ComboboxProps): React.JSX.Element;
+/**
+ * Rich list row of the Dropdown page (Figma: Dropdown Cell, 51 high): checkbox, avatar, name with subtext, trailing text and an
+ * action. `state` forces hover / focused for documentation; real hover and focus work as usual.
+ */
+declare function DropdownCell({ name, subtext, trailing, avatar, checked, selected, disabled, state, leading, action, onCheckedChange, className, }: {
+    name: React.ReactNode;
+    subtext?: React.ReactNode;
+    trailing?: React.ReactNode;
+    avatar?: string;
+    checked?: boolean;
+    selected?: boolean;
+    disabled?: boolean;
+    state?: 'hover' | 'focused';
+    /** small icon between the avatar and the name */
+    leading?: React.ReactNode;
+    /** icon / button at the far right */
+    action?: React.ReactNode;
+    onCheckedChange?: (checked: boolean) => void;
+    className?: string;
+}): React.JSX.Element;
+export { Combobox, OptionList, OptionContent, DropdownCell };
