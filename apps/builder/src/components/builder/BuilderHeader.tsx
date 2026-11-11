@@ -14,6 +14,7 @@ import { useEdition } from '@/edition/edition';
 import { previewVersion } from '@/lib/preview';
 import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
+import { copyText } from '@/lib/copyText';
 import { fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
 
 export function BuilderHeader() {
@@ -76,10 +77,11 @@ export function BuilderHeader() {
   async function copyLink() {
     if (!link) return;
     try {
-      await navigator.clipboard.writeText(link);
+      await copyText(link);
+      setError(null);
       toast('Link copied');
     } catch {
-      setError('The link could not be copied.');
+      setError('The link could not be copied. Select it and press Ctrl+C.');
     }
   }
 

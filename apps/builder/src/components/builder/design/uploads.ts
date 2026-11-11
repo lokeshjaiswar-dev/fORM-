@@ -16,8 +16,37 @@ function read(): Record<string, string> {
 }
 
 /** Restores pictures uploaded in this browser so covers and backgrounds survive a reload. */
-export function hydrateThemeImages(): void {
+export function hydrateThemeImages(extra?: Record<string, string>): void {
   for (const [id, url] of Object.entries(read())) rememberThemeImage(id, url);
+  if (!extra) return;
+  for (const [id, url] of Object.entries(extra)) {
+    if (typeof url === 'string' && url.startsWith('data:image/')) rememberThemeImage(id, url);
+  }
+}
+
+function collectAssetIds(value: unknown, into: Set<string>): void {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectAssetIds(item, into));
+    return;
+  }
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.assetId === 'string' && rec.assetId) into.add(rec.assetId);
+  for (const nested of Object.values(rec)) collectAssetIds(nested, into);
+}
+
+/** Pictures used on this draft (image choice, cover, background) so a shared fill link can show them. */
+export function themeMediaForDraft(draft: unknown): Record<string, string> {
+  const ids = new Set<string>();
+  collectAssetIds(draft, ids);
+  if (ids.size === 0) return {};
+  const stored = read();
+  const media: Record<string, string> = {};
+  for (const id of ids) {
+    const url = stored[id];
+    if (url) media[id] = url;
+  }
+  return media;
 }
 
 export function storeThemeImage(assetId: string, url: string): void {

@@ -137,12 +137,14 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
     '/v1/p/publish',
     {
       config: { auth: 'none' },
+      bodyLimit: 12 * 1024 * 1024,
       schema: {
         tags: ['runtime'],
         summary: 'Publish a draft without a session so the public fill link works on any device',
         body: z.object({
           id: z.uuid(),
           draft: z.record(z.string(), z.unknown()),
+          media: z.record(z.string(), z.string()).optional(),
         }),
         response: { 200: published },
       },
@@ -200,10 +202,11 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
         formId: id,
         version: projectForRuntime(version, { state: 'open' }, {
           edition: 'onprem',
-          upload: { presignUrl: '', maxFileBytes: 0 },
+          upload: { presignUrl: '', maxFileBytes: 10 * 1024 * 1024 },
           branding: false,
           thirdPartyTrackingAllowed: false,
         }),
+        media: request.body.media,
       });
       return published;
     },

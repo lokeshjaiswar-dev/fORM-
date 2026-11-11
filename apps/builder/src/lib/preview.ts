@@ -7,6 +7,7 @@ import type {
 import type { UploadRequest } from '@form/renderer';
 import { uid } from '@/lib/utils';
 import { putSubmissionFile } from '@/persistence/blobStore';
+import { persistRemoteFile } from '@/persistence/filesApi';
 import type { LocalOps } from '@/state/opsStore';
 
 /*
@@ -80,6 +81,11 @@ export async function previewUploader({ file, name }: UploadRequest): Promise<Fi
     await putSubmissionFile(ref.fileId, file, name, mime);
   } catch {
     /* Tests and locked-down browsers still get a FileRef without a stored blob. */
+  }
+  try {
+    await persistRemoteFile(ref.fileId, file, name, mime);
+  } catch {
+    /* Preview and tests still submit when the API is down. */
   }
   return ref;
 }

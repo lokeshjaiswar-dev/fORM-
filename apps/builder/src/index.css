@@ -65,6 +65,14 @@ body,
   margin: 0;
 }
 
+/* Fill page: let the document grow with the form so the themed page is not clipped to the viewport. */
+html:has(.fr-fill),
+body:has(.fr-fill),
+#root:has(.fr-fill) {
+  height: auto;
+  min-height: 100%;
+}
+
 body {
   font-family: var(--font-sans);
   background: var(--background);

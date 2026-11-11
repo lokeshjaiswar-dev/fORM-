@@ -46,4 +46,17 @@ describe('answerRows', () => {
     expect(rows[0]?.value).toContain(' - ');
     expect(rows[1]?.value).toMatch(/ - /);
   });
+
+  it('shows appointments as a date and clock range, not raw instants', () => {
+    const definition = formWith([block('appointment', 'visit', { label: 'Appointment name' })]);
+    const rows = answerRows(definition, {
+      ['visit' as BlockId]: {
+        type: 'appointment',
+        value: { start: '2026-11-10T03:30:00Z', end: '2026-11-10T04:00:00Z', respondentTimeZone: 'Asia/Kolkata' },
+      },
+    } as Answers);
+    expect(rows[0]?.value).toMatch(/10 Nov 2026/);
+    expect(rows[0]?.value).toMatch(/9:00/);
+    expect(rows[0]?.value).not.toContain('2026-11-10T03:30:00Z');
+  });
 });

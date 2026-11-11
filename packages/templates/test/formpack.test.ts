@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { unzipSync, zipSync } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEV_TRUSTED_KEY, FORMPACK_LIMITS, FormpackError, buildFormpack, readFormpack, verifySignature, type FormpackErrorCode, type PackSigner, type TrustedKey,
 } from '../src/index.ts';
@@ -26,6 +26,10 @@ async function code(bytes: Uint8Array, options = TRUSTED): Promise<FormpackError
 }
 
 describe('readFormpack verification', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('rejects one changed byte in any file of the pack', async () => {
     const bytes = await pack();
     const files = unzipSync(bytes);
@@ -101,6 +105,12 @@ describe('readFormpack verification', () => {
   it('returns false for a signature it cannot check', async () => {
     expect(await verifySignature('ed25519', new Uint8Array(3), new Uint8Array(64), new Uint8Array(1))).toBe(false);
     expect(await verifySignature('es256', new Uint8Array(65), new Uint8Array(64), new Uint8Array(1))).toBe(false);
+  });
+
+  it('verifies Ed25519 when WebCrypto is missing (http on a LAN IP)', async () => {
+    vi.stubGlobal('crypto', {});
+    expect(await code(await pack())).toBe('ok');
+    expect(await code(await pack(keySigner(DEV_TRUSTED_KEY.keyId, generateKeyPairSync('ed25519').privateKey)))).toBe('bad_signature');
   });
 });
 

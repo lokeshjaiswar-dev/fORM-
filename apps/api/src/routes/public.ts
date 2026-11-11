@@ -16,12 +16,14 @@ const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
 const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string() });
 
-type PublicPayload = { slug: string; formId: string; version: unknown };
+type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
 
 const LIVE_DIR = path.resolve(process.cwd(), '.data/published');
 const SUB_DIR = path.resolve(process.cwd(), '.data/submissions');
+const FILE_DIR = path.resolve(process.cwd(), '.data/files');
 const SLUG_FILE = /^[a-z0-9][a-z0-9-]{0,127}$/i;
 const FORM_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const FILE_BODY_LIMIT = 12 * 1024 * 1024;
 const LIVE_TTL_MS = 60_000;
 const liveCache = new Map<string, { at: number; body: PublicPayload }>();
 const liveInflight = new Map<string, Promise<PublicPayload>>();
@@ -86,6 +88,32 @@ async function readSubmissions(formId: string): Promise<DiskSubmission[]> {
     return Array.isArray(parsed.items) ? parsed.items.filter((row) => row && formKey(row.formId) === id && row.id) : [];
   } catch {
     return [];
+  }
+}
+
+function fileBinPath(id: string): string {
+  return path.join(FILE_DIR, `${id}.bin`);
+}
+
+function fileMetaPath(id: string): string {
+  return path.join(FILE_DIR, `${id}.json`);
+}
+
+async function saveUploadedFile(id: string, name: string, mime: string, bytes: Buffer): Promise<void> {
+  await mkdir(FILE_DIR, { recursive: true });
+  await writeFile(fileBinPath(id), bytes);
+  await writeFile(fileMetaPath(id), JSON.stringify({ name, mime }));
+}
+
+async function readUploadedFile(id: string): Promise<{ name: string; mime: string; bytes: Buffer } | null> {
+  if (!FORM_FILE.test(id)) return null;
+  try {
+    const meta = JSON.parse(await readFile(fileMetaPath(id), 'utf8')) as { name?: unknown; mime?: unknown };
+    if (typeof meta.name !== 'string' || typeof meta.mime !== 'string') return null;
+    const bytes = await readFile(fileBinPath(id));
+    return { name: meta.name, mime: meta.mime, bytes };
+  } catch {
+    return null;
   }
 }
 
@@ -160,7 +188,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         formId: found.formId,
         version: projectForRuntime(version, { state: 'open' }, {
           edition,
-          upload: { presignUrl: '', maxFileBytes: 0 },
+          upload: { presignUrl: '', maxFileBytes: 10 * 1024 * 1024 },
           branding: false,
           thirdPartyTrackingAllowed: false,
         }),
@@ -185,11 +213,65 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
             slug: z.string(),
             formId: z.uuid(),
             version: z.unknown(),
+            media: z.record(z.string(), z.string()).optional(),
           }),
         },
       },
     },
     async (request) => loadLive(request.params.slug, request.id),
+  );
+
+  r.post(
+    '/v1/p/files',
+    {
+      config: { auth: 'none' },
+      bodyLimit: FILE_BODY_LIMIT,
+      schema: {
+        tags: ['runtime'],
+        summary: 'Store a respondent file so Responses can open it on another device',
+        body: z.object({
+          id: z.uuid(),
+          name: z.string().min(1).max(255),
+          mime: z.string().min(1).max(255),
+          data: z.string().min(1),
+        }),
+        response: { 200: z.object({ id: z.uuid() }) },
+      },
+    },
+    async (request) => {
+      const { id, name, mime, data } = request.body;
+      let bytes: Buffer;
+      try {
+        bytes = Buffer.from(data, 'base64');
+      } catch {
+        throw new ProblemError('VALIDATION_FAILED', 'The file could not be read.');
+      }
+      if (bytes.length === 0 || bytes.length > FILE_BODY_LIMIT) {
+        throw new ProblemError('PAYLOAD_TOO_LARGE', 'That file is too large.');
+      }
+      await saveUploadedFile(id, name, mime, bytes);
+      return { id };
+    },
+  );
+
+  r.get(
+    '/v1/p/files/:id',
+    {
+      config: { auth: 'none' },
+      schema: {
+        tags: ['runtime'],
+        summary: 'Download a stored respondent file',
+        params: z.object({ id: z.uuid() }),
+      },
+    },
+    async (request, reply) => {
+      const file = await readUploadedFile(request.params.id);
+      if (!file) throw new ProblemError('NOT_FOUND', 'That file is not stored.');
+      return reply
+        .header('x-file-name', encodeURIComponent(file.name))
+        .type(file.mime)
+        .send(file.bytes);
+    },
   );
 
   r.post(

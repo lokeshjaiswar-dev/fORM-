@@ -34,7 +34,7 @@ export const PALETTE_LABELS = defineMessages('builder', {
   'palette.datetime': 'Date and time',
   'palette.consent': 'Terms and conditions',
   'palette.unique_id': 'Unique ID',
-  'palette.appointment': 'Appointment',
+  'palette.appointment': 'Appointment name',
   'palette.captcha': 'Captcha',
   'palette.section': 'Collapse',
   'palette.short_text.fill_blank': 'Fill in the blank',

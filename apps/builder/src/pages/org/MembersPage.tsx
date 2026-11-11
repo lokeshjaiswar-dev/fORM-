@@ -9,6 +9,7 @@ import { Badge, Button, Field, Input, TextLink } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import { FormError, Notice } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
+import { copyText } from '@/lib/copyText';
 import {
   accessLinkSchema,
   assignable,
@@ -186,7 +187,7 @@ export function MembersPage() {
       await reload();
     });
   const copy = (link: string) => {
-    void navigator.clipboard?.writeText(link).then(
+    void copyText(link).then(
       () => setCopied(true),
       () => setCopied(false),
     );

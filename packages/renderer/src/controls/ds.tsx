@@ -176,6 +176,7 @@ export function DsRadioCell({
   onSelect,
   onBlur,
   disabled,
+  grouped,
   'aria-label': ariaLabel,
   'aria-invalid': invalid,
 }: {
@@ -185,12 +186,17 @@ export function DsRadioCell({
   onSelect: () => void;
   onBlur?: () => void;
   disabled?: boolean;
+  /** When true, the cell is already inside a RadioGroup (one group per matrix row). */
+  grouped?: boolean;
   'aria-label': string;
   'aria-invalid'?: boolean | undefined;
 }) {
+  const item = <RadioGroupItem id={id} value={value} aria-label={ariaLabel} onBlur={onBlur} />;
+  if (grouped) return item;
+  /* Keep a sentinel when unchecked: `undefined` lets Radix go uncontrolled and the radio stays visually on. */
   return (
-    <RadioGroup className="flex justify-center" value={checked ? value : undefined} onValueChange={() => onSelect()} disabled={disabled} aria-invalid={invalid}>
-      <RadioGroupItem id={id} value={value} aria-label={ariaLabel} onBlur={onBlur} />
+    <RadioGroup className="flex justify-center" value={checked ? value : NONE} onValueChange={() => onSelect()} disabled={disabled} aria-invalid={invalid}>
+      {item}
     </RadioGroup>
   );
 }

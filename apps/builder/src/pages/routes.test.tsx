@@ -50,19 +50,6 @@ describe('routes', () => {
     expect(path()).toBe('/forms');
   });
 
-  it('New form → Demo GSTIN vs State opens a form with the check', async () => {
-    const repo = new MemoryRepository();
-    renderApp(repo, '/forms');
-    await screen.findByText(/No forms yet/, {}, OPENS);
-    fireEvent.click(screen.getByRole('button', { name: 'New form' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Demo: GSTIN vs State/ }, OPENS));
-    expect(await screen.findByDisplayValue('Demo: GSTIN vs State', {}, OPENS)).toBeInTheDocument();
-    const id = path()?.replace('/builder/', '') ?? '';
-    const record = repo.records.get(id);
-    expect(record?.doc).toMatchObject({ formId: id, title: 'Demo: GSTIN vs State' });
-    expect((record?.doc as { logic?: { rules?: unknown[] } }).logic?.rules).toHaveLength(1);
-  });
-
   it('New form → Blank opens an empty v2 form at its own id (B23)', async () => {
     const repo = new MemoryRepository();
     renderApp(repo, '/forms');

@@ -20,6 +20,25 @@ function joinReadable(value: unknown): string {
     if (Array.isArray(rec.optionIds)) return rec.optionIds.map(joinReadable).concat(rec.other ? [joinReadable(rec.other)] : []).filter(Boolean).join(', ');
     if (typeof rec.name === 'string' && rec.name) return rec.name;
     if (typeof rec.fileId === 'string' && typeof rec.name === 'string') return rec.name;
+    if (typeof rec.start === 'string' && typeof rec.end === 'string' && rec.start.includes('T')) {
+      const zone = typeof rec.respondentTimeZone === 'string' ? rec.respondentTimeZone : 'UTC';
+      const slots = Array.isArray(rec.slots) && rec.slots.length > 0 ? rec.slots : [{ start: rec.start, end: rec.end }];
+      return slots
+        .map((slot) => {
+          if (!slot || typeof slot !== 'object') return '';
+          const row = slot as { start?: unknown; end?: unknown };
+          if (typeof row.start !== 'string' || typeof row.end !== 'string') return '';
+          const from = new Date(row.start);
+          const to = new Date(row.end);
+          if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return `${row.start} – ${row.end}`;
+          const date = new Intl.DateTimeFormat('en-IN', { timeZone: zone, day: 'numeric', month: 'short', year: 'numeric' }).format(from);
+          const start = new Intl.DateTimeFormat('en-IN', { timeZone: zone, hour: 'numeric', minute: '2-digit', hour12: true }).format(from);
+          const end = new Intl.DateTimeFormat('en-IN', { timeZone: zone, hour: 'numeric', minute: '2-digit', hour12: true }).format(to);
+          return `${date}, ${start} – ${end}`;
+        })
+        .filter(Boolean)
+        .join('; ');
+    }
     const pairs = Object.entries(rec)
       .filter(([key]) => key !== 'type' && key !== 'enc' && key !== 'file')
       .map(([key, v]) => {

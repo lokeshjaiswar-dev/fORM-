@@ -606,8 +606,6 @@
   "mfa.use_totp": "Use your authenticator app instead",
   "new.blank": "Blank form",
   "new.blank_hint": "An empty page to build on",
-  "new.demo_gstin": "Demo: GSTIN vs State",
-  "new.demo_gstin_hint": "State codes + GSTIN check. Delete the form when you are done.",
   "new.description": "Start from a blank form or from a template. Templates work offline.",
   "new.templates": "From a template",
   "new.title": "New form",

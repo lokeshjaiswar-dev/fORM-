@@ -67,7 +67,14 @@ export interface AnswerValueMap {
   hidden: string;
   consent: { items: Partial<Record<ConsentItemId, boolean>>; noticeLocale: Locale; noticeVersion: number; scrolledToEnd?: boolean; guardian?: { email: EmailAddress; verifiedAt?: IsoInstant } };
   payment: PaymentSelection;
-  appointment: { start: IsoInstant; end: IsoInstant; respondentTimeZone: TimeZone; holdToken?: string };
+  appointment: {
+    start: IsoInstant;
+    end: IsoInstant;
+    respondentTimeZone: TimeZone;
+    holdToken?: string;
+    /** All chosen times when the field allows more than one; `start`/`end` stay the first. */
+    slots?: Array<{ start: IsoInstant; end: IsoInstant }>;
+  };
   calculation: ScalarValue;
   context: Partial<Record<string, string>>;
   unique_id: string;

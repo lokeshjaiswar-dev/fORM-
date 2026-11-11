@@ -386,6 +386,8 @@ export interface AppointmentConfig {
   reminders?: Array<{ minutesBefore: number; emailBlockId: BlockId }>;
   calendarConnectionId?: ConnectionId;   // INT-11; secrets server-side
   attachIcs: boolean;
+  /** When true, the respondent can pick more than one time on the chosen date. */
+  allowMultipleTimes?: boolean;
 }
 
 /* Computed */

@@ -56,13 +56,20 @@
   inset: 0;
   z-index: 0;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  min-height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   pointer-events: none;
 }
 
 :where(.fr-root) .fr-page-photo[data-fit='contain'] {
-  object-fit: contain;
+  background-size: contain;
+}
+
+:where(.fr-root) .fr-page-photo[data-fit='tile'] {
+  background-size: auto;
+  background-repeat: repeat;
 }
 
 :where(.fr-root) .fr-form:has(.fr-cover),
@@ -108,9 +115,32 @@
   padding: 52px 36px 56px;
 }
 
-/* Live fill is the preview card on a full window: themed page behind, surface card in the middle. */
+/* Live fill: one grid cell as tall as the form (at least the viewport) so the page photo stretches with it. */
 .fr-root[data-mode='live'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(100svh, max-content);
   min-height: 100svh;
+  height: auto;
+}
+
+.fr-root[data-mode='live'] > .fr-page-photo {
+  position: relative;
+  inset: auto;
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  align-self: stretch;
+  justify-self: stretch;
+}
+
+.fr-root[data-mode='live'] > .fr-form,
+.fr-root[data-mode='live'] > .fr-screen {
+  grid-area: 1 / 1;
+  z-index: 1;
+  align-self: start;
+  justify-self: center;
 }
 
 .fr-root[data-mode='live'] .fr-form,
@@ -476,35 +506,51 @@
 }
 
 :where(.fr-root) .fr-field[data-type='appointment'] {
-  display: grid;
-  grid-template-columns: auto minmax(10rem, 1fr);
-  column-gap: 12px;
-  row-gap: 8px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.fr-root[data-label-align='left'] .fr-field[data-type='appointment'],
+.fr-root[data-label-align='right'] .fr-field[data-type='appointment'] {
+  display: flex;
+  grid-template-columns: none;
+}
+
+.fr-root[data-label-align='left'] .fr-field[data-type='appointment'] > :not(.fr-label),
+.fr-root[data-label-align='right'] .fr-field[data-type='appointment'] > :not(.fr-label) {
+  grid-column: auto;
 }
 
 :where(.fr-root) .fr-field[data-type='appointment'] > .fr-label {
   margin: 0;
 }
 
-:where(.fr-root) .fr-field[data-type='appointment'] > .fr-description,
-:where(.fr-root) .fr-field[data-type='appointment'] > .fr-error {
-  grid-column: 1 / -1;
-}
-
 :where(.fr-root) .fr-appointment {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
 
-:where(.fr-root) .fr-appointment > :first-child {
+:where(.fr-root) .fr-appointment-date {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
+}
+
+:where(.fr-root) .fr-appointment-caption {
+  color: var(--fr-label-color, var(--fr-text));
+  font-size: 0.875em;
+  font-weight: 500;
 }
 
 :where(.fr-root) .fr-appointment-slots {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  grid-column: 1 / -1;
 }
 
 :where(.fr-root) .fr-appointment-slot {

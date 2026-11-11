@@ -525,7 +525,10 @@ function AppointmentCanvas({ block }: { block: BlockOf<'appointment'> }) {
   const dayLabel = days[0] ? formatDate(days[0], 'D MMM YYYY') : t(M['canvas.appointment_day']);
   return (
     <div className="fr-appointment pointer-events-none">
-      <Select block={block} placeholder={dayLabel} />
+      <label className="fr-appointment-date">
+        <span className="fr-appointment-caption">{t(M['canvas.appointment_day'])}</span>
+        <Select block={block} placeholder={dayLabel} />
+      </label>
       <div className="fr-appointment-slots" role="list">
         {shown.map((slot) => (
           <Chip key={slot.start} kind="filter" size="md" color="primary" disabled role="listitem">{formatTime(slot.time, 'h12')}</Chip>

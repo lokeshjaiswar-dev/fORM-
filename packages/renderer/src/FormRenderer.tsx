@@ -464,7 +464,14 @@ export function FormRenderer(props: FormRendererProps) {
       data-layout={(theme ?? def.theme).layout}
       data-mode={mode}
     >
-      {photo ? <img className="fr-page-photo" alt="" src={photo.url} data-fit={photo.fit === 'contain' ? 'contain' : 'cover'} /> : null}
+      {photo ? (
+        <div
+          className="fr-page-photo"
+          aria-hidden
+          data-fit={photo.fit === 'contain' ? 'contain' : photo.fit === 'tile' ? 'tile' : 'cover'}
+          style={{ backgroundImage: `url(${JSON.stringify(photo.url)})` }}
+        />
+      ) : null}
       {status.state === 'open' ? (
         <FormSession key={`${version.versionId}:${run.count}`} props={props} meta={meta} base={base} onRestart={restart} />
       ) : (

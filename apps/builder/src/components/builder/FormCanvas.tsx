@@ -119,15 +119,20 @@ export function FormCanvas() {
       }}
       onClick={() => setActiveBlock(null)}
     >
+      <div className="grid min-h-full w-full">
       {photo ? (
-        <img
-          alt=""
-          src={photo.url}
-          className="pointer-events-none absolute inset-0 h-full w-full"
-          style={{ objectFit: photo.fit === 'contain' ? 'contain' : 'cover' }}
+        <div
+          aria-hidden
+          className="pointer-events-none col-start-1 row-start-1 h-full min-h-full w-full"
+          style={{
+            backgroundImage: `url(${JSON.stringify(photo.url)})`,
+            backgroundSize: photo.fit === 'contain' ? 'contain' : photo.fit === 'tile' ? 'auto' : 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: photo.fit === 'tile' ? 'repeat' : 'no-repeat',
+          }}
         />
       ) : null}
-      <div className="relative flex min-h-full items-start justify-center px-[72px] py-16 pb-24">
+      <div className="relative col-start-1 row-start-1 flex min-h-full items-start justify-center px-[72px] py-16 pb-24">
         <div
           className="relative h-auto w-full self-start px-[7.5rem] py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
           style={{
@@ -281,6 +286,7 @@ export function FormCanvas() {
           </>
         )}
         </div>
+      </div>
       </div>
     </div>
   );

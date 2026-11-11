@@ -91,4 +91,17 @@ describe('BuilderHeader', () => {
     expect(screen.getByLabelText('Share link')).toHaveValue(`${window.location.origin}/f/hello-form`);
     expect(publishLive).toHaveBeenCalled();
   });
+
+  it('copies the share link when the clipboard API is blocked', async () => {
+    vi.mocked(publishLive).mockResolvedValue({ slug: 'hello-form', versionId: 'v1', number: 1 });
+    vi.stubGlobal('isSecureContext', false);
+    vi.stubGlobal('navigator', { clipboard: undefined });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn().mockReturnValue(true) });
+    renderHeader();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(await screen.findByRole('dialog', { name: 'Share form' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(document.execCommand).toHaveBeenCalledWith('copy');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

@@ -5,6 +5,7 @@ import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
 import { RuntimeFormVersionSchema, type RuntimeFormVersion } from '@form/schema';
 import { API_BASE } from '@/edition/edition';
+import { hydrateThemeImages } from '@/components/builder/design/uploads';
 import { previewUploader } from '@/lib/preview';
 import { BUILDER_LOCALE } from '@/i18n';
 import { answerRows } from '@/persistence/answerRows';
@@ -13,6 +14,7 @@ const payloadSchema = z.object({
   slug: z.string(),
   formId: z.string(),
   version: RuntimeFormVersionSchema,
+  media: z.record(z.string(), z.string()).optional(),
 });
 
 type Load = { status: 'loading' } | { status: 'missing' } | { status: 'error'; message: string } | { status: 'ready'; version: RuntimeFormVersion; slug: string };
@@ -30,6 +32,7 @@ export function PublicFillPage() {
       if (!res.ok) return { status: 'error', message: 'This form could not be loaded.' };
       const parsed = payloadSchema.safeParse(await res.json());
       if (!parsed.success) return { status: 'error', message: 'This form could not be read.' };
+      hydrateThemeImages(parsed.data.media);
       return { status: 'ready', version: parsed.data.version, slug: parsed.data.slug };
     };
     const open = async () => {
@@ -62,7 +65,7 @@ export function PublicFillPage() {
   }
 
   return (
-    <main className="min-h-svh">
+    <main className="fr-fill min-h-svh">
       <FormRenderer
         version={load.version}
         mode="live"

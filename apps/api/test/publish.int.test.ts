@@ -117,4 +117,36 @@ describe('publish and public fill', () => {
       items: [expect.objectContaining({ formId: id, fieldCount: 1 })],
     });
   });
+
+  it('stores a respondent file and serves it back', async () => {
+    const id = randomUUID();
+    const data = Buffer.from('hello-file').toString('base64');
+    const stored = await app.inject({
+      method: 'POST',
+      url: '/v1/p/files',
+      payload: { id, name: 'note.txt', mime: 'text/plain', data },
+    });
+    expect(stored.statusCode).toBe(200);
+    const got = await app.inject({ url: `/v1/p/files/${id}` });
+    expect(got.statusCode).toBe(200);
+    expect(got.headers['content-type']).toMatch(/text\/plain/);
+    expect(got.body).toBe('hello-file');
+  });
+
+  it('publishes image-choice pictures on the public form', async () => {
+    const id = randomUUID();
+    const published = await app.inject({
+      method: 'POST',
+      url: '/v1/p/publish',
+      payload: {
+        id,
+        draft: publishableDraft(id, 'Photos'),
+        media: { pic1: 'data:image/png;base64,AAAA' },
+      },
+    });
+    expect(published.statusCode).toBe(200);
+    const live = published.json<{ slug: string }>();
+    const publicGet = await app.inject({ url: `/v1/p/${live.slug}` });
+    expect(publicGet.json()).toMatchObject({ media: { pic1: 'data:image/png;base64,AAAA' } });
+  });
 });

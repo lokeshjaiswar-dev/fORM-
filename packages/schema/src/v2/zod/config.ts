@@ -426,6 +426,7 @@ export const AppointmentConfigSchema = z.strictObject({
   reminders: z.array(z.strictObject({ minutesBefore: z.number().int().min(1), emailBlockId: BlockIdSchema })).exactOptional(),
   calendarConnectionId: ConnectionIdSchema.exactOptional(),
   attachIcs: z.boolean(),
+  allowMultipleTimes: z.boolean().exactOptional(),
 });
 
 export const CalculationConfigSchema = z.strictObject({

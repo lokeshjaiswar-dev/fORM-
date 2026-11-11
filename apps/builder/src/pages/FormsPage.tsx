@@ -7,7 +7,6 @@ import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
-import { gstinDemoDefinition } from '@/lib/gstinDemo';
 import { uid } from '@/lib/utils';
 import type { FormSummary, StoredForm } from '@/persistence/DocumentRepository';
 import { whenSaved } from '@/persistence/autosave';
@@ -31,8 +30,6 @@ const M = defineMessages('builder', {
   'new.description': 'Start from a blank form or from a template. Templates work offline.',
   'new.blank': 'Blank form',
   'new.blank_hint': 'An empty page to build on',
-  'new.demo_gstin': 'Demo: GSTIN vs State',
-  'new.demo_gstin_hint': 'State codes + GSTIN check. Delete the form when you are done.',
   'new.templates': 'From a template',
 });
 
@@ -179,18 +176,6 @@ export function FormsPage() {
             <span>
               <span className="block font-medium">{t(M['new.blank'])}</span>
               <span className="block text-sm font-normal text-muted-foreground">{t(M['new.blank_hint'])}</span>
-            </span>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void create(gstinDemoDefinition('demo'))}
-            className="mb-4 h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-left"
-          >
-            <FileText className="size-4 shrink-0" />
-            <span>
-              <span className="block font-medium">{t(M['new.demo_gstin'])}</span>
-              <span className="block text-sm font-normal text-muted-foreground">{t(M['new.demo_gstin_hint'])}</span>
             </span>
           </Button>
           <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['new.templates'])}</p>

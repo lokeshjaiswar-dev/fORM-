@@ -110,7 +110,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['content-type', 'if-match', 'idempotency-key', 'x-fr-client', ORG_HEADER, 'x-request-id', ...(config.authDevHeaders ? [DEV_USER_HEADER] : [])],
-    exposedHeaders: ['x-request-id', 'etag'],
+    exposedHeaders: ['x-request-id', 'etag', 'x-file-name'],
     maxAge: 600,
   });
   await app.register(cookie);

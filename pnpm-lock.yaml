@@ -9,6 +9,9 @@ catalogs:
     '@fastify/otel':
       specifier: 0.21.1
       version: 0.21.1
+    '@noble/curves':
+      specifier: 1.9.7
+      version: 1.9.7
     '@noble/hashes':
       specifier: 2.4.0
       version: 2.4.0
@@ -927,6 +930,9 @@ importers:
       '@form/templates-core':
         specifier: workspace:*
         version: link:../templates-core
+      '@noble/curves':
+        specifier: 'catalog:'
+        version: 1.9.7
       '@noble/hashes':
         specifier: 'catalog:'
         version: 2.4.0
@@ -1726,6 +1732,14 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@noble/curves@1.9.7':
+    resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@noble/hashes@2.4.0':
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
@@ -6191,6 +6205,12 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@noble/curves@1.9.7':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
+  '@noble/hashes@1.8.0': {}
 
   '@noble/hashes@2.4.0': {}
 

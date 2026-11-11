@@ -2,18 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Inbox } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { themeImageUrl } from '@form/renderer';
+import { rememberThemeImage, themeImageUrl } from '@form/renderer';
 import type { FormDefinition, IsoInstant } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { builderPath } from '@/pages/useBuilderMode';
 import { readableFields, type AnswerMedia, type ReadableField } from '@/persistence/answerRows';
-import { getSubmissionFile } from '@/persistence/blobStore';
+import { loadSubmissionFile } from '@/persistence/filesApi';
 import { getRemoteSubmission, listRemoteSubmissions } from '@/persistence/submissionsApi';
 import { useRepository } from '@/persistence/repository';
 import { useSubmissions } from '@/persistence/SubmissionsContext';
 import type { StoredSubmission, SubmissionSummary } from '@/persistence/SubmissionsRepository';
 import { openStored } from '@/persistence/openForm';
+import { API_BASE } from '@/edition/edition';
+import { rememberedSlug } from '@/persistence/publishApi';
 
 const M = defineMessages('builder', {
   'responses.title': 'Responses',
@@ -53,20 +55,22 @@ function previewFields(fields: ReadableField[], n = 3): ReadableField[] {
 
 function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime?: string }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [resolvedMime, setMime] = useState(mime ?? '');
   useEffect(() => {
     let objectUrl: string | undefined;
     let live = true;
-    getSubmissionFile(fileId).then((row) => {
+    loadSubmissionFile(fileId).then((row) => {
       if (!live || !row) return;
       objectUrl = URL.createObjectURL(row.blob);
       setUrl(objectUrl);
+      if (row.mime) setMime(row.mime);
     }).catch(() => undefined);
     return () => {
       live = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [fileId]);
-  const image = (mime ?? '').startsWith('image/');
+  const image = resolvedMime.startsWith('image/') || (mime ?? '').startsWith('image/');
   if (url && image) return <img src={url} alt={name} className="mt-2 max-h-52 max-w-full rounded-[8px] border border-border object-contain" />;
   if (url) {
     return (
@@ -94,10 +98,15 @@ function FieldMedia({ media }: { media: AnswerMedia[] }) {
 }
 
 function FieldValue({ field, compact }: { field: ReadableField; compact?: boolean }) {
+  const files = field.media?.filter((item) => item.fileId) ?? [];
+  const pictures = field.media?.filter((item) => item.assetId) ?? [];
+  const fileNames = files.map((item) => item.name).join(', ');
+  const hideFileName = files.length > 0 && (!field.value || field.value === fileNames);
   return (
     <>
-      {field.value ? <span className={compact ? 'truncate' : 'whitespace-pre-wrap'}>{field.value}</span> : null}
-      {field.media?.length ? <FieldMedia media={field.media} /> : null}
+      {field.value && !hideFileName ? <span className={compact ? 'truncate' : 'whitespace-pre-wrap'}>{field.value}</span> : null}
+      {pictures.length ? <FieldMedia media={pictures} /> : null}
+      {files.length ? <FieldMedia media={files} /> : null}
     </>
   );
 }
@@ -132,6 +141,18 @@ export function ResponsesPage() {
       },
       () => live && setError(t(M['responses.unreadable'])),
     );
+    const slug = rememberedSlug(id);
+    if (slug) {
+      void fetch(`${API_BASE}/v1/p/${encodeURIComponent(slug)}`, { headers: { accept: 'application/json' } })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { media?: Record<string, string> } | null) => {
+          if (!body?.media) return;
+          for (const [assetId, url] of Object.entries(body.media)) {
+            if (url.startsWith('data:image/')) rememberThemeImage(assetId, url);
+          }
+        })
+        .catch(() => undefined);
+    }
     Promise.all([submissions.listByForm(id), listRemoteSubmissions(id)])
       .then(async ([local, remote]) => {
         const items = merge(local, remote);

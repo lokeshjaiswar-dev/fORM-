@@ -188,6 +188,8 @@ const M = defineMessages('builder', {
   'inspector.unique_reset_month': 'Each month',
   'inspector.consent_notice': 'Checkbox only — add a notice later if you need one',
   'inspector.slot_minutes': 'Slot length (minutes)',
+  'inspector.appointment_multi': 'Allow more than one time',
+  'inspector.appointment_multi_hint': 'When on, a respondent can pick several times on the chosen date.',
   'inspector.hours_from': 'Hours from',
   'inspector.hours_to': 'Hours to',
   'inspector.rolling_days': 'Days ahead',
@@ -492,6 +494,12 @@ export function AppointmentGeneral({ block }: InspectorProps<'appointment'>) {
   };
   return (
     <>
+      <ToggleRow
+        label={t(M['inspector.appointment_multi'])}
+        hint={t(M['inspector.appointment_multi_hint'])}
+        checked={block.config.allowMultipleTimes === true}
+        onChange={(allowMultipleTimes) => setConfig(block, { allowMultipleTimes })}
+      />
       <NumberField label={t(M['inspector.slot_minutes'])} value={block.config.slotMinutes} parse={parseInteger(5, 480)} onChange={(slotMinutes) => slotMinutes !== undefined && setConfig(block, { slotMinutes })} />
       <NumberField label={t(M['inspector.rolling_days'])} value={block.config.rollingDays} parse={parseInteger(1, 365)} onChange={(rollingDays) => rollingDays !== undefined && setConfig(block, { rollingDays })} />
       <Field label={t(M['inspector.hours_from'])}>

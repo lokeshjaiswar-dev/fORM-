@@ -393,6 +393,8 @@ describe('OpenAPI', () => {
       '/v1/orgs',
       '/v1/p/by-form/{formId}/submissions',
       '/v1/p/by-form/{formId}/submissions/{id}',
+      '/v1/p/files',
+      '/v1/p/files/{id}',
       '/v1/p/publish',
       '/v1/p/{slug}',
       '/v1/p/{slug}/submissions',

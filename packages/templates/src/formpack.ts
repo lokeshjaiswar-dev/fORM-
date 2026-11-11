@@ -1,5 +1,6 @@
 import { FormpackAttestationSchema, FormpackManifestSchema, FormpackSignatureSchema, FormpackTemplateFileSchema, TemplateCategorySchema, canonicalJson } from '@form/schema';
 import type { FormpackAttestation, FormpackManifest, FormpackSignature, FormpackTemplateFile, Sha256Hex } from '@form/schema';
+import { ed25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { unzipSync, zipSync, type Zippable } from 'fflate';
@@ -154,18 +155,28 @@ function parse<T>(schema: { safeParse(v: unknown): { success: true; data: T } | 
 
 /** WebCrypto verification with the port wire formats (Ed25519 raw key; ES256 SEC1 key and IEEE P1363 signature). */
 export async function verifySignature(alg: SignatureAlg, publicKey: Uint8Array, signature: Uint8Array, data: Uint8Array): Promise<boolean> {
-  const { subtle } = globalThis.crypto;
   const own = (b: Uint8Array) => new Uint8Array(b);
-  try {
-    if (alg === 'ed25519') {
-      const key = await subtle.importKey('raw', own(publicKey), { name: 'Ed25519' }, false, ['verify']);
-      return await subtle.verify({ name: 'Ed25519' }, key, own(signature), own(data));
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    try {
+      if (alg === 'ed25519') {
+        const key = await subtle.importKey('raw', own(publicKey), { name: 'Ed25519' }, false, ['verify']);
+        return await subtle.verify({ name: 'Ed25519' }, key, own(signature), own(data));
+      }
+      const key = await subtle.importKey('raw', own(publicKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+      return await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, own(signature), own(data));
+    } catch {
+      /* HTTP on a LAN IP is not a secure context: crypto.subtle is missing or refuses Ed25519. */
     }
-    const key = await subtle.importKey('raw', own(publicKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
-    return await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, own(signature), own(data));
-  } catch {
-    return false;
   }
+  if (alg === 'ed25519') {
+    try {
+      return ed25519.verify(own(signature), own(data), own(publicKey));
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 export interface ReadOptions { trustedKeys: readonly TrustedKey[] }

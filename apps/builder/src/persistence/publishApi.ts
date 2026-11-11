@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { api } from '@/auth/client';
+import { themeMediaForDraft } from '@/components/builder/design/uploads';
 
 const liveSchema = z.object({
   slug: z.string(),
@@ -35,7 +36,7 @@ export function fillUrl(slug: string): string {
  * Freezes the current draft as a public fill link. Does not send X-FR-Org; nobody needs to be signed in.
  */
 export async function publishLive(id: string, draft: unknown, _title: string): Promise<LiveForm> {
-  const live = await api('POST', '/v1/p/publish', liveSchema, { id, draft });
+  const live = await api('POST', '/v1/p/publish', liveSchema, { id, draft, media: themeMediaForDraft(draft) });
   rememberSlug(id, live.slug);
   return live;
 }
