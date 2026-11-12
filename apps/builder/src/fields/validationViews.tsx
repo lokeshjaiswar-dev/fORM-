@@ -4,7 +4,7 @@ import { type BlockOf, type CountryCode, type DateBound, type DateLimits, type I
 import { t } from '@/i18n';
 import { NumberField, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { parseInteger } from '@/components/builder/inspector/parse';
-import { updateBlock } from '@/state/actions';
+import { patchBlockConfig } from '@/fields/configSink';
 
 type InspectorProps<T extends AvailableType> = { block: BlockOf<T> };
 
@@ -49,7 +49,7 @@ const M = defineMessages('builder', {
 });
 
 function setConfig(block: Pick<BlockOf<AvailableType>, 'id' | 'config'>, patch: Readonly<Record<string, unknown>>): void {
-  updateBlock(block.id, { config: { ...block.config, ...patch } });
+  patchBlockConfig(block, patch);
 }
 
 function ConfigProblem({ block }: { block: BlockOf<AvailableType> }) {

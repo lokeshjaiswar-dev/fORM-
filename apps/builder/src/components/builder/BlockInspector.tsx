@@ -1,5 +1,6 @@
 import { createElement, useState, type ComponentType } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'sonner';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable, type AvailableType } from '@form/registry';
 import { isSafeUrl, type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type SafeUrl, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
@@ -7,13 +8,15 @@ import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { tileOf } from '@/fields/tiles';
-import { KEY_PATTERN, isField, placementOf, richDoc, takenKeys } from '@/lib/definition';
+import { KEY_PATTERN, isField, placementOf, plainText, richDoc, takenKeys } from '@/lib/definition';
+import { isCustomFieldType, parseConfig } from '@/fields/custom/model';
+import { saveLibraryField } from '@/fields/custom/repository';
 import { cn } from '@/lib/utils';
 import { setBlockWidth, updateBlock } from '@/state/actions';
 import { currentDoc, useBlock } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { Tooltip } from '@/components/Tooltip';
-import { Button, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { Field, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
@@ -69,6 +72,12 @@ const M = defineMessages('builder', {
   'inspector.api_url_hint': 'The browser POSTs JSON using this field key ({key}) as the property name and the typed answer as the value. Respond with ok true, or ok false and a message.',
   'inspector.hidden_never_required': 'Hidden fields are never required.',
   'inspector.no_validation': 'This block has no answer to validate.',
+  'inspector.save_field': 'Save as field',
+  'inspector.save_field_title': 'Save as a reusable field',
+  'inspector.save_field_help': 'This stores the type, settings and validation so you can add it from the palette.',
+  'inspector.save_field_name': 'Name',
+  'inspector.save_field_done': 'Saved. You can add it from Your fields in the sidebar.',
+  'inspector.save_field_fail': 'This field could not be saved.',
 });
 
 const UNIQUE_TYPES = new Set<FieldBlock['type']>(['short_text', 'email', 'phone', 'url', 'number']);
@@ -344,6 +353,83 @@ function GeneralTab({ block }: { block: Exclude<StoredBlock, { type: 'unsupporte
         </Field>
       )}
       {block.type !== 'divider' ? <Look block={block} compact={nested || list} /> : null}
+      {isField(block) && isCustomFieldType(block.type) ? <SaveAsField block={block} /> : null}
+    </>
+  );
+}
+
+function SaveAsField({ block }: { block: FieldBlock }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'fail'>('idle');
+  const type = block.type;
+  if (!isCustomFieldType(type)) return null;
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={() => {
+          setName(plainText(block.label) || tileOf(block.type)?.label || block.type);
+          setStatus('idle');
+          setOpen(true);
+        }}
+      >
+        {t(M['inspector.save_field'])}
+      </Button>
+      <Dialog open={open} onOpenChange={(next) => { if (status !== 'saving') setOpen(next); }}>
+        <DialogContent className="gap-5 p-6 sm:max-w-[440px]">
+          <DialogHeader className="space-y-2 pr-6">
+            <DialogTitle>{t(M['inspector.save_field_title'])}</DialogTitle>
+            <DialogDescription>{t(M['inspector.save_field_help'])}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <TextField label={t(M['inspector.save_field_name'])} value={name} onChange={setName} />
+          </div>
+          {status === 'fail' ? (
+            <p role="alert" className="text-[13px] text-destructive">
+              {t(M['inspector.save_field_fail'])}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={status === 'saving'}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={status === 'saving'}
+              onClick={() => {
+                const config = parseConfig(type, block.config);
+                const trimmed = name.trim();
+                if (!config || !trimmed) {
+                  setStatus('fail');
+                  return;
+                }
+                setStatus('saving');
+                saveLibraryField({
+                  name: trimmed,
+                  icon: tileOf(type)?.icon ?? 'type',
+                  keywords: [],
+                  baseType: type,
+                  config,
+                  required: block.required,
+                }).then(
+                  () => {
+                    setOpen(false);
+                    setStatus('idle');
+                    toast.success(t(M['inspector.save_field_done']));
+                  },
+                  () => setStatus('fail'),
+                );
+              }}
+            >
+              {t(M['inspector.save_field'])}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

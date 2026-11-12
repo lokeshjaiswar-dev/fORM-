@@ -9,7 +9,8 @@ import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
 import { formatFormula, parseFormula } from '@/lib/formula';
-import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions';
+import { patchBlockConfig } from '@/fields/configSink';
+import { addChildBlock, requestDeleteBlock } from '@/state/actions';
 import { currentDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
@@ -210,7 +211,7 @@ type AnyBlock = BlockOf<AvailableType>;
 
 /** Replaces the block's config with `patch` applied; `undefined` removes a setting. */
 function setConfig(block: Pick<AnyBlock, 'id' | 'config'>, patch: Readonly<Record<string, unknown>>): void {
-  updateBlock(block.id, { config: { ...block.config, ...patch } });
+  patchBlockConfig(block, patch);
 }
 
 const text = (value: string) => (value === '' ? undefined : value);

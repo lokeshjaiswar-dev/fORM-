@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@dmacq/ui';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
-import { CATEGORIES, categoryLabel, matchTiles, type Tile } from '@/fields/tiles';
+import { useCustomFields } from '@/fields/custom/useCustomFields';
+import { CATEGORIES, categoryLabel, matchTiles, tilesFromCustomFields, type Tile } from '@/fields/tiles';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { useEdition } from '@/edition/edition';
 
@@ -29,7 +30,9 @@ export function SlashMenu({
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const edition = useEdition();
-  const items = useMemo(() => matchTiles(query, edition), [query, edition]);
+  const { fields } = useCustomFields();
+  const extras = useMemo(() => tilesFromCustomFields(fields ?? []), [fields]);
+  const items = useMemo(() => matchTiles(query, edition, extras), [query, edition, extras]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();

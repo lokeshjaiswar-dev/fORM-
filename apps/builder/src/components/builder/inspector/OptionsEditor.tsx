@@ -8,7 +8,7 @@ import { labelString } from '@/fields/style';
 import { fileToThemeImage, storeThemeImage } from '@/components/builder/design/uploads';
 import { APP_IDS } from '@/lib/definition';
 import { uid } from '@/lib/utils';
-import { updateBlock } from '@/state/actions';
+import { patchBlockConfig } from '@/fields/configSink';
 import { Button, Input, Label } from '@dmacq/ui';
 import { ToggleRow } from '@/components/builder/inspector/parts';
 
@@ -39,7 +39,7 @@ type ChoiceBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'> | BlockOf<
 export function OptionsEditor({ block }: { block: ChoiceBlock }) {
   const options = block.config.options;
   const images = (block.type === 'single_choice' || block.type === 'multi_choice') && block.config.display === 'image';
-  const write = (next: ChoiceOption[], extra: Record<string, unknown> = {}) => updateBlock(block.id, { config: { ...block.config, options: next, ...extra } });
+  const write = (next: ChoiceOption[], extra: Record<string, unknown> = {}) => patchBlockConfig(block, { options: next, ...extra });
 
   const edit = (i: number, patch: Partial<ChoiceOption>) => {
     const next = options.map((o, j) => {
@@ -127,14 +127,14 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
         <ToggleRow
           label={t(M['options.other'])}
           checked={block.config.other?.enabled === true}
-          onChange={(on) => updateBlock(block.id, { config: { ...block.config, other: on ? { enabled: true, textRequired: false } : undefined } })}
+          onChange={(on) => patchBlockConfig(block, { other: on ? { enabled: true, textRequired: false } : undefined })}
         />
       ) : null}
       {block.type !== 'constant_sum' ? (
         <ToggleRow
           label={t(M['options.shuffle'])}
           checked={block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? block.config.shuffle === true : block.config.shuffle !== undefined && block.config.shuffle !== false}
-          onChange={(on) => updateBlock(block.id, { config: { ...block.config, shuffle: on ? (block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? true : { keepLast: 0 }) : undefined } })}
+          onChange={(on) => patchBlockConfig(block, { shuffle: on ? (block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? true : { keepLast: 0 }) : undefined })}
         />
       ) : null}
     </div>

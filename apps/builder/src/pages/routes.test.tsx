@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { DOCUMENT_FORMAT, LEGACY_FORMAT } from '@/persistence/DocumentRepository
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 import { newStoredForm } from '@/persistence/openForm';
+import { MemoryCustomFieldRepository, setCustomFieldRepository } from '@/fields/custom/repository';
 import { MemoryRepository, MemorySubmissions, block, formWith, v1Form } from '@/test/fixtures';
 
 const NOW = '2026-10-19T04:30:00.000Z';
@@ -38,6 +39,10 @@ function stored(id: string, title: string) {
 }
 
 describe('routes', () => {
+  beforeEach(() => {
+    setCustomFieldRepository(new MemoryCustomFieldRepository());
+  });
+
   it('keeps /f/:slug as the public fill page', async () => {
     renderApp(new MemoryRepository(), '/f/hello');
     expect(await screen.findByText(/Form not found|This form cannot be opened|This link is not a published form/, {}, OPENS)).toBeInTheDocument();
@@ -46,6 +51,12 @@ describe('routes', () => {
 
   it('sends / to the forms list', async () => {
     renderApp(new MemoryRepository(), '/');
+    expect(await screen.findByText(/No forms yet/, {}, OPENS)).toBeInTheDocument();
+    expect(path()).toBe('/forms');
+  });
+
+  it('sends /fields to the forms list', async () => {
+    renderApp(new MemoryRepository(), '/fields');
     expect(await screen.findByText(/No forms yet/, {}, OPENS)).toBeInTheDocument();
     expect(path()).toBe('/forms');
   });

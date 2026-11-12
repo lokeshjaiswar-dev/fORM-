@@ -2,6 +2,7 @@ import { isEditionFeatureAvailable, type EditionFeatures } from '@form/config';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { AVAILABLE_TYPES, REGISTRY, type AvailableType } from '@form/registry';
 import type { PaletteEntry } from '@form/schema';
+import type { CustomField } from '@/fields/custom/model';
 import { t } from '@/i18n';
 import type { BlockChoice } from '@/state/actions';
 
@@ -22,15 +23,16 @@ const M = defineMessages('builder', {
   'palette.category.media': 'Media',
   'palette.category.layout': 'Layout',
   'palette.category.advanced': 'Advanced',
+  'palette.category.snippets': 'Your fields',
   'palette.page_break': 'Page break',
 });
 
 export type Tile =
-  | { kind: 'block'; id: string; choice: BlockChoice; category: Category; label: string; icon: string; keywords: readonly string[] }
+  | { kind: 'block'; id: string; choice: BlockChoice; category: Category; label: string; icon: string; keywords: readonly string[]; required?: boolean }
   | { kind: 'page_break'; id: 'page_break'; category: Category; label: string; icon: string; keywords: readonly string[] };
 
-/** Categories in palette order; the registry's other categories (payments, compliance, snippets) have no P0 entries. */
-export const CATEGORIES: readonly Category[] = ['basic', 'choice', 'date_time', 'rating', 'media', 'layout', 'advanced'];
+/** Categories in palette order; custom library fields use `snippets`. */
+export const CATEGORIES: readonly Category[] = ['basic', 'choice', 'date_time', 'rating', 'media', 'layout', 'advanced', 'snippets'];
 
 const CATEGORY_LABELS: Partial<Record<Category, MessageId>> = {
   basic: M['palette.category.basic'],
@@ -41,6 +43,7 @@ const CATEGORY_LABELS: Partial<Record<Category, MessageId>> = {
   media: M['palette.category.media'],
   layout: M['palette.category.layout'],
   advanced: M['palette.category.advanced'],
+  snippets: M['palette.category.snippets'],
 };
 
 export const categoryLabel = (category: Category): string => {
@@ -108,10 +111,24 @@ export const tileOf = (type: string, overrides?: Readonly<Record<string, unknown
 export const tileAvailable = (tile: Tile, edition: EditionFeatures): boolean =>
   tile.kind === 'page_break' || isEditionFeatureAvailable(edition, `field:${tile.choice.type}`);
 
+/** Palette tiles for saved library fields. Insert copies the stored config onto a normal block. */
+export function tilesFromCustomFields(fields: readonly CustomField[]): Tile[] {
+  return fields.map((field) => ({
+    kind: 'block' as const,
+    id: `custom.${field.id}`,
+    choice: { type: field.baseType, configOverrides: field.config },
+    category: 'snippets' as const,
+    label: field.name,
+    icon: field.icon,
+    keywords: field.keywords,
+    required: field.required,
+  }));
+}
+
 /** The edition's tiles whose label, id or keywords contain `query` (case-insensitive); all of them for an empty query. */
-export function matchTiles(query: string, edition: EditionFeatures): Tile[] {
+export function matchTiles(query: string, edition: EditionFeatures, extra: readonly Tile[] = []): Tile[] {
   const q = query.trim().toLowerCase();
-  return TILES.filter(
+  return [...TILES, ...extra].filter(
     (tile) =>
       tileAvailable(tile, edition) && (!q || tile.label.toLowerCase().includes(q) || tile.id.replaceAll('_', ' ').includes(q) || tile.keywords.some((k) => k.includes(q))),
   );

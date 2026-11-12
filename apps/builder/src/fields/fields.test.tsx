@@ -8,7 +8,7 @@ import type { BlockId, PaletteEntry } from '@form/schema';
 import { CANVAS } from '@/fields/canvas';
 import { ICONS } from '@/fields/icons';
 import { INSPECTOR } from '@/fields/inspector';
-import { CATEGORIES, HIDDEN_PALETTE_IDS, HIDDEN_PALETTE_TYPES, TILES, matchTiles, tileAvailable, tileOf, type Tile } from '@/fields/tiles';
+import { CATEGORIES, HIDDEN_PALETTE_IDS, HIDDEN_PALETTE_TYPES, TILES, matchTiles, tileAvailable, tileOf, tilesFromCustomFields, type Tile } from '@/fields/tiles';
 import { EditBlock } from '@/components/blocks/EditBlock';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { useUiStore } from '@/state/uiStore';
@@ -47,6 +47,21 @@ describe('registry views (FND-03)', () => {
     expect(matchTiles('dob', saas).map((t) => t.id)).toEqual(['date']);
     expect(matchTiles('page', saas).map((t) => t.id)).toContain('page_break');
     expect(matchTiles('', saas)).toHaveLength(TILES.length);
+    const extra = tilesFromCustomFields([
+      {
+        id: 'x',
+        name: 'Staff id',
+        icon: 'hash',
+        keywords: ['emp'],
+        baseType: 'short_text',
+        config: {},
+        required: false,
+        createdAt: '',
+        updatedAt: '',
+      },
+    ]);
+    expect(matchTiles('staff', saas, extra).map((t) => t.id)).toEqual(['custom.x']);
+    expect(matchTiles('', saas, extra)).toHaveLength(TILES.length + 1);
   });
 
   it('edition matrix: a tile is hidden where the edition cannot run its type (FND-19)', () => {

@@ -13,6 +13,7 @@ export function AppRoutes() {
       <Route path="/f/:slug" element={<PublicFillPage />} />
       <Route path="/forms" element={<FormsPage />} />
       <Route path="/forms/:id/responses" element={<ResponsesPage />} />
+      <Route path="/fields/*" element={<Navigate to="/forms" replace />} />
       <Route path="/builder/:id/preview?" element={<BuilderPage />} />
       <Route path="*" element={<Navigate to="/forms" replace />} />
     </Routes>
