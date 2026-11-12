@@ -28,7 +28,7 @@ const MESSAGES: Record<string, string> = {
   'config.defaultValue': 'These fields have different default values and cannot be combined.',
   'config.bounds': 'These fields have limits that cannot both be true (for example min greater than max).',
   'config.unique': 'These fields use different uniqueness rules and cannot be combined.',
-  'config.apiValidation': 'These fields call different validation URLs and cannot be combined.',
+  'config.apiValidation': 'These fields use different API validation settings and cannot be combined.',
   'config.messages': 'These fields have different error messages for the same error.',
   'config.description': 'These fields have different help text and cannot be combined.',
   'config.compliance.category': 'These fields are classified as different kinds of data and cannot be combined.',
@@ -292,7 +292,7 @@ export function combineFields(left: FieldBlock, right: FieldBlock): CombineResul
   if (left.unique && right.unique && left.unique.normalize !== right.unique.normalize) {
     return { ok: false, reason: 'config.unique', message: conflictMessage('config.unique') };
   }
-  if (left.apiValidation && right.apiValidation && left.apiValidation.url !== right.apiValidation.url) {
+  if (left.apiValidation && right.apiValidation && JSON.stringify(left.apiValidation) !== JSON.stringify(right.apiValidation)) {
     return { ok: false, reason: 'config.apiValidation', message: conflictMessage('config.apiValidation') };
   }
   if (left.description && right.description && plainLabelText(left.description) !== plainLabelText(right.description)) {

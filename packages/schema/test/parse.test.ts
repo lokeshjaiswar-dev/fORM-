@@ -119,6 +119,13 @@ describe('primitives', () => {
   it('accepts API validation on any field against an http(s) URL', () => {
     const name = definition().blocks[ids.name];
     expect(ok(S.FieldBlockSchema, { ...name, apiValidation: { url: 'https://api.example.com/verify' } })).toBe(true);
+    expect(ok(S.FieldBlockSchema, { ...name, apiValidation: {
+      url: 'https://api.example.com/verify',
+      method: 'GET',
+      parser: 'xml',
+      responseKey: 'success',
+      success: { type: 'boolean', equals: true },
+    } })).toBe(true);
     expect(ok(S.FieldBlockSchema, { ...name, apiValidation: { url: 'javascript:alert(1)' } })).toBe(false);
   });
 

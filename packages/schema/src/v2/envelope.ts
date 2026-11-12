@@ -65,6 +65,36 @@ export interface PrefillConfig { urlParam?: string; lockWhenPrefilled?: boolean 
 /** VAL-11. Server-checked; blind index when encrypted. */
 export interface UniqueConstraint { normalize: 'exact' | 'trim_lower' | 'e164' | 'digits'; message?: string }
 
+/** Extra query or JSON-body pair sent with the field-value request. */
+export interface ApiPair { key: string; value: string }
+
+export type ApiAuth =
+  | { type: 'bearer'; token: string }
+  | { type: 'api_key'; header: string; value: string }
+  | { type: 'basic'; username: string; password: string };
+
+/** What the selected response key must equal for the answer to pass. */
+export type ApiSuccessRule =
+  | { type: 'boolean'; equals: boolean }
+  | { type: 'number'; equals: number }
+  | { type: 'string'; equals: string[] };
+
+/**
+ * GET sends the field key as a query param; POST sends it in a JSON body.
+ * `responseKey` is a dotted path into the JSON/XML body; `success` is the pass rule.
+ * `{ url }` alone still means POST JSON and `{ ok: true }`.
+ */
+export interface ApiValidation {
+  url: SafeUrl;
+  method?: 'GET' | 'POST';
+  query?: ApiPair[];
+  body?: ApiPair[];
+  auth?: ApiAuth;
+  parser?: 'json' | 'xml';
+  responseKey?: string;
+  success?: ApiSuccessRule;
+}
+
 export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   key: FieldKey;
   label: InlineDoc;
@@ -83,6 +113,5 @@ export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   compliance: FieldCompliance;
   prefill?: PrefillConfig;
   unique?: UniqueConstraint;
-  /** Browser POSTs `{ [field.key]: answer }` to this URL; expects `{ ok: boolean, message?: string }`. */
-  apiValidation?: { url: SafeUrl };
+  apiValidation?: ApiValidation;
 }

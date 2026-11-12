@@ -3,6 +3,10 @@ export type {
   FormRendererProps, PartialSave, RendererEvent, RendererSession, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
 } from './types.ts';
 export { CONTROLS } from './controls/index.ts';
+export {
+  buildApiRequest, callFieldApi, defaultSuccess, getAtPath, matchSuccessRule, parseApiBody, postFieldApi,
+} from './controls/apiValidation.ts';
+export type { ApiCheckResult, ApiParseResult, ApiResponseLeaf } from './controls/apiValidation.ts';
 export { slotsOf, toWallDateTime } from './controls/appointmentSlots.ts';
 export type { AppointmentSlot } from './controls/appointmentSlots.ts';
 export type { Control, ControlProps, FieldIds, FieldState, Labelling } from './controls/index.ts';

@@ -27,6 +27,27 @@ export const ValidationErrorCodeSchema = z.enum(VALIDATION_ERROR_CODES);
 export const FieldMessagesSchema = keyed(z.partialRecord(ValidationErrorCodeSchema, z.string().max(1000)));
 export const PrefillConfigSchema = z.strictObject({ urlParam: z.string().min(1).max(64).exactOptional(), lockWhenPrefilled: z.boolean().exactOptional() });
 export const UniqueConstraintSchema = z.strictObject({ normalize: z.enum(['exact', 'trim_lower', 'e164', 'digits']), message: z.string().max(1000).exactOptional() });
+export const ApiPairSchema = z.strictObject({ key: z.string().min(1).max(64), value: z.string().max(2048) });
+export const ApiAuthSchema = z.union([
+  z.strictObject({ type: z.literal('bearer'), token: z.string().min(1).max(4096) }),
+  z.strictObject({ type: z.literal('api_key'), header: z.string().min(1).max(64), value: z.string().min(1).max(4096) }),
+  z.strictObject({ type: z.literal('basic'), username: z.string().min(1).max(256), password: z.string().max(256) }),
+]);
+export const ApiSuccessRuleSchema = z.union([
+  z.strictObject({ type: z.literal('boolean'), equals: z.boolean() }),
+  z.strictObject({ type: z.literal('number'), equals: z.number().finite() }),
+  z.strictObject({ type: z.literal('string'), equals: z.array(z.string().min(1).max(256)).min(1).max(3) }),
+]);
+export const ApiValidationSchema = z.strictObject({
+  url: SafeUrlSchema,
+  method: z.enum(['GET', 'POST']).exactOptional(),
+  query: z.array(ApiPairSchema).max(32).exactOptional(),
+  body: z.array(ApiPairSchema).max(32).exactOptional(),
+  auth: ApiAuthSchema.exactOptional(),
+  parser: z.enum(['json', 'xml']).exactOptional(),
+  responseKey: z.string().min(1).max(256).exactOptional(),
+  success: ApiSuccessRuleSchema.exactOptional(),
+});
 
 /** Shape of BlockBase<T>. */
 export const blockBase = <T extends string>(type: T) => ({
@@ -57,5 +78,5 @@ export const fieldBase = <T extends string>(type: T) => ({
   compliance: FieldComplianceSchema,
   prefill: PrefillConfigSchema.exactOptional(),
   unique: UniqueConstraintSchema.exactOptional(),
-  apiValidation: z.strictObject({ url: SafeUrlSchema }).exactOptional(),
+  apiValidation: ApiValidationSchema.exactOptional(),
 });

@@ -59,10 +59,28 @@ const server = http.createServer(async (req, res) => {
     data = {};
   }
 
-  const name = typedValue(data).trim().toLowerCase();
-  const ok = NAMES.has(name);
+  const name = typedValue(data).trim();
+  const ok = NAMES.has(name.toLowerCase());
   res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(ok ? { ok: true } : { ok: false, message: 'Name not found' }));
+  res.end(JSON.stringify(ok
+    ? {
+        ok: true,
+        success: true,
+        code: 1,
+        status: 'validated',
+        message: 'Name is on the list',
+        checked: name,
+        count: NAMES.size,
+      }
+    : {
+        ok: false,
+        success: false,
+        code: 0,
+        status: 'rejected',
+        message: 'Name not found',
+        checked: name,
+        count: 0,
+      }));
 });
 
 server.listen(PORT, () => {

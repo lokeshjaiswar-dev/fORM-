@@ -198,9 +198,11 @@ describe('BlockInspector validation', () => {
     const user = open('emp_name');
     await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.click(screen.getByRole('switch', { name: 'Validate with an API' }));
-    expect(get('emp_name').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name' });
+    expect(get('emp_name').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name', method: 'POST', parser: 'json' });
     fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/names' } });
-    expect(get('emp_name').apiValidation).toEqual({ url: 'https://hr.example.com/names' });
+    expect(get('emp_name').apiValidation).toEqual({ url: 'https://hr.example.com/names', method: 'POST', parser: 'json' });
+    await user.click(screen.getByRole('radio', { name: 'GET' }));
+    expect(get('emp_name').apiValidation?.method).toBe('GET');
   });
 
   it('enables API validation on any answer field', async () => {
@@ -208,7 +210,7 @@ describe('BlockInspector validation', () => {
     const user = open('mail');
     await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.click(screen.getByRole('switch', { name: 'Validate with an API' }));
-    expect(get('mail').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name' });
+    expect(get('mail').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name', method: 'POST', parser: 'json' });
   });
 
   it('sets a minimum age on a date field', async () => {

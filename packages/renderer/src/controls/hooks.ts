@@ -62,19 +62,19 @@ export function useAnswer<T extends ValueFieldType>(block: FieldBlockOf<T>) {
   );
   const onBlur = useCallback(() => {
     field.onBlur();
-    const url = block.apiValidation?.url;
-    if (!url) return;
+    const config = block.apiValidation;
+    if (!config) return;
     const current = field.value as AnswerValue | null | undefined;
     const payload = current && current.type === block.type ? current.value : undefined;
     if (payload === undefined || payload === null || payload === '') return;
     if (typeof payload === 'string' && payload.trim() === '') return;
-    void import('./apiValidation.ts').then(({ postFieldApi }) =>
-      postFieldApi(url, block.key, payload).then((result) => {
+    void import('./apiValidation.ts').then(({ callFieldApi }) =>
+      callFieldApi(config, block.key, payload).then((result) => {
         if (result.ok) clearErrors(block.id);
         else setError(block.id, { type: 'api_failed', message: result.message ?? t('system:api_failed') });
       }),
     );
-  }, [block.apiValidation?.url, block.id, block.key, block.type, clearErrors, field, setError, t]);
+  }, [block.apiValidation, block.id, block.key, block.type, clearErrors, field, setError, t]);
   return { value, set, onBlur };
 }
 

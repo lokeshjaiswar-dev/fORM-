@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable, type AvailableType } from '@form/registry';
-import { isSafeUrl, type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type SafeUrl, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
+import { type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
@@ -19,6 +19,7 @@ import { Tooltip } from '@/components/Tooltip';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { Field, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { ApiValidationSection } from '@/components/builder/inspector/ApiValidationSection';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
 import { PrivacySection } from '@/components/builder/inspector/PrivacySection';
 
@@ -67,9 +68,6 @@ const M = defineMessages('builder', {
   'inspector.unique_e164': 'As a phone number',
   'inspector.unique_digits': 'Digits only',
   'inspector.unique_message': 'Message when the value is already used',
-  'inspector.api_validation': 'Validate with an API',
-  'inspector.api_url': 'API URL',
-  'inspector.api_url_hint': 'The browser POSTs JSON using this field key ({key}) as the property name and the typed answer as the value. Respond with ok true, or ok false and a message.',
   'inspector.hidden_never_required': 'Hidden fields are never required.',
   'inspector.no_validation': 'This block has no answer to validate.',
   'inspector.save_field': 'Save as field',
@@ -434,24 +432,6 @@ function SaveAsField({ block }: { block: FieldBlock }) {
   );
 }
 
-function ApiUrlField({ block }: { block: FieldBlock }) {
-  const stored = block.apiValidation?.url ?? '';
-  const [text, setText] = useDraft(stored);
-  return (
-    <TextField
-      label={t(M['inspector.api_url'])}
-      hint={t(M['inspector.api_url_hint'], { key: block.key })}
-      value={text}
-      placeholder="http://localhost:3001/verify-name"
-      onChange={(url) => {
-        setText(url);
-        if (!url) updateBlock(block.id, { apiValidation: undefined });
-        else if (isSafeUrl(url)) updateBlock(block.id, { apiValidation: { url: url as SafeUrl } });
-      }}
-    />
-  );
-}
-
 function ValidationTab({ block }: { block: FieldBlock }) {
   const hidden = block.type === 'hidden';
   const formatCode = FORMAT_CODE[block.type];
@@ -479,12 +459,7 @@ function ValidationTab({ block }: { block: FieldBlock }) {
           ) : null}
         </>
       )}
-      <ToggleRow
-        label={t(M['inspector.api_validation'])}
-        checked={block.apiValidation !== undefined}
-        onChange={(on) => updateBlock(block.id, { apiValidation: on ? { url: 'http://localhost:3001/verify-name' as SafeUrl } : undefined })}
-      />
-      {block.apiValidation ? <ApiUrlField block={block} /> : null}
+      <ApiValidationSection block={block} />
       <Registered block={block} section="validation" />
       {formatCode ? (
         <TextField label={t(M['inspector.format_message'])} value={block.messages?.[formatCode]} onChange={(text) => setMessage(formatCode, text)} />
