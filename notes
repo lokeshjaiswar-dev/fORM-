@@ -1,0 +1,10 @@
+create fields on our own  
+add checkbox on configurable list (for adding columns)
+api integration for dropdown then all the related data should be pulled from that specific master
+section breaker , it would have section name also (section name for each section) for each page that would create a section
+section level maker checker approval approval workflow
+payment integration
+adding logo in the cover
+drafts saving (progressive saving)
+grouped forms (from frontend we can select multiple forms then it would merge all the forms for mergin it should match and field name and field type)
+api tester for validation (can write the api url then we should have two types of parser JSON and XML it parses, then show all the keys now there should be options for configuring basically what should we expect for a success response in boolean if it is true, in stirng we can give options to add different vlaues like authorization, authorised, correct and in case of number we give that 1 is correct)

@@ -1019,7 +1019,7 @@ export function MatchingGeneral({ block }: InspectorProps<'matching'>) {
         title={t(M['inspector.matching_prompts'])}
         addLabel={t(M['inspector.matching_add_prompt'])}
         items={block.config.prompts}
-        onChange={(prompts) => setConfig(block, { prompts: prompts.map((row, i) => ({ id: row.id as MatchingPromptId, label: row.label || t(M['inspector.prompt_n'], { n: i + 1 }) })) })}
+        onChange={(prompts) => setConfig(block, { prompts: prompts.map((row) => ({ id: row.id as MatchingPromptId, label: row.label })) })}
       />
       <ConfigProblem block={block} />
     </>
@@ -1035,7 +1035,7 @@ export function LikertGeneral({ block }: InspectorProps<'likert'>) {
         title={t(M['inspector.likert_statements'])}
         addLabel={t(M['inspector.likert_add_statement'])}
         items={block.config.statements}
-        onChange={(statements) => setConfig(block, { statements: statements.map((row, i) => ({ id: row.id as LikertStatementId, label: row.label || t(M['inspector.statement_n'], { n: i + 1 }) })) })}
+        onChange={(statements) => setConfig(block, { statements: statements.map((row) => ({ id: row.id as LikertStatementId, label: row.label })) })}
       />
       <ConfigProblem block={block} />
     </>
@@ -1175,7 +1175,7 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
         title={t(M['inspector.card_items'])}
         addLabel={t(M['inspector.card_add_item'])}
         items={block.config.items}
-        onChange={(items) => setConfig(block, { items: items.map((row, i) => ({ id: row.id as CardItemId, label: row.label || t(M['inspector.card_item_n'], { n: i + 1 }) })) })}
+        onChange={(items) => setConfig(block, { items: items.map((row) => ({ id: row.id as CardItemId, label: row.label })) })}
       />
       <LabelList
         title={t(M['inspector.card_buckets'])}
@@ -1183,7 +1183,7 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
         items={block.config.buckets}
         onChange={(buckets) => {
           if (buckets.length < 2) return;
-          setConfig(block, { buckets: buckets.map((row, i) => ({ id: row.id as CardBucketId, label: row.label || t(M['inspector.card_bucket_n'], { n: i + 1 }) })) });
+          setConfig(block, { buckets: buckets.map((row) => ({ id: row.id as CardBucketId, label: row.label })) });
         }}
       />
       <ConfigProblem block={block} />
@@ -1225,7 +1225,7 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
         title={t(M['inspector.matrix_rows'])}
         addLabel={t(M['inspector.matrix_add_row'])}
         items={block.config.rows.map((row) => ({ id: row.id, label: typeof row.label === 'string' ? row.label : '' }))}
-        onChange={(rows) => setConfig(block, { rows: rows.map((row) => ({ id: row.id as MatrixRowId, label: row.label || t(M['inspector.matrix_row_n'], { n: 1 }) })) })}
+        onChange={(rows) => setConfig(block, { rows: rows.map((row) => ({ id: row.id as MatrixRowId, label: row.label })) })}
       />
       <LabelList
         title={t(M['inspector.matrix_columns'])}
@@ -1233,7 +1233,11 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
         items={block.config.columns.map((col) => ({ id: col.id, label: col.label }))}
         onChange={(columns) =>
           setConfig(block, {
-            columns: columns.map((col) => ({ id: col.id as MatrixColumnId, label: col.label || t(M['inspector.matrix_column_n'], { n: 1 }), input: inputFor(mode) })),
+            columns: columns.map((col) => ({
+              id: col.id as MatrixColumnId,
+              label: col.label,
+              input: block.config.columns.find((c) => c.id === col.id)?.input ?? inputFor(mode),
+            })),
           })
         }
       />

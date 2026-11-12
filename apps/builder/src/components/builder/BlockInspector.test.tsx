@@ -305,6 +305,24 @@ describe('BlockInspector logic', () => {
   });
 });
 
+describe('BlockInspector matrix labels', () => {
+  it('lets the author clear a row or column label and type a new one', async () => {
+    resetStore([block('matrix', 'grid', { label: 'Table' })]);
+    const user = open('grid');
+    const row = screen.getByDisplayValue('Row 1');
+    await user.clear(row);
+    expect(row).toHaveValue('');
+    expect((get('grid').config['rows'] as Array<{ label: string }>)[0]?.label).toBe('');
+    await user.type(row, 'Age');
+    expect((get('grid').config['rows'] as Array<{ label: string }>)[0]?.label).toBe('Age');
+    const col = screen.getByDisplayValue('Column 1');
+    await user.clear(col);
+    expect(col).toHaveValue('');
+    await user.type(col, 'Yes');
+    expect((get('grid').config['columns'] as Array<{ label: string }>)[0]?.label).toBe('Yes');
+  });
+});
+
 describe('BlockInspector look', () => {
   it('a half-typed hex code leaves the stored colour alone; a full one or an empty box writes', async () => {
     resetStore([block('short_text', 'name', { label: 'Name', style: { labelColor: '#ff0000' } })]);
