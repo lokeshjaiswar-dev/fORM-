@@ -19,6 +19,8 @@ import { sessionMeta, todayIn } from './eval/meta.ts';
 import { Block } from './fields/Field.tsx';
 import { packRows } from './layout/rows.ts';
 import { MESSAGES } from './messages.ts';
+import { SectionNav, stepsFor } from './SectionNav.tsx';
+import { listFormSections, resolveSectionNav, sectionIndexForPage, sectionNavAtStart, SUBMIT_SECTION_ID } from './sections.ts';
 import { rhfResolver } from './rhfResolver.ts';
 import { RichTextView } from './richtext/RichTextView.tsx';
 import { EndingScreen } from './screens/Ending.tsx';
@@ -51,10 +53,54 @@ interface PageViewProps {
   formErrors: FieldError[];
   failure: string | null;
   onBack: () => void;
+  onJumpPage: (pageId: PageId) => void;
+}
+
+function SectionNavHost({ current, isLast, onJump }: { current: PageId; isLast: boolean; onJump: (pageId: PageId) => void }) {
+  const { def, t } = useRenderer();
+  const { text } = usePipes();
+  const nav = resolveSectionNav(def);
+  const sections = useMemo(() => listFormSections(def), [def]);
+  const pageIndex = sectionIndexForPage(sections, def.pages, current);
+  const [currentIndex, setCurrentIndex] = useState(pageIndex);
+  useEffect(() => setCurrentIndex(pageIndex), [pageIndex, current]);
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof IntersectionObserver === 'undefined') return;
+    const nodes = [...document.querySelectorAll<HTMLElement>('[data-fr-section]')];
+    if (nodes.length < 2) return;
+    const visible = new Map<string, number>();
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const id = entry.target.getAttribute('data-fr-section');
+        if (!id) continue;
+        if (entry.isIntersecting) visible.set(id, entry.boundingClientRect.top);
+        else visible.delete(id);
+      }
+      const ordered = sections.map((s) => s.id).filter((id) => visible.has(id));
+      if (!ordered.length) return;
+      const i = sections.findIndex((s) => s.id === ordered[ordered.length - 1]);
+      if (i >= 0) setCurrentIndex(i);
+    }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+    nodes.forEach((n) => io.observe(n));
+    return () => io.disconnect();
+  }, [sections, current]);
+  if (!nav) return null;
+  const submitLabel = text(def.behavior.submit.label) || t('system:nav.submit');
+  const steps = stepsFor(sections, Math.max(0, currentIndex), nav, submitLabel, isLast && currentIndex >= sections.length - 1);
+  const select = (id: typeof SUBMIT_SECTION_ID | (typeof sections)[number]['id']) => {
+    if (id === SUBMIT_SECTION_ID) return;
+    const section = sections.find((s) => s.id === id);
+    if (!section) return;
+    if (section.pageId !== current) onJump(section.pageId);
+    requestAnimationFrame(() => {
+      document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+  return <SectionNav steps={steps} nav={nav} onSelect={select} />;
 }
 
 /** The current page: header on the first page, progress, rows of blocks, form-level errors and navigation. */
-function PageView({ current, first, canGoBack, sending, busy, formErrors, failure, onBack }: PageViewProps) {
+function PageView({ current, first, canGoBack, sending, busy, formErrors, failure, onBack, onJumpPage }: PageViewProps) {
   const { def, t, tokens, mode } = useRenderer();
   const { state } = useEvaluation();
   const { text, resolve } = usePipes();
@@ -65,8 +111,18 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
   const rows = packRows(shownBlocks(def, current, state.visible));
   const progressLabel = t('system:progress.label', { current: position + 1, total });
   const nextLabel = isLast ? text(def.behavior.submit.label) || t('system:nav.submit') : text(page?.nav?.nextLabel) || t('system:nav.next');
+  const sectionNav = resolveSectionNav(def);
+  const placement = sectionNav?.placement ?? 'top';
+  const navEl = <SectionNavHost current={current} isLast={isLast} onJump={onJumpPage} />;
+  const startNav = sectionNav && sectionNavAtStart(placement);
   return (
-    <>
+    <div
+      className="fr-form-main"
+      data-section-placement={sectionNav ? placement : undefined}
+      style={sectionNav?.color ? { ['--fr-section-color' as string]: sectionNav.color } : undefined}
+    >
+      {startNav ? navEl : null}
+      <div className="fr-form-body">
       {tokens.progress !== 'none' && total > 1 ? (
         tokens.progress === 'bar' ? (
           <div className="fr-progress" role="progressbar" aria-label={progressLabel} aria-valuemin={1} aria-valuemax={total} aria-valuenow={position + 1}>
@@ -118,7 +174,9 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
           </Button>
         )}
       </div>
-    </>
+      </div>
+      {sectionNav && !startNav ? navEl : null}
+    </div>
   );
 }
 
@@ -327,6 +385,25 @@ function FormSession({ props, meta, base, onRestart }: {
     requestAnimationFrame(() => rootRef.current?.focus());
   };
 
+  const jumpPage = (target: PageId) => {
+    const at = trail.indexOf(target);
+    if (at === -1) {
+      setTrail([]);
+      setPageId(target);
+      setFormErrors([]);
+      form.clearErrors();
+      emit({ type: 'page', pageId: target, index: 0 });
+      requestAnimationFrame(() => rootRef.current?.focus());
+      return;
+    }
+    setTrail(trail.slice(0, at));
+    setPageId(target);
+    setFormErrors([]);
+    form.clearErrors();
+    emit({ type: 'page', pageId: target, index: at });
+    requestAnimationFrame(() => rootRef.current?.focus());
+  };
+
   /* "Submit another response" is a new session: FormRenderer remounts it with a new `meta.now`. */
   const restart = () => {
     emit({ type: 'restart' });
@@ -377,6 +454,7 @@ function FormSession({ props, meta, base, onRestart }: {
           formErrors={formErrors}
           failure={failure}
           onBack={back}
+          onJumpPage={jumpPage}
         />
       </EvalProvider>
     );

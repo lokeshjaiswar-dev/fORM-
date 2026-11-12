@@ -29,9 +29,70 @@ export interface Theme {
   customCss?: string;
 }
 
+export const SECTION_NAV_PLACEMENTS = ['top', 'bottom', 'left', 'right', 'top_left', 'top_right', 'bottom_left', 'bottom_right'] as const;
+export type SectionNavPlacement = (typeof SECTION_NAV_PLACEMENTS)[number];
+export const SECTION_NAV_VARIANTS = ['stepper', 'pills', 'dots', 'numbers', 'breadcrumb', 'timeline'] as const;
+export type SectionNavVariant = (typeof SECTION_NAV_VARIANTS)[number];
+export const SECTION_NAV_CURRENT = ['color', 'fill', 'pulse', 'underline', 'bold'] as const;
+export type SectionNavCurrentMarker = (typeof SECTION_NAV_CURRENT)[number];
+export const SECTION_NAV_COMPLETED = ['check', 'muted', 'keep'] as const;
+export type SectionNavCompletedMarker = (typeof SECTION_NAV_COMPLETED)[number];
+export const SECTION_NAV_CONNECTORS = ['arrow', 'line', 'chevron', 'none'] as const;
+export type SectionNavConnector = (typeof SECTION_NAV_CONNECTORS)[number];
+export const SECTION_NAV_CHROMES = ['plain', 'cards', 'circles', 'bar'] as const;
+export type SectionNavChrome = (typeof SECTION_NAV_CHROMES)[number];
+export const SECTION_NAV_MODES = ['scroll', 'paged'] as const;
+export type SectionNavMode = (typeof SECTION_NAV_MODES)[number];
+
+/** How named section breaks appear to the respondent (Personal information → Education → Payment → Submit). */
+export interface SectionNav {
+  enabled: boolean;
+  /** `scroll`: one page, click jumps to the marker. `paged`: each marker starts a new page. */
+  mode: SectionNavMode;
+  placement: SectionNavPlacement;
+  variant: SectionNavVariant;
+  currentMarker: SectionNavCurrentMarker;
+  completedMarker: SectionNavCompletedMarker;
+  connector: SectionNavConnector;
+  size: 'sm' | 'md' | 'lg';
+  /** Label size in px (single-page navigator). */
+  labelSizePx?: number;
+  /** Navigator / current-step colour. */
+  color?: HexColor;
+  /** Label colour (single-page). */
+  labelColor?: HexColor;
+  sticky: boolean;
+  clickable: boolean;
+  showIndex: boolean;
+  includeSubmit: boolean;
+  submitLabel?: string;
+  align: 'start' | 'center' | 'end';
+  /** Frame around the steps: plain text, bordered cards, circles, or a full bar. */
+  chrome?: SectionNavChrome;
+}
+
+export const DEFAULT_SECTION_NAV: SectionNav = {
+  enabled: true,
+  mode: 'scroll',
+  placement: 'top',
+  variant: 'stepper',
+  currentMarker: 'color',
+  completedMarker: 'check',
+  connector: 'arrow',
+  size: 'md',
+  sticky: false,
+  clickable: true,
+  showIndex: false,
+  includeSubmit: true,
+  align: 'center',
+  chrome: 'cards',
+};
+
 export interface Behavior {
   submit: { label: LabelText; align: 'left' | 'center' | 'right' | 'full'; printButton?: boolean }; // FLD-50
   navigation: { allowBack: boolean; showPageTitles: boolean; autoAdvance?: boolean; keyboardShortcuts?: boolean };
+  /** Present when the form uses section breaks; omitted on older forms. */
+  sectionNav?: SectionNav;
   saveAndResume: { enabled: boolean; showButton: boolean; delivery: Array<'email' | 'copy_link'>; expiryDays: number }; // RSP-03 (≤ 60)
   /** RSP-04: forced off when any field is 'sensitive' unless allowWithSensitive; always off for consent-based fields before consent and under a children policy. */
   localAutosave: { enabled: boolean; allowWithSensitive: boolean };

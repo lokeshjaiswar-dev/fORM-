@@ -34,6 +34,7 @@ import { repeatingGroup } from './fields/repeating_group.ts';
 import { rating } from './fields/rating.ts';
 import { scheduleGrid } from './fields/schedule_grid.ts';
 import { section } from './fields/section.ts';
+import { sectionBreak } from './fields/section_break.ts';
 import { semanticDifferential } from './fields/semantic_differential.ts';
 import { shortText } from './fields/short_text.ts';
 import { signature } from './fields/signature.ts';
@@ -89,6 +90,7 @@ const PLAIN_BLOCKS: { readonly [T in PlainBlockType]: PlainDefinition<T> } = {
   paragraph,
   image,
   divider,
+  section_break: sectionBreak,
   section,
 };
 

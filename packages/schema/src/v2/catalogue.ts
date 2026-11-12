@@ -43,7 +43,7 @@ export const INPUT_FIELD_TYPES = [
 export const COMPUTED_FIELD_TYPES = ['calculation', 'context', 'unique_id'] as const; // FLD-33/31/32
 /** Verified then discarded. */
 export const TRANSIENT_BLOCK_TYPES = ['captcha'] as const;                           // FLD-29
-export const CONTENT_BLOCK_TYPES = ['heading', 'paragraph', 'image', 'divider'] as const; // FLD-44..47
+export const CONTENT_BLOCK_TYPES = ['heading', 'paragraph', 'image', 'divider', 'section_break'] as const; // FLD-44..47 + named section markers
 export const CONTAINER_BLOCK_TYPES = ['section'] as const;                            // FLD-48
 
 export type InputFieldType = (typeof INPUT_FIELD_TYPES)[number];

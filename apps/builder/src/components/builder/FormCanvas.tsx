@@ -3,8 +3,8 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ArrowRight, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { coverPhoto, packRows, pagePhoto, themeCssVars } from '@form/renderer';
-import type { BlockId, BlockLayout, FormDefinition, PageId } from '@form/schema';
+import { coverPhoto, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, themeCssVars, type FormSection } from '@form/renderer';
+import type { BlockId, BlockLayout, FormDefinition, PageId, SectionNav as SectionNavConfig } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { addParagraph, endSlot, removePageBreak, setTitle } from '@/state/actions';
@@ -51,6 +51,26 @@ function layoutKey(doc: FormDefinition): string {
   }).join(',')}`).join('\n');
 }
 
+/** Stable string so the canvas does not re-render in a loop when section nav objects are rebuilt (FND-13). */
+function sectionNavKey(doc: FormDefinition): string {
+  const nav = resolveSectionNav(doc);
+  if (!nav) return '';
+  return JSON.stringify({
+    nav,
+    sections: listFormSections(doc),
+    submit: labelString(doc.behavior.submit.label) || 'Submit',
+    pages: doc.pages.map((p) => p.id),
+    first: doc.pages[0]?.id ?? '',
+  });
+}
+
+function parseSectionNav(key: string): { nav: SectionNavConfig; steps: ReturnType<typeof stepsFor> } | null {
+  if (!key) return null;
+  const parsed = JSON.parse(key) as { nav: SectionNavConfig; sections: FormSection[]; submit: string; pages: PageId[]; first: PageId };
+  const idx = sectionIndexForPage(parsed.sections, parsed.pages.map((id) => ({ id })), parsed.first);
+  return { nav: parsed.nav, steps: stepsFor(parsed.sections, Math.max(0, idx), parsed.nav, parsed.submit, false) };
+}
+
 function parseLayout(key: string): CanvasPage[] {
   return key.split('\n').map((line) => {
     const at = line.indexOf(':');
@@ -68,12 +88,20 @@ export function FormCanvas() {
   const tokens = useDoc((d) => d.theme.tokens);
   const layout = useDoc((d) => d.theme.layout);
   const submitLabel = useDoc((d) => labelString(d.behavior.submit.label));
+  const sectionKey = useDoc(sectionNavKey);
   const pages = useMemo(() => parseLayout(key), [key]);
+  const sectionSteps = useMemo(() => parseSectionNav(sectionKey), [sectionKey]);
+  const sectionPlacement = sectionSteps?.nav.placement ?? 'top';
+  const sectionNavStart = Boolean(sectionSteps && sectionNavAtStart(sectionPlacement));
   const ids = useMemo(() => pages.flatMap((p) => p.rows.flat().map((b) => b.id)), [pages]);
   const startBlank = useUiStore((s) => s.startBlank);
   const started = useUiStore((s) => s.started);
   const [, setMode] = useBuilderMode();
   const setActiveBlock = useUiStore((s) => s.setActiveBlock);
+  const goToSection = (id: BlockId) => {
+    document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActiveBlock(id);
+  };
   const [slashOpen, setSlashOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState('');
@@ -160,6 +188,13 @@ export function FormCanvas() {
             </div>
           </div>
         ) : null}
+        <div
+          className="fr-form-main"
+          data-section-placement={sectionSteps ? sectionPlacement : undefined}
+          style={sectionSteps?.nav.color ? { ['--fr-section-color' as string]: sectionSteps.nav.color } : undefined}
+        >
+        {sectionNavStart && sectionSteps ? <SectionNav steps={sectionSteps.steps} nav={sectionSteps.nav} onSelect={goToSection} /> : null}
+        <div className="fr-form-body">
         <input
           ref={titleRef}
           value={title}
@@ -285,6 +320,9 @@ export function FormCanvas() {
             </button>
           </>
         )}
+        </div>
+        {sectionSteps && !sectionNavStart ? <SectionNav steps={sectionSteps.steps} nav={sectionSteps.nav} onSelect={goToSection} /> : null}
+        </div>
         </div>
       </div>
       </div>

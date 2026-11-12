@@ -31,6 +31,13 @@ const NO_TWIN: Record<string, string> = {
   InsertSnippet: 'function signature',
   LockFingerprint: 'function signature',
   SanitizeForTemplate: 'function signature',
+  SectionNavPlacement: 'enum field of SectionNav',
+  SectionNavVariant: 'enum field of SectionNav',
+  SectionNavCurrentMarker: 'enum field of SectionNav',
+  SectionNavCompletedMarker: 'enum field of SectionNav',
+  SectionNavConnector: 'enum field of SectionNav',
+  SectionNavChrome: 'enum field of SectionNav',
+  SectionNavMode: 'enum field of SectionNav',
   DiffTemplate: 'function signature',
 };
 

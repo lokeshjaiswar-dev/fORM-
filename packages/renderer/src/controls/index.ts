@@ -32,6 +32,7 @@ import { Paragraph } from './paragraph.tsx';
 import { Phone } from './phone.tsx';
 import { Ranking } from './ranking.tsx';
 import { Section } from './section.tsx';
+import { SectionBreak } from './section_break.tsx';
 import { RepeatingGroup } from './repeating_group.tsx';
 import { Rating } from './rating.tsx';
 import { ShortText } from './short_text.tsx';
@@ -87,6 +88,7 @@ export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   heading: { labelling: () => 'content', Component: Heading },
   paragraph: { labelling: () => 'content', Component: Paragraph },
   divider: { labelling: () => 'content', Component: Divider },
+  section_break: { labelling: () => 'content', Component: SectionBreak },
   section: { labelling: () => 'content', Component: Section },
 };
 

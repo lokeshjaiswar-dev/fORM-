@@ -69,4 +69,20 @@ describe('FormDesignPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Outside' }));
     expect(screen.queryByRole('dialog', { name: 'Form settings' })).not.toBeInTheDocument();
   });
+
+  it('enables section breaks from the tab after Logic and stores colour', async () => {
+    const user = userEvent.setup();
+    render(<FormDesignPanel />);
+    await user.click(screen.getByRole('button', { name: 'Form settings' }));
+    await user.click(screen.getByRole('tab', { name: 'Sections' }));
+    expect(screen.getByRole('switch', { name: 'Section break' })).not.toBeChecked();
+    await user.click(screen.getByRole('switch', { name: 'Section break' }));
+    expect(doc().behavior.sectionNav?.enabled).toBe(true);
+    expect(doc().behavior.sectionNav?.mode).toBe('scroll');
+    expect(screen.getByRole('combobox', { name: 'Behaviour' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Section colour')).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: 'Behaviour' }));
+    await user.click(await screen.findByRole('option', { name: 'Break the page' }));
+    expect(doc().behavior.sectionNav?.mode).toBe('paged');
+  });
 });

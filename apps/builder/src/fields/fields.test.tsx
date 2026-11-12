@@ -13,7 +13,7 @@ import { EditBlock } from '@/components/blocks/EditBlock';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { useUiStore } from '@/state/uiStore';
 import { isField } from '@/lib/definition';
-import { block, resetStore } from '@/test/fixtures';
+import { block, doc, resetStore } from '@/test/fixtures';
 
 describe('registry views (FND-03)', () => {
   it('every available type has a canvas view, an inspector entry, a known palette icon and a renderer control', () => {
@@ -46,7 +46,10 @@ describe('registry views (FND-03)', () => {
     expect(matchTiles('nps', saas).map((t) => t.id)).toEqual([]);
     expect(matchTiles('dob', saas).map((t) => t.id)).toEqual(['date']);
     expect(matchTiles('page', saas).map((t) => t.id)).toContain('page_break');
-    expect(matchTiles('', saas)).toHaveLength(TILES.length);
+    expect(matchTiles('section', saas).map((t) => t.id)).not.toContain('section_break');
+    expect(matchTiles('section', saas, [], { sectionNav: true }).map((t) => t.id)).toContain('section_break');
+    expect(matchTiles('', saas)).toHaveLength(TILES.length - 1);
+    expect(matchTiles('', saas, [], { sectionNav: true })).toHaveLength(TILES.length);
     const extra = tilesFromCustomFields([
       {
         id: 'x',
@@ -61,7 +64,7 @@ describe('registry views (FND-03)', () => {
       },
     ]);
     expect(matchTiles('staff', saas, extra).map((t) => t.id)).toEqual(['custom.x']);
-    expect(matchTiles('', saas, extra)).toHaveLength(TILES.length + 1);
+    expect(matchTiles('', saas, extra)).toHaveLength(TILES.length);
   });
 
   it('edition matrix: a tile is hidden where the edition cannot run its type (FND-19)', () => {
@@ -81,7 +84,7 @@ describe('registry views (FND-03)', () => {
       unknown: false,
     });
     /* Every P0 palette type runs everywhere: the air-gapped palette is the full palette. */
-    for (const e of Object.values(editions)) expect(matchTiles('', e)).toHaveLength(TILES.length);
+    for (const e of Object.values(editions)) expect(matchTiles('', e)).toHaveLength(TILES.length - 1);
   });
 
   it('every available type renders on the canvas', () => {
@@ -110,6 +113,18 @@ describe('registry views (FND-03)', () => {
       expect(screen.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
       expect(within(screen.getByRole('tabpanel')).queryAllByText(/./).length, name).toBeGreaterThan(0);
     }
+  });
+
+  it('clears the default section name instead of putting Section back', async () => {
+    const item = block('section_break', 's1', { config: { name: 'Section' } });
+    resetStore([item]);
+    useUiStore.getState().openInspector('s1' as BlockId);
+    render(<BlockInspector />);
+    const user = userEvent.setup();
+    const input = screen.getByLabelText('Section name');
+    await user.clear(input);
+    expect((doc().blocks.s1 as { config: { name: string } }).config.name).toBe('');
+    expect(input).toHaveValue('');
   });
 
   it('a block of a type this builder cannot edit is kept and labelled', () => {

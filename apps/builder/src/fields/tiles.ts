@@ -126,10 +126,12 @@ export function tilesFromCustomFields(fields: readonly CustomField[]): Tile[] {
 }
 
 /** The edition's tiles whose label, id or keywords contain `query` (case-insensitive); all of them for an empty query. */
-export function matchTiles(query: string, edition: EditionFeatures, extra: readonly Tile[] = []): Tile[] {
+export function matchTiles(query: string, edition: EditionFeatures, extra: readonly Tile[] = [], opts: { sectionNav?: boolean } = {}): Tile[] {
   const q = query.trim().toLowerCase();
   return [...TILES, ...extra].filter(
     (tile) =>
-      tileAvailable(tile, edition) && (!q || tile.label.toLowerCase().includes(q) || tile.id.replaceAll('_', ' ').includes(q) || tile.keywords.some((k) => k.includes(q))),
+      (tile.kind !== 'block' || tile.choice.type !== 'section_break' || opts.sectionNav === true) &&
+      tileAvailable(tile, edition) &&
+      (!q || tile.label.toLowerCase().includes(q) || tile.id.replaceAll('_', ' ').includes(q) || tile.keywords.some((k) => k.includes(q))),
   );
 }

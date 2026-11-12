@@ -1,6 +1,29 @@
 import { expect, test } from './test.ts';
 import { insert, label, openNewForm, openSettings } from './helpers.ts';
 
+test('section breaks name a stepper that highlights the current section', async ({ page }) => {
+  await openNewForm(page);
+  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await insert(page, '/section', /Section break/);
+  await insert(page, '/short', /Short answer/);
+  await insert(page, '/section', /Section break/);
+  await insert(page, '/short', /Short answer/);
+  await expect(page.getByRole('navigation', { name: 'Form sections' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Form sections' })).toContainText('Section 1');
+  await expect(page.getByRole('navigation', { name: 'Form sections' })).toContainText('Section 2');
+
+  await openSettings(page, 0);
+  await page.getByLabel('Section name').fill('Personal information');
+  await page.getByRole('combobox', { name: 'Current section' }).click();
+  await page.getByRole('option', { name: 'Pulse / blink' }).click();
+
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const nav = page.getByRole('navigation', { name: 'Form sections' });
+  await expect(nav).toBeVisible();
+  await expect(nav).toContainText('Personal information');
+  await expect(nav.locator('[data-state="current"]')).toContainText('Personal information');
+});
+
 test('a 3-page form with a required field on page 3 advances from page 1', async ({ page }) => {
   await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();

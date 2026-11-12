@@ -1,6 +1,9 @@
 import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
-import { CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS, type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday } from '@form/schema';
+import {
+  CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS,
+  type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
+} from '@form/schema';
 import { patternProblem } from '@form/validation';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
@@ -194,6 +197,67 @@ const M = defineMessages('builder', {
   'inspector.hours_from': 'Hours from',
   'inspector.hours_to': 'Hours to',
   'inspector.rolling_days': 'Days ahead',
+  'inspector.section_name': 'Section name',
+  'inspector.section_name_hint': 'Shown in the section navigator, for example Personal information',
+  'inspector.section_desc': 'Description',
+  'inspector.section_in_nav': 'Show in the section navigator',
+  'inspector.section_heading': 'Show this name on the form',
+  'inspector.section_heading_align': 'Heading alignment',
+  'inspector.heading_align_left': 'Left',
+  'inspector.heading_align_center': 'Centre',
+  'inspector.heading_align_right': 'Right',
+  'inspector.section_nav': 'Navigator',
+  'inspector.section_nav_enabled': 'Show the section navigator',
+  'inspector.section_placement': 'Placement',
+  'inspector.section_placement_top': 'Top',
+  'inspector.section_placement_bottom': 'Bottom',
+  'inspector.section_placement_left': 'Left',
+  'inspector.section_placement_right': 'Right',
+  'inspector.section_placement_top_left': 'Top left',
+  'inspector.section_placement_top_right': 'Top right',
+  'inspector.section_placement_bottom_left': 'Bottom left',
+  'inspector.section_placement_bottom_right': 'Bottom right',
+  'inspector.section_variant': 'Style',
+  'inspector.section_variant_stepper': 'Steps with labels',
+  'inspector.section_variant_pills': 'Pills',
+  'inspector.section_variant_dots': 'Dots',
+  'inspector.section_variant_numbers': 'Numbers',
+  'inspector.section_variant_breadcrumb': 'Breadcrumb',
+  'inspector.section_variant_timeline': 'Timeline',
+  'inspector.section_chrome': 'Navigator frame',
+  'inspector.section_chrome_plain': 'Plain',
+  'inspector.section_chrome_cards': 'Cards',
+  'inspector.section_chrome_circles': 'Circles',
+  'inspector.section_chrome_bar': 'Bar',
+  'inspector.section_marker': 'Break look',
+  'inspector.section_marker_line': 'Line',
+  'inspector.section_marker_card': 'Card',
+  'inspector.section_marker_pill': 'Pill',
+  'inspector.section_marker_badge': 'Badge',
+  'inspector.section_current': 'Current section',
+  'inspector.section_current_color': 'Accent colour',
+  'inspector.section_current_fill': 'Filled background',
+  'inspector.section_current_pulse': 'Pulse / blink',
+  'inspector.section_current_underline': 'Underline',
+  'inspector.section_current_bold': 'Bold',
+  'inspector.section_completed': 'Completed sections',
+  'inspector.section_completed_check': 'Tick mark',
+  'inspector.section_completed_muted': 'Muted',
+  'inspector.section_completed_keep': 'Same as upcoming',
+  'inspector.section_connector': 'Between steps',
+  'inspector.section_connector_arrow': 'Arrow',
+  'inspector.section_connector_line': 'Line',
+  'inspector.section_connector_chevron': 'Chevron',
+  'inspector.section_connector_none': 'None',
+  'inspector.section_sticky': 'Stick to the edge while scrolling',
+  'inspector.section_clickable': 'Allow jumping to a completed section',
+  'inspector.section_show_index': 'Show step numbers',
+  'inspector.section_include_submit': 'Include a Submit step',
+  'inspector.section_submit_label': 'Submit step label',
+  'inspector.section_align': 'Alignment',
+  'inspector.section_align_start': 'Start',
+  'inspector.section_align_center': 'Centre',
+  'inspector.section_align_end': 'End',
   'inspector.collapsible': 'Collapsible',
   'inspector.initially_collapsed': 'Start collapsed',
   'inspector.postal_validate': 'Validate PIN / postal code',
@@ -960,6 +1024,24 @@ export function DividerGeneral({ block }: InspectorProps<'divider'>) {
         value={block.config.spacing}
         options={(['sm', 'md', 'lg'] as const).map((v) => ({ value: v, label: t(M[`inspector.spacing_${v}`]) }))}
         onChange={(spacing) => setConfig(block, { spacing })}
+      />
+    </>
+  );
+}
+
+export function SectionBreakGeneral({ block }: InspectorProps<'section_break'>) {
+  return (
+    <>
+      <TextField
+        label={t(M['inspector.section_name'])}
+        hint={t(M['inspector.section_name_hint'])}
+        value={block.config.name}
+        onChange={(name) => setConfig(block, { name: name.slice(0, 80) })}
+      />
+      <TextField
+        label={t(M['inspector.section_desc'])}
+        value={block.config.description ?? ''}
+        onChange={(description) => setConfig(block, { description: text(description) })}
       />
     </>
   );

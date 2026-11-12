@@ -414,6 +414,18 @@ export interface HeadingConfig { level: 1 | 2 | 3; text: InlineDoc; subheading?:
 export interface ParagraphConfig { content: RichDoc }
 export interface ImageConfig { image: AssetRef | BrandRef; widthPct: number; align: TextAlign; href?: SafeUrl }
 export interface DividerConfig { lineStyle: 'solid' | 'dashed' | 'dotted' | 'none'; color?: ColorValue; spacing: 'sm' | 'md' | 'lg' }
+/** Named section marker. Fields after it belong to this section until the next break. */
+export interface SectionBreakConfig {
+  name: string;
+  description?: string;
+  /** When false the section is skipped in the navigator. */
+  showInNav: boolean;
+  /** Draw the section name on the form at the break. */
+  showHeading: boolean;
+  headingAlign?: 'left' | 'center' | 'right';
+  /** How the in-form break looks: a line, a card, a pill, or a numbered badge. */
+  marker?: 'line' | 'card' | 'pill' | 'badge';
+}
 /** FLD-48. Logic target as a unit; hiding hides (and strips) descendants. Also the snippet root (TPL-15). */
 export interface SectionConfig {
   title?: InlineDoc; description?: RichDoc;
@@ -432,6 +444,6 @@ export interface BlockConfigMap {
   matrix: MatrixConfig; repeating_group: RepeatingGroupConfig; file_upload: FileUploadConfig; signature: SignatureConfig;
   hidden: HiddenConfig; consent: ConsentConfig; payment: PaymentConfig; appointment: AppointmentConfig;
   calculation: CalculationConfig; context: ContextConfig; unique_id: UniqueIdConfig; captcha: CaptchaConfig;
-  heading: HeadingConfig; paragraph: ParagraphConfig; image: ImageConfig; divider: DividerConfig; section: SectionConfig;
+  heading: HeadingConfig; paragraph: ParagraphConfig; image: ImageConfig; divider: DividerConfig; section_break: SectionBreakConfig; section: SectionConfig;
 }
 export const _configComplete: _ExactKeys<BlockConfigMap, BlockType> = true;

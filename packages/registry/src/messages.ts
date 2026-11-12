@@ -37,6 +37,7 @@ export const PALETTE_LABELS = defineMessages('builder', {
   'palette.appointment': 'Appointment name',
   'palette.captcha': 'Captcha',
   'palette.section': 'Collapse',
+  'palette.section_break': 'Section break',
   'palette.short_text.fill_blank': 'Fill in the blank',
   'palette.short_text.pan': 'PAN',
   'palette.short_text.gstin': 'GSTIN',

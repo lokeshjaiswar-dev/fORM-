@@ -473,7 +473,7 @@ async function submitIn(user: UserEvent) {
 describe('control contract', () => {
   it('every available value type except hidden has a case; content types render', () => {
     const tested = new Set(CASES.map((c) => c.block.type));
-    const values = AVAILABLE_TYPES.filter((t) => !['heading', 'paragraph', 'divider', 'hidden', 'calculation', 'context', 'unique_id', 'captcha', 'section'].includes(t));
+    const values = AVAILABLE_TYPES.filter((t) => !['heading', 'paragraph', 'divider', 'hidden', 'calculation', 'context', 'unique_id', 'captcha', 'section', 'section_break'].includes(t));
     expect(values.filter((t) => !tested.has(t as ValueFieldType))).toEqual([]);
     expect(Object.keys(CONTROLS).sort()).toEqual([...AVAILABLE_TYPES].sort());
   });

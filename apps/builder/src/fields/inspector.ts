@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
-  AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, FullNameGeneral, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionGeneral, SemanticDifferentialGeneral,
+  AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, FullNameGeneral, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionBreakGeneral, SectionGeneral, SemanticDifferentialGeneral,
   LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
@@ -65,4 +65,5 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   heading: { general: HeadingGeneral },
   paragraph: {},
   divider: { general: DividerGeneral },
+  section_break: { general: SectionBreakGeneral },
 };

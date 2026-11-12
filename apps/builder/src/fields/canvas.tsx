@@ -39,6 +39,7 @@ const M = defineMessages('builder', {
   'canvas.captcha': "I'm not a robot",
   'canvas.appointment_day': 'Date',
   'canvas.section': 'Section',
+  'canvas.section_name': 'Section name',
   'canvas.section_hint': 'Fields in this collapse',
   'canvas.section_pick': 'Add a field',
   'canvas.name.first': 'First name',
@@ -500,6 +501,28 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     />
   ),
   divider: ({ block }) => <hr className={cn(SPACING[block.config.spacing], LINE[block.config.lineStyle])} style={{ borderColor: 'var(--fr-inputBorder)' }} />,
+  section_break: ({ block, focused }) => (
+    <div
+      className="fr-section-break"
+      data-fr-section={block.id}
+      data-marker={block.config.marker ?? 'card'}
+      id={`section-${block.id}`}
+      role="separator"
+      aria-label={block.config.name.trim() || t(M['canvas.section'])}
+    >
+      <div className="fr-section-break-mark">
+        {(block.config.marker ?? 'card') === 'badge' ? <span className="fr-section-break-badge" aria-hidden /> : null}
+        <input
+          className="fr-section-break-name min-w-0 flex-1 bg-transparent outline-none"
+          value={block.config.name}
+          placeholder={t(M['canvas.section'])}
+          aria-label={t(M['canvas.section_name'])}
+          autoFocus={focused}
+          onChange={(e) => updateBlock(block.id, { config: { ...block.config, name: e.target.value.slice(0, 80) } })}
+        />
+      </div>
+    </div>
+  ),
 };
 
 const RATING_PATH = {

@@ -7,7 +7,7 @@ export const AVAILABLE_TYPES = [
   'short_text', 'long_text', 'full_name', 'email', 'phone', 'address', 'number', 'url', 'single_choice', 'multi_choice',
   'date', 'date_range', 'datetime', 'time', 'rating', 'linear_scale', 'nps', 'ranking', 'matching', 'likert', 'constant_sum', 'maxdiff', 'card_sort', 'semantic_differential', 'number_range', 'schedule_grid', 'matrix', 'repeating_group', 'file_upload',
   'signature', 'hidden', 'consent', 'calculation', 'context', 'unique_id', 'appointment', 'captcha', 'heading',
-  'paragraph', 'divider', 'section',
+  'paragraph', 'divider', 'section_break', 'section',
 ] as const satisfies readonly BlockType[];
 export type AvailableType = (typeof AVAILABLE_TYPES)[number];
 /** Types registered through `defineStub`: real config schema, no palette, refused by compile. */

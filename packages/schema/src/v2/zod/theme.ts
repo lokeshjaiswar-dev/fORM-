@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { keyed } from './_util.ts';
 import {
+  SECTION_NAV_CHROMES, SECTION_NAV_COMPLETED, SECTION_NAV_CONNECTORS, SECTION_NAV_CURRENT, SECTION_NAV_MODES, SECTION_NAV_PLACEMENTS, SECTION_NAV_VARIANTS,
+} from '../theme.ts';
+import {
   AssetRefSchema, BrandRefSchema, FontIdSchema, HexColorSchema, PurposeIdSchema, TemplateIdSchema, TemplateVersionIdSchema, TimeZoneSchema,
 } from './primitives.ts';
 import { LabelTextSchema, ThemeColorTokenSchema } from './rich-text.ts';
@@ -33,6 +36,27 @@ export const ThemeSchema = z.strictObject({
   customCss: z.string().max(50 * 1024).exactOptional(),
 });
 
+export const SectionNavSchema = z.strictObject({
+  enabled: z.boolean(),
+  mode: z.enum(SECTION_NAV_MODES).exactOptional(),
+  placement: z.enum(SECTION_NAV_PLACEMENTS),
+  variant: z.enum(SECTION_NAV_VARIANTS),
+  currentMarker: z.enum(SECTION_NAV_CURRENT),
+  completedMarker: z.enum(SECTION_NAV_COMPLETED),
+  connector: z.enum(SECTION_NAV_CONNECTORS),
+  size: z.enum(['sm', 'md', 'lg']),
+  labelSizePx: z.number().int().min(10).max(32).exactOptional(),
+  color: HexColorSchema.exactOptional(),
+  labelColor: HexColorSchema.exactOptional(),
+  sticky: z.boolean(),
+  clickable: z.boolean(),
+  showIndex: z.boolean(),
+  includeSubmit: z.boolean(),
+  submitLabel: z.string().max(40).exactOptional(),
+  align: z.enum(['start', 'center', 'end']),
+  chrome: z.enum(SECTION_NAV_CHROMES).exactOptional(),
+});
+
 export const BehaviorSchema = z.strictObject({
   submit: z.strictObject({ label: LabelTextSchema, align: z.enum(['left', 'center', 'right', 'full']), printButton: z.boolean().exactOptional() }),
   navigation: z.strictObject({
@@ -41,6 +65,7 @@ export const BehaviorSchema = z.strictObject({
     autoAdvance: z.boolean().exactOptional(),
     keyboardShortcuts: z.boolean().exactOptional(),
   }),
+  sectionNav: SectionNavSchema.exactOptional(),
   saveAndResume: z.strictObject({
     enabled: z.boolean(),
     showButton: z.boolean(),

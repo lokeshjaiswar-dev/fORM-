@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { BlockId } from '@form/schema';
-import { setTheme, updateBlock } from '@/state/actions';
+import { DEFAULT_SECTION_NAV, type BlockId } from '@form/schema';
+import { setBehavior, setTheme, updateBlock } from '@/state/actions';
 import { applyImageTemplate, IMAGE_TEMPLATES, THEME_PRESETS } from '@/components/builder/design/presets';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc } from '@/lib/definition';
@@ -41,6 +41,43 @@ describe('FormCanvas', () => {
       expect(sel?.toString()).toBe('');
       expect(sel?.anchorNode?.textContent).toContain('Short answer');
     });
+  });
+
+  it('section breaks show a named navigator without looping updates', async () => {
+    resetStore([
+      block('section_break', 's1', { config: { name: 'Personal information', showInNav: true, showHeading: false } }),
+      block('short_text', 'name', { label: 'Name' }),
+      block('section_break', 's2', { config: { name: 'Education', showInNav: true, showHeading: false } }),
+      block('short_text', 'school', { label: 'School' }),
+    ]);
+    act(() => setBehavior({ ...doc().behavior, sectionNav: { ...DEFAULT_SECTION_NAV, enabled: true } }));
+    renderCanvas();
+    const nav = screen.getByRole('navigation', { name: 'Form sections' });
+    expect(nav).toHaveTextContent('Personal information');
+    expect(nav).toHaveTextContent('Education');
+    expect(nav.querySelector('[data-state="current"]')).toHaveTextContent('Personal information');
+    const user = userEvent.setup();
+    const personal = screen.getByDisplayValue('Personal information');
+    await user.clear(personal);
+    expect((doc().blocks.s1 as { config: { name: string } }).config.name).toBe('');
+    expect(personal).toHaveValue('');
+    await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/section break');
+    await user.click(screen.getByRole('option', { name: 'Section break' }));
+    expect(screen.getByRole('navigation', { name: 'Form sections' })).toHaveTextContent('Section');
+    expect(personal.closest('[data-marker]')).toHaveAttribute('data-marker', 'card');
+    act(() => setBehavior({ ...doc().behavior, sectionNav: { ...DEFAULT_SECTION_NAV, ...doc().behavior.sectionNav, placement: 'left', chrome: 'circles' } }));
+    expect(screen.getByRole('navigation', { name: 'Form sections' }).closest('[data-section-placement]')).toHaveAttribute('data-section-placement', 'left');
+    expect(screen.getByRole('navigation', { name: 'Form sections' })).toHaveAttribute('data-chrome', 'circles');
+    act(() => setBehavior({ ...doc().behavior, sectionNav: { ...DEFAULT_SECTION_NAV, ...doc().behavior.sectionNav, placement: 'bottom', chrome: 'bar' } }));
+    expect(screen.getByRole('navigation', { name: 'Form sections' }).closest('[data-section-placement]')).toHaveAttribute('data-section-placement', 'bottom');
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.id);
+    };
+    await user.click(screen.getByRole('button', { name: /Education/ }));
+    expect(scrolled).toContain('section-s2');
+    Element.prototype.scrollIntoView = original;
   });
 
   it('a page break from the slash menu starts a new page, and removing it merges the pages', async () => {

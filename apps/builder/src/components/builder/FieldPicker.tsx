@@ -36,7 +36,8 @@ export function FieldPicker() {
   const [q, setQ] = useState('');
   const edition = useEdition();
   const { fields } = useCustomFields();
-  const tiles = matchTiles(q, edition, tilesFromCustomFields(fields ?? []));
+  const sectionNav = useDoc((d) => d.behavior.sectionNav?.enabled === true);
+  const tiles = matchTiles(q, edition, tilesFromCustomFields(fields ?? []), { sectionNav });
   const [removing, setRemoving] = useState<Tile | null>(null);
 
   return (

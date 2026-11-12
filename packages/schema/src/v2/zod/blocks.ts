@@ -27,7 +27,7 @@ export const FIELD_BLOCK_SCHEMAS = {
 /** Twin of PlainBlockOf<T> per transient, content and container type. */
 export const PLAIN_BLOCK_SCHEMAS = {
   captcha: plainBlock('captcha'), heading: plainBlock('heading'), paragraph: plainBlock('paragraph'), image: plainBlock('image'),
-  divider: plainBlock('divider'), section: plainBlock('section'),
+  divider: plainBlock('divider'), section_break: plainBlock('section_break'), section: plainBlock('section'),
 } as const;
 /** Twin of BlockOf<T> for every BlockType. */
 export const BLOCK_SCHEMAS = { ...FIELD_BLOCK_SCHEMAS, ...PLAIN_BLOCK_SCHEMAS } as const;

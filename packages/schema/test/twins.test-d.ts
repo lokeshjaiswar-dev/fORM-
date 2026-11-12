@@ -201,6 +201,7 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ParagraphConfigSchema>>().toEqualTypeOf<S.ParagraphConfig>();
   expectTypeOf<z.infer<typeof S.ImageConfigSchema>>().toEqualTypeOf<S.ImageConfig>();
   expectTypeOf<z.infer<typeof S.DividerConfigSchema>>().toEqualTypeOf<S.DividerConfig>();
+  expectTypeOf<z.infer<typeof S.SectionBreakConfigSchema>>().toEqualTypeOf<S.SectionBreakConfig>();
   expectTypeOf<z.infer<typeof S.SectionConfigSchema>>().toEqualTypeOf<S.SectionConfig>();
   expectTypeOf<z.infer<typeof S.BlockConfigMapSchema>>().toEqualTypeOf<S.BlockConfigMap>();
   expectTypeOf<z.infer<typeof S.FieldBlockSchema>>().branded.toEqualTypeOf<S.FieldBlock>();
@@ -239,6 +240,7 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ExprFunctionTableSchema>>().toEqualTypeOf<S.ExprFunctionTable>();
   expectTypeOf<z.infer<typeof S.ThemeTokensSchema>>().toEqualTypeOf<S.ThemeTokens>();
   expectTypeOf<z.infer<typeof S.ThemeSchema>>().toEqualTypeOf<S.Theme>();
+  expectTypeOf<z.infer<typeof S.SectionNavSchema>>().toEqualTypeOf<S.SectionNav>();
   expectTypeOf<z.infer<typeof S.BehaviorSchema>>().toEqualTypeOf<S.Behavior>();
   expectTypeOf<z.infer<typeof S.TextKeySchema>>().toEqualTypeOf<S.TextKey>();
   expectTypeOf<z.infer<typeof S.TranslationEntrySchema>>().toEqualTypeOf<S.TranslationEntry>();

@@ -55,7 +55,7 @@ describe('REGISTRY', () => {
 
 describe('availability', () => {
   it('marks the P0 types available and every other type P1 or P2', () => {
-    expect(AVAILABLE_TYPES).toHaveLength(41);
+    expect(AVAILABLE_TYPES).toHaveLength(42);
     for (const type of AVAILABLE_TYPES) expect(availability(type)).toBe('P0');
     for (const type of STUB_TYPES) expect(['P1', 'P2']).toContain(availability(type));
     expect(Object.keys(STUB_AVAILABILITY).sort()).toEqual([...STUB_TYPES].sort());
@@ -284,8 +284,10 @@ describe('translatable and lockable content', () => {
     expect(REGISTRY.paragraph.lockableContent(plainBlock('paragraph'))).toEqual(['/config/content']);
     expect(REGISTRY.divider.translatable(plainBlock('divider'))).toEqual([]);
     expect(REGISTRY.divider.lockableContent(plainBlock('divider'))).toEqual([]);
+    expect(REGISTRY.section_break.translatable(plainBlock('section_break'))).toEqual(['block:section_break_1:name']);
+    expect(REGISTRY.section_break.lockableContent(plainBlock('section_break'))).toEqual(['/config/name']);
     expect(REGISTRY.heading.palette.map((p) => p.configOverrides)).toEqual([{ level: 1 }]);
-    for (const type of ['heading', 'paragraph', 'divider', 'captcha', 'section'] as const) expect(REGISTRY[type].lint(plainBlock(type) as never, definition([]))).toEqual([]);
+    for (const type of ['heading', 'paragraph', 'divider', 'captcha', 'section', 'section_break'] as const) expect(REGISTRY[type].lint(plainBlock(type) as never, definition([]))).toEqual([]);
   });
 });
 

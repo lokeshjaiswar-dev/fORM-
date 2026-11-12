@@ -474,6 +474,14 @@ export const DividerConfigSchema = z.strictObject({
   color: ColorValueSchema.exactOptional(),
   spacing: z.enum(['sm', 'md', 'lg']),
 });
+export const SectionBreakConfigSchema = z.strictObject({
+  name: z.string().max(80),
+  description: z.string().max(200).exactOptional(),
+  showInNav: z.boolean(),
+  showHeading: z.boolean(),
+  headingAlign: z.enum(['left', 'center', 'right']).exactOptional(),
+  marker: z.enum(['line', 'card', 'pill', 'badge']).exactOptional(),
+});
 export const SectionConfigSchema = z.strictObject({
   title: InlineDocSchema.exactOptional(),
   description: RichDocSchema.exactOptional(),
@@ -492,6 +500,6 @@ export const BLOCK_CONFIG_SCHEMAS = {
   matrix: MatrixConfigSchema, repeating_group: RepeatingGroupConfigSchema, file_upload: FileUploadConfigSchema, signature: SignatureConfigSchema,
   hidden: HiddenConfigSchema, consent: ConsentConfigSchema, payment: PaymentConfigSchema, appointment: AppointmentConfigSchema,
   calculation: CalculationConfigSchema, context: ContextConfigSchema, unique_id: UniqueIdConfigSchema, captcha: CaptchaConfigSchema,
-  heading: HeadingConfigSchema, paragraph: ParagraphConfigSchema, image: ImageConfigSchema, divider: DividerConfigSchema, section: SectionConfigSchema,
+  heading: HeadingConfigSchema, paragraph: ParagraphConfigSchema, image: ImageConfigSchema, divider: DividerConfigSchema, section_break: SectionBreakConfigSchema, section: SectionConfigSchema,
 } as const;
 export const BlockConfigMapSchema = z.strictObject(BLOCK_CONFIG_SCHEMAS);
