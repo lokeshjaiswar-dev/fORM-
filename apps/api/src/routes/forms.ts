@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { FORM_LIFECYCLES, formDrafts, forms, withTenant, type Db } from '@form/db';
+import { FormDefinitionSchema, mergeForms, type FormDefinition, type MergeFormInput } from '@form/schema';
 import { z } from 'zod';
 import { accountOf, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
@@ -181,6 +182,115 @@ export function formRoutes(app: FastifyInstance, deps: { db: Db }): void {
         return { draftRev: nextRev, updatedAt: now.toISOString() };
       });
       return saved;
+    },
+  );
+
+  const mergeSide = z.object({
+    formId: z.string(),
+    formTitle: z.string(),
+    blockId: z.string(),
+    summary: z.string(),
+  });
+  const mergeConflict = z.object({
+    label: z.string(),
+    type: z.string(),
+    reason: z.string(),
+    message: z.string(),
+    sides: z.array(mergeSide),
+  });
+  const mergeResolution = z.object({
+    label: z.string().min(1),
+    type: z.string().min(1),
+    chosenFormId: z.uuid(),
+  });
+
+  r.post(
+    '/v1/forms/merge',
+    {
+      config: { auth: 'user', perm: 'forms.create' },
+      schema: {
+        tags: ['forms'],
+        summary: 'Merge selected forms into a new form (match on label + type)',
+        security: [{ session: [], org: [] }, { devUser: [], org: [] }],
+        body: z.object({
+          formIds: z.array(z.uuid()).min(2).max(20),
+          title: z.string().max(200).optional(),
+          resolutions: z.array(mergeResolution).max(200).optional(),
+        }),
+        response: {
+          200: z.object({ id: z.uuid() }),
+          409: z.object({ status: z.literal('conflict'), conflicts: z.array(mergeConflict) }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const ids = [...new Set(request.body.formIds)];
+      if (ids.length < 2) throw new ProblemError('VALIDATION_FAILED', 'Select at least two different forms.');
+      const tenant = tenantOf(request);
+      const userId = accountOf(request).userId;
+
+      const loaded = await withTenant(deps.db, { ...tenant, readOnly: true }, async (tx) => {
+        const rows = await tx
+          .select({ id: forms.id, title: forms.title, draft: formDrafts.draft })
+          .from(forms)
+          .innerJoin(formDrafts, eq(formDrafts.formId, forms.id))
+          .where(inArray(forms.id, ids));
+        return rows;
+      });
+
+      const byId = new Map(loaded.map((row) => [row.id, row]));
+      const missing = ids.filter((id) => !byId.has(id));
+      if (missing.length) throw new ProblemError('NOT_FOUND', 'One of the selected forms has no draft in this organisation.');
+
+      const inputs: MergeFormInput[] = [];
+      for (const id of request.body.formIds) {
+        if (inputs.some((item) => item.id === id)) continue;
+        const row = byId.get(id);
+        if (!row) continue;
+        const parsed = FormDefinitionSchema.safeParse(row.draft);
+        if (!parsed.success) throw new ProblemError('VALIDATION_FAILED', `The draft for “${row.title}” cannot be merged.`);
+        inputs.push({ id: row.id, title: row.title, definition: parsed.data as FormDefinition });
+      }
+
+      const merged = mergeForms(inputs, {
+        newFormId: randomUUID(),
+        title: request.body.title,
+        resolutions: request.body.resolutions,
+        newId: () => randomUUID(),
+      });
+      if (!merged.ok) {
+        return reply.code(409).send({ status: 'conflict' as const, conflicts: merged.conflicts });
+      }
+
+      const id = merged.definition.formId;
+      const draft = merged.definition as unknown as Record<string, unknown>;
+      const sizeBytes = Buffer.byteLength(JSON.stringify(draft), 'utf8');
+      if (sizeBytes > 5_242_880) throw new ProblemError('PAYLOAD_TOO_LARGE', 'The merged form is larger than 5 MB.');
+      const title = merged.definition.title.trim() || 'Untitled form';
+      const now = new Date();
+
+      await withTenant(deps.db, tenant, async (tx) => {
+        await tx.insert(forms).values({
+          id,
+          orgId: tenant.orgId,
+          teamId: tenant.orgId,
+          ownerUserId: userId,
+          title,
+          updatedAt: now,
+          updatedBy: userId,
+        });
+        await tx.insert(formDrafts).values({
+          formId: id,
+          orgId: tenant.orgId,
+          draft,
+          draftRev: 1,
+          schemaVersion: 2,
+          sizeBytes,
+          updatedBy: userId,
+          updatedAt: now,
+        });
+      });
+      return { id };
     },
   );
 }

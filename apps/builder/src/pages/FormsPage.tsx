@@ -2,14 +2,16 @@ import { Suspense, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Inbox, Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import type { FormDefinition } from '@form/schema';
+import type { FormDefinition, MergeConflict, MergeResolution } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
+import { mergeFromRepository } from '@/lib/mergeSelected';
 import { uid } from '@/lib/utils';
 import type { FormSummary, StoredForm } from '@/persistence/DocumentRepository';
 import { whenSaved } from '@/persistence/autosave';
+import { mergeRemoteForms } from '@/persistence/draftsApi';
 import { newStoredForm } from '@/persistence/openForm';
 import { deleteSubmissionFiles, fileIdsFromAnswers } from '@/persistence/blobStore';
 import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
@@ -31,6 +33,13 @@ const M = defineMessages('builder', {
   'new.blank': 'Blank form',
   'new.blank_hint': 'An empty page to build on',
   'new.templates': 'From a template',
+  'forms.merge': 'Merge selected',
+  'forms.merge_need_two': 'Select at least two forms to merge.',
+  'forms.merge_failed': 'Those forms could not be merged.',
+  'forms.merge_conflict_title': 'These fields cannot be combined',
+  'forms.merge_conflict_help': 'The same question appears in more than one form, but the extra rules do not fit together. Pick which version to keep.',
+  'forms.merge_use': 'Use this version',
+  'forms.merge_continue': 'Merge with these choices',
 });
 
 const dateTime = new Intl.DateTimeFormat(BUILDER_LOCALE, { dateStyle: 'medium', timeStyle: 'short' });
@@ -50,6 +59,10 @@ export function FormsPage() {
   const [creating, setCreating] = useState(false);
   const [removing, setRemoving] = useState<FormSummary | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [conflicts, setConflicts] = useState<MergeConflict[] | null>(null);
+  const [choices, setChoices] = useState<Record<string, string>>({});
+  const [merging, setMerging] = useState(false);
 
   useEffect(preloadGallery, []);
 
@@ -97,6 +110,60 @@ export function FormsPage() {
     await saveThenOpen(doc ? newStoredForm(id, now, doc) : newStoredForm(id, now));
   }
 
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function runMerge(resolutions?: MergeResolution[]) {
+    const ids = [...selected];
+    if (ids.length < 2) {
+      setError(t(M['forms.merge_need_two']));
+      return;
+    }
+    setError(null);
+    setMerging(true);
+    try {
+      let remote: Awaited<ReturnType<typeof mergeRemoteForms>> = null;
+      try {
+        remote = await mergeRemoteForms(ids, resolutions);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t(M['forms.merge_failed']));
+        return;
+      }
+      if (remote?.ok) {
+        setConflicts(null);
+        setSelected(new Set());
+        const stored = await repo.load(remote.id);
+        if (stored) await saveThenOpen(stored);
+        else navigate(builderPath(remote.id));
+        return;
+      }
+      if (remote && !remote.ok) {
+        setConflicts(remote.conflicts);
+        return;
+      }
+      const local = await mergeFromRepository(repo, ids, resolutions);
+      if (local.ok) {
+        setConflicts(null);
+        setSelected(new Set());
+        await saveThenOpen(local.form);
+        return;
+      }
+      if ('conflicts' in local && local.conflicts) {
+        setConflicts(local.conflicts);
+        return;
+      }
+      setError('error' in local ? local.error : t(M['forms.merge_failed']));
+    } finally {
+      setMerging(false);
+    }
+  }
+
   async function confirmDelete() {
     if (!removing) return;
     const id = removing.id;
@@ -120,6 +187,16 @@ export function FormsPage() {
         <Button onClick={() => setCreating(true)}>
           <Plus /> {t(M['forms.new'])}
         </Button>
+        {forms && forms.length >= 2 ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={selected.size < 2 || merging}
+            onClick={() => void runMerge()}
+          >
+            {t(M['forms.merge'])}
+          </Button>
+        ) : null}
       </div>
       {error ? (
         <p role="alert" className="mt-4 text-[14px] text-destructive">
@@ -132,6 +209,13 @@ export function FormsPage() {
         <ul className="mt-8 divide-y divide-border">
           {forms.map((form) => (
             <li key={form.id} className="-mx-2 flex items-center gap-2 rounded-[6px] px-2 py-3 hover:bg-state-hover">
+              <input
+                type="checkbox"
+                className="size-4 shrink-0"
+                checked={selected.has(form.id)}
+                aria-label={`Select ${form.title || t(M['forms.untitled'])}`}
+                onChange={() => toggleSelected(form.id)}
+              />
               <Link to={builderPath(form.id)} className="flex min-w-0 flex-1 items-center gap-3">
                 <FileText className="size-4 shrink-0 text-text-subtle" />
                 <span className="min-w-0 flex-1 truncate text-[15px]">{form.title || t(M['forms.untitled'])}</span>
@@ -182,6 +266,60 @@ export function FormsPage() {
           <Suspense fallback={<GalleryFallback />}>
             <TemplateGallery onCancel={() => setCreating(false)} onUse={(definition) => void create(definition)} />
           </Suspense>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={conflicts !== null} onOpenChange={(next) => !next && setConflicts(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t(M['forms.merge_conflict_title'])}</DialogTitle>
+            <DialogDescription>{t(M['forms.merge_conflict_help'])}</DialogDescription>
+          </DialogHeader>
+          <ul className="space-y-6">
+            {conflicts?.map((conflict) => {
+              const key = `${conflict.label}::${conflict.type}`;
+              return (
+                <li key={key} className="space-y-2">
+                  <p className="text-[15px] font-medium">
+                    {conflict.label || conflict.type}: {conflict.message}
+                  </p>
+                  {conflict.sides.map((side) => (
+                    <label key={side.formId + side.blockId} className="flex cursor-pointer items-start gap-2 text-[14px]">
+                      <input
+                        type="radio"
+                        name={key}
+                        checked={choices[key] === side.formId}
+                        onChange={() => setChoices((prev) => ({ ...prev, [key]: side.formId }))}
+                      />
+                      <span>
+                        <span className="font-medium">{side.formTitle || t(M['forms.untitled'])}</span>
+                        {side.summary ? <span className="block text-muted-foreground">{side.summary}</span> : null}
+                      </span>
+                    </label>
+                  ))}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setConflicts(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!conflicts?.every((c) => choices[`${c.label}::${c.type}`]) || merging}
+              onClick={() =>
+                void runMerge(
+                  conflicts?.map((c) => ({
+                    label: c.label,
+                    type: c.type,
+                    chosenFormId: choices[`${c.label}::${c.type}`] ?? '',
+                  })),
+                )
+              }
+            >
+              {t(M['forms.merge_continue'])}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={removing !== null} onOpenChange={(next) => !next && setRemoving(null)}>

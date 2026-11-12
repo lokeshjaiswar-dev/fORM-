@@ -11,7 +11,7 @@ import { API_BASE } from '@/edition/edition';
 export const CLIENT_HEADERS = { 'x-fr-client': 'builder' } as const;
 
 /** Local Vite only: the seeded demo user so Publish works without Mailpit sign-up (`AUTH_DEV_HEADERS`). */
-const DEV_USER_HEADERS =
+export const DEV_USER_HEADERS =
   import.meta.env.MODE === 'development' ? { 'x-fr-dev-user': '01970000-0000-7000-8000-000000000002' } : {};
 
 export const meUserSchema = z.object({

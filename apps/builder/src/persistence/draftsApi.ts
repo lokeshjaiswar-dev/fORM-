@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { ApiProblem, ApiUnreachable, orgApi, useSessionStore } from '@/auth/client';
+import type { MergeConflict, MergeResolution } from '@form/schema';
+import { ApiProblem, ApiUnreachable, CLIENT_HEADERS, DEV_USER_HEADERS, ORG_HEADER, activeOrgOf, orgApi, useSessionStore } from '@/auth/client';
+import { API_BASE } from '@/edition/edition';
 
 const created = z.object({ id: z.string() });
 const listSchema = z.object({
@@ -72,4 +74,54 @@ export async function putRemoteDraft(id: string, draft: unknown, title: string):
 /** Same write as autosave, but refusals are not swallowed — used by Publish. */
 export function putRemoteDraftForPublish(id: string, draft: unknown, title: string): Promise<void> {
   return writeDraft(id, draft, title);
+}
+
+const mergeConflictSchema = z.object({
+  label: z.string(),
+  type: z.string(),
+  reason: z.string(),
+  message: z.string(),
+  sides: z.array(z.object({ formId: z.string(), formTitle: z.string(), blockId: z.string(), summary: z.string() })),
+});
+
+export type MergeRemoteResult = { ok: true; id: string } | { ok: false; conflicts: MergeConflict[] };
+
+/** Asks the API to merge forms. Null when signed out or unreachable so the builder can merge locally. */
+export async function mergeRemoteForms(
+  formIds: string[],
+  resolutions?: MergeResolution[],
+  title?: string,
+): Promise<MergeRemoteResult | null> {
+  if (!signedIn()) return null;
+  const session = useSessionStore.getState();
+  const org = session.status === 'signed_in' ? activeOrgOf(session.me)?.id : null;
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/v1/forms/merge`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        ...DEV_USER_HEADERS,
+        ...CLIENT_HEADERS,
+        ...(org ? { [ORG_HEADER]: org } : {}),
+      },
+      body: JSON.stringify({ formIds, resolutions, title }),
+    });
+  } catch {
+    return null;
+  }
+  const json: unknown = await res.json().catch(() => ({}));
+  if (res.status === 409) {
+    const parsed = z.object({ status: z.literal('conflict'), conflicts: z.array(mergeConflictSchema) }).safeParse(json);
+    if (parsed.success) return { ok: false, conflicts: parsed.data.conflicts };
+  }
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) {
+    const p = json as { code?: unknown; detail?: unknown; title?: unknown };
+    throw new ApiProblem(res.status, typeof p.code === 'string' ? p.code : 'UNKNOWN', typeof p.detail === 'string' ? p.detail : typeof p.title === 'string' ? p.title : '');
+  }
+  const id = z.object({ id: z.string() }).safeParse(json);
+  return id.success ? { ok: true, id: id.data.id } : null;
 }

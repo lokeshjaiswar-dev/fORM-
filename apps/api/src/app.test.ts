@@ -366,6 +366,7 @@ describe('OpenAPI', () => {
       '/v1/auth/verify-email',
       '/v1/csp-reports',
       '/v1/forms',
+      '/v1/forms/merge',
       '/v1/forms/{formId}/submissions',
       '/v1/forms/{formId}/submissions/{id}',
       '/v1/forms/{id}/draft',

@@ -164,6 +164,35 @@ describe('routes', () => {
     expect(path()).toBe('/forms');
   });
 
+  it('merges two selected forms from the list', async () => {
+    const repo = new MemoryRepository();
+    await repo.save(stored('one', 'Alpha'));
+    await repo.save(stored('two', 'Beta'));
+    renderApp(repo, '/forms');
+    expect(await screen.findByText('Alpha', {}, OPENS)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge selected' }));
+    expect(await screen.findByDisplayValue('Alpha + Beta', OPENS)).toBeInTheDocument();
+    expect(path()?.startsWith('/builder/')).toBe(true);
+  });
+
+  it('asks which field to keep when merged validations clash', async () => {
+    const repo = new MemoryRepository();
+    await repo.save(newStoredForm('one', NOW, formWith([block('short_text', 'n1', { label: 'Code', config: { pattern: { source: '^[A-Z]+$' } } })])));
+    await repo.save(newStoredForm('two', NOW, formWith([block('short_text', 'n2', { label: 'Code', config: { pattern: { source: '^[0-9]+$' } } })])));
+    renderApp(repo, '/forms');
+    expect(await screen.findAllByText('Test form', {}, OPENS)).toHaveLength(2);
+    const checkboxes = await screen.findAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]!);
+    fireEvent.click(checkboxes[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge selected' }));
+    expect(await screen.findByRole('heading', { name: 'These fields cannot be combined' }, OPENS)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('radio')[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge with these choices' }));
+    expect(await screen.findByDisplayValue(/Test form/, OPENS)).toBeInTheDocument();
+  });
+
   it('BL-143: reopening a v1 draft migrates it once, saves it back as v2 and shows what changed', async () => {
     const repo = new MemoryRepository();
     await repo.save({ id: 'old', format: LEGACY_FORMAT, rev: 2, savedAt: NOW, doc: v1Form([{ id: 'q', type: 'text', label: 'Question' }], { redirectUrl: 'http://example.com', password: 'hunter2' }) });
