@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { issuesOf, valuesFor, wellShaped } from '../src/errors.ts';
 import {
   PATTERN_COST_BUDGET, PATTERN_MAX_LENGTH, PATTERN_MAX_PROGRAM, PRESET_SOURCES, addDays, addMonths, ageOn, compilePattern, isUnanswered, maskSource, matchesMask,
-  matchesPreset, messageFormatter, normalizeAnswer, normalizeAnswers, patternProblem, relativeDate, withinBudget,
+  matchesPreset, messageFormatter, normalizeAnswer, normalizeAnswers, patternProblem, patternUnsupportedFeature, relativeDate, withinBudget,
 } from '../src/index.ts';
 import { EN_IN, a, choices, field, form, id, page } from './build.ts';
 import { ans, codes, run } from './helpers.ts';
@@ -77,6 +77,12 @@ describe('patterns (re2js, VAL-04)', () => {
     expect(compilePattern({ source: '(a)\\1' })).toMatchObject({ ok: false, reason: 'syntax' });
     expect(patternProblem({ source: '[' })).toMatch(/missing closing/);
     expect(patternProblem({ source: '^[0-9]+$' })).toBeNull();
+    expect(patternUnsupportedFeature('(?=a)a')).toBe('lookaround');
+    expect(patternUnsupportedFeature('(?<=a)b')).toBe('lookaround');
+    expect(patternUnsupportedFeature('(a)\\1')).toBe('backref');
+    expect(patternUnsupportedFeature('(?i)^lokesh$')).toBeUndefined();
+    expect(patternUnsupportedFeature('(?:lokesh|jayesh)')).toBeUndefined();
+    expect(patternUnsupportedFeature('^[0-9]+$')).toBeUndefined();
   });
 
   it('refuses patterns whose compiled program is over the budget, however short the source', () => {

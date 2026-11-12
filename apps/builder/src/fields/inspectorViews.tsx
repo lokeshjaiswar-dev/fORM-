@@ -4,7 +4,7 @@ import {
   CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS,
   type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
 } from '@form/schema';
-import { patternProblem } from '@form/validation';
+import { patternProblem, patternUnsupportedFeature } from '@form/validation';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { Field, NumberField, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
@@ -37,7 +37,10 @@ const M = defineMessages('builder', {
   'inspector.limit_characters': 'Characters',
   'inspector.limit_words': 'Words',
   'inspector.pattern': 'Pattern (regular expression)',
+  'inspector.pattern_hint': 'RE2, not JavaScript or Python. Use ^…$ for the whole answer.',
   'inspector.pattern_invalid': 'This pattern is ignored until fixed: {problem}',
+  'inspector.pattern_unsupported_lookaround': 'Lookahead and lookbehind are not supported in RE2. This pattern is ignored until fixed.',
+  'inspector.pattern_unsupported_backref': 'Backreferences such as \\1 are not supported in RE2. This pattern is ignored until fixed.',
   'inspector.rows': 'Rows',
   'inspector.counter': 'Show a character counter',
   'inspector.display': 'Display',
@@ -359,9 +362,20 @@ export function EmailGeneral({ block }: InspectorProps<'email'>) {
 
 const count = (max: number) => parseInteger(0, max);
 
+const PATTERN_FEATURE_MESSAGE = {
+  lookaround: 'inspector.pattern_unsupported_lookaround',
+  backref: 'inspector.pattern_unsupported_backref',
+} as const;
+
+function shortTextPatternError(source: string): string | null {
+  const problem = patternProblem({ source });
+  if (!problem) return null;
+  const feature = patternUnsupportedFeature(source);
+  return feature ? t(M[PATTERN_FEATURE_MESSAGE[feature]]) : t(M['inspector.pattern_invalid'], { problem });
+}
+
 export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
   const pattern = block.config.pattern?.source ?? '';
-  const problem = pattern ? patternProblem({ source: pattern }) : null;
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
@@ -370,9 +384,10 @@ export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
       </div>
       <TextField
         label={t(M['inspector.pattern'])}
+        hint={t(M['inspector.pattern_hint'])}
         value={pattern}
         placeholder="^[A-Z].+"
-        error={problem ? t(M['inspector.pattern_invalid'], { problem }) : null}
+        error={pattern ? shortTextPatternError(pattern) : null}
         onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
       />
       <ConfigProblem block={block} />

@@ -82,6 +82,15 @@ export const compilePattern = (pattern: SafePattern): CompiledPattern => cached(
 /** Built-in sources (presets, masks) have no length cap; masks are author input, so the program budget still applies. */
 export const compileBuiltIn = (source: string): CompiledPattern => cached(source, '', false);
 
+/** PCRE/JS constructs authors often paste that this RE2 engine will not compile. */
+export type UnsupportedRegexFeature = 'lookaround' | 'backref';
+
+/** The lookaround or backreference in `source`, when present. Inline flags such as `(?i)` compile in re2js. */
+export function patternUnsupportedFeature(source: string): UnsupportedRegexFeature | undefined {
+  if (/\(\?<?[=!]/.test(source)) return 'lookaround';
+  if (/\\[1-9]/.test(source)) return 'backref';
+}
+
 /** Why a pattern cannot be used, or null when it compiles (builder inline error, B12). */
 export function patternProblem(pattern: SafePattern): string | null {
   const compiled = compilePattern(pattern);

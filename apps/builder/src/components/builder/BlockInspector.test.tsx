@@ -142,6 +142,17 @@ describe('BlockInspector validation', () => {
     expect(screen.queryByText(/This pattern is ignored until fixed/)).not.toBeInTheDocument();
   });
 
+  it('explains that RE2 does not support lookahead', async () => {
+    resetStore([block('short_text', 'name', { label: 'Name' })]);
+    const user = open('name');
+    await user.click(screen.getByRole('tab', { name: 'Validation' }));
+    expect(screen.getByText(/RE2, not JavaScript or Python/)).toBeInTheDocument();
+    const pattern = screen.getByRole('textbox', { name: 'Pattern (regular expression)' });
+    await user.type(pattern, '(?=a)a');
+    expect(get('name').config['pattern']).toEqual({ source: '(?=a)a' });
+    expect(screen.getByText(/Lookahead and lookbehind are not supported in RE2/)).toBeInTheDocument();
+  });
+
   it('required and read-only are toggles; both together warn (B27)', async () => {
     resetStore([block('short_text', 'name')]);
     const user = open('name');
