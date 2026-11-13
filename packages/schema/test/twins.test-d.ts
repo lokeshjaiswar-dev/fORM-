@@ -247,6 +247,8 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ThemeTokensSchema>>().toEqualTypeOf<S.ThemeTokens>();
   expectTypeOf<z.infer<typeof S.ThemeSchema>>().toEqualTypeOf<S.Theme>();
   expectTypeOf<z.infer<typeof S.SectionNavSchema>>().toEqualTypeOf<S.SectionNav>();
+  expectTypeOf<z.infer<typeof S.SubmitButtonStyleSchema>>().toEqualTypeOf<S.SubmitButtonStyle>();
+  expectTypeOf<z.infer<typeof S.FormTitleStyleSchema>>().toEqualTypeOf<S.FormTitleStyle>();
   expectTypeOf<z.infer<typeof S.BehaviorSchema>>().toEqualTypeOf<S.Behavior>();
   expectTypeOf<z.infer<typeof S.TextKeySchema>>().toEqualTypeOf<S.TextKey>();
   expectTypeOf<z.infer<typeof S.TranslationEntrySchema>>().toEqualTypeOf<S.TranslationEntry>();

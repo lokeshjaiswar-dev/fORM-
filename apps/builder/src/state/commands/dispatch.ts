@@ -141,6 +141,10 @@ export function applyCommand(doc: FormDefinition, input: Command, ids: IdSource 
       case 'set_title':
         draft.title = command.title;
         break;
+      case 'set_title_style':
+        if (command.style) draft.titleStyle = command.style;
+        else delete draft.titleStyle;
+        break;
       case 'set_description':
         if (command.description) draft.description = command.description;
         else delete draft.description;
@@ -248,6 +252,8 @@ export function coalesceKey(command: Command, doc: FormDefinition): string | nul
   switch (command.type) {
     case 'set_title':
       return 'title';
+    case 'set_title_style':
+      return typingKey('titleStyle', doc.titleStyle ?? {}, command.style ?? {});
     case 'set_description':
       return command.description ? 'description' : null;
     case 'set_theme':

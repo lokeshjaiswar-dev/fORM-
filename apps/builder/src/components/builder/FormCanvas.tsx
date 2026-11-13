@@ -3,14 +3,13 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ArrowRight, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { coverPhoto, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, themeCssVars, type FormSection } from '@form/renderer';
+import { coverPhoto, formTitlePresentation, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, submitButtonPresentation, themeCssVars, type FormSection } from '@form/renderer';
 import type { BlockId, BlockLayout, FormDefinition, PageId, SectionNav as SectionNavConfig } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { addParagraph, endSlot, removePageBreak, setTitle } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import { useBuilderMode } from '@/pages/useBuilderMode';
 import { CanvasBlock } from '@/components/builder/CanvasBlock';
 import { insertTile } from '@/components/builder/insert';
 import { SlashMenu } from '@/components/builder/SlashMenu';
@@ -18,6 +17,8 @@ import { EmptyStart } from '@/components/builder/EmptyStart';
 import { cn } from '@/lib/utils';
 import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@dmacq/ui';
+import { SUBMIT_INSPECTOR_ID } from '@/components/builder/SubmitInspector';
+import { TITLE_INSPECTOR_ID } from '@/components/builder/TitleInspector';
 
 const M = defineMessages('builder', {
   'canvas.title_placeholder': 'Form title',
@@ -27,6 +28,9 @@ const M = defineMessages('builder', {
   'canvas.remove_page_break': 'Remove this page break',
   'canvas.delete': 'Delete',
   'canvas.drag': 'Drag to move',
+  'canvas.submit': 'Submit button',
+  'canvas.submit_settings': 'Open submit button settings',
+  'canvas.title_settings': 'Open form title settings',
 });
 
 interface Placed {
@@ -84,10 +88,15 @@ function parseLayout(key: string): CanvasPage[] {
 
 export function FormCanvas() {
   const title = useDoc((d) => d.title);
+  const titleStyle = useDoc((d) => d.titleStyle);
+  const titlePresent = formTitlePresentation(titleStyle);
   const key = useDoc(layoutKey);
   const tokens = useDoc((d) => d.theme.tokens);
   const layout = useDoc((d) => d.theme.layout);
   const submitLabel = useDoc((d) => labelString(d.behavior.submit.label));
+  const submit = useDoc((d) => d.behavior.submit);
+  const submitAlign = submit.align;
+  const submitPresent = submitButtonPresentation(submit, submit.align === 'full');
   const sectionKey = useDoc(sectionNavKey);
   const pages = useMemo(() => parseLayout(key), [key]);
   const sectionSteps = useMemo(() => parseSectionNav(sectionKey), [sectionKey]);
@@ -96,7 +105,7 @@ export function FormCanvas() {
   const ids = useMemo(() => pages.flatMap((p) => p.rows.flat().map((b) => b.id)), [pages]);
   const startBlank = useUiStore((s) => s.startBlank);
   const started = useUiStore((s) => s.started);
-  const [, setMode] = useBuilderMode();
+  const openInspector = useUiStore((s) => s.openInspector);
   const setActiveBlock = useUiStore((s) => s.setActiveBlock);
   const goToSection = (id: BlockId) => {
     document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -195,28 +204,49 @@ export function FormCanvas() {
         >
         {sectionNavStart && sectionSteps ? <SectionNav steps={sectionSteps.steps} nav={sectionSteps.nav} onSelect={goToSection} /> : null}
         <div className="fr-form-body">
-        <input
-          ref={titleRef}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+        <div
+          className={cn('mb-8 rounded-md', activeBlockId === TITLE_INSPECTOR_ID && 'ring-2 ring-primary ring-offset-2')}
+          style={titlePresent.headerStyle}
           onClick={(e) => {
             e.stopPropagation();
-            e.currentTarget.select();
+            openInspector(TITLE_INSPECTOR_ID);
           }}
-          onFocus={(e) => {
-            if (e.currentTarget.value) e.currentTarget.select();
-          }}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            if (showStart) startBlank();
-            else insertRef.current?.focus();
-          }}
-          placeholder={t(M['canvas.title_placeholder'])}
-          aria-label={t(M['canvas.title_placeholder'])}
-          className="mb-8 w-full border-0 bg-transparent text-left text-[40px] font-bold leading-[1.15] tracking-[-0.02em] shadow-none outline-none placeholder:text-[color-mix(in_srgb,var(--fr-text)_35%,transparent)]"
-          style={{ color: 'var(--fr-text)', fontFamily: 'var(--fr-heading-font)' }}
-        />
+        >
+          <input
+            ref={titleRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onClick={(e) => {
+              e.stopPropagation();
+              openInspector(TITLE_INSPECTOR_ID);
+              e.currentTarget.select();
+            }}
+            onFocus={(e) => {
+              openInspector(TITLE_INSPECTOR_ID);
+              if (e.currentTarget.value) e.currentTarget.select();
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault();
+              if (showStart) startBlank();
+              else insertRef.current?.focus();
+            }}
+            placeholder={t(M['canvas.title_placeholder'])}
+            aria-label={t(M['canvas.title_placeholder'])}
+            className={cn(
+              'w-full border-0 bg-transparent text-[40px] font-bold leading-[1.15] tracking-[-0.02em] shadow-none outline-none placeholder:text-[color-mix(in_srgb,var(--fr-text)_35%,transparent)]',
+              !titleStyle?.align && 'text-left',
+              titleStyle?.align === 'center' && 'text-center',
+              titleStyle?.align === 'right' && 'text-right',
+            )}
+            style={{
+              color: titlePresent.style.color ?? 'var(--fr-text)',
+              fontFamily: 'var(--fr-heading-font)',
+              fontSize: titlePresent.style.fontSize,
+              fontWeight: titlePresent.style.fontWeight ?? 700,
+            }}
+          />
+        </div>
 
         {showStart ? (
           <EmptyStart />
@@ -310,14 +340,29 @@ export function FormCanvas() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMode('preview')}
-              className="mt-6 inline-flex items-center gap-2 px-4 py-2 text-[15px] font-medium"
-              style={{ background: 'var(--fr-accent)', color: 'var(--fr-accentText)', borderRadius: 'var(--fr-radius)' }}
+            <div
+              className={cn('fr-nav mt-6 rounded-md', activeBlockId === SUBMIT_INSPECTOR_ID && 'ring-2 ring-primary ring-offset-2')}
+              data-align={submitAlign}
+              onClick={(e) => {
+                e.stopPropagation();
+                openInspector(SUBMIT_INSPECTOR_ID);
+              }}
             >
-              {submitLabel} <ArrowRight className="size-4" />
-            </button>
+              <button
+                type="button"
+                aria-label={t(M['canvas.submit_settings'])}
+                className={cn(submitPresent.className, 'inline-flex items-center gap-2 font-medium', submitAlign === 'full' && 'justify-center')}
+                style={{
+                  ...submitPresent.style,
+                  background: submitPresent.style.background ?? 'var(--fr-accent)',
+                  color: submitPresent.style.color ?? 'var(--fr-accentText)',
+                }}
+                data-submit-size={submitPresent['data-submit-size']}
+                data-submit-shape={submitPresent['data-submit-shape']}
+              >
+                {submitLabel || t(M['canvas.submit'])} <ArrowRight className="size-4" />
+              </button>
+            </div>
           </>
         )}
         </div>

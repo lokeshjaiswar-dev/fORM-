@@ -23,13 +23,13 @@ export function SectionTitle({ children }: { children: ReactNode }) {
   return <p className="pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</p>;
 }
 
-export function TextField({ label, value, onChange, placeholder, error, hint }: {
-  label: string; value: string | undefined; onChange: (value: string) => void; placeholder?: string; error?: string | null | undefined; hint?: string;
+export function TextField({ label, value, onChange, onBlur, placeholder, error, hint }: {
+  label: string; value: string | undefined; onChange: (value: string) => void; onBlur?: () => void; placeholder?: string; error?: string | null | undefined; hint?: string;
 }) {
   const id = useId();
   return (
     <Field label={label} error={error} hint={hint} htmlFor={id}>
-      <Input id={id} value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <Input id={id} value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
     </Field>
   );
 }

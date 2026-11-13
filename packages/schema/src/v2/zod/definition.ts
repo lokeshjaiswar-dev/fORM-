@@ -9,18 +9,27 @@ import { I18nBundleSchema } from './i18n.ts';
 import { ClientRuleSchema, LogicModelSchema } from './logic.ts';
 import { EndingSchema, PageSchema, WelcomeScreenSchema } from './pages.ts';
 import {
-  BlockIdSchema, BrandKitIdSchema, BrandTokenSchema, EndingIdSchema, ExtensionsSchema, FormIdSchema, FormVersionIdSchema, IsoInstantSchema,
+  BlockIdSchema, BrandKitIdSchema, BrandTokenSchema, EndingIdSchema, ExtensionsSchema, FormIdSchema, FormVersionIdSchema, HexColorSchema, IsoInstantSchema,
   LocaleSchema, OrgIdSchema, PageIdSchema, ProductIdSchema, PurposeIdSchema, RuleIdSchema, Sha256HexSchema, TeamIdSchema,
   TemplateBindingIdSchema, TemplateIdSchema, TemplateVariableNameSchema, TemplateVersionIdSchema, UserIdSchema, VariableIdSchema,
 } from './primitives.ts';
 import { RichDocSchema } from './rich-text.ts';
+import { FORM_TITLE_WEIGHTS } from '../definition.ts';
 import { BehaviorSchema, ThemeSchema } from './theme.ts';
+
+export const FormTitleStyleSchema = z.strictObject({
+  textColor: HexColorSchema.exactOptional(),
+  sizePx: z.number().int().min(20).max(72).exactOptional(),
+  align: z.enum(['left', 'center', 'right']).exactOptional(),
+  weight: z.enum(FORM_TITLE_WEIGHTS).exactOptional(),
+});
 
 export const FormDefinitionSchema = z.strictObject({
   schemaVersion: z.literal(SCHEMA_VERSION),
   revision: z.number().int().min(0),
   formId: FormIdSchema,
   title: z.string().max(500),
+  titleStyle: FormTitleStyleSchema.exactOptional(),
   description: RichDocSchema.exactOptional(),
   welcome: WelcomeScreenSchema.exactOptional(),
   blocks: keyed(z.partialRecord(BlockIdSchema, StoredBlockSchema)),

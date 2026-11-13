@@ -1,6 +1,6 @@
 import { REGISTRY, type AvailableType } from '@form/registry';
 import type {
-  Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
+  Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, FormTitleStyle, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
 } from '@form/schema';
 import { APP_IDS, blankDefinition, createBlock, inlineDoc, isField, placementOf, richDoc } from '@/lib/definition';
 import { focusLabelEnd } from '@/lib/focusLabel';
@@ -37,6 +37,16 @@ export function slotAfter(id: BlockId, doc: FormDefinition = currentDoc()): Page
 
 export function setTitle(title: string): CommandResult {
   return dispatch({ type: 'set_title', title });
+}
+
+export function setTitleStyle(patch: Partial<FormTitleStyle>): CommandResult {
+  const style = currentDoc().titleStyle ?? {};
+  const merged = { ...style, ...patch };
+  const next: FormTitleStyle = {};
+  for (const [key, value] of Object.entries(merged) as Array<[keyof FormTitleStyle, FormTitleStyle[keyof FormTitleStyle]]>) {
+    if (value !== undefined) next[key] = value;
+  }
+  return dispatch({ type: 'set_title_style', style: Object.keys(next).length ? next : null });
 }
 
 export function setDescription(description: RichDoc | null): CommandResult {

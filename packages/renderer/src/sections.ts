@@ -9,6 +9,8 @@ export interface FormSection {
 type Def = Pick<FormDefinition | PublicFormDefinition, 'pages' | 'blocks' | 'behavior'>;
 
 const SUBMIT_ID = '__submit' as BlockId;
+/** Sentinel for the builder title inspector (not a real block). */
+export const TITLE_SECTION_ID = '__form_title' as BlockId;
 
 export function resolveSectionNav(def: Def): SectionNav | null {
   const raw = def.behavior.sectionNav;

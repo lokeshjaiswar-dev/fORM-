@@ -26,6 +26,7 @@ const M = defineMessages('builder', {
   'settings.closed_message': 'Closed message',
   'settings.password': 'Password (optional)',
   'settings.password_hint': 'Kept in this browser for the preview; the server hashes it when forms are saved there.',
+  'form.submit_label': 'Submit',
 });
 
 type MessageEnding = Extract<Ending, { kind: 'message' }>;
@@ -103,8 +104,15 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
           className={field}
           value={submit}
           onChange={(e) => {
-            setSubmit(e.target.value);
-            if (e.target.value.trim()) setBehavior({ ...def.behavior, submit: { ...def.behavior.submit, label: e.target.value } });
+            const v = e.target.value;
+            setSubmit(v);
+            if (v.trim()) setBehavior({ ...def.behavior, submit: { ...def.behavior.submit, label: v } });
+          }}
+          onBlur={() => {
+            if (submit.trim()) return;
+            const fallback = t(M['form.submit_label']);
+            setSubmit(fallback);
+            setBehavior({ ...def.behavior, submit: { ...def.behavior.submit, label: fallback } });
           }}
         />
       </div>

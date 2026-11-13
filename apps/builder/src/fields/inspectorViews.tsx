@@ -1058,6 +1058,35 @@ export function SectionBreakGeneral({ block }: InspectorProps<'section_break'>) 
         value={block.config.description ?? ''}
         onChange={(description) => setConfig(block, { description: text(description) })}
       />
+      <ToggleRow
+        label={t(M['inspector.section_in_nav'])}
+        checked={block.config.showInNav !== false}
+        onChange={(showInNav) => setConfig(block, { showInNav })}
+      />
+      <ToggleRow
+        label={t(M['inspector.section_heading'])}
+        checked={block.config.showHeading === true}
+        onChange={(showHeading) => setConfig(block, { showHeading })}
+      />
+      {block.config.showHeading ? (
+        <SelectField
+          label={t(M['inspector.section_heading_align'])}
+          value={block.config.headingAlign ?? 'left'}
+          options={[
+            { value: 'left', label: t(M['inspector.section_align_start']) },
+            { value: 'center', label: t(M['inspector.section_align_center']) },
+            { value: 'right', label: t(M['inspector.section_align_end']) },
+          ]}
+          onChange={(headingAlign) => setConfig(block, { headingAlign: headingAlign as 'left' | 'center' | 'right' })}
+        />
+      ) : null}
+      <SelectField
+        label={t(M['inspector.section_marker'])}
+        value={block.config.marker ?? 'card'}
+        options={(['line', 'card', 'pill', 'badge'] as const).map((v) => ({ value: v, label: t(M[`inspector.section_marker_${v}`]) }))}
+        onChange={(marker) => setConfig(block, { marker })}
+      />
+      <ConfigProblem block={block} />
     </>
   );
 }

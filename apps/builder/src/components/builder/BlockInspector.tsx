@@ -22,6 +22,8 @@ import { Field, SectionTitle, SelectField, TextField, ToggleRow } from '@/compon
 import { ApiValidationSection } from '@/components/builder/inspector/ApiValidationSection';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
 import { PrivacySection } from '@/components/builder/inspector/PrivacySection';
+import { SUBMIT_INSPECTOR_ID, SubmitInspector } from '@/components/builder/SubmitInspector';
+import { TITLE_INSPECTOR_ID, TitleInspector } from '@/components/builder/TitleInspector';
 
 const M = defineMessages('builder', {
   'inspector.title': 'Block settings',
@@ -76,6 +78,8 @@ const M = defineMessages('builder', {
   'inspector.save_field_name': 'Name',
   'inspector.save_field_done': 'Saved. You can add it from Your fields in the sidebar.',
   'inspector.save_field_fail': 'This field could not be saved.',
+  'inspector.submit_type': 'Submit button',
+  'inspector.form_title_type': 'Form title',
 });
 
 const UNIQUE_TYPES = new Set<FieldBlock['type']>(['short_text', 'email', 'phone', 'url', 'number']);
@@ -127,15 +131,18 @@ export function BlockInspector() {
   const setInspectorWidth = useUiStore((s) => s.setInspectorWidth);
   const activeBlockId = useUiStore((s) => s.activeBlockId);
   const closeInspector = useUiStore((s) => s.closeInspector);
-  const block = useBlock(activeBlockId ?? ('' as BlockId));
+  const submitSelected = activeBlockId === SUBMIT_INSPECTOR_ID;
+  const titleSelected = activeBlockId === TITLE_INSPECTOR_ID;
+  const chromeSelected = submitSelected || titleSelected;
+  const block = useBlock(chromeSelected ? ('' as BlockId) : (activeBlockId ?? ('' as BlockId)));
   const [resizing, setResizing] = useState(false);
   /* The picked tab belongs to the block it was picked on: another block opens on General. */
   const [picked, setPicked] = useState<{ id: BlockId | null; tab: Tab }>({ id: activeBlockId, tab: 'general' });
   const tab = picked.id === activeBlockId ? picked.tab : 'general';
   const setTab = (next: Tab) => setPicked({ id: activeBlockId, tab: next });
 
-  const open = inspectorOpen && !!block && block.type !== 'unsupported';
-  if (!block || block.type === 'unsupported') {
+  const open = inspectorOpen && (chromeSelected || (!!block && block.type !== 'unsupported'));
+  if (!chromeSelected && (!block || block.type === 'unsupported')) {
     return (
       <aside
         className="relative flex shrink-0 flex-col overflow-hidden border-l border-transparent bg-background transition-[width,border-color] duration-300 ease-out"
@@ -143,9 +150,61 @@ export function BlockInspector() {
       />
     );
   }
-  const tabs = tabsFor(block);
+  if (chromeSelected) {
+    return (
+      <aside
+        aria-label={t(M['inspector.title'])}
+        className={cn(
+          'relative flex shrink-0 flex-col overflow-hidden border-l bg-background',
+          open ? 'border-border' : 'border-transparent',
+          !resizing && 'transition-[width,border-color] duration-300 ease-out',
+        )}
+        style={{ width: open ? inspectorWidth : 0 }}
+      >
+        <button
+          type="button"
+          aria-label={t(M['inspector.resize'])}
+          className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-state-hover"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setResizing(true);
+            const startX = e.clientX;
+            const startW = inspectorWidth;
+            function move(ev: MouseEvent) {
+              setInspectorWidth(startW + (startX - ev.clientX));
+            }
+            function up() {
+              setResizing(false);
+              window.removeEventListener('mousemove', move);
+              window.removeEventListener('mouseup', up);
+            }
+            window.addEventListener('mousemove', move);
+            window.addEventListener('mouseup', up);
+          }}
+        />
+        <div className="flex min-h-0 flex-1 flex-col" style={{ width: inspectorWidth }}>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <h2 className="text-[14px] font-semibold">{t(M['inspector.title'])}</h2>
+              <p className="text-[12px] text-muted-foreground">{t(submitSelected ? M['inspector.submit_type'] : M['inspector.form_title_type'])}</p>
+            </div>
+            <Tooltip content={t(M['inspector.close'])}>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['inspector.close'])} onClick={closeInspector}>
+                <X className="size-4" />
+              </Button>
+            </Tooltip>
+          </div>
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+            {submitSelected ? <SubmitInspector /> : <TitleInspector />}
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  const tabs = tabsFor(block!);
   const shown = tabs.includes(tab) ? tab : 'general';
-  const typeName = tileOf(block.type, block.config as Readonly<Record<string, unknown>>)?.label ?? block.type;
+  const typeName = tileOf(block!.type, block!.config as Readonly<Record<string, unknown>>)?.label ?? block!.type;
 
   return (
     <aside
@@ -200,11 +259,11 @@ export function BlockInspector() {
             ))}
           </TabsList>
           <TabsContent value={shown} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {shown === 'general' ? <GeneralTab block={block} /> : null}
-            {shown === 'options' ? <Registered block={block} section="options" /> : null}
-            {shown === 'validation' && isField(block) ? <ValidationTab block={block} /> : null}
-            {shown === 'logic' ? <LogicTab blockId={block.id} /> : null}
-            {shown === 'privacy' && isField(block) ? <PrivacySection block={block} /> : null}
+            {shown === 'general' ? <GeneralTab block={block!} /> : null}
+            {shown === 'options' ? <Registered block={block!} section="options" /> : null}
+            {shown === 'validation' && isField(block!) ? <ValidationTab block={block!} /> : null}
+            {shown === 'logic' ? <LogicTab blockId={block!.id} /> : null}
+            {shown === 'privacy' && isField(block!) ? <PrivacySection block={block!} /> : null}
           </TabsContent>
         </Tabs>
       </div>

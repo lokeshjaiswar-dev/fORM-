@@ -88,8 +88,20 @@ export const DEFAULT_SECTION_NAV: SectionNav = {
   chrome: 'cards',
 };
 
+export const SUBMIT_BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
+export type SubmitButtonSize = (typeof SUBMIT_BUTTON_SIZES)[number];
+export const SUBMIT_BUTTON_SHAPES = ['square', 'rounded', 'pill'] as const;
+export type SubmitButtonShape = (typeof SUBMIT_BUTTON_SHAPES)[number];
+
+export interface SubmitButtonStyle {
+  bgColor?: HexColor;
+  textColor?: HexColor;
+  size?: SubmitButtonSize;
+  shape?: SubmitButtonShape;
+}
+
 export interface Behavior {
-  submit: { label: LabelText; align: 'left' | 'center' | 'right' | 'full'; printButton?: boolean }; // FLD-50
+  submit: { label: LabelText; align: 'left' | 'center' | 'right' | 'full'; printButton?: boolean } & SubmitButtonStyle; // FLD-50
   navigation: { allowBack: boolean; showPageTitles: boolean; autoAdvance?: boolean; keyboardShortcuts?: boolean };
   /** Present when the form uses section breaks; omitted on older forms. */
   sectionNav?: SectionNav;

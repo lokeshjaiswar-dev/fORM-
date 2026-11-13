@@ -3,6 +3,9 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BlockId, ChoiceOption, IsoInstant, OptionId } from '@form/schema';
 import { BlockInspector } from '@/components/builder/BlockInspector';
+import { SUBMIT_INSPECTOR_ID } from '@/components/builder/SubmitInspector';
+import { TITLE_INSPECTOR_ID } from '@/components/builder/TitleInspector';
+import { labelString } from '@/fields/style';
 import { previewVersion } from '@/lib/preview';
 import { useUiStore } from '@/state/uiStore';
 import { block, doc, resetStore, rule, text } from '@/test/fixtures';
@@ -342,6 +345,46 @@ describe('BlockInspector matrix labels', () => {
     expect(col).toHaveValue('');
     await user.type(col, 'Yes');
     expect((get('grid').config['columns'] as Array<{ label: string }>)[0]?.label).toBe('Yes');
+  });
+});
+
+describe('BlockInspector form title', () => {
+  it('opens settings for colour, size, alignment and weight', async () => {
+    resetStore([block('short_text', 'name')]);
+    const user = userEvent.setup();
+    useUiStore.getState().openInspector(TITLE_INSPECTOR_ID);
+    render(<BlockInspector />);
+    expect(screen.getByText('Form title')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Center' }));
+    expect(doc().titleStyle).toEqual({ align: 'center' });
+    await user.clear(screen.getByRole('spinbutton', { name: 'Title size' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Title size' }), '52');
+    expect(doc().titleStyle).toMatchObject({ align: 'center', sizePx: 52 });
+    await user.click(screen.getByRole('combobox', { name: 'Weight' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Normal' }));
+    expect(doc().titleStyle).toMatchObject({ weight: 'normal' });
+  });
+});
+
+describe('BlockInspector submit', () => {
+  it('opens settings for label, alignment, and print', async () => {
+    resetStore([block('short_text', 'name')]);
+    const user = userEvent.setup();
+    useUiStore.getState().openInspector(SUBMIT_INSPECTOR_ID);
+    render(<BlockInspector />);
+    expect(screen.getByText('Submit button')).toBeInTheDocument();
+    const label = screen.getByRole('textbox', { name: 'Button label' });
+    await user.clear(label);
+    await user.type(label, 'Send');
+    expect(labelString(doc().behavior.submit.label)).toBe('Send');
+    await user.click(screen.getByRole('radio', { name: 'Full width' }));
+    expect(doc().behavior.submit.align).toBe('full');
+    await user.click(screen.getByRole('combobox', { name: 'Size' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Large' }));
+    expect(doc().behavior.submit.size).toBe('lg');
+    await user.click(screen.getByRole('combobox', { name: 'Shape' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Pill' }));
+    expect(doc().behavior.submit.shape).toBe('pill');
   });
 });
 

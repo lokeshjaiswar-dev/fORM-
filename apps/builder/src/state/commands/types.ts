@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
-  BehaviorSchema, BlockIdSchema, BlockSchema, DocumentOpSchema, EndingIdSchema, EndingSchema, FormDefinitionSchema, PageIdSchema, PurposeSchema,
+  BehaviorSchema, BlockIdSchema, BlockSchema, DocumentOpSchema, EndingIdSchema, EndingSchema, FormDefinitionSchema, FormTitleStyleSchema, PageIdSchema, PurposeSchema,
   RichDocSchema, RuleIdSchema, RuleSchema, ThemeSchema,
-  type Behavior, type Block, type BlockId, type DocumentOp, type Ending, type EndingId, type FormDefinition, type PageId, type Purpose,
+  type Behavior, type Block, type BlockId, type DocumentOp, type Ending, type EndingId, type FormDefinition, type FormTitleStyle, type PageId, type Purpose,
   type RichDoc, type Rule, type RuleId, type Theme,
 } from '@form/schema';
 
@@ -31,6 +31,7 @@ export interface PageSlot {
  */
 export type Command =
   | { type: 'set_title'; title: string }
+  | { type: 'set_title_style'; style: FormTitleStyle | null }
   | { type: 'set_description'; description: RichDoc | null }
   | { type: 'set_theme'; theme: Theme }
   | { type: 'set_behavior'; behavior: Behavior }
@@ -55,6 +56,7 @@ const slot = z.strictObject({ pageId: PageIdSchema, index });
 /** The command twin: payloads are checked against the strict v2 twins (unknown keys rejected). */
 export const CommandSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('set_title'), title: z.string().max(500) }),
+  z.strictObject({ type: z.literal('set_title_style'), style: FormTitleStyleSchema.nullable() }),
   z.strictObject({ type: z.literal('set_description'), description: RichDocSchema.nullable() }),
   z.strictObject({ type: z.literal('set_theme'), theme: ThemeSchema }),
   z.strictObject({ type: z.literal('set_behavior'), behavior: BehaviorSchema }),

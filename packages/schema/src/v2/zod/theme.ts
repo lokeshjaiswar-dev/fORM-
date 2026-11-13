@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { keyed } from './_util.ts';
 import {
   SECTION_NAV_CHROMES, SECTION_NAV_COMPLETED, SECTION_NAV_CONNECTORS, SECTION_NAV_CURRENT, SECTION_NAV_MODES, SECTION_NAV_PLACEMENTS, SECTION_NAV_VARIANTS,
+  SUBMIT_BUTTON_SHAPES, SUBMIT_BUTTON_SIZES,
 } from '../theme.ts';
 import {
   AssetRefSchema, BrandRefSchema, FontIdSchema, HexColorSchema, PurposeIdSchema, TemplateIdSchema, TemplateVersionIdSchema, TimeZoneSchema,
@@ -36,6 +37,13 @@ export const ThemeSchema = z.strictObject({
   customCss: z.string().max(50 * 1024).exactOptional(),
 });
 
+export const SubmitButtonStyleSchema = z.strictObject({
+  bgColor: HexColorSchema.exactOptional(),
+  textColor: HexColorSchema.exactOptional(),
+  size: z.enum(SUBMIT_BUTTON_SIZES).exactOptional(),
+  shape: z.enum(SUBMIT_BUTTON_SHAPES).exactOptional(),
+});
+
 export const SectionNavSchema = z.strictObject({
   enabled: z.boolean(),
   mode: z.enum(SECTION_NAV_MODES).exactOptional(),
@@ -58,7 +66,11 @@ export const SectionNavSchema = z.strictObject({
 });
 
 export const BehaviorSchema = z.strictObject({
-  submit: z.strictObject({ label: LabelTextSchema, align: z.enum(['left', 'center', 'right', 'full']), printButton: z.boolean().exactOptional() }),
+  submit: SubmitButtonStyleSchema.extend({
+    label: LabelTextSchema,
+    align: z.enum(['left', 'center', 'right', 'full']),
+    printButton: z.boolean().exactOptional(),
+  }),
   navigation: z.strictObject({
     allowBack: z.boolean(),
     showPageTitles: z.boolean(),

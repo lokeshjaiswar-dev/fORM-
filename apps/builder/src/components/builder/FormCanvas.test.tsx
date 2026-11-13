@@ -8,6 +8,9 @@ import { useUiStore } from '@/state/uiStore';
 import { inlineDoc } from '@/lib/definition';
 import { useBlockClipboard } from '@/components/builder/useBlockClipboard';
 import { block, blockIds, doc, keyOf, resetStore } from '@/test/fixtures';
+import { SUBMIT_INSPECTOR_ID } from '@/components/builder/SubmitInspector';
+import { TITLE_INSPECTOR_ID } from '@/components/builder/TitleInspector';
+import { setTitleStyle } from '@/state/actions';
 import { renderCanvas } from '@/test/canvas';
 import { renders, resetRenders } from '@/test/profiler';
 
@@ -94,6 +97,22 @@ describe('FormCanvas', () => {
     expect(doc().pages.map((p) => p.children.length)).toEqual([3]);
   });
 
+  it('focusing the form title selects it for block settings', async () => {
+    renderCanvas();
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText('Form title'));
+    expect(useUiStore.getState().activeBlockId).toBe(TITLE_INSPECTOR_ID);
+    expect(useUiStore.getState().inspectorOpen).toBe(true);
+  });
+
+  it('clicking the submit button selects it for block settings', async () => {
+    renderCanvas();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Open submit button settings' }));
+    expect(useUiStore.getState().activeBlockId).toBe(SUBMIT_INSPECTOR_ID);
+    expect(useUiStore.getState().inspectorOpen).toBe(true);
+  });
+
   it('theme tokens colour the canvas and the submit button', () => {
     renderCanvas();
     act(() => {
@@ -109,7 +128,9 @@ describe('FormCanvas', () => {
     const title = screen.getByLabelText('Form title');
     const canvas = title.closest('[data-layout]');
     expect(canvas).toHaveStyle({ '--fr-accent': '#7c3aed', '--fr-page': '#fef3c7', '--fr-text': '#111827', color: 'var(--fr-text)', backgroundColor: 'var(--fr-page)' });
-    expect(screen.getByRole('button', { name: /submit/i })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
+    act(() => setTitleStyle({ textColor: '#dc2626', sizePx: 36 }));
+    expect(title).toHaveStyle({ color: 'rgb(220, 38, 38)', fontSize: '36px' });
+    expect(screen.getByRole('button', { name: 'Open submit button settings' })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
   });
 
   it('keeps the slash menu unclipped and on builder chrome after a cover theme', async () => {

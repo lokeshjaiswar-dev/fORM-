@@ -21,6 +21,8 @@ import { packRows } from './layout/rows.ts';
 import { MESSAGES } from './messages.ts';
 import { SectionNav, stepsFor } from './SectionNav.tsx';
 import { listFormSections, resolveSectionNav, sectionIndexForPage, sectionNavAtStart, SUBMIT_SECTION_ID } from './sections.ts';
+import { formTitlePresentation } from './formTitle.ts';
+import { submitButtonPresentation } from './submitButton.ts';
 import { rhfResolver } from './rhfResolver.ts';
 import { RichTextView } from './richtext/RichTextView.tsx';
 import { EndingScreen } from './screens/Ending.tsx';
@@ -135,14 +137,19 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
         )
       ) : null}
       {first && (def.title || def.description || mode === 'preview') ? (
-        <header className="fr-header">
-          {def.title ? (
-            <h1 className="fr-title">{def.title}</h1>
-          ) : mode === 'preview' ? (
-            <h1 className="fr-title fr-title-placeholder">{t(MESSAGES['title.untitled'])}</h1>
-          ) : null}
-          {def.description ? <div className="fr-description fr-rich"><RichTextView doc={def.description} resolve={resolve} /></div> : null}
-        </header>
+        (() => {
+          const titlePresent = formTitlePresentation(def.titleStyle);
+          return (
+            <header className="fr-header" style={titlePresent.headerStyle} data-align={def.titleStyle?.align}>
+              {def.title ? (
+                <h1 className={titlePresent.className} style={titlePresent.style}>{def.title}</h1>
+              ) : mode === 'preview' ? (
+                <h1 className={`${titlePresent.className} fr-title-placeholder`} style={titlePresent.style}>{t(MESSAGES['title.untitled'])}</h1>
+              ) : null}
+              {def.description ? <div className="fr-description fr-rich"><RichTextView doc={def.description} resolve={resolve} /></div> : null}
+            </header>
+          );
+        })()
       ) : null}
       {def.behavior.navigation.showPageTitles && page?.title ? <h2 className="fr-page-title">{text(page.title)}</h2> : null}
       <div className="fr-blocks">
@@ -168,8 +175,26 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
             {text(page?.nav?.backLabel) || t('system:nav.back')}
           </Button>
         ) : null}
-        {page?.nav?.showNext === false && !isLast ? null : (
-          <Button type="submit" disabled={sending} aria-disabled={busy || undefined} aria-busy={busy || undefined} className={isLast && def.behavior.submit.align === 'full' ? 'w-full' : undefined}>
+        {page?.nav?.showNext === false && !isLast ? null : isLast ? (
+          (() => {
+            const present = submitButtonPresentation(def.behavior.submit, def.behavior.submit.align === 'full');
+            return (
+              <Button
+                type="submit"
+                disabled={sending}
+                aria-disabled={busy || undefined}
+                aria-busy={busy || undefined}
+                className={present.className}
+                style={present.style}
+                data-submit-size={present['data-submit-size']}
+                data-submit-shape={present['data-submit-shape']}
+              >
+                {sending ? t(MESSAGES['submit.sending']) : nextLabel}
+              </Button>
+            );
+          })()
+        ) : (
+          <Button type="submit" disabled={sending} aria-disabled={busy || undefined} aria-busy={busy || undefined} className="fr-button fr-primary">
             {sending ? t(MESSAGES['submit.sending']) : nextLabel}
           </Button>
         )}

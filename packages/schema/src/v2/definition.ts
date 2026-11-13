@@ -8,6 +8,7 @@ import type { Ending, Page, WelcomeScreen } from './pages.ts';
 import type { RichDoc } from './rich-text.ts';
 import type { BrandToken, TemplateVariableName } from './template-primitives.ts';
 import type { TemplateKind } from './templates.ts';
+import type { HexColor } from './ids.ts';
 import type { Behavior, Theme } from './theme.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -16,6 +17,17 @@ import type { Behavior, Theme } from './theme.ts';
 
 export const SCHEMA_VERSION = 2 as const;
 
+export const FORM_TITLE_WEIGHTS = ['normal', 'medium', 'semibold', 'bold'] as const;
+export type FormTitleWeight = (typeof FORM_TITLE_WEIGHTS)[number];
+
+/** Respondent-facing styling for the form title (PROP-02); the title string lives on `title`. */
+export interface FormTitleStyle {
+  textColor?: HexColor;
+  sizePx?: number; // 20..72
+  align?: 'left' | 'center' | 'right';
+  weight?: FormTitleWeight;
+}
+
 /** Everything that decides what respondents see and how answers are judged. */
 export interface FormDefinition {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -23,6 +35,7 @@ export interface FormDefinition {
   revision: number;
   formId: FormId;
   title: string;
+  titleStyle?: FormTitleStyle;
   description?: RichDoc;
   welcome?: WelcomeScreen;
   blocks: Partial<Record<BlockId, StoredBlock>>;
