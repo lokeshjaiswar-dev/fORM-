@@ -29,6 +29,7 @@ const MESSAGES: Record<string, string> = {
   'config.bounds': 'These fields have limits that cannot both be true (for example min greater than max).',
   'config.unique': 'These fields use different uniqueness rules and cannot be combined.',
   'config.apiValidation': 'These fields use different API validation settings and cannot be combined.',
+  'config.apiOptions': 'These fields load choices from different APIs and cannot be combined.',
   'config.messages': 'These fields have different error messages for the same error.',
   'config.description': 'These fields have different help text and cannot be combined.',
   'config.compliance.category': 'These fields are classified as different kinds of data and cannot be combined.',
@@ -42,7 +43,7 @@ const MESSAGES: Record<string, string> = {
 
 const REASON_PREFIXES = [
   'config.pattern', 'config.preset', 'config.mask', 'config.parts', 'config.requiredParts', 'config.options',
-  'config.display', 'config.defaultValue', 'config.bounds', 'config.unique', 'config.apiValidation', 'config.messages',
+  'config.display', 'config.defaultValue', 'config.bounds', 'config.unique', 'config.apiValidation', 'config.apiOptions', 'config.messages',
   'config.description', 'config.compliance.category',
 ] as const;
 
@@ -295,6 +296,9 @@ export function combineFields(left: FieldBlock, right: FieldBlock): CombineResul
   if (left.apiValidation && right.apiValidation && JSON.stringify(left.apiValidation) !== JSON.stringify(right.apiValidation)) {
     return { ok: false, reason: 'config.apiValidation', message: conflictMessage('config.apiValidation') };
   }
+  if (left.apiOptions && right.apiOptions && JSON.stringify(left.apiOptions) !== JSON.stringify(right.apiOptions)) {
+    return { ok: false, reason: 'config.apiOptions', message: conflictMessage('config.apiOptions') };
+  }
   if (left.description && right.description && plainLabelText(left.description) !== plainLabelText(right.description)) {
     return { ok: false, reason: 'config.description', message: conflictMessage('config.description') };
   }
@@ -318,6 +322,8 @@ export function combineFields(left: FieldBlock, right: FieldBlock): CombineResul
   if (left.hideLabel || right.hideLabel) field.hideLabel = true;
   if (left.unique ?? right.unique) field.unique = left.unique ?? right.unique;
   if (left.apiValidation ?? right.apiValidation) field.apiValidation = left.apiValidation ?? right.apiValidation;
+  if (left.apiOptions) field.apiOptions = left.apiOptions;
+  else if (right.apiOptions) field.apiOptions = right.apiOptions;
   if (left.prefill ?? right.prefill) field.prefill = left.prefill ?? right.prefill;
   if (left.description ?? right.description) field.description = left.description ?? right.description;
   if (messages.value) field.messages = messages.value;

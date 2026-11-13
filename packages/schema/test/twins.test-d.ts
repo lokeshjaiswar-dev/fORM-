@@ -139,6 +139,8 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ApiAuthSchema>>().toEqualTypeOf<S.ApiAuth>();
   expectTypeOf<z.infer<typeof S.ApiSuccessRuleSchema>>().toEqualTypeOf<S.ApiSuccessRule>();
   expectTypeOf<z.infer<typeof S.ApiValidationSchema>>().toEqualTypeOf<S.ApiValidation>();
+  expectTypeOf<z.infer<typeof S.ApiRequestConfigSchema>>().toEqualTypeOf<S.ApiRequestConfig>();
+  expectTypeOf<z.infer<typeof S.ApiOptionsSchema>>().toEqualTypeOf<S.ApiOptions>();
   expectTypeOf<z.infer<typeof S.TextPresetSchema>>().toEqualTypeOf<S.TextPreset>();
   expectTypeOf<z.infer<typeof S.SafePatternSchema>>().toEqualTypeOf<S.SafePattern>();
   expectTypeOf<z.infer<typeof S.InputMaskSchema>>().toEqualTypeOf<S.InputMask>();

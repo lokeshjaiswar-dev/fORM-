@@ -38,15 +38,26 @@ export const ApiSuccessRuleSchema = z.union([
   z.strictObject({ type: z.literal('number'), equals: z.number().finite() }),
   z.strictObject({ type: z.literal('string'), equals: z.array(z.string().min(1).max(256)).min(1).max(3) }),
 ]);
-export const ApiValidationSchema = z.strictObject({
+const apiRequest = {
   url: SafeUrlSchema,
   method: z.enum(['GET', 'POST']).exactOptional(),
   query: z.array(ApiPairSchema).max(32).exactOptional(),
   body: z.array(ApiPairSchema).max(32).exactOptional(),
   auth: ApiAuthSchema.exactOptional(),
   parser: z.enum(['json', 'xml']).exactOptional(),
+};
+export const ApiRequestConfigSchema = z.strictObject(apiRequest);
+export const ApiValidationSchema = z.strictObject({
+  ...apiRequest,
   responseKey: z.string().min(1).max(256).exactOptional(),
   success: ApiSuccessRuleSchema.exactOptional(),
+});
+export const ApiOptionsSchema = z.strictObject({
+  ...apiRequest,
+  itemsPath: z.string().max(256).exactOptional(),
+  collectionKind: z.enum(['array', 'map']).exactOptional(),
+  labelKey: z.string().max(256).exactOptional(),
+  valueKey: z.string().max(256).exactOptional(),
 });
 
 /** Shape of BlockBase<T>. */
@@ -79,4 +90,5 @@ export const fieldBase = <T extends string>(type: T) => ({
   prefill: PrefillConfigSchema.exactOptional(),
   unique: UniqueConstraintSchema.exactOptional(),
   apiValidation: ApiValidationSchema.exactOptional(),
+  apiOptions: ApiOptionsSchema.exactOptional(),
 });

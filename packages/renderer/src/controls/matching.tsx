@@ -9,7 +9,7 @@ export function MatchingField({ block, field }: ControlProps<'matching'>) {
   const { t } = useRenderer();
   const { text } = usePipes();
   const answer = useAnswer(block);
-  const options = useOptions(block.id, block.config.options, block.config.shuffle);
+  const options = useOptions(block.id, block.config.options, block.config.shuffle, block.apiOptions);
   const pairs = answer.value ?? {};
   const taken = new Set(block.config.exclusive ? Object.values(pairs) : []);
   const attrs = inputAttrs(field);

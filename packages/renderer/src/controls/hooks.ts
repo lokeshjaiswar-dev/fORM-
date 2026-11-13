@@ -1,7 +1,7 @@
-import { useCallback, type ComponentType } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { useController, useFormContext } from 'react-hook-form';
 import type { AvailableType } from '@form/registry';
-import type { AnswerValue, AnswerValueMap, BlockOf, ChoiceOption, FieldBlockOf, LabelText, OptionId, ValueFieldType } from '@form/schema';
+import type { AnswerValue, AnswerValueMap, ApiOptions, BlockOf, ChoiceOption, FieldBlockOf, LabelText, OptionId, ValueFieldType } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { useEvaluation } from '../eval/context.ts';
 import type { RichTextResolvers } from '../richtext/RichTextView.tsx';
@@ -110,12 +110,45 @@ export function usePipes(): { ctx: PipeContext; text: (label: LabelText | undefi
   return { ctx, text: (label) => labelText(label, ctx), resolve: { pipe: (attrs) => pipeValue(attrs, ctx) } };
 }
 
-/** Options as shown: logic-hidden ones removed, shuffled per session when the block asks (Other is not an option). */
-export function useOptions(blockId: string, options: readonly ChoiceOption[], shuffle: false | { keepLast: number } | boolean | undefined): ChoiceOption[] {
+function useFetchedOptions(api: ApiOptions | undefined): ChoiceOption[] | undefined {
+  const fingerprint = api ? JSON.stringify(api) : '';
+  const [rows, setRows] = useState<ChoiceOption[] | undefined>();
+  useEffect(() => {
+    if (!fingerprint) {
+      setRows(undefined);
+      return;
+    }
+    const config = JSON.parse(fingerprint) as ApiOptions;
+    if (!config.url || config.itemsPath === undefined) {
+      setRows(undefined);
+      return;
+    }
+    let cancelled = false;
+    void import('./apiOptions.ts').then(({ fetchApiOptions }) =>
+      fetchApiOptions(config).then((next) => {
+        if (!cancelled) setRows(next.length ? next : undefined);
+      }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [fingerprint]);
+  return rows;
+}
+
+/** Options as shown: API list when configured, then logic-hidden ones removed, shuffled per session when the block asks. */
+export function useOptions(
+  blockId: string,
+  options: readonly ChoiceOption[],
+  shuffle: false | { keepLast: number } | boolean | undefined,
+  api?: ApiOptions,
+): ChoiceOption[] {
   const { meta } = useRenderer();
   const { state } = useEvaluation();
+  const loaded = useFetchedOptions(api);
+  const source = loaded ?? options;
   const hidden = new Set<OptionId>(state.hiddenOptions[blockId as keyof typeof state.hiddenOptions] ?? []);
-  const visible = options.filter((o) => !hidden.has(o.id));
+  const visible = source.filter((o) => !hidden.has(o.id));
   if (!shuffle) return visible;
   return seededShuffle(visible, `${meta.shuffleSeed}:${blockId}`, typeof shuffle === 'object' ? shuffle.keepLast : 0);
 }

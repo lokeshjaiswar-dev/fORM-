@@ -1,4 +1,4 @@
-import type { AnswerValue, Answers, ApiSuccessRule, ApiValidation, FieldBlock, FieldError, PublicFormDefinition, SafeUrl } from '@form/schema';
+import type { AnswerValue, Answers, ApiRequestConfig, ApiSuccessRule, ApiValidation, FieldBlock, FieldError, PublicFormDefinition, SafeUrl } from '@form/schema';
 
 export interface ApiCheckResult {
   ok: boolean;
@@ -13,9 +13,18 @@ export interface ApiResponseLeaf {
   value: string | number | boolean;
 }
 
+export interface ApiCollection {
+  key: string;
+  kind: 'array' | 'map';
+  length: number;
+  primitive: boolean;
+  itemKeys: string[];
+}
+
 export interface ApiParseResult {
   data: unknown;
   leaves: ApiResponseLeaf[];
+  collections: ApiCollection[];
 }
 
 const HEADER_NAME = /^[\w!#$%&'*+.^`|~-]+$/;
@@ -25,7 +34,7 @@ export function parseApiBody(text: string, parser: 'json' | 'xml'): ApiParseResu
   try {
     return flattenUnknown(JSON.parse(text) as unknown);
   } catch {
-    return { data: undefined, leaves: [] };
+    return { data: undefined, leaves: [], collections: [] };
   }
 }
 
@@ -60,27 +69,65 @@ export function defaultSuccess(leaf: ApiResponseLeaf): ApiSuccessRule {
   return { type: 'string', equals: [text] };
 }
 
-function flattenUnknown(data: unknown): ApiParseResult {
-  const leaves: ApiResponseLeaf[] = [];
-  walk(data, '', leaves);
-  return { data, leaves };
+const RECORD_KEYS = new Set(['id', 'name', 'label', 'code', 'value', 'title', 'key', 'ok', 'success', 'status', 'message', 'count']);
+
+function isPrimitive(value: unknown): value is string | number | boolean {
+  return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string';
 }
 
-function walk(value: unknown, path: string, leaves: ApiResponseLeaf[]): void {
+function objectItemKeys(item: unknown): string[] {
+  if (item == null || typeof item !== 'object' || Array.isArray(item)) return [];
+  return Object.keys(item).slice(0, 32);
+}
+
+function asMapCollection(value: Record<string, unknown>, path: string): ApiCollection | undefined {
+  const entries = Object.entries(value);
+  if (entries.length === 0) return undefined;
+  const values = entries.map(([, v]) => v);
+  if (entries.length >= 2 && values.every((v) => v !== null && typeof v === 'object' && !Array.isArray(v))) {
+    return { key: path, kind: 'map', length: entries.length, primitive: false, itemKeys: objectItemKeys(values[0]) };
+  }
+  if (values.every(isPrimitive)) {
+    const keys = entries.map(([k]) => k);
+    if (keys.length < 2) return undefined;
+    if (keys.some((k) => RECORD_KEYS.has(k.toLowerCase()))) return undefined;
+    return { key: path, kind: 'map', length: entries.length, primitive: true, itemKeys: [] };
+  }
+  return undefined;
+}
+
+function flattenUnknown(data: unknown): ApiParseResult {
+  const leaves: ApiResponseLeaf[] = [];
+  const collections: ApiCollection[] = [];
+  walk(data, '', leaves, collections);
+  return { data, leaves, collections };
+}
+
+function walk(value: unknown, path: string, leaves: ApiResponseLeaf[], collections: ApiCollection[]): void {
   if (value === null || value === undefined) return;
-  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+  if (isPrimitive(value)) {
     if (!path) return;
     const type: ApiLeafType = typeof value === 'boolean' ? 'boolean' : typeof value === 'number' ? 'number' : 'string';
     leaves.push({ key: path, type, value });
     return;
   }
   if (Array.isArray(value)) {
-    value.forEach((item, i) => walk(item, path ? `${path}[${i}]` : `[${i}]`, leaves));
+    collections.push({
+      key: path,
+      kind: 'array',
+      length: value.length,
+      primitive: value.every(isPrimitive),
+      itemKeys: objectItemKeys(value.find((item) => item && typeof item === 'object' && !Array.isArray(item))),
+    });
+    value.forEach((item, i) => walk(item, path ? `${path}[${i}]` : `[${i}]`, leaves, collections));
     return;
   }
   if (typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      walk(child, path ? `${path}.${key}` : key, leaves);
+    const record = value as Record<string, unknown>;
+    const mapped = asMapCollection(record, path);
+    if (mapped) collections.push(mapped);
+    for (const [key, child] of Object.entries(record)) {
+      walk(child, path ? `${path}.${key}` : key, leaves, collections);
     }
   }
 }
@@ -133,7 +180,7 @@ function readXmlElement(source: string, start: number): { name: string; value: u
 function parseXml(text: string): ApiParseResult {
   const cleaned = text.replace(/<\?xml[\s\S]*?\?>/i, '').replace(/<!--[\s\S]*?-->/g, '').trim();
   const parsed = readXmlElement(cleaned, 0);
-  if (!parsed) return { data: undefined, leaves: [] };
+  if (!parsed) return { data: undefined, leaves: [], collections: [] };
   const data = parsed.value;
   return flattenUnknown(typeof data === 'object' && data !== null && !Array.isArray(data) ? data : { [parsed.name]: data });
 }
@@ -146,7 +193,7 @@ function authHeaders(auth: ApiValidation['auth']): Record<string, string> {
   return { Authorization: `Basic ${token}` };
 }
 
-export function buildApiRequest(config: ApiValidation, fieldKey: string, value: unknown): { url: string; init: RequestInit } {
+export function buildApiRequest(config: ApiRequestConfig, fieldKey?: string, value?: unknown): { url: string; init: RequestInit } {
   const method = config.method ?? 'POST';
   const parser = config.parser ?? 'json';
   const accept = parser === 'xml' ? 'application/xml, text/xml, application/json' : 'application/json';
@@ -156,14 +203,14 @@ export function buildApiRequest(config: ApiValidation, fieldKey: string, value: 
   }
   const headers: Record<string, string> = { Accept: accept, ...authHeaders(config.auth) };
   if (method === 'GET') {
-    url.searchParams.set(fieldKey, value == null ? '' : String(value));
+    if (fieldKey) url.searchParams.set(fieldKey, value == null ? '' : String(value));
     return { url: url.toString(), init: { method: 'GET', headers } };
   }
   const body: Record<string, unknown> = {};
   for (const pair of config.body ?? []) {
     if (pair.key) body[pair.key] = pair.value;
   }
-  body[fieldKey] = value;
+  if (fieldKey) body[fieldKey] = value;
   headers['Content-Type'] = 'application/json';
   return { url: url.toString(), init: { method: 'POST', headers, body: JSON.stringify(body) } };
 }
@@ -174,7 +221,7 @@ export async function callFieldApi(config: ApiValidation, fieldKey: string, valu
     const res = await fetch(url, init);
     const text = await res.text();
     const parser = config.parser ?? 'json';
-    const parsed = text ? parseApiBody(text, parser) : { data: undefined, leaves: [] };
+    const parsed = text ? parseApiBody(text, parser) : { data: undefined, leaves: [], collections: [] };
     if (config.responseKey && config.success) {
       const leaf = getAtPath(parsed.data, config.responseKey);
       return { ok: matchSuccessRule(leaf, config.success) };

@@ -15,7 +15,7 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const { text } = usePipes();
   const answer = useAnswer(block);
   const c = block.config;
-  const options = useOptions(block.id, c.options, c.shuffle);
+  const options = useOptions(block.id, c.options, c.shuffle, block.apiOptions);
   const other = c.other?.enabled ? c.other : undefined;
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const selected = answer.value ? (answer.value.optionId ?? (answer.value.other !== undefined ? OTHER : '')) : '';

@@ -129,6 +129,12 @@ describe('primitives', () => {
     expect(ok(S.FieldBlockSchema, { ...name, apiValidation: { url: 'javascript:alert(1)' } })).toBe(false);
   });
 
+  it('accepts API option lists on a choice field', () => {
+    const choice = definition().blocks[ids.marketing];
+    expect(ok(S.FieldBlockSchema, { ...choice, apiOptions: { url: 'https://api.example.com/cities', method: 'GET', itemsPath: 'data.cities', labelKey: 'name', valueKey: 'id' } })).toBe(true);
+    expect(ok(S.FieldBlockSchema, { ...choice, apiOptions: { url: 'javascript:alert(1)' } })).toBe(false);
+  });
+
   it('extensions are x- namespaced', () => {
     expect(ok(S.ExtensionsSchema, { 'x-acme': { any: 1 } })).toBe(true);
     expect(ok(S.ExtensionsSchema, { acme: 1 })).toBe(false);

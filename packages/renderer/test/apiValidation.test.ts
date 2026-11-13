@@ -15,6 +15,33 @@ describe('parseApiBody', () => {
     ]);
   });
 
+  it('lists arrays and id-keyed maps as collections', () => {
+    expect(parseApiBody(JSON.stringify({ data: { cities: [{ id: 'mum', name: 'Mumbai' }] } }), 'json').collections).toEqual([
+      { key: 'data.cities', kind: 'array', length: 1, primitive: false, itemKeys: ['id', 'name'] },
+    ]);
+    expect(parseApiBody(JSON.stringify({ mum: 'Mumbai', del: 'Delhi' }), 'json').collections).toEqual([
+      { key: '', kind: 'map', length: 2, primitive: true, itemKeys: [] },
+    ]);
+  });
+
+  it('turns repeating XML tags into a list', () => {
+    const body = `<?xml version="1.0"?>
+<root>
+  <cities>
+    <city><id>mum</id><name>Mumbai</name></city>
+    <city><id>del</id><name>Delhi</name></city>
+  </cities>
+</root>`;
+    const parsed = parseApiBody(body, 'xml');
+    expect(parsed.collections).toEqual(expect.arrayContaining([
+      { key: 'cities.city', kind: 'array', length: 2, primitive: false, itemKeys: ['id', 'name'] },
+    ]));
+    expect(parsed.leaves).toEqual(expect.arrayContaining([
+      { key: 'cities.city[0].id', type: 'string', value: 'mum' },
+      { key: 'cities.city[0].name', type: 'string', value: 'Mumbai' },
+    ]));
+  });
+
   it('parses XML and coerces booleans and numbers', () => {
     const { leaves } = parseApiBody('<root><success>true</success><code>1</code><msg>ok</msg></root>', 'xml');
     expect(leaves).toEqual(expect.arrayContaining([
@@ -42,6 +69,13 @@ describe('buildApiRequest', () => {
     expect(req.init.body).toBeUndefined();
     expect(parsed.searchParams.get('emp_name')).toBe('Lokesh');
     expect(parsed.searchParams.get('src')).toBe('form');
+  });
+
+  it('omits the field answer when no field key is given', () => {
+    const req = buildApiRequest({ url, method: 'GET', query: [{ key: 'src', value: 'form' }] });
+    const parsed = new URL(req.url);
+    expect(parsed.searchParams.get('src')).toBe('form');
+    expect([...parsed.searchParams.keys()]).toEqual(['src']);
   });
 
   it('POST puts the field key in the JSON body and sends extra body fields', () => {

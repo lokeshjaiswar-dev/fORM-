@@ -119,6 +119,15 @@ describe('BlockInspector options', () => {
     expect(options().map((o) => o.label)).toEqual(['Option 1', 'Option 3', 'Option 2', 'Option 4']);
   });
 
+  it('enables API options with a GET URL', async () => {
+    const user = open('color');
+    await tab(user);
+    await user.click(screen.getByRole('switch', { name: 'Load options from an API' }));
+    expect(get('color').apiOptions).toEqual({ url: 'http://localhost:3001/cities', method: 'GET', parser: 'json' });
+    fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/cities' } });
+    expect(get('color').apiOptions).toEqual({ url: 'https://hr.example.com/cities', method: 'GET', parser: 'json' });
+  });
+
   it('moves options and toggles Other', async () => {
     const user = open('color');
     await tab(user);

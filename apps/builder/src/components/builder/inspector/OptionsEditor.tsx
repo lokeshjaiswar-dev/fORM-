@@ -10,6 +10,7 @@ import { APP_IDS } from '@/lib/definition';
 import { uid } from '@/lib/utils';
 import { patchBlockConfig } from '@/fields/configSink';
 import { Button, Input, Label } from '@dmacq/ui';
+import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSection';
 import { ToggleRow } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
@@ -83,6 +84,7 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
 
   return (
     <div className="space-y-2">
+      <ApiOptionsSection block={block} />
       <div className="flex items-center justify-between">
         <Label>{t(M['options.title'])}</Label>
         <Button type="button" variant="ghost" size="xs" onClick={add}>

@@ -10,7 +10,7 @@ export function MaxDiffField({ block, field }: ControlProps<'maxdiff'>) {
   const { t } = useRenderer();
   const { text } = usePipes();
   const answer = useAnswer(block);
-  const options = useOptions(block.id, block.config.options, block.config.shuffle);
+  const options = useOptions(block.id, block.config.options, block.config.shuffle, block.apiOptions);
   const attrs = inputAttrs(field);
   const [best, setBest] = useState<OptionId | undefined>(answer.value?.best);
   const [worst, setWorst] = useState<OptionId | undefined>(answer.value?.worst);

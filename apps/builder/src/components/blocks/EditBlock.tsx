@@ -5,7 +5,7 @@ import { isAvailable, type AvailableType } from '@form/registry';
 import type { StoredBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { CANVAS, type CanvasProps } from '@/fields/canvas';
-import { labelStyle } from '@/fields/style';
+import { blockStyleVars, labelStyle } from '@/fields/style';
 import { isField, plainText } from '@/lib/definition';
 import { updateBlock } from '@/state/actions';
 import { useUiStore } from '@/state/uiStore';
@@ -45,10 +45,10 @@ export function EditBlock({ block }: { block: StoredBlock }) {
   }
 
   return (
-    <div className="w-full space-y-2" data-canvas-field="">
+    <div className="w-full space-y-2" data-canvas-field="" style={blockStyleVars(block.style)}>
       {hidden}
       {!block.hideLabel && (
-        <div className="flex min-w-0 items-baseline gap-1 text-[length:var(--fr-label-size,1em)] font-medium" data-canvas-label="">
+        <div className="flex min-w-0 items-start text-[length:var(--fr-label-size,1em)] font-medium" data-canvas-label="">
           <InlineEditor
             value={block.label}
             onChange={(label) => updateBlock(block.id, { label })}
@@ -56,16 +56,11 @@ export function EditBlock({ block }: { block: StoredBlock }) {
             autoFocus={focused}
             fill={false}
             editorClassName="whitespace-pre!"
-            className="min-w-[12.5rem] whitespace-nowrap bg-transparent text-left text-[length:var(--fr-label-size,1em)] font-medium leading-normal text-[var(--fr-label-color,var(--fr-text))]"
+            className="w-max max-w-full whitespace-nowrap bg-transparent text-left text-[length:var(--fr-label-size,1em)] font-medium leading-normal text-[var(--fr-label-color,var(--fr-text))]"
             style={labelStyle(block.style)}
             placeholder={t(block.type === 'hidden' ? M['block.hidden_field'] : M['block.question'])}
           />
-          {block.required ? (
-            <>
-              {' '}
-              <span className="fr-required shrink-0 self-center" aria-hidden="true">*</span>
-            </>
-          ) : null}
+          {block.required ? <span className="fr-required shrink-0" aria-hidden="true"><span>*</span></span> : null}
         </div>
       )}
       {block.description ? <p className="text-left text-[13px] text-muted-foreground">{plainText(block.description)}</p> : null}

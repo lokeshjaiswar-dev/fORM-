@@ -35,8 +35,7 @@ function RequiredMark() {
   const { t } = useRenderer();
   return (
     <>
-      {' '}
-      <span className="fr-required" aria-hidden="true">*</span>
+      <span className="fr-required" aria-hidden="true"><span>*</span></span>
       <span className="fr-sr-only">{t(MESSAGES['field.required'])}</span>
     </>
   );

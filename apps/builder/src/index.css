@@ -9,9 +9,28 @@
   min-height: 100%;
 }
 
-.fr-root.fr-builder-canvas [data-canvas-input],
-.fr-root.fr-builder-canvas .ds-field {
-  background-color: var(--fr-inputBg, #fff) !important;
+/* The design-system box owns background, border and text. Block look colours arrive as variables on the field. */
+.fr-root.fr-builder-canvas [data-canvas-field] .ds-field {
+  background-color: var(--fr-input-bg, var(--fr-inputBg, #fff)) !important;
+  border-color: var(--fr-input-border, var(--fr-inputBorder, var(--border-control))) !important;
+  color: var(--fr-input-color, var(--fr-inputText, var(--text-normal)));
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field] .ds-field-input,
+.fr-root.fr-builder-canvas [data-canvas-field] [data-canvas-input] {
+  color: inherit;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field] .ds-field-input::placeholder,
+.fr-root.fr-builder-canvas [data-canvas-field] textarea.ds-field::placeholder,
+.fr-root.fr-builder-canvas [data-canvas-field] input.ds-field::placeholder {
+  color: var(--fr-placeholder, var(--text-muted));
+  opacity: 1;
+}
+
+.fr-root.fr-builder-canvas [data-canvas-field] [data-slot='input-prefix'],
+.fr-root.fr-builder-canvas [data-canvas-field] [data-slot='input-suffix'] {
+  color: var(--fr-input-color, var(--fr-inputText, currentColor));
 }
 
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) {
@@ -255,14 +274,14 @@ img.ProseMirror-separator {
   text-align: end;
 }
 
-[data-input-style='filled'] [data-canvas-input] {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg));
+.fr-root.fr-builder-canvas[data-input-style='filled'] [data-canvas-field] .ds-field {
+  border-color: transparent !important;
+  background-color: var(--fr-input-bg, color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg))) !important;
 }
 
-[data-input-style='underlined'] [data-canvas-input] {
+.fr-root.fr-builder-canvas[data-input-style='underlined'] [data-canvas-field] .ds-field {
   border-width: 0 0 1px;
   border-radius: 0;
-  padding-inline: 0;
-  background: transparent;
+  background-color: transparent !important;
+  box-shadow: none;
 }

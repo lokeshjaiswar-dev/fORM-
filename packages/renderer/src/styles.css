@@ -612,7 +612,38 @@
 }
 
 :where(.fr-root) .fr-required {
-  color: var(--fr-accent);
+  display: inline-block;
+  margin-inline-start: 0.2em;
+  color: var(--fr-error);
+  font-size: 0.85em;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: super;
+  align-self: flex-start;
+  margin-top: 0.12em;
+}
+
+:where(.fr-root) .fr-required > span {
+  font-weight: 800;
+}
+
+/* Block look colours are variables on the field. The design-system box otherwise keeps the theme tokens. */
+:where(.fr-root) .fr-field .ds-field {
+  background-color: var(--fr-input-bg, var(--field-bg));
+  border-color: var(--fr-input-border, var(--border-control));
+  color: var(--fr-input-color, var(--text-normal));
+}
+
+:where(.fr-root) .fr-field .ds-field-input::placeholder,
+:where(.fr-root) .fr-field textarea.ds-field::placeholder,
+:where(.fr-root) .fr-field input.ds-field::placeholder {
+  color: var(--fr-placeholder, var(--text-muted));
+  opacity: 1;
+}
+
+:where(.fr-root) .fr-field [data-slot='input-prefix'],
+:where(.fr-root) .fr-field [data-slot='input-suffix'] {
+  color: var(--fr-input-color, currentColor);
 }
 
 :where(.fr-root) .fr-description {

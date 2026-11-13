@@ -79,20 +79,36 @@ export type ApiSuccessRule =
   | { type: 'number'; equals: number }
   | { type: 'string'; equals: string[] };
 
-/**
- * GET sends the field key as a query param; POST sends it in a JSON body.
- * `responseKey` is a dotted path into the JSON/XML body; `success` is the pass rule.
- * `{ url }` alone still means POST JSON and `{ ok: true }`.
- */
-export interface ApiValidation {
+/** Shared request settings for validation and option-list APIs. */
+export interface ApiRequestConfig {
   url: SafeUrl;
   method?: 'GET' | 'POST';
   query?: ApiPair[];
   body?: ApiPair[];
   auth?: ApiAuth;
   parser?: 'json' | 'xml';
+}
+
+/**
+ * GET sends the field key as a query param; POST sends it in a JSON body.
+ * `responseKey` is a dotted path into the JSON/XML body; `success` is the pass rule.
+ * `{ url }` alone still means POST JSON and `{ ok: true }`.
+ */
+export interface ApiValidation extends ApiRequestConfig {
   responseKey?: string;
   success?: ApiSuccessRule;
+}
+
+/**
+ * Loads choice options from an API. `itemsPath` is a dotted path to an array or a
+ * key→value object (`''` = the whole body). `labelKey` / `valueKey` are paths on each
+ * item; `$self` is the item itself; `$key` is the object key when `collectionKind` is `map`.
+ */
+export interface ApiOptions extends ApiRequestConfig {
+  itemsPath?: string;
+  collectionKind?: 'array' | 'map';
+  labelKey?: string;
+  valueKey?: string;
 }
 
 export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
@@ -114,4 +130,5 @@ export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   prefill?: PrefillConfig;
   unique?: UniqueConstraint;
   apiValidation?: ApiValidation;
+  apiOptions?: ApiOptions;
 }

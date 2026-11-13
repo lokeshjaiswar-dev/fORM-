@@ -4,7 +4,7 @@ import { defineMessages } from '@form/i18n';
 import { themeImageUrl } from '@form/renderer';
 import type { BlockStyle, ChoiceOption } from '@form/schema';
 import { t } from '@/i18n';
-import { css, inputStyle, labelString } from '@/fields/style';
+import { inputStyle, labelString } from '@/fields/style';
 
 /* Static previews of respondent controls, using the same renderer classes as fill/preview. */
 
@@ -18,7 +18,7 @@ const M = defineMessages('builder', {
 const controlStyle = (block?: { style?: BlockStyle }) => ({ ...inputStyle(block?.style) }) as CSSProperties;
 
 export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: { style?: BlockStyle }; placeholder?: string | undefined; prefix?: string | undefined; suffix?: string | undefined; tall?: boolean }) {
-  const color = css(block.style?.placeholderColor) ?? 'var(--fr-muted)';
+  const style = { ...controlStyle(block), backgroundColor: 'transparent' };
   if (tall) {
     return (
       <Textarea
@@ -28,7 +28,7 @@ export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: {
         data-canvas-input=""
         placeholder={placeholder || t(M['canvas.answer'])}
         rows={4}
-        style={{ ...controlStyle(block), color, backgroundColor: controlStyle(block).backgroundColor ?? 'transparent' }}
+        style={style}
       />
     );
   }
@@ -36,12 +36,12 @@ export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: {
     <Input
       readOnly
       tabIndex={-1}
-      className="pointer-events-none bg-transparent"
+      className="pointer-events-none"
       data-canvas-input=""
       placeholder={placeholder || t(M['canvas.answer'])}
       prefixText={prefix}
       suffixText={suffix}
-      style={{ ...controlStyle(block), color, backgroundColor: controlStyle(block).backgroundColor ?? 'transparent' }}
+      style={style}
     />
   );
 }

@@ -15,7 +15,7 @@ export function Ranking({ block, field }: ControlProps<'ranking'>) {
   const { text } = usePipes();
   const answer = useAnswer(block);
   const c = block.config;
-  const shown = useOptions(block.id, c.options, c.shuffle === true);
+  const shown = useOptions(block.id, c.options, c.shuffle === true, block.apiOptions);
   const buttons = useRef(new Map<string, HTMLElement | null>());
   const ranked = answer.value ?? [];
   const order = [...ranked.filter((id) => shown.some((o) => o.id === id)), ...shown.map((o) => o.id).filter((id) => !ranked.includes(id))];
