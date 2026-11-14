@@ -64,6 +64,9 @@ export function DsSelect({
   'aria-label'?: string | undefined;
 }) {
   const mapped = !value && allowEmpty ? NONE : value;
+  /* Radix only fills the trigger from the selected item once the items have mounted (client side, after hydration), so
+   * the server would send an empty trigger. Pass the shown text as children so both renders agree. */
+  const shown = mapped === NONE ? placeholder : options.find((option) => option.value === mapped)?.label;
   return (
     <Select value={mapped || undefined} onValueChange={(next) => onChange(next === NONE ? '' : next)} disabled={disabled}>
       <SelectTrigger
@@ -76,7 +79,7 @@ export function DsSelect({
         aria-label={ariaLabel}
         onBlur={onBlur}
       >
-        <SelectValue placeholder={placeholder} />
+        <SelectValue placeholder={placeholder}>{shown}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {allowEmpty ? <SelectItem value={NONE}>{placeholder}</SelectItem> : null}
