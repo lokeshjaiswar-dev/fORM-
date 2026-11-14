@@ -15,44 +15,44 @@ export function todayIn(now: IsoInstant, timeZone: string): IsoDate {
 }
 
 /**
- * EvalMeta for one session: `now` is the session start, frozen until the session ends (schema §19). The shuffle seed
- * is per session (PROP-11): the version and the session start, so server and client agree whenever `startedAt` is passed.
+ * What the browser knows about this page view, for the host to pass as `session` (client side only). The renderer never
+ * reads `window` itself: a render that depended on it would differ between the server and the browser (hydration
+ * mismatch, e.g. in a session-details field) and between a live page and the builder preview (which must not report the
+ * builder's own URL).
  */
-function fromWindow(): { pageUrl?: string; referrer?: string; userAgent?: string; embedOrigin?: string; urlParams: Record<string, string> } {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return { urlParams: {} };
+export function browserSession(): RendererSession {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return {};
   const urlParams: Record<string, string> = {};
   new URLSearchParams(window.location.search).forEach((value, key) => {
     urlParams[key] = value;
   });
-  const env: { pageUrl?: string; referrer?: string; userAgent?: string; embedOrigin?: string; urlParams: Record<string, string> } = {
+  const embedder = window.location.ancestorOrigins?.[0];
+  return {
     urlParams,
     pageUrl: window.location.href,
+    ...(document.referrer ? { referrer: document.referrer } : {}),
+    ...(typeof navigator !== 'undefined' && navigator.userAgent ? { userAgent: navigator.userAgent } : {}),
+    ...(window.parent !== window && embedder !== undefined ? { embedOrigin: embedder } : {}),
   };
-  if (document.referrer) env.referrer = document.referrer;
-  if (typeof navigator !== 'undefined' && navigator.userAgent) env.userAgent = navigator.userAgent;
-  const ancestors = window.location.ancestorOrigins;
-  if (window.parent !== window && ancestors && ancestors.length > 0) env.embedOrigin = ancestors[0];
-  return env;
 }
 
+/**
+ * EvalMeta for one session: `now` is the session start, frozen until the session ends (schema §19). The shuffle seed
+ * is per session (PROP-11): the version and the session start, so server and client agree whenever `startedAt` is passed.
+ */
 export function sessionMeta(version: RuntimeFormVersion, locale: Locale, mode: 'live' | 'preview', session: RendererSession, now: IsoInstant): EvalMeta {
-  const env = fromWindow();
   const meta: EvalMeta = {
     now,
     timeZone: version.definition.behavior.timeZone,
     locale,
-    urlParams: { ...env.urlParams, ...session.urlParams },
+    urlParams: session.urlParams ?? {},
     isPreview: mode === 'preview',
     shuffleSeed: session.shuffleSeed ?? `${version.versionId}:${now}`,
   };
   if (session.device) meta.device = session.device;
-  const pageUrl = session.pageUrl ?? env.pageUrl;
-  const referrer = session.referrer ?? env.referrer;
-  const embedOrigin = session.embedOrigin ?? env.embedOrigin;
-  const userAgent = session.userAgent ?? env.userAgent;
-  if (pageUrl !== undefined) meta.pageUrl = pageUrl;
-  if (referrer !== undefined) meta.referrer = referrer;
-  if (embedOrigin !== undefined) meta.embedOrigin = embedOrigin;
-  if (userAgent !== undefined) meta.userAgent = userAgent;
+  if (session.pageUrl !== undefined) meta.pageUrl = session.pageUrl;
+  if (session.referrer !== undefined) meta.referrer = session.referrer;
+  if (session.embedOrigin !== undefined) meta.embedOrigin = session.embedOrigin;
+  if (session.userAgent !== undefined) meta.userAgent = session.userAgent;
   return meta;
 }

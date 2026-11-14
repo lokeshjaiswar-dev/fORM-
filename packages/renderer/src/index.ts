@@ -20,6 +20,7 @@ export { packRows } from './layout/rows.ts';
 export { SectionNav, stepsFor } from './SectionNav.tsx';
 export type { SectionStep, SectionStepState } from './SectionNav.tsx';
 export { listFormSections, resolveSectionNav, sectionIndexForPage, sectionNavAtStart, SUBMIT_SECTION_ID, TITLE_SECTION_ID } from './sections.ts';
+export { browserSession } from './eval/meta.ts';
 export { formTitlePresentation } from './formTitle.ts';
 export { submitButtonPresentation } from './submitButton.ts';
 export type { FormSection } from './sections.ts';
