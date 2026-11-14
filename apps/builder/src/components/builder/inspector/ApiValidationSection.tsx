@@ -11,6 +11,7 @@ import {
 } from '@form/schema';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
+import { applyPatch, type Patch } from '@/lib/patch';
 import { updateBlock } from '@/state/actions';
 import { Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
@@ -42,13 +43,10 @@ const M = defineMessages('builder', {
 
 const DEFAULT_API: ApiValidation = { url: 'http://localhost:3001/verify-name' as SafeUrl, method: 'POST', parser: 'json' };
 
-function patch(block: FieldBlock, next: Partial<ApiValidation>): void {
+function patch(block: FieldBlock, next: Patch<ApiValidation>): void {
   const current = block.apiValidation;
   if (!current) return;
-  const merged: ApiValidation = { ...current, ...next };
-  for (const key of ['query', 'body', 'auth', 'responseKey', 'success'] as const) {
-    if (merged[key] === undefined) delete merged[key];
-  }
+  const merged = applyPatch(current, next);
   if (merged.query && merged.query.length === 0) delete merged.query;
   if (merged.body && merged.body.length === 0) delete merged.body;
   updateBlock(block.id, { apiValidation: merged });

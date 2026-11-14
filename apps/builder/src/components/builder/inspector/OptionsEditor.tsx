@@ -8,6 +8,7 @@ import { labelString } from '@/fields/style';
 import { fileToThemeImage, storeThemeImage } from '@/components/builder/design/uploads';
 import { APP_IDS } from '@/lib/definition';
 import { uid } from '@/lib/utils';
+import { applyPatch, type Patch } from '@/lib/patch';
 import { patchBlockConfig } from '@/fields/configSink';
 import { Button, Input, Label } from '@dmacq/ui';
 import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSection';
@@ -42,12 +43,11 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
   const images = (block.type === 'single_choice' || block.type === 'multi_choice') && block.config.display === 'image';
   const write = (next: ChoiceOption[], extra: Record<string, unknown> = {}) => patchBlockConfig(block, { options: next, ...extra });
 
-  const edit = (i: number, patch: Partial<ChoiceOption>) => {
+  const edit = (i: number, patch: Patch<ChoiceOption>) => {
     const next = options.map((o, j) => {
       if (j !== i) return o;
-      const merged = { ...o, ...patch };
+      const merged = applyPatch(o, patch);
       if (merged.code === '') delete merged.code;
-      if (merged.image === undefined) delete merged.image;
       return merged;
     });
     write(next);
@@ -162,7 +162,8 @@ function OptionImage({ opt, index, onChange }: { opt: ChoiceOption; index: numbe
           void fileToThemeImage(file).then((data) => {
             const assetId = uid() as AssetId;
             storeThemeImage(assetId, data);
-            onChange({ assetId, alt: labelString(opt.label) || undefined, decorative: true });
+            const alt = labelString(opt.label);
+            onChange({ assetId, ...(alt ? { alt } : {}), decorative: true });
           });
         }}
       />

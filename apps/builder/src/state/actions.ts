@@ -4,6 +4,7 @@ import type {
 } from '@form/schema';
 import { APP_IDS, blankDefinition, createBlock, inlineDoc, isField, placementOf, richDoc } from '@/lib/definition';
 import { focusLabelEnd } from '@/lib/focusLabel';
+import { applyPatch, type Patch } from '@/lib/patch';
 import { dispatch, type CommandResult } from '@/state/commands/dispatch';
 import { rulesReading } from '@/state/commands/rules';
 import type { BlockPatch, PageSlot, RuleFate } from '@/state/commands/types';
@@ -39,13 +40,8 @@ export function setTitle(title: string): CommandResult {
   return dispatch({ type: 'set_title', title });
 }
 
-export function setTitleStyle(patch: Partial<FormTitleStyle>): CommandResult {
-  const style = currentDoc().titleStyle ?? {};
-  const merged = { ...style, ...patch };
-  const next: FormTitleStyle = {};
-  for (const [key, value] of Object.entries(merged) as Array<[keyof FormTitleStyle, FormTitleStyle[keyof FormTitleStyle]]>) {
-    if (value !== undefined) next[key] = value;
-  }
+export function setTitleStyle(patch: Patch<FormTitleStyle>): CommandResult {
+  const next = applyPatch(currentDoc().titleStyle ?? {}, patch);
   return dispatch({ type: 'set_title_style', style: Object.keys(next).length ? next : null });
 }
 

@@ -4,6 +4,7 @@ import { type BlockOf, type CountryCode, type DateBound, type DateLimits, type I
 import { t } from '@/i18n';
 import { NumberField, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 import { parseInteger } from '@/components/builder/inspector/parse';
+import { applyPatch, type Patch } from '@/lib/patch';
 import { patchBlockConfig } from '@/fields/configSink';
 
 type InspectorProps<T extends AvailableType> = { block: BlockOf<T> };
@@ -66,8 +67,6 @@ function ConfigProblem({ block }: { block: BlockOf<AvailableType> }) {
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-type BoundSlot = 'min' | 'max';
-
 function boundMode(bound: DateBound | undefined): 'none' | 'today' | 'days' | 'fixed' {
   if (!bound) return 'none';
   if (bound.kind === 'absolute') return 'fixed';
@@ -126,12 +125,13 @@ function DateBoundFields({
 }
 
 function DateLimitsEditor({ limits, onChange }: { limits: DateLimits | undefined; onChange: (limits: DateLimits | undefined) => void }) {
-  const write = (patch: Partial<DateLimits>) => {
-    const next: DateLimits = { ...limits, ...patch };
-    for (const key of Object.keys(next) as Array<keyof DateLimits>) {
-      if (next[key] === undefined) delete next[key];
-    }
+  const write = (patch: Patch<DateLimits>) => {
+    const next = applyPatch(limits ?? {}, patch);
     onChange(Object.keys(next).length ? next : undefined);
+  };
+  const writeAge = (patch: Patch<NonNullable<DateLimits['age']>>) => {
+    const age = applyPatch(limits?.age ?? {}, patch);
+    write(age.min === undefined && age.max === undefined ? { age: undefined } : { age });
   };
   const weekendsOff = (limits?.disallowWeekdays ?? []).includes(0) && (limits?.disallowWeekdays ?? []).includes(6);
   return (
@@ -139,16 +139,8 @@ function DateLimitsEditor({ limits, onChange }: { limits: DateLimits | undefined
       <DateBoundFields label={t(M['inspector.date_earliest'])} bound={limits?.min} onChange={(min) => write({ min })} />
       <DateBoundFields label={t(M['inspector.date_latest'])} bound={limits?.max} onChange={(max) => write({ max })} />
       <div className="grid grid-cols-2 gap-2">
-        <NumberField label={t(M['inspector.age_min'])} value={limits?.age?.min} parse={parseInteger(0, 130)} onChange={(min) => {
-          const age = { ...limits?.age, min };
-          if (age.min === undefined && age.max === undefined) write({ age: undefined });
-          else write({ age });
-        }} />
-        <NumberField label={t(M['inspector.age_max'])} value={limits?.age?.max} parse={parseInteger(0, 130)} onChange={(max) => {
-          const age = { ...limits?.age, max };
-          if (age.min === undefined && age.max === undefined) write({ age: undefined });
-          else write({ age });
-        }} />
+        <NumberField label={t(M['inspector.age_min'])} value={limits?.age?.min} parse={parseInteger(0, 130)} onChange={(min) => writeAge({ min })} />
+        <NumberField label={t(M['inspector.age_max'])} value={limits?.age?.max} parse={parseInteger(0, 130)} onChange={(max) => writeAge({ max })} />
       </div>
       <ToggleRow
         label={t(M['inspector.no_weekends'])}

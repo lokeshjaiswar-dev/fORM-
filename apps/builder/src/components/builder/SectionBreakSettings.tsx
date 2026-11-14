@@ -13,6 +13,7 @@ import { currentDoc, useDoc } from '@/state/documentStore';
 import { Input, Label, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import { useDraft } from '@/lib/useDraft';
+import { applyPatch, type Patch } from '@/lib/patch';
 
 const M = defineMessages('builder', {
   'sections.enable': 'Section break',
@@ -53,9 +54,9 @@ const M = defineMessages('builder', {
   'sections.align_end': 'End',
 });
 
-function patchNav(patch: Partial<SectionNav>): void {
+function patchNav(patch: Patch<SectionNav>): void {
   const doc = currentDoc();
-  setBehavior({ ...doc.behavior, sectionNav: { ...DEFAULT_SECTION_NAV, ...doc.behavior.sectionNav, ...patch } });
+  setBehavior({ ...doc.behavior, sectionNav: applyPatch({ ...DEFAULT_SECTION_NAV, ...doc.behavior.sectionNav }, patch) });
 }
 
 export function SectionBreakSettings() {

@@ -11,6 +11,7 @@ import {
 import { SUBMIT_SECTION_ID } from '@form/renderer';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
+import { applyPatch, type Patch } from '@/lib/patch';
 import { labelString } from '@/fields/style';
 import { setBehavior } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
@@ -78,14 +79,14 @@ export function SubmitInspector() {
   const submit = behavior.submit;
   const [label, setLabel] = useDraft(labelString(submit.label));
 
-  const setSubmit = (patch: Partial<Behavior['submit']>) => {
-    setBehavior({ ...behavior, submit: { ...submit, ...patch } });
+  const setSubmit = (patch: Patch<Behavior['submit']>) => {
+    setBehavior({ ...behavior, submit: applyPatch(submit, patch) });
   };
 
-  const patchNav = (patch: Partial<NonNullable<Behavior['sectionNav']>>) => {
+  const patchNav = (patch: Patch<NonNullable<Behavior['sectionNav']>>) => {
     setBehavior({
       ...behavior,
-      sectionNav: { ...DEFAULT_SECTION_NAV, ...behavior.sectionNav, ...patch },
+      sectionNav: applyPatch({ ...DEFAULT_SECTION_NAV, ...behavior.sectionNav }, patch),
     });
   };
 

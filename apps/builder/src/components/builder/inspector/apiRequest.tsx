@@ -2,6 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { isSafeUrl, type ApiAuth, type ApiPair, type ApiRequestConfig, type SafeUrl } from '@form/schema';
 import { t } from '@/i18n';
+import type { Patch } from '@/lib/patch';
 import { Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { Field, SelectField, TextField } from '@/components/builder/inspector/parts';
 
@@ -105,7 +106,7 @@ export function ApiRequestFields({
   bodyHint?: string;
   urlText: string;
   onUrlText: (url: string) => void;
-  onPatch: (next: Partial<ApiRequestConfig>) => void;
+  onPatch: (next: Patch<ApiRequestConfig>) => void;
 }) {
   return (
     <>

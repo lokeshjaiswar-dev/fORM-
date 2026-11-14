@@ -13,6 +13,7 @@ import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { patchBlockConfig } from '@/fields/configSink';
 import { useDraft } from '@/lib/useDraft';
+import { applyPatch, type Patch } from '@/lib/patch';
 import { updateBlock } from '@/state/actions';
 import { Button } from '@dmacq/ui';
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
@@ -42,13 +43,10 @@ const DEFAULT_API: ApiOptions = { url: 'http://localhost:3001/cities' as SafeUrl
 
 type ChoiceBlock = BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'>;
 
-function patch(block: FieldBlock, next: Partial<ApiOptions>): void {
+function patch(block: FieldBlock, next: Patch<ApiOptions>): void {
   const current = block.apiOptions;
   if (!current) return;
-  const merged: ApiOptions = { ...current, ...next };
-  for (const key of ['query', 'body', 'auth', 'itemsPath', 'collectionKind', 'labelKey', 'valueKey'] as const) {
-    if (merged[key] === undefined) delete merged[key];
-  }
+  const merged = applyPatch(current, next);
   if (merged.query && merged.query.length === 0) delete merged.query;
   if (merged.body && merged.body.length === 0) delete merged.body;
   updateBlock(block.id, { apiOptions: merged });

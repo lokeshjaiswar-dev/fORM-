@@ -2,6 +2,7 @@ import { defineMessages } from '@form/i18n';
 import { FORM_TITLE_WEIGHTS, type FormTitleStyle, type FormTitleWeight, type HexColor } from '@form/schema';
 import { TITLE_SECTION_ID } from '@form/renderer';
 import { t } from '@/i18n';
+import type { Patch } from '@/lib/patch';
 import { setTitleStyle } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Field, SectionTitle, SelectField } from '@/components/builder/inspector/parts';
@@ -56,7 +57,7 @@ const weightLabel = (weight: FormTitleWeight): string => t(M[`inspector.form_tit
 
 export function TitleInspector() {
   const style = useDoc((d) => d.titleStyle) ?? {};
-  const set = (patch: Partial<FormTitleStyle>) => setTitleStyle(patch);
+  const set = (patch: Patch<FormTitleStyle>) => setTitleStyle(patch);
 
   return (
     <div className="space-y-4">

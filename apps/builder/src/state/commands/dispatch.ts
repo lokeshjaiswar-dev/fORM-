@@ -240,7 +240,7 @@ function changes(before: unknown, after: unknown, path: string): Change[] {
  * Typing coalesces per changed path; a toggle (every changed value a boolean), a structural array change (an option
  * added, removed or moved) or a no-op is its own step.
  */
-function typingKey(prefix: string, current: unknown, next: Plain): string | null {
+function typingKey(prefix: string, current: unknown, next: object): string | null {
   const was: Plain = isPlain(current) ? current : {};
   const changed = Object.entries(next).flatMap(([k, v]) => changes(was[k], v, k));
   if (!changed.length || changed.some((c) => c.structural) || changed.every((c) => typeof c.value === 'boolean')) return null;
