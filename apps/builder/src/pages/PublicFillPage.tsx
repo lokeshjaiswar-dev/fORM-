@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
-import { RuntimeFormVersionSchema, type BlockId, type IsoInstant, type RuntimeFormVersion } from '@form/schema';
+import { RuntimeFormVersionSchema, type BlockId, type RuntimeFormVersion } from '@form/schema';
 import { API_BASE } from '@/edition/edition';
 import { hydrateThemeImages } from '@/components/builder/design/uploads';
 import { BUILDER_LOCALE } from '@/i18n';
@@ -27,7 +27,7 @@ type Load = { status: 'loading' } | { status: 'missing' } | { status: 'error'; m
 export function PublicFillPage() {
   const { slug = '' } = useParams();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
-  const startedAt = useMemo(() => new Date().toISOString() as IsoInstant, []);
+  const startedAt = useMemo(() => new Date().toISOString(), []);
   const uploader = useMemo(() => publicUploader(slug), [slug]);
 
   useEffect(() => {
