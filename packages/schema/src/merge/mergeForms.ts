@@ -10,6 +10,9 @@ import type { MergeConflict, MergeFormInput, MergeOptions, MergeResolution, Merg
 const isContainer = (block: StoredBlock | undefined): block is StoredBlock & { type: 'section' | 'repeating_group'; config: { children: BlockId[] } } =>
   block !== undefined && (block.type === 'section' || block.type === 'repeating_group');
 
+/** `Object.values` of a `Partial<Record<BlockId, StoredBlock>>` is `(StoredBlock | undefined)[]`; drop the holes. */
+const storedBlocks = (def: FormDefinition): StoredBlock[] => Object.values(def.blocks).filter((b): b is StoredBlock => b !== undefined);
+
 /** Fields inside a configurable list belong to each row, not the page, so they must not match page fields. */
 function nestedIds(def: FormDefinition): Set<string> {
   const nested = new Set<string>();
@@ -18,7 +21,7 @@ function nestedIds(def: FormDefinition): Set<string> {
     const block = def.blocks[id as BlockId];
     if (isContainer(block)) block.config.children.forEach(visit);
   };
-  for (const block of Object.values(def.blocks)) {
+  for (const block of storedBlocks(def)) {
     if (block.type === 'repeating_group') block.config.children.forEach(visit);
   }
   return nested;
@@ -26,7 +29,7 @@ function nestedIds(def: FormDefinition): Set<string> {
 
 function takenKeys(def: FormDefinition): Set<string> {
   const taken = new Set<string>();
-  for (const block of Object.values(def.blocks)) if (isFieldBlock(block)) taken.add(block.key);
+  for (const block of storedBlocks(def)) if (isFieldBlock(block)) taken.add(block.key);
   for (const v of def.logic.variables) taken.add(v.key);
   return taken;
 }
@@ -35,7 +38,7 @@ function takenKeys(def: FormDefinition): Set<string> {
 function indexFields(def: FormDefinition, formId: string, formTitle: string): Map<string, Array<{ block: FieldBlock; formId: string; formTitle: string }>> {
   const nested = nestedIds(def);
   const map = new Map<string, Array<{ block: FieldBlock; formId: string; formTitle: string }>>();
-  for (const block of Object.values(def.blocks)) {
+  for (const block of storedBlocks(def)) {
     if (!isFieldBlock(block) || nested.has(block.id)) continue;
     if (block.type === 'repeating_group') continue;
     const key = fieldMatchKey(block);
@@ -220,7 +223,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
     for (const ending of src.endings) map.set(ending.id, base.defaultEndingId);
     if (defaultPurpose) for (const purpose of src.privacy.purposes) map.set(purpose.id, defaultPurpose);
 
-    for (const block of Object.values(src.blocks)) {
+    for (const block of storedBlocks(src)) {
       if (nested.has(block.id) || !isFieldBlock(block) || block.type === 'repeating_group') continue;
       const key = fieldMatchKey(block);
       const hit = survivors.get(key);
@@ -293,7 +296,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
     }
   }
 
-  const payments = Object.values(base.blocks).filter((b) => b.type === 'payment');
+  const payments = storedBlocks(base).filter((b) => b.type === 'payment');
   if (payments.length > 1) {
     const sides = payments.filter(isFieldBlock).map((block) => {
       const owner = [...survivors.values()].find((v) => v.blockId === block.id);
@@ -310,7 +313,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
   }
 
   const fieldById = new Map<string, FieldBlock>();
-  for (const block of Object.values(base.blocks)) if (isFieldBlock(block)) fieldById.set(block.id, block);
+  for (const block of storedBlocks(base)) if (isFieldBlock(block)) fieldById.set(block.id, block);
   if (!conflicts.length) conflicts.push(...collectWriterConflicts(base, ruleOrigin, fieldById));
 
   if (conflicts.length) return { ok: false, conflicts };
