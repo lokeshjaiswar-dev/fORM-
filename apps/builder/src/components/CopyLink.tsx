@@ -28,7 +28,9 @@ export function CopyLink({ link, label, copyLabel, icon, compact, onCopied }: {
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [manual, setManual] = useState(() => !clipboardAvailable());
-  const [copied, setCopied] = useState(false);
+  /* The link that was copied: a different link starts again as "not copied" without an effect to reset a flag. */
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const copied = copiedLink === link;
 
   const select = () => {
     input.current?.focus();
@@ -37,7 +39,6 @@ export function CopyLink({ link, label, copyLabel, icon, compact, onCopied }: {
 
   /* Without a clipboard the link is the thing to act on: select it as soon as it shows (and again when it changes). */
   useEffect(() => {
-    setCopied(false);
     if (manual) select();
   }, [link, manual]);
 
@@ -47,7 +48,7 @@ export function CopyLink({ link, label, copyLabel, icon, compact, onCopied }: {
       return;
     }
     if (await copyText(link)) {
-      setCopied(true);
+      setCopiedLink(link);
       onCopied?.();
     } else {
       setManual(true);
