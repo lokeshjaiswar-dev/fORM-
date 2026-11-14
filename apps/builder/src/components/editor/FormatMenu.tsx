@@ -146,7 +146,7 @@ function Tool({ children, onClick, label, shortcut, active }: { children: ReactN
         variant="ghost"
         size="icon-sm"
         aria-label={label}
-        pressed={active}
+        {...(active !== undefined ? { pressed: active } : {})}
         onClick={onClick}
       >
         {children}

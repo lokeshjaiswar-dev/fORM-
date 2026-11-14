@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Tooltip as DsTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@dmacq/ui';
 import { cn } from '@/lib/utils';
 
-type Side = 'top' | 'bottom' | 'right';
+type Side = 'top' | 'bottom' | 'left' | 'right';
 
 /** dMACQ Tooltip with `content` / `shortcut` props used across the builder chrome. */
 export function Tooltip({

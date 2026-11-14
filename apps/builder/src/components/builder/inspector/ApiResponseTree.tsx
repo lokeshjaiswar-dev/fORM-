@@ -52,16 +52,16 @@ function Row({
   onValueClick,
 }: {
   depth: number;
-  open?: boolean;
-  expandable?: boolean;
-  onToggle?: () => void;
+  open?: boolean | undefined;
+  expandable?: boolean | undefined;
+  onToggle?: (() => void) | undefined;
   label: string;
-  hint?: string;
-  value?: string;
-  active?: boolean;
-  actions?: ReactNode;
-  onLabelClick?: () => void;
-  onValueClick?: () => void;
+  hint?: string | undefined;
+  value?: string | undefined;
+  active?: boolean | undefined;
+  actions?: ReactNode | undefined;
+  onLabelClick?: (() => void) | undefined;
+  onValueClick?: (() => void) | undefined;
 }) {
   return (
     <div className={`rounded-sm ${active ? 'bg-state-hover' : ''}`}>
@@ -103,11 +103,11 @@ function Node({
   name: string;
   value: unknown;
   depth: number;
-  startOpen?: boolean;
+  startOpen?: boolean | undefined;
   mode: 'options' | 'check';
   selected: string | undefined;
   onSelect: (path: string, part: TreePart) => void;
-  onUse?: (role: 'label' | 'value') => void;
+  onUse?: ((role: 'label' | 'value') => void) | undefined;
 }) {
   const [open, setOpen] = useState(startOpen ?? false);
   const list = Array.isArray(value);
@@ -201,9 +201,9 @@ export function ApiResponseTree({
 }: {
   data: unknown;
   mode: 'options' | 'check';
-  selected?: string;
+  selected?: string | undefined;
   onSelect: (path: string, part: TreePart) => void;
-  onUse?: (role: 'label' | 'value') => void;
+  onUse?: ((role: 'label' | 'value') => void) | undefined;
 }) {
   if (data === undefined) return null;
   return (

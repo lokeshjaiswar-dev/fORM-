@@ -53,7 +53,7 @@ function previewFields(fields: ReadableField[], n = 3): ReadableField[] {
   return fields.filter((field) => field.value || field.media?.length).slice(0, n);
 }
 
-function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime?: string }) {
+function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime?: string | undefined }) {
   const [url, setUrl] = useState<string | null>(null);
   const [resolvedMime, setMime] = useState(mime ?? '');
   useEffect(() => {

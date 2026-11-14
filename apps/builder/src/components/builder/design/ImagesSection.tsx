@@ -91,7 +91,7 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
   );
 }
 
-function SceneRow({ label, selected, onSelect, onUpload }: { label: string; selected?: string; onSelect: (id: string | null) => void; onUpload: (file: File | undefined) => void }) {
+function SceneRow({ label, selected, onSelect, onUpload }: { label: string; selected?: string | undefined; onSelect: (id: string | null) => void; onUpload: (file: File | undefined) => void }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <section>

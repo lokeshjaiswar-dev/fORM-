@@ -122,7 +122,7 @@ export function FieldPicker() {
   );
 }
 
-function PaletteItem({ tile, onRemove }: { tile: Tile; onRemove?: () => void }) {
+function PaletteItem({ tile, onRemove }: { tile: Tile; onRemove?: (() => void) | undefined }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `palette-${tile.id}`, data: { from: 'palette', tile } });
 
   return (
