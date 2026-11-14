@@ -85,10 +85,32 @@ export const compileBuiltIn = (source: string): CompiledPattern => cached(source
 /** PCRE/JS constructs authors often paste that this RE2 engine will not compile. */
 export type UnsupportedRegexFeature = 'lookaround' | 'backref';
 
-/** The lookaround or backreference in `source`, when present. Inline flags such as `(?i)` compile in re2js. */
+/**
+ * The lookaround or backreference in `source`, when present (a lookaround wins over a backreference). Inline flags
+ * such as `(?i)` compile in re2js. This is a plain scan, not a host RegExp: author input must never meet the host
+ * regex engine (VAL-04), and the scan skips escaped characters and character classes, so `\(?=` and `[(?=]` are fine.
+ */
 export function patternUnsupportedFeature(source: string): UnsupportedRegexFeature | undefined {
-  if (/\(\?<?[=!]/.test(source)) return 'lookaround';
-  if (/\\[1-9]/.test(source)) return 'backref';
+  let backref = false;
+  let inClass = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === '\\') {
+      const next = source[i + 1];
+      if (next !== undefined && next >= '1' && next <= '9') backref = true;
+      i += 1; // the escaped character is a literal, never a group opener or a class delimiter
+    } else if (inClass) {
+      if (ch === ']') inClass = false;
+    } else if (ch === '[') {
+      inClass = true;
+      if (source[i + 1] === '^') i += 1;
+      if (source[i + 1] === ']') i += 1; // a leading `]` is a literal member of the class
+    } else if (ch === '(' && source[i + 1] === '?') {
+      const kind = source[i + 2] === '<' ? source[i + 3] : source[i + 2];
+      if (kind === '=' || kind === '!') return 'lookaround';
+    }
+  }
+  return backref ? 'backref' : undefined;
 }
 
 /** Why a pattern cannot be used, or null when it compiles (builder inline error, B12). */

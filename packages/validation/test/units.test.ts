@@ -83,6 +83,11 @@ describe('patterns (re2js, VAL-04)', () => {
     expect(patternUnsupportedFeature('(?i)^lokesh$')).toBeUndefined();
     expect(patternUnsupportedFeature('(?:lokesh|jayesh)')).toBeUndefined();
     expect(patternUnsupportedFeature('^[0-9]+$')).toBeUndefined();
+    expect(patternUnsupportedFeature('(?!a)(a)\\1')).toBe('lookaround');
+    expect(patternUnsupportedFeature('\\(?=a')).toBeUndefined();
+    expect(patternUnsupportedFeature('[(?=]+')).toBeUndefined();
+    expect(patternUnsupportedFeature('[]](?<!a)b')).toBe('lookaround');
+    expect(patternUnsupportedFeature('(?P<year>\\d{4})')).toBeUndefined();
   });
 
   it('refuses patterns whose compiled program is over the budget, however short the source', () => {
