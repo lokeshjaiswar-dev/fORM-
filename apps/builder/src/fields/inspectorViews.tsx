@@ -1320,6 +1320,7 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
 
 export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
   const mode = block.config.mode;
+  const MATRIX_MODES: readonly (typeof mode)[] = ['single', 'multi', 'grid'];
   const inputFor = (next: typeof mode) => (next === 'single' ? 'choice' as const : next === 'multi' ? 'checkbox' as const : 'text' as const);
   const setMode = (next: typeof mode) => {
     const input = inputFor(next);
@@ -1345,7 +1346,10 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
             { value: 'multi', label: t(M['inspector.matrix_mode_multi']) },
             { value: 'grid', label: t(M['inspector.matrix_mode_grid']) },
           ]}
-          onChange={setMode}
+          onChange={(value) => {
+            const next = MATRIX_MODES.find((m) => m === value);
+            if (next) setMode(next);
+          }}
         />
       ) : null}
       <LabelList

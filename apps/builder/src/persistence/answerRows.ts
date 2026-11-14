@@ -1,12 +1,8 @@
 import { valueDefinition } from '@form/registry';
-import type { Answers, FieldBlock, FileRef, FormDefinition, StoredBlock, ValueFieldType } from '@form/schema';
+import type { Answers, FieldBlock, FileRef, FormDefinition, ValueFieldType } from '@form/schema';
 import { toPlain } from '@form/schema';
 import { blockOrder, isField } from '@/lib/definition';
 import type { SubmissionField } from '@/persistence/SubmissionsRepository';
-
-function isValueField(block: StoredBlock | undefined): block is FieldBlock {
-  return isField(block) && block.type !== 'unsupported';
-}
 
 function joinReadable(value: unknown): string {
   if (value == null || value === '') return '';
@@ -118,7 +114,7 @@ function mediaFor(block: FieldBlock, answer: unknown): AnswerMedia[] {
 /** One readable line for a stored answer, using option labels and field text — never raw JSON. */
 export function displayAnswer(block: FieldBlock | undefined, answer: unknown): string {
   const value = answerValue(answer);
-  if (block && isValueField(block)) {
+  if (block && isField(block)) {
     const text = registryText(block, value);
     if (text != null && text.trim()) return text.trim();
   }
@@ -139,7 +135,7 @@ export function answerRows(definition: FormDefinition, answers: Answers): Readab
   const rows: ReadableField[] = [];
   for (const id of blockOrder(definition)) {
     const block = definition.blocks[id];
-    if (!isValueField(block)) continue;
+    if (!isField(block)) continue;
     const answer = answers[block.id];
     if (!answer) continue;
     const media = mediaFor(block, answer);

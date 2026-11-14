@@ -113,9 +113,10 @@ function starterCheck(fields: FieldBlock[], defaults: Defaults): { conditions: C
 }
 
 function checkRule(id: RuleId, name: string, enabled: boolean, whenId: ConditionId, conditions: Condition[], message: string, anchor: BlockId, atPage?: PageId): Rule {
+  const trimmed = name.trim();
   return {
     id,
-    name: name.trim() || undefined,
+    ...(trimmed ? { name: trimmed } : {}),
     enabled,
     when: { kind: 'group', id: whenId, combinator: 'all', children: conditions },
     then: [{ type: 'block_submit', message: message.trim() || 'This answer does not match.', anchorBlockId: anchor, ...(atPage ? { atPage } : {}) }],

@@ -142,14 +142,6 @@ export function BlockInspector() {
   const setTab = (next: Tab) => setPicked({ id: activeBlockId, tab: next });
 
   const open = inspectorOpen && (chromeSelected || (!!block && block.type !== 'unsupported'));
-  if (!chromeSelected && (!block || block.type === 'unsupported')) {
-    return (
-      <aside
-        className="relative flex shrink-0 flex-col overflow-hidden border-l border-transparent bg-background transition-[width,border-color] duration-300 ease-out"
-        style={{ width: 0 }}
-      />
-    );
-  }
   if (chromeSelected) {
     return (
       <aside
@@ -202,9 +194,18 @@ export function BlockInspector() {
     );
   }
 
-  const tabs = tabsFor(block!);
+  if (!block || block.type === 'unsupported') {
+    return (
+      <aside
+        className="relative flex shrink-0 flex-col overflow-hidden border-l border-transparent bg-background transition-[width,border-color] duration-300 ease-out"
+        style={{ width: 0 }}
+      />
+    );
+  }
+
+  const tabs = tabsFor(block);
   const shown = tabs.includes(tab) ? tab : 'general';
-  const typeName = tileOf(block!.type, block!.config as Readonly<Record<string, unknown>>)?.label ?? block!.type;
+  const typeName = tileOf(block.type, block.config as Readonly<Record<string, unknown>>)?.label ?? block.type;
 
   return (
     <aside
@@ -259,11 +260,11 @@ export function BlockInspector() {
             ))}
           </TabsList>
           <TabsContent value={shown} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {shown === 'general' ? <GeneralTab block={block!} /> : null}
-            {shown === 'options' ? <Registered block={block!} section="options" /> : null}
-            {shown === 'validation' && isField(block!) ? <ValidationTab block={block!} /> : null}
-            {shown === 'logic' ? <LogicTab blockId={block!.id} /> : null}
-            {shown === 'privacy' && isField(block!) ? <PrivacySection block={block!} /> : null}
+            {shown === 'general' ? <GeneralTab block={block} /> : null}
+            {shown === 'options' ? <Registered block={block} section="options" /> : null}
+            {shown === 'validation' && isField(block) ? <ValidationTab block={block} /> : null}
+            {shown === 'logic' ? <LogicTab blockId={block.id} /> : null}
+            {shown === 'privacy' && isField(block) ? <PrivacySection block={block} /> : null}
           </TabsContent>
         </Tabs>
       </div>

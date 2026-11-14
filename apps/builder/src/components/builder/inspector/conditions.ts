@@ -69,7 +69,8 @@ export function fits(source: FieldBlock, op: LogicOperator, right: Operand | und
   if (!right) return false;
   const kind = kindOf(source);
   if (right.kind === 'ref' && right.ref.kind === 'answer') {
-    return compareFields(source, op, fields).some((f) => f.id === right.ref.blockId);
+    const target = right.ref.blockId;
+    return compareFields(source, op, fields).some((f) => f.id === target);
   }
   if (choiceOperand(kind, op)) return right.kind === 'options' && right.blockId === source.id && right.optionIds.length > 0;
   return right.kind === 'literal' && right.value.type === literalType(kind, op);

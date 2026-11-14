@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { runtimeEdition } from '@form/config';
+import type { IsoInstant } from '@form/schema';
 import { useDoc, currentDoc } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
@@ -47,7 +48,7 @@ export function BuilderHeader() {
     try {
       await flushAutosave();
       const doc = currentDoc();
-      const built = previewVersion(doc, { state: 'open' }, new Date().toISOString(), runtimeEdition(edition));
+      const built = previewVersion(doc, { state: 'open' }, new Date().toISOString() as IsoInstant, runtimeEdition(edition));
       if (!built.ok) {
         const first = built.issues.find((i) => i.severity === 'error') ?? built.issues[0];
         setError(first?.message ?? 'This form cannot be published yet.');
