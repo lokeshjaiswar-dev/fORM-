@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copyText } from '@/lib/copyText';
+import { clipboardAvailable, copyText } from '@/lib/copyText';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -11,23 +11,22 @@ describe('copyText', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('isSecureContext', true);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
-    await copyText('http://192.168.1.121:5173/f/demo');
+    await expect(copyText('http://192.168.1.121:5173/f/demo')).resolves.toBe(true);
     expect(writeText).toHaveBeenCalledWith('http://192.168.1.121:5173/f/demo');
   });
 
-  it('falls back to execCommand when the clipboard API is blocked (http on a LAN IP)', async () => {
-    const exec = vi.fn().mockReturnValue(true);
-    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec });
+  it('reports false, without a hidden-textarea fallback, when the clipboard API is blocked (http on a LAN IP)', async () => {
+    const append = vi.spyOn(document.body, 'appendChild');
     vi.stubGlobal('isSecureContext', false);
     vi.stubGlobal('navigator', { clipboard: undefined });
-    await copyText('http://192.168.1.121:5173/f/demo');
-    expect(exec).toHaveBeenCalledWith('copy');
+    expect(clipboardAvailable()).toBe(false);
+    await expect(copyText('http://192.168.1.121:5173/f/demo')).resolves.toBe(false);
+    expect(append).not.toHaveBeenCalled();
   });
 
-  it('falls back when writeText throws', async () => {
-    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn().mockReturnValue(true) });
+  it('reports false when writeText is refused', async () => {
     vi.stubGlobal('isSecureContext', true);
     vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
-    await expect(copyText('x')).resolves.toBeUndefined();
+    await expect(copyText('x')).resolves.toBe(false);
   });
 });

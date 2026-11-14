@@ -165,7 +165,7 @@ describe('members', () => {
     await user.click(screen.getByRole('option', { name: roleLabel('admin') }));
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     expect(await screen.findByText(/This server sends no email: give new@example.test this link yourself./)).toBeInTheDocument();
-    expect(screen.getByText('https://app.form.test/invite#token=abc')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://app.form.test/invite#token=abc')).toBeInTheDocument();
     expect(sent('POST', '/v1/org/invites')[0]?.body).toEqual({ email: 'new@example.test', role: 'admin' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }));

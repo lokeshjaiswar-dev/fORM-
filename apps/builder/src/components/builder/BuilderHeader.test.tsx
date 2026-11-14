@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { BuilderHeader } from '@/components/builder/BuilderHeader';
 import { addBlock } from '@/state/actions';
@@ -38,6 +38,8 @@ beforeEach(() => {
   addBlock({ type: 'short_text', configOverrides: {} });
   undo();
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('BuilderHeader', () => {
   it('redoes with Mod+Shift+Z outside text fields', () => {
@@ -92,16 +94,31 @@ describe('BuilderHeader', () => {
     expect(publishLive).toHaveBeenCalled();
   });
 
-  it('copies the share link when the clipboard API is blocked', async () => {
+  it('copies the share link with the clipboard API', async () => {
     vi.mocked(publishLive).mockResolvedValue({ slug: 'hello-form', versionId: 'v1', number: 1 });
-    vi.stubGlobal('isSecureContext', false);
-    vi.stubGlobal('navigator', { clipboard: undefined });
-    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn().mockReturnValue(true) });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('isSecureContext', true);
+    vi.stubGlobal('navigator', { clipboard: { writeText }, platform: 'Linux x86_64' });
     renderHeader();
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
     expect(await screen.findByRole('dialog', { name: 'Share form' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
-    expect(document.execCommand).toHaveBeenCalledWith('copy');
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/f/hello-form`));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows the share link selected, with a hint, when the clipboard API is blocked (http on a LAN IP)', async () => {
+    vi.mocked(publishLive).mockResolvedValue({ slug: 'hello-form', versionId: 'v1', number: 1 });
+    vi.stubGlobal('isSecureContext', false);
+    vi.stubGlobal('navigator', { clipboard: undefined, platform: 'Linux x86_64' });
+    renderHeader();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(await screen.findByRole('dialog', { name: 'Share form' })).toBeInTheDocument();
+    const link = screen.getByLabelText('Share link') as HTMLInputElement;
+    expect(link).toHaveAttribute('readonly');
+    await waitFor(() => expect(link).toHaveFocus());
+    expect(link.selectionEnd).toBe(link.value.length);
+    expect(screen.getByText('Press Ctrl+C to copy the link.')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

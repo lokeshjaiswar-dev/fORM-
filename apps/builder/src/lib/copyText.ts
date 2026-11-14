@@ -1,29 +1,19 @@
+/** Whether the asynchronous Clipboard API can be used here. It is missing outside a secure context (plain http on a LAN IP). */
+export const clipboardAvailable = (): boolean =>
+  globalThis.isSecureContext !== false && typeof navigator.clipboard?.writeText === 'function';
+
 /**
- * Copy text on http LAN hosts as well as https. `navigator.clipboard` is missing or throws
- * outside a secure context (plain http on an IP, as on the VM).
+ * Copies `text` with the Clipboard API. Resolves `true` when it was copied and `false` when this browser gives no way to
+ * do it (the API is missing, as on http://192.168.x.x, or the browser refused). The caller then shows the text for the
+ * person to copy by hand: see `CopyLink`. There is deliberately no hidden-textarea fallback; it needs a deprecated
+ * document command and still fails silently in some browsers.
  */
-export async function copyText(text: string): Promise<void> {
-  if (globalThis.isSecureContext !== false && typeof navigator.clipboard?.writeText === 'function') {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      /* Fall through to the execCommand path. */
-    }
-  }
-  const el = document.createElement('textarea');
-  el.value = text;
-  el.setAttribute('readonly', '');
-  el.style.position = 'fixed';
-  el.style.left = '-9999px';
-  document.body.appendChild(el);
-  el.select();
-  el.setSelectionRange(0, text.length);
-  let ok = false;
+export async function copyText(text: string): Promise<boolean> {
+  if (!clipboardAvailable()) return false;
   try {
-    ok = document.execCommand('copy');
-  } finally {
-    el.remove();
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
   }
-  if (!ok) throw new Error('copy failed');
 }

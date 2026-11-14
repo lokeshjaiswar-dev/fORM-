@@ -9,13 +9,13 @@ import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input } from '@dmacq/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/Tooltip';
 import { useEdition } from '@/edition/edition';
 import { previewVersion } from '@/lib/preview';
 import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
-import { copyText } from '@/lib/copyText';
+import { CopyLink } from '@/components/CopyLink';
 import { fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
 
 export function BuilderHeader() {
@@ -72,17 +72,6 @@ export function BuilderHeader() {
       else setError(err instanceof Error ? err.message : 'This form could not be published.');
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function copyLink() {
-    if (!link) return;
-    try {
-      await copyText(link);
-      setError(null);
-      toast('Link copied');
-    } catch {
-      setError('The link could not be copied. Select it and press Ctrl+C.');
     }
   }
 
@@ -150,12 +139,14 @@ export function BuilderHeader() {
             </p>
           ) : null}
           {link ? (
-            <div className="flex gap-2">
-              <Input readOnly value={link} aria-label="Share link" />
-              <Button type="button" onClick={() => void copyLink()}>
-                Copy
-              </Button>
-            </div>
+            <CopyLink
+              link={link}
+              label="Share link"
+              onCopied={() => {
+                setError(null);
+                toast('Link copied');
+              }}
+            />
           ) : null}
         </DialogContent>
       </Dialog>

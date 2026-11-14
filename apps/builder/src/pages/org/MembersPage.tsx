@@ -9,7 +9,7 @@ import { Badge, Button, Field, Input, TextLink } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import { FormError, Notice } from '@/pages/auth/AuthLayout';
 import { problemText, submit } from '@/pages/auth/util';
-import { copyText } from '@/lib/copyText';
+import { CopyLink } from '@/components/CopyLink';
 import {
   accessLinkSchema,
   assignable,
@@ -47,7 +47,7 @@ const M = defineMessages('builder', {
   'members.invited_emailed': 'Invitation emailed to {email}. You can also share this link:',
   'members.invited_link': 'This server sends no email: give {email} this link yourself.',
   'members.copy': 'Copy link',
-  'members.copied': 'Copied',
+  'members.link_field': 'Link to hand over',
   'members.invites': 'Open invitations',
   'members.invites_none': 'No open invitations.',
   'members.invite_expires': 'expires {date}',
@@ -77,7 +77,6 @@ export function MembersPage() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('editor');
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (session.status === 'unknown') void loadSession();
@@ -156,7 +155,6 @@ export function MembersPage() {
     run(async () => {
       const r = await orgApi('POST', '/v1/org/invites', invitedSchema, { email, role });
       setEmail('');
-      setCopied(false);
       setNotice({ text: t(r.emailed ? M['members.invited_emailed'] : M['members.invited_link'], { email: r.invite.email }), link: r.link });
       await reload();
     });
@@ -178,7 +176,6 @@ export function MembersPage() {
   const accessLink = (userId: string, memberEmail: string) =>
     run(async () => {
       const r = await orgApi('POST', `/v1/org/members/${userId}/access-link`, accessLinkSchema);
-      setCopied(false);
       setNotice({ text: t(M['members.access_link_shown'], { email: memberEmail }), link: r.link });
     });
   const withdraw = (id: string) =>
@@ -186,12 +183,6 @@ export function MembersPage() {
       await orgApi('DELETE', `/v1/org/invites/${id}`, null);
       await reload();
     });
-  const copy = (link: string) => {
-    void copyText(link).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    );
-  };
 
   return (
     <Page footer={footer}>
@@ -207,11 +198,8 @@ export function MembersPage() {
         <Notice className="mt-4">
           {notice.text}
           {notice.link ? (
-            <span className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-[12px] text-foreground">{notice.link}</code>
-              <Button type="button" size="sm" variant="outline" onClick={() => copy(notice.link!)}>
-                <Copy /> {copied ? t(M['members.copied']) : t(M['members.copy'])}
-              </Button>
+            <span className="mt-2 block">
+              <CopyLink compact link={notice.link} label={t(M['members.link_field'])} copyLabel={t(M['members.copy'])} icon={<Copy />} />
             </span>
           ) : null}
         </Notice>
