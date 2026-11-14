@@ -1,4 +1,5 @@
-import type { AnswerValue, Answers, ApiRequestConfig, ApiSuccessRule, ApiValidation, FieldBlock, FieldError, PublicFormDefinition, SafeUrl } from '@form/schema';
+import type { RawAnswers } from '@form/validation/lazy';
+import type { AnswerValue, ApiRequestConfig, ApiSuccessRule, ApiValidation, FieldBlock, FieldError, PublicFormDefinition, SafeUrl } from '@form/schema';
 
 export interface ApiCheckResult {
   ok: boolean;
@@ -242,7 +243,7 @@ export async function postFieldApi(url: SafeUrl, fieldKey: string, value: unknow
   return callFieldApi({ url }, fieldKey, value);
 }
 
-export function payloadValue(answer: AnswerValue | undefined): unknown {
+export function payloadValue(answer: AnswerValue | null | undefined): unknown {
   if (!answer) return undefined;
   const value = answer.value as unknown;
   if (value === undefined || value === null || value === '') return undefined;
@@ -253,7 +254,7 @@ export function payloadValue(answer: AnswerValue | undefined): unknown {
 /** Visible fields with `apiValidation` that currently have an answer. */
 export function apiValidationTargets(
   def: PublicFormDefinition,
-  answers: Answers,
+  answers: RawAnswers,
   visible: ReadonlySet<string>,
   pageId?: string,
 ): FieldBlock[] {
@@ -271,7 +272,7 @@ export function apiValidationTargets(
 
 export async function verifyFieldApis(
   def: PublicFormDefinition,
-  answers: Answers,
+  answers: RawAnswers,
   visible: ReadonlySet<string>,
   pageId: string | undefined,
   fallback: string,
