@@ -606,11 +606,40 @@ Acceptance highlights: invalid PIN rejected; Aadhaar full number never leaves th
 ### M2.3 Payments
 
 **WP-2.11: Payment framework, Stripe and Razorpay** (PAY-01, 02, 03, 06, 07, FLD-34, SUB-20) — 55 ed
-- Gateway adapter interface (hosted checkout / fields only, SAQ-A); webhook reconciliation and idempotency (`payment_events`); per-form currency, test mode; `pending_payment` hold (limit counted on confirmation); server-computed amount (`amount_changed`); Stripe (cards, Apple/Google Pay, ACH, Link), Razorpay (UPI, cards, netbanking, wallets); donations and calculated amounts; pending/failed view.
-- **Depends on:** WP-2.02, WP-1.12. **Acceptance:** sandbox e2e for both; replayed webhooks idempotent; tampered total rejected; no card data on our servers. **Parallel?** Two engineers.
+
+*Expanded in Nov 2026 after the client demo asked for payments (§10). Rows, size and place in the payments chain are unchanged; the order of work lets slice 1 start before WP-2.02 ends (D21).*
+
+- **Scope:**
+  - **Merchant model.** Each org connects its own gateway account (`payment_accounts`: key id, KMS-encrypted key secret and webhook secret, mode `test | live`, `rev`). The org is the merchant of record and fORM- never holds funds, so the platform is not a payment aggregator. Connecting, rotating and removing an account needs a new `payments.manage` permission (owner, admin), is audited, and never returns a secret. Credentials stay in FormOps (`payments.connectionId`), never in a definition, a template or a merged draft.
+  - **Gateways.** Razorpay first, as the India default (UPI intent and QR, cards, netbanking, wallets); Stripe (cards, Apple/Google Pay, ACH, Link) for orgs collecting outside India. Stripe has restricted onboarding of new Indian businesses since 2024: recheck at WP start and say so in the docs. PhonePe PG, Cashfree and PayU stay adapters on demand (PAY-16). The `PaymentGateway` port (`createOrder`, `verifyWebhook`, `fetchStatus`, `refund`) is proven in its contract suite against a fake redirect-and-callback gateway, so one can be added without touching the core.
+  - **PCI scope stays SAQ-A.** Hosted checkout only (Razorpay Checkout; Stripe Checkout or the Payment Element in Stripe's iframe). No card number, CVV or UPI VPA touches our DOM, API, logs, traces or storage. Gateway scripts load only on forms with a payment block, from the origins in the hash CSP (architecture §4.5).
+  - **Amount from the server.** On submit the API recomputes the total from `PaymentConfig.amount` and the stored answers: a fixed amount (one product, no options), a donation within min/max (PAY-06), or a calculated `Expr` through `packages/logic` (PAY-07), always as `MinorUnits`. `PaymentSelection.clientTotal` is advisory; a mismatch returns 422 `amount_changed`. The gateway order is created for the server's total only. The full product list is WP-2.12.
+  - **Order flow.** Submit → validation → in one transaction, the submission as `pending_payment` (not counted against the limit, no fanout) and a `payments` row (`created`) → the gateway order is created outside the transaction with `payments.id` as the idempotency key (Razorpay `receipt`, Stripe `Idempotency-Key`) → `SubmitResult` `payment_required` with checkout parameters. "Pay again" reuses the same row and order while it is open.
+  - **Capture only from a verified webhook.** `POST /hooks/payments/:gateway/:accountId` (the provider-callback surface, architecture §3.1) verifies the signature over the raw body (Razorpay `X-Razorpay-Signature`; Stripe `Stripe-Signature` with its timestamp tolerance), dedupes by gateway event id (`payment_events`; raw payload encrypted in object storage for 30 days), then confirms with `fetchStatus` and checks order id, amount and currency. Only then, in one transaction: payment `paid`, submission `complete`, `form_counters` and stock updated, one `submission.fanout` job. The browser's success callback only starts polling a receipt endpoint. A bad signature is a denied, audited event with no state change; an amount or currency mismatch keeps the submission held (`pending_payment`), marks the payment `mismatch` and alerts the owner. Schema: `PaymentRecord.status` gains `created` and `mismatch`.
+  - **Reconciliation without inbound webhooks.** `payment.reconcile` (every 10 min) polls `fetchStatus` for open orders, so an on-prem install whose webhook URL the gateway cannot reach still completes payments. Abandoned orders expire after `abandonAfterHours` (default 24) to `payment_failed`; their answers are purged after a short retention (default 7 days, stated in the notice).
+  - **Idempotency and state.** Unique `(gateway, reference)` and `(gateway, event_id)`; one open order per submission; monotonic transitions (`created → pending → paid → partially_refunded | refunded`, or `failed`); a replay returns the stored outcome.
+  - **Refunds.** Refunds made in the gateway dashboard reach `PaymentRecord.status` (`refunded`, `partially_refunded`) through webhooks and reconcile, with an audit event and an owner notification. Automatic refunds through `refund()` when a paid submission cannot be accepted (limit reached, or the last stock unit taken between order and capture). Owner-initiated refunds from the submission view stay PAY-14 (P4); if a client needs them earlier, promote PAY-14 with sign-off (R6) and require a `payments.refund` permission plus the WP-2.33 four-eyes rule above an org threshold.
+  - **GST-ready fields.** Billing name, email, phone and address, and an optional buyer GSTIN (format and checksum), from `PaymentConfig.billing`; place-of-supply state code; seller GSTIN and state from the org profile (WP-T1.3); HSN/SAC on the product. Stored on the payment so WP-2.12 can compute the GST split and number invoices without a schema change. Tax modes here: `none` and `flat`.
+  - **Editions and egress.** `field:payment` and `capability:payments` (`@form/config`) gate the palette, publish and the runtime; air-gapped installs show no payment block and make no outbound call. With `EGRESS_POLICY=allowlist`, a gateway in `PAYMENTS_ENABLED` whose API host is missing from `EGRESS_ALLOWLIST` is a config issue and stays off. Every outbound call goes through the egress port.
+  - **Compliance.** The gateway is a declared recipient: publish error `recipient_not_declared` when the form's purposes do not list it, and one `disclosures` row per payment (fields sent: name, email, phone, amount). Payment answers keep the registry's `financial` classification and `allowPrefill: false`. Payment records follow the statutory floor; tax-record retention for invoices (counsel, D17) lands with WP-2.12. Audit events: `payment.account_*`, `payment.order_created`, `payment.captured`, `payment.failed`, `payment.refunded`, `payment.mismatch`, `payment.webhook_rejected`.
+  - **Respondent and owner UI.** The registry `payment` stub becomes available (config schema, control, export columns for amount, status and reference). A "Confirming your payment" status screen until the webhook lands; receipt through a signed link; the SUB-20 pending/failed view with filters; a payment status column in the grid. Test-mode submissions are marked and kept out of limits, analytics and default exports. Form merge (`packages/schema/src/merge`) keeps refusing two payment blocks and carries no gateway connection into the merged draft.
+  - **Order of work.** Slice 1: port, Razorpay, fixed and donation amounts, webhook capture, reconcile, SUB-20 (needs WP-1.12, not WP-2.02). Slice 2: Stripe, calculated amounts (needs WP-2.02), automatic refunds.
+- **Depends on:** WP-1.12, WP-1.07, WP-1.11, WP-1.16, WP-1.20, WP-1.03 (egress port, KMS), WP-T1.3; WP-2.02 for calculated amounts only.
+- **Acceptance:**
+  - sandbox e2e for Razorpay (UPI and card) and Stripe (card) from submit to `complete`, driven only by the webhook; with webhooks blocked the submission stays `pending_payment` and reconcile completes it;
+  - a tampered client total, price or quantity → 422 `amount_changed`; the gateway order amount equals the server total on the whole amount corpus (property test);
+  - a bad signature → 401, a denied audit event, no state change; one event delivered five times → one transition, one fanout, one stock decrement;
+  - a webhook amount or currency that differs from the order → payment `mismatch`, submission never `complete`;
+  - limit N with N + 3 concurrent paid checkouts → exactly N `complete`, the others refunded automatically and told so;
+  - a dashboard refund shows as `refunded` / `partially_refunded` within one reconcile cycle, audited, owner notified;
+  - no card number, CVV or UPI VPA in the database, logs, traces or object storage after a full sandbox run (scan); gateway scripts only on forms with a payment block;
+  - air-gapped: no payment block in the palette, publish refused by the edition check, zero outbound calls; allowlist edition with the gateway host missing → config issue, gateway off;
+  - gateway secrets never in a response, log, definition or merged draft;
+  - a form whose purposes do not declare the gateway fails publish with `recipient_not_declared`; each payment writes a `disclosures` row.
+- **Parallel?** Two engineers (port, Razorpay, webhooks and reconcile; Stripe and the UI).
 
 **WP-2.12: Commerce** (PAY-04, 05, 08, 09, 10, 11, 12) — 55 ed
-- Product list; subscriptions (Stripe Billing, Razorpay Subscriptions; UPI Autopay limits documented); coupons; tax incl. GST split; shipping; receipts and GST invoice numbering; stock.
+- Product list; subscriptions (Stripe Billing, Razorpay Subscriptions; UPI Autopay limits documented); coupons; tax incl. GST split; shipping; receipts and GST invoice numbering (from the buyer GSTIN, place of supply and HSN/SAC that WP-2.11 stores); stock.
 - **Depends on:** WP-2.11. **Acceptance:** GST fixtures (intra → CGST+SGST, inter → IGST); last unit sold exactly once; coupon limits respected.
 
 ### M2.4 Appointments
@@ -667,6 +696,37 @@ Acceptance highlights: invalid PIN rejected; Aadhaar full number never leaves th
 **WP-2.28: Approvals** (WFL-01, WFL-02, WFL-07) — 25 ed
 - `workflows`, `workflow_runs`, `workflow_actions`; linear steps; signed action links; outcome emails; `workflow_state`; branches through `packages/logic`; signature evidence hash; IT Act disclaimer on signature templates.
 
+**WP-2.33: Section-level maker-checker review** (WFL-09, proposed) — 30 ed
+
+*Added in Nov 2026 from the client demo (§10). WFL-09 is a proposed row: the WP joins the P2 total once the PM and tech lead sign it off (R6, D22).*
+
+- **Goal:** a submission is final only when each of its review units (a page, a section or a section-break range) has been approved by a checker from that unit's group, and no checker approves a unit they made or last changed.
+- **Scope:**
+  - **Review units in the schema.** `FormDefinition.review?: { units: ReviewUnit[] }`, each `{ id: ReviewUnitId; name: LabelText; target: { kind: 'page'; pageId } | { kind: 'section'; blockId } | { kind: 'section_break'; blockId } }`. Membership is versioned with the form: `compile()` derives `compiled.reviewUnits: Record<ReviewUnitId, BlockId[]>` (a page's blocks; a section container's descendants, FLD-48; or the blocks from a `section_break` up to the next one, in document order across pages). Publish issues `review_unit_empty`, `review_unit_overlap`, `review_unit_contains_payment`. `PublicFormDefinition` keeps unit names only. New brands with zod twins (`ReviewUnitId`, `ReviewGroupId`). The `section_break` block, added to the code in Nov 2026, must enter `02-form-schema-v2.md` with this membership rule before it can be a target.
+  - **Who reviews (FormOps, live).** `review?: { enabled; units: Array<{ unitId; groupId; order; required; visibility: 'own_unit' | 'whole_submission' }>; onReturn: 'respondent' | 'maker'; distinctCheckers: boolean }`, revisioned and audited like the rest of FormOps. Units with the same `order` are reviewed in parallel; a higher `order` waits for the lower ones.
+  - **Roles on top of WP-1.02.** New permission `submissions.review` (owner, admin, editor; grantable to data collaborators in P2). `review_groups` and `review_group_members`, managed with `members.manage`; a checker needs the permission and membership of the unit's group. Creators never review (no data access). Org setting "checkers must use 2FA", on by default.
+  - **Data model.** `submission_reviews`: current state per unit per submission (`round`; `state` `pending | approved | rejected | returned | not_applicable`; `maker`: the respondent with a subject blind index, or a user id; `answers_hash` = sha256(JCS(the unit's stored answers)); `rev`). `review_decisions`, append-only: `decision` (`approve | reject | return`), `reason_code`, `respondent_message` and `internal_note` (encrypted with the submission's DEK), `decided_by`, `decided_at`, `answers_hash`, `form_version_id`, unique `idempotency_key`. `fr_app` has no UPDATE or DELETE on decisions and a trigger refuses both. Both tables are partitioned like submissions, with tenant RLS, and appear in the isolation suite and the `pii_coverage` manifest.
+  - **Decisions only through `review_decide()`.** A definer function that, in one transaction, checks `submissions.review`, group membership, unit order and state, the current `answers_hash` (stale → 409 `review_stale`) and the **four-eyes rule**: the checker is not the unit's maker, not the last user to edit it (SUB-09 owner edits), not a user whose verified email blind index matches the respondent's, and, with `distinctCheckers`, has not decided another unit of the same submission. It then appends the decision, moves the state and appends the audit event. The API runs the same checks first for clear errors; the function is the guarantee. Refusals are denied events on the separate audit connection (WP-1.04).
+  - **Submission states.** New held status `pending_review` (after `pending_payment` when both apply); `complete` when every required, applicable unit is approved in the current round; new status `rejected` on a final reject. A held submission enqueues reviewer notifications only; webhooks, integrations, workflows (`start_workflow`) and analytics counters run once, on finalisation (webhook events `submission.finalised`, `submission.rejected`). A unit whose blocks are all hidden or off the path is `not_applicable`.
+  - **Corrections.** "Return" sends a unit back with a message: to the respondent through a signed link that unlocks only the returned units (WP-2.18 respondent edit), or to the internal maker. A resubmission runs full server validation and logic, opens a new round for the changed units only, and leaves every earlier decision readable. Any change to an approved unit's answers, by any path, reopens that unit.
+  - **Reviewer UI.** A review queue per user (filter by form, unit, age); inbox detail with per-unit approve / reject / return, reason codes, notes, and a diff of the unit between rounds. `own_unit` visibility redacts other units' answers server-side in detail, grid and export; every read is audited (WP-1.04 read audit).
+  - **Notifications (WP-1.16).** Triggers `review_assigned`, `review_returned`, `review_finalised`. Reviewer emails carry a link and the form and unit names, never answer values; optional daily digest. Respondent outcome email from a default template (added to the WP-T1.6 set).
+  - **Respondent view.** The ending says the submission is under review; a receipt link (`signed_links` purpose `receipt`) shows each unit's name and state in plain words, never checker names or internal notes.
+  - **Builder.** A Review tab in form settings: units from pages, sections or section breaks; group, order, required and visibility per unit; a preview of the blocks each unit covers.
+  - **Compliance.** Decisions and denials go into the per-org audit chain (WP-1.04). The decision log and group membership are the SOC 2 segregation-of-duties evidence (CC6.1, CC6.3); access reviews (WP-1.24) list review groups. The DSR export includes decisions and respondent messages about the principal; erasure removes messages and notes and cancels open reviews, leaving pseudonymised events in the audit chain; retention purges review rows with their submission, and the statutory floor applies as for answers. No outbound call, so it works air-gapped.
+- **Depends on:** WP-1.02, WP-1.04, WP-1.11, WP-1.12, WP-1.15, WP-1.16, WP-1.22, WP-1.23; WP-2.18 for return to the respondent; WP-2.09 for `section` targets (pages and section breaks work without it). Shares `signed_links` and the `workflow_state` mirror with WP-2.28 but does not wait for it.
+- **Acceptance:**
+  - the maker or last editor of a unit, or a user whose verified email matches the respondent's, gets 403 `four_eyes_violation` from the API and from `review_decide()` called directly as `fr_app`; each attempt is a denied audit event;
+  - UPDATE and DELETE on `review_decisions` fail as `fr_app`; the isolation suite covers the four new tables for every actor kind;
+  - a submission becomes `complete` only when every required, applicable unit's latest decision in the current round approves the current `answers_hash`; correcting one unit reopens only that unit;
+  - two checkers approving one unit at once → one decision and one 409 `review_stale`; a replayed decision with the same idempotency key returns the first result;
+  - webhooks, integrations and workflows fire exactly once, after finalisation; nothing but reviewer notifications fires while `pending_review`;
+  - with `own_unit`, responses to a unit-B checker (detail, grid, export) hold no unit-A answers (snapshot), and every read is audited;
+  - reviewer emails hold no answer values (snapshot); the respondent receipt shows unit names and states only;
+  - the DSR export lists decisions and respondent messages; after erasure no message or note remains and the audit chain still verifies;
+  - overlapping or empty units fail publish with `review_unit_overlap` / `review_unit_empty`; the edition check passes air-gapped with no outbound call.
+- **Size:** 30 ed. **Parallel?** Two engineers (BE: schema, tables, `review_decide()`, API, fanout; FE: builder tab, queue, inbox detail, respondent receipt).
+
 ### M2.12 Teams and builder collaboration
 
 | WP | Rows | Scope | Size |
@@ -702,7 +762,7 @@ Acceptance highlights: a Creator cannot read submissions or create a webhook (AP
 
 **WP-2.32: Feature-match hardening** — 15 ed. Starts only after WP-T2.1 completes. Regression sweep over all 306 rows (traceability test ids); second pen test; performance re-baseline; docs; JotForm migration guides. **Acceptance:** every row has a passing acceptance test linked in §8; zero open critical/high findings.
 
-**P2 total:** 755 (product WPs) + 150 (templates) + 15 (WP-2.32) = **920 ed**; with 15% buffer ≈ **1,058 ed**, about **33 weeks with 8 engineers**.
+**P2 total:** 755 (product WPs) + 150 (templates) + 15 (WP-2.32) = **920 ed**; with 15% buffer ≈ **1,058 ed**, about **33 weeks with 8 engineers**. Not included: WP-2.33 (30 ed, ≈ 35 ed with buffer), proposed in Nov 2026 and counted once signed off (D22).
 
 ---
 
@@ -806,7 +866,7 @@ gantt
 | SUB | 01→1.12 · 02,03,04,05,08,12→1.15 · 06,07,16(gallery),17,18,19,23→2.14 · 09,10,11,13,14,15,21,22→2.15 · 16(calendar)→2.13 · 20→2.11 |
 | EXP | 01,03→1.17 · 02→1.14 · 04,05,06→2.17 |
 | ANA | 01→1.19 · 02–05→2.27 |
-| WFL | 01,02,07→2.28 |
+| WFL | 01,02,07→2.28 · 09→2.33 (proposed, not counted until D22) |
 | PAY | 01,02,03,06,07→2.11 · 04,05,08–12→2.12 |
 | INT | 01→1.18 · 02,03,13→2.23 · 05,06,07,10→2.24 · 04,08,09→2.25 · 11→2.13 |
 | WSP | 01,08→1.01 · 02,03,09→1.02 · 06→1.06 · 10,11→1.26 · 04,05,07→2.29 |
@@ -844,3 +904,44 @@ Items marked **PO** need the product owner; **counsel** needs legal sign-off. Th
 | D18 | Per-org KMS keys (real crypto-shredding) before P3 for top tiers (**PO**) | WP-1.11 | P1 W12 | No; P3 BYOK |
 | D19 | Postgres floor for external databases | WP-1.27 | P1 W12 | 16 (bundle ships 18) |
 | D20 | DigiLocker partnership and commercial terms (**PO**) | WP-2.31 | P2 W8 | Pursue; manual review remains the fallback |
+| D21 | Pull WP-2.11 slice 1 (Razorpay, fixed and donation amounts) forward for the demo client, to start right after WP-1.12 instead of after WP-2.02 (**PO**) | WP-2.11 | P1 W12 | Yes, if an engineer is free without slowing the P1 critical chain or the 2027-05-10 gate; otherwise P2 W1 |
+| D22 | Accept WFL-09 (section-level maker-checker) into feature match, with a matching deferral (R6) (**PO**, tech lead) | WP-2.33 | P1 W16 | Accept; WP-2.33 starts after WP-1.15 and WP-1.16 |
+
+---
+
+## 10. Demo follow-ups (Nov 2026)
+
+After a client demo in early November 2026 the asks below were written down in the root file `notes`. Most of them were prototyped on `dev` between 10 and 13 November, ahead of the WPs that own them. This section tracks each ask against the plan, so the prototype is hardened against those WPs' acceptance criteria rather than counted as done.
+
+**Status values:** **built as prototype**: works in the builder and stays inside the schema contract, but the owning WP's acceptance has not been run · **needs hardening**: reaches the server, personal data or the internet and does not yet meet the named WP's acceptance · **not started**. "No row" means no matrix row covers the ask: it needs a proposed row and PM + tech lead sign-off (R6) before more work.
+
+### 10.1 The asks in `notes`
+
+| # | Ask (from `notes`) | On `dev` now | Rows → WP | Status |
+|---|---|---|---|---|
+| 1 | Create fields on our own | Custom fields page and editor; fields kept in this browser (IndexedDB) and offered in the picker | TPL-15 → WP-T2.4 (snippets); single-block snippets in WP-T1.4; TPL-08 → WP-T1.5 (save, org scope) | Built as prototype; browser-only until it meets WP-T1.4 / T2.4 (org scope, RLS, bindings, `origin`) |
+| 2 | Checkbox columns in a configurable list | Matrix / input-table column inputs fixed, checkbox cells included | FLD-24, FLD-25 → WP-2.09 | Built as prototype; WP-2.09 acceptance (row-scoped rules, encrypted child values, export flattening) open |
+| 3 | Dropdown options pulled from an API (a "master") | Inspector section to fetch options from a URL; the renderer calls it from the respondent's browser | No row (closest FLD-39, P4) | Needs hardening and a row: an outbound call chosen by the author (edition and egress policy, CSP `connect-src`) and possibly answers sent to a third party (purposes, `data.route`, `disclosures`). Proposed shape: a server-side fetch through the egress port, allowlisted hosts, cached option lists, off when air-gapped |
+| 4 | Section breaker with a name for each section | `section_break` block, named sections and a section navigator in the renderer | FLD-48 → WP-2.09; FLD-49 → WP-2.10 | Built as prototype; `section_break` is not yet in `02-form-schema-v2.md` and must be reconciled with the FLD-48 section container (one section model) before WP-2.33 uses it |
+| 5 | Section-level maker-checker approval | Nothing | WFL-09 (proposed) → WP-2.33 | Not started |
+| 6 | Payment integration | Registry `payment` stub and the merge conflict for two payment blocks only | PAY-01, 02, 03, 06, 07, FLD-34, SUB-20 → WP-2.11 (expanded); PAY-09, 11 → WP-2.12 (GST invoices) | Not started |
+| 7 | Logo on the cover | Logo, cover and theme inspectors; images kept as `data:` URLs in browser storage and sent with publish | DSN-01, DSN-07 → WP-1.08 | Needs hardening against WP-1.08: content-addressed asset store, `AssetRef` only, no data URLs, zero third-party requests on the runtime page |
+| 8 | Drafts saving (progressive saving) | Builder: the API stores forms and drafts with `If-Match`, and an API-backed repository with an IndexedDB cache exists but is not switched on; the editor saves to IndexedDB. Respondent: nothing | BLD-07, WSP-06 → WP-1.06; RSP-03 → WP-2.18 | Builder side needs hardening against WP-1.06 (repository switched on, 409 merge prompt, forms list actions, every endpoint in the RLS suite); respondent save-and-resume not started |
+| 9 | Grouped forms (merge several forms by field name and type) | `@form/schema` merge (`packages/schema/src/merge`), "Merge selected" on the forms list, a merge endpoint | No row | Built as prototype; needs a row. A merged form combines purposes and consent blocks, so it is a new notice: it must pass the WP-1.32 notice approval gate before publish |
+| 10 | API tester for validation (JSON / XML parsing, success rules for boolean, string and number) | Inspector section with response tree and success rules; renderer check; a demo server in `tools/demo-validate-api` | No row (closest VAL-13) | Needs hardening and a row: the client verdict is untrusted, so the server must re-check at submit; the call sends answer values to a third party (purposes, `data.route`, `disclosures`, egress policy); XML needs a parser with entities off; timeouts and failure behaviour must be defined |
+
+### 10.2 Built alongside, not in `notes`
+
+| Work on `dev` | Rows → WP | Status |
+|---|---|---|
+| New field types: card sort, constant sum, date range, Likert, matching, MaxDiff, number range, schedule grid, semantic differential | No rows (Likert overlaps FLD-24) | Built as prototype; need rows (R6) and the registry completeness and determinism tests |
+| Title, submit-button and theme inspectors | FLD-50 → WP-2.10; DSN-01 → WP-1.08 | Built as prototype |
+| Quick publish → public fill page → submissions list → file upload (migrations 0012–0015) | PUB-01, ACC-* → WP-1.07; WSP-06 → WP-1.06; PUB-02 → WP-1.09; SUB-01 → WP-1.12; FLD-26 → WP-1.14; SUB-02 → WP-1.15 | Needs hardening: reads of submissions must need a signed-in member and go through RLS; publishing must belong to the signed-in user's org; uploads move to the WP-1.14 staging flow with sniffed MIME types and server-chosen ids. Under way in Nov 2026. Do not use with real personal data until each WP's acceptance passes |
+| Sign-up changes | WSP-01 → WP-1.01 | Needs hardening against WP-1.01: email verification, per-IP and per-account throttling, no account enumeration |
+
+### 10.3 Rules for the follow-up work
+
+- A follow-up starts from its WP: read the acceptance criteria first and build to them. An ask with no row gets a proposed row and sign-off (R6) before more code.
+- Hardening never edits migrations 0012–0015: they are applied history. Fixes ship as new migrations.
+- WP-2.11 slice 1 (D21) and WP-2.33 (D22) are the two decisions that bring demo asks forward; both need WP-1.12 first, so neither can land before M1.3.
+- When a follow-up merges, its row here moves to the WP's as-built note and its status becomes "done".

@@ -444,8 +444,11 @@ Captcha → FLD-29. Unique submission → ACC-07.
 | WFL-06 | Document e-signature product (upload PDF, signer roles, signing order, audit trail) | Jotform Sign | Missing | P4 | XL | A separate product |
 | WFL-07 | Signature field audit metadata (timestamp, IP hash, version hash, consent statement) | Sign audit trail only | Missing | P2 | S | (exceeds) Basic e-sign evidence on the form signature |
 | WFL-08 | Aadhaar eSign / DSC signing (Indian IT Act 2000) | Not offered | Missing | P4 | L | (exceeds) Regional differentiator after feature match. Needs an ESP partner |
+| WFL-09 | Section-level maker-checker review: each review unit (page, section or section-break range) of a submission approved, rejected or returned by a checker from its group; submission final only when every required unit is approved; maker ≠ checker enforced on the server; append-only decisions | Not offered (approvals are per submission) | Missing | P2 (proposed) | L | (exceeds) Client demo ask, Nov 2026 (delivery plan §10) → WP-2.33. Not counted until signed off (R6, D22). Works air-gapped. Decisions in the audit chain; SOC 2 segregation-of-duties evidence |
 
 ## 19. Payments (PAY)
+
+The Nov 2026 client demo asked for payments (delivery plan §10). The design is in WP-2.11 (expanded): org-owned gateway accounts, Razorpay first for India (UPI), server-computed amounts, capture only from a verified webhook, SAQ-A hosted checkout, off when air-gapped.
 
 | ID | Feature | JotForm behaviour | fORM- today | Phase | Cx | Notes |
 |---|---|---|---|---|---|---|
@@ -596,6 +599,8 @@ Each row is counted once, at its own Phase. The three pointer rows (BLD-13, DSN-
 | **Total** | **46** | **88** | **172** | **24** | **42** | **14** | **386** |
 
 **Feature match is done when every P0, P1 and P2 row has shipped: 306 rows** (P0 46, P1 88, P2 172).
+
+**Proposed rows** (Phase "P2 (proposed)") are not in these counts until the PM and tech lead sign them off with a matching deferral (delivery plan R6). Open proposals: WFL-09 (Nov 2026 client demo, decision D22). The other demo asks with no row are listed in delivery plan §10.
 
 **Changes in v1.1** (see `05-review-log.md`): +33 TPL rows; BLD-13, DSN-03 and DSN-09 became pointers; CMP-05, CMP-10 and CMP-13 moved from P2 to P1 for DPDP Rules commencement; new rows CMP-21 to CMP-24, TPL-32 and TPL-33.
 
