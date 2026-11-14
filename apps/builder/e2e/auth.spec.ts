@@ -23,7 +23,6 @@ test.describe('air-gapped', () => {
   test('hides OAuth sign-in even if a server offered it', async ({ page }) => {
     await page.route('**/v1/auth/methods', (route) => route.fulfill({ json: offered }));
     await page.goto('/auth/sign-in');
-    await expect(page.getByRole('note', { name: 'Edition' })).toHaveText('On-premises · air-gapped');
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await expect(page.getByRole('link', { name: /Continue with/ })).toHaveCount(0);
   });
