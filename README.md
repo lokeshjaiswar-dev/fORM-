@@ -2,25 +2,25 @@
 
 A form platform for multi-tenant SaaS and on-prem deployments, working toward feature parity with JotForm, with SOC 2 and India DPDP compliance built in. The plan, schema, architecture and delivery roadmap are in [`docs/platform/`](docs/platform/README.md).
 
-> **Status:** Phase 0 is merged on `dev` (see [Phase 0 exit gate](docs/platform/phase0-exit-gate.md)), and so is the first part of Phase 1: the audit log (WP-1.04), production adapters (WP-1.03), edition flags and security headers (WP-1.05), sign-in with sessions and 2FA (WP-1.01), account export and deletion (WP-1.31), organisations, members and invites (WP-1.02) and template storage (WP-T1.1). The builder edits v2 form definitions on the field registry, previews them with `@form/renderer`, keeps drafts in IndexedDB and creates forms from the signed system template pack. Forms are not saved to the API yet (WP-1.06), and field-level encryption (WP-1.11), the public runtime and server-side submissions come later in Phase 1. Open issues are in the [backlog](docs/platform/backlog.md).
+> **Status:** Phase 0 is merged on `dev` (see [Phase 0 exit gate](docs/platform/phase0-exit-gate.md)), and so is the first part of Phase 1: the audit log (WP-1.04), production adapters (WP-1.03), edition flags and security headers (WP-1.05), sign-in with sessions and 2FA (WP-1.01), account export and deletion (WP-1.31), organisations, members and invites (WP-1.02) and template storage (WP-T1.1). The builder edits v2 form definitions on the field registry, previews them with `@form/renderer`, creates forms from the signed system template pack and keeps drafts in IndexedDB. The API now stores forms and drafts (with `If-Match`), and the builder has an API-backed repository for them that is not switched on yet (WP-1.06). Since the November 2026 client demo it also has more field types (Likert, matching, card sort, MaxDiff, constant sum, date and number ranges, schedule grid, semantic differential), named section breaks with a section navigator, custom fields, merging several forms into one, dropdown options and answer checks from an outside API, and logo, cover, title, theme and submit-button settings. Publish → public fill page → submissions → file upload works as a **prototype** that is being hardened against WP-1.06, 1.07, 1.09, 1.12 and 1.14: don't use it with real personal data yet. [Delivery plan §10](docs/platform/04-delivery-plan.md#10-demo-follow-ups-nov-2026) maps each demo ask to its work package and status; section-level maker-checker review (WP-2.33) and payments (WP-2.11) are planned, not built. Field-level encryption (WP-1.11), the SSR runtime and the production submission pipeline come later in Phase 1. Open issues are in the [backlog](docs/platform/backlog.md).
 
 ## Workspace
 
 | Path | Package | What it is |
 |---|---|---|
-| `apps/builder` | `@form/builder` | Vite + React form builder |
+| `apps/builder` | `@form/builder` | Vite + React form builder: canvas and inspectors from the field registry, preview through `@form/renderer`, drafts in IndexedDB (API-backed repository ready for WP-1.06), custom fields, form merge, sign-in, account and organisation pages; prototype publish, fill and responses pages |
 | `apps/worker` | `@form/worker` | pg-boss worker skeleton: handler registry, signed job envelopes verified and the org re-derived with `resolve_job_org`, per-job tenant context, cron in UTC, graceful `SIGTERM`; jobs `system.heartbeat`, `partitions.maintain`, `templates.seed` (stub) |
-| `apps/api` | `@form/api` | Fastify 5 API skeleton: `buildApp(config)`, zod type provider, problem+json errors, `/livez` and `/readyz`, OpenAPI, `GET /v1/forms` behind RLS, dev header auth stub |
+| `apps/api` | `@form/api` | Fastify 5 API: `buildApp(config)`, zod type provider, problem+json errors, `/livez` and `/readyz`, OpenAPI; in-house auth with sessions and 2FA, organisations, members and invites, account export and deletion, forms and drafts behind RLS; dev header auth for scripts and tests (`AUTH_DEV_HEADERS`); a prototype publish and submissions path being hardened (WP-1.07, WP-1.12) |
 | `packages/db` | `@form/db` | Drizzle tables, SQL migrations, roles (`fr_migrator`, `fr_app`, `fr_template_seeder`, `fr_system_agg`), null-safe RLS helpers, `withTenant()`, definer functions, RLS meta-checks |
 | `packages/observability` | `@form/observability` | pino logger with redaction, URL and query scrubbing, NTP clock check, OpenTelemetry (OTLP only when configured) |
 | `packages/i18n` | `@form/i18n` | ICU messages (`createI18n`), en-IN catalogues, en-XA pseudo-locale, lakh/crore number, money and `DD-MM-YYYY` date formatting, pinned grapheme segmenter |
-| `packages/schema` | `@form/schema` | Form schema v2 types, strict zod twins, v1 reader, structural validation, JCS hashing, rich-text AST tools (`fromHtml` allowlist, `normalize`, `toPlain`) |
+| `packages/schema` | `@form/schema` | Form schema v2 types, strict zod twins, v1 reader, structural validation, JCS hashing, rich-text AST tools (`fromHtml` allowlist, `normalize`, `toPlain`), form merge by field name and type (`merge`) |
 | `packages/registry` | `@form/registry` | Field registry (`REGISTRY: FieldRegistry`): config and answer schemas, operators, paths, compliance defaults, export columns and lint for every block type; `answerScalar` |
 | `packages/logic` | `@form/logic` | The `logic@2` engine: `compile()` (plan, cycles, page order, taint), `evaluate()` (full and incremental), `validateDefinition`, `projectForRuntime`; deterministic across Node, Chromium, Firefox and WebKit |
 | `packages/templates-core` | `@form/templates-core` | The template engine: `instantiate()` (deterministic `uuidv5` ids, remapped references, origin stamps, baked variables, optional parts, refs and bindings), `insertSnippet()`, `lockFingerprint()`, the save-as-template sanitiser with its PII scan; byte-identical across Node, Chromium, Firefox and WebKit |
 | `packages/templates` | `@form/templates` | System templates authored as v2 data (`src/system/core`: contact, feedback, NPS, job application, event registration), `templates:build` (registry, logic and instance validation, then `dist/system-core-<version>.formpack` signed with the Ed25519 development key, or the key in `FORM_PACK_SIGNING_KEY`), and `readFormpack` (zip guards, signature with a trusted key of the named algorithm, every file's sha256) |
 | `packages/validation` | `@form/validation` | Answer validation per page and on the visible set (`validateAnswers` over a logic `EvalState`), I9 `normalizeAnswers`, `FieldError` codes and en-IN messages, author regexes, presets and masks through re2js; same verdicts in Node, Chromium, Firefox and WebKit |
-| `packages/renderer` | `@form/renderer` | Store-independent `FormRenderer` for runtime versions: logic@2 evaluated incrementally, page-scoped validation, one control per available type, status and ending screens, theme tokens as CSS variables, SSR and hydration; `RichTextView` (rich-text AST → React elements) |
+| `packages/renderer` | `@form/renderer` | Store-independent `FormRenderer` for runtime versions: logic@2 evaluated incrementally, page-scoped validation, one control per available type, status and ending screens, theme tokens as CSS variables, named sections with a section navigator, SSR and hydration; `RichTextView` (rich-text AST → React elements) |
 | `packages/tsconfig` | `@form/tsconfig` | Shared TypeScript bases (`base.json`, `strict.json`) |
 | `packages/ports` | `@form/ports` | Adapter interfaces (storage, mailer, KMS, search, captcha, AV scan, GeoIP, guardian, audit sink, egress, queue) and the `JobData` map; depends only on `@form/schema` (its brands) |
 | `packages/adapters` | `@form/adapters` | Dev implementations: filesystem storage, SMTP mailer (Mailpit), local-keyfile KMS, no-op scanner, manual guardian review; the pg-boss queue (HMAC-signed envelopes, `installQueueSchema`) |
@@ -76,7 +76,7 @@ Do not use `npm install` or `yarn`: the workspace uses pnpm catalogs (`catalog:`
    curl -H 'X-FR-Dev-User: 01970000-0000-7000-8000-000000000002' \
         -H 'X-FR-Org: 01970000-0000-7000-8000-000000000001' http://127.0.0.1:8080/v1/forms
    ```
-   Add `--profile av` to the compose command for ClamAV. If port 5432 is taken, set `FR_PG_PORT` for compose and `DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:<port>/form` for `pnpm dev:setup`. With the API running, `pnpm dev` proxies `/v1` to it, so the builder's **Sign up** / **Sign in** pages (`/auth/sign-up`, `/auth/sign-in`), two-factor setup (`/account/security`), organisations (`/orgs/new`, `/org/members`, `/org/settings`) and invites work end to end; sign-up, magic-link and reset mails land in Mailpit at http://localhost:8025. For scripts and tests the API also accepts the `X-FR-Dev-User` header, but only when `AUTH_DEV_HEADERS=true` (refused with `NODE_ENV=production`). The OpenAPI document is at `/v1/openapi.json` and in `apps/api/dist/openapi.json` after a build. Tracing turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (the compose collector listens on `http://127.0.0.1:4318`).
+   Add `--profile av` to the compose command for ClamAV. If port 5432 is taken, set `FR_PG_PORT` for compose and `DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:<port>/form` for `pnpm dev:setup`. With the API running, `pnpm dev` proxies `/v1` to it, so the builder's **Sign up** / **Sign in** pages (`/auth/sign-up`, `/auth/sign-in`), two-factor setup (`/account/security`), organisations (`/orgs/new`, `/org/members`, `/org/settings`) and invites work end to end, and the prototype publish flow stores the form on the server and gives a fill link and a responses page (made-up data only); sign-up, magic-link and reset mails land in Mailpit at http://localhost:8025. For scripts and tests the API also accepts the `X-FR-Dev-User` header, but only when `AUTH_DEV_HEADERS=true` (refused with `NODE_ENV=production`). The OpenAPI document is at `/v1/openapi.json` and in `apps/api/dist/openapi.json` after a build. Tracing turns on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (the compose collector listens on `http://127.0.0.1:4318`).
 
 6. **Production build (optional)**
    ```sh
@@ -86,7 +86,7 @@ Do not use `npm install` or `yarn`: the workspace uses pnpm catalogs (`catalog:`
 
 ## Tests and checks
 
-Run these from the repository root before pushing. CI (`.github/workflows/ci.yml`) runs the same commands.
+Run these from the repository root before pushing (see [CONTRIBUTING.md](CONTRIBUTING.md) for which ones and why). CI (`.github/workflows/ci.yml`) runs the same commands.
 
 | Command | What it does |
 |---|---|
@@ -147,6 +147,8 @@ Tests named after a bug id (for example `B7: …`) that use `it.fails` describe 
 
 ## Branches
 
-- `main`: the original builder.
-- `dev`: integration branch for the platform work (Phase 0 onward).
-- Work happens on short-lived branches, one commit per work package (`WP-x.xx`, see the [delivery plan](docs/platform/04-delivery-plan.md)).
+- `main`: stable. Only maintainers update it, from a green `dev`.
+- `dev`: integration. Rebase on it, keep commits small, and push only after the checks above pass.
+- Changes that need review (auth, access control, money, migrations, shared packages) go through a short-lived branch and a pull request into `dev`.
+
+How we work, the checks, commit messages and the security rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
