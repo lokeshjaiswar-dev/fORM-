@@ -286,6 +286,10 @@ describe('translatable and lockable content', () => {
     expect(REGISTRY.divider.lockableContent(plainBlock('divider'))).toEqual([]);
     expect(REGISTRY.section_break.translatable(plainBlock('section_break'))).toEqual(['block:section_break_1:name']);
     expect(REGISTRY.section_break.lockableContent(plainBlock('section_break'))).toEqual(['/config/name']);
+    /* Lock fingerprints map instance ids back to template ids by property name, so a container locks its whole /config:
+     * the pointer '/config/children' would leave the children's instance ids unmapped and change the fingerprint. */
+    expect(REGISTRY.section.lockableContent(plainBlock('section'))).toEqual(['/config']);
+    expect(REGISTRY.repeating_group.lockableContent(fieldBlock('repeating_group'))).toEqual(['/label', '/config']);
     expect(REGISTRY.heading.palette.map((p) => p.configOverrides)).toEqual([{ level: 1 }]);
     for (const type of ['heading', 'paragraph', 'divider', 'captcha', 'section', 'section_break'] as const) expect(REGISTRY[type].lint(plainBlock(type) as never, definition([]))).toEqual([]);
   });

@@ -58,7 +58,9 @@ export const repeatingGroup = defineField({
     ...(block.config.addLabel?.trim() ? [`block:${block.id}:addLabel` as const] : []),
     ...(block.config.removeLabel?.trim() ? [`block:${block.id}:removeLabel` as const] : []),
   ],
-  content: () => ['/config/children'],
+  /* The whole config: lock fingerprints map instance ids back to template ids by property name, which works for a nested
+   * `children` key but not for the JSON pointer `/config/children` (see section.ts). */
+  content: () => ['/config'],
 });
 
 export const isRepeatableChildType = (type: string): type is RepeatableBlockType =>

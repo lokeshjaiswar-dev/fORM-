@@ -12,5 +12,7 @@ export const section = defineBlock({
   palette: [entry('section', null, 'layout', PALETTE_LABELS['palette.section'], 'chevrons-up-down', ['section', 'collapse', 'group', 'accordion', 'heading group'], { collapsible: true })],
   defaultConfig: () => ({ title: emptyInline(), children: [], collapsible: true, initiallyCollapsed: false }),
   texts: (block) => (block.config.title ? [`block:${block.id}:title`] : []),
-  content: () => ['/config/children', '/config/title'],
+  /* The whole config, not '/config/children' + '/config/title': a lock fingerprint maps instance ids back to template ids by
+   * property name (`children`), which only works when the value sits inside an object, not under a JSON-pointer key. */
+  content: () => ['/config'],
 });
