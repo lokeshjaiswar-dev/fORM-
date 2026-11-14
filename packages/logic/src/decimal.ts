@@ -27,8 +27,10 @@ export function compareDecimal(a: string, b: string): -1 | 0 | 1 | null {
 /** A DecimalString for a finite value of at most 34 significant digits and 10 fraction digits. */
 export function formatDecimal(value: DecimalValue): string | null {
   if (!value.isFinite() || value.precision(true) > 34) return null;
-  let text = value.toFixed(10);
-  if (text.includes('.')) text = text.replace(/\.?0+$/, '');
+  /* decimal.js only, no JS float: round half-even to 10 places, then print plain digits (never an exponent inside
+   * the 34-digit range, no trailing zeros). `toFixed` is avoided on purpose: this package bans that name so nobody
+   * can mistake it for Number#toFixed, which is host float formatting. */
+  let text = value.toDecimalPlaces(10).toString();
   if (text === '-0') text = '0';
   return DECIMAL.test(text) ? text : null;
 }
