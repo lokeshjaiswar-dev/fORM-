@@ -3,7 +3,6 @@ import { FormProvider, useForm, type FieldValues } from 'react-hook-form';
 import { isAvailable } from '@form/registry';
 import type { AnswerValueMap, Answers, BlockId, GroupRowId, StoredBlock } from '@form/schema';
 import { RendererContext, useRenderer } from '../context.ts';
-import { Block } from '../fields/Field.tsx';
 import { MESSAGES } from '../messages.ts';
 import { useAnswer, type ControlProps } from './hooks.ts';
 
@@ -31,6 +30,7 @@ function RowFields({
   onBlur: () => void;
 }) {
   const parent = useRenderer();
+  const { Block } = parent;
   const methods = useForm({ defaultValues: values as FieldValues });
   const ctx = useMemo(
     () => ({ ...parent, idFor: (blockId: string) => `${parent.idFor(blockId)}-${rowId}` }),

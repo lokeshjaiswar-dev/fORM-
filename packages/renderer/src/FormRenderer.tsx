@@ -547,6 +547,7 @@ export function FormRenderer(props: FormRendererProps) {
       i18n,
       t: (id, values) => i18n.t(id, values),
       uploader,
+      Block,
       idFor: (blockId) => `${rootId}${blockId}`,
     }),
     [version, def, tokens, mode, meta, i18n, uploader, rootId],

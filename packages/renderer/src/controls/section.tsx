@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { isAvailable } from '@form/registry';
 import type { StoredBlock } from '@form/schema';
 import { useRenderer } from '../context.ts';
-import { Block } from '../fields/Field.tsx';
 import { RichTextView } from '../richtext/RichTextView.tsx';
 import { usePipes, type ControlProps } from './hooks.ts';
 
 /** FLD-48: title, optional description, then nested blocks. */
 export function Section({ block }: ControlProps<'section'>) {
-  const { def } = useRenderer();
+  const { def, Block } = useRenderer();
   const { resolve } = usePipes();
   const c = block.config;
   const [open, setOpen] = useState(c.initiallyCollapsed !== true);
