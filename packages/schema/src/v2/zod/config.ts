@@ -438,12 +438,13 @@ export const CalculationConfigSchema = z.strictObject({
 });
 export const ContextSourceSchema = z.enum(CONTEXT_SOURCES);
 const ContextParamNameSchema = z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/);
+export const ContextStaticFactSchema = z.strictObject({ key: ContextParamNameSchema, value: z.string().min(1).max(10_000) });
 export const ContextConfigSchema = z.strictObject({
   sources: z.array(ContextSourceSchema).max(CONTEXT_SOURCES.length),
   stripQuery: z.boolean().exactOptional(),
   display: z.enum(['visible', 'hidden']).exactOptional(),
   urlParams: z.array(ContextParamNameSchema).max(20).exactOptional(),
-  staticFacts: z.array(z.strictObject({ key: ContextParamNameSchema, value: z.string().min(1).max(10_000) })).max(20).exactOptional(),
+  staticFacts: z.array(ContextStaticFactSchema).max(20).exactOptional(),
 }).refine((config) => new Set(config.sources).size === config.sources.length, 'sources must be unique')
   .refine((config) => !config.urlParams || new Set(config.urlParams).size === config.urlParams.length, 'url params must be unique')
   .refine((config) => !config.staticFacts || new Set(config.staticFacts.map((f) => f.key)).size === config.staticFacts.length, 'static keys must be unique')
