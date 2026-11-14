@@ -130,10 +130,14 @@ function patchMe(jar: Jar, body: unknown) {
 }
 
 async function signedUp(email = newEmail(), target = app): Promise<{ jar: Jar; email: string; userId: string }> {
+  const since = sink.messages.length;
   const jar = new Jar();
-  const res = await call(jar, 'POST', '/v1/auth/signup', { email, password: PASSWORD, name: 'Asha', noticeVersion: NOTICE_VERSION }, target);
-  expect(res.statusCode).toBe(200);
-  return { jar, email, userId: res.json<{ user: { id: string } }>().user.id };
+  expect((await call(jar, 'POST', '/v1/auth/signup', { email, password: PASSWORD, name: 'Asha', noticeVersion: NOTICE_VERSION }, target)).statusCode).toBe(202);
+  const mail = await mailTo(email, /Confirm your email/, since);
+  const token = /\/auth\/verify#token=([A-Za-z0-9_-]{43})/.exec(mail.text)![1]!;
+  const verified = await call(jar, 'POST', '/v1/auth/verify-email', { token }, target);
+  expect(verified.statusCode).toBe(200);
+  return { jar, email, userId: verified.json<{ user: { id: string } }>().user.id };
 }
 
 async function events(userId: string): Promise<Array<{ action: string; outcome: string; reason?: string; metadata?: Record<string, unknown> }>> {
@@ -178,8 +182,8 @@ describe('the platform privacy notice (CMP-21)', () => {
     expect(refused.statusCode).toBe(409);
     expect(refused.json()).toMatchObject({ code: 'NOTICE_OUTDATED' });
     expect((await owner.query('select 1 from users where email = $1', [stale])).rowCount).toBe(0);
-    const ok = await call(new Jar(), 'POST', '/v1/auth/signup', { email: stale, password: PASSWORD, orgName: 'Stale org' });
-    expect(ok.statusCode).toBe(200);
+    const missing = await call(new Jar(), 'POST', '/v1/auth/signup', { email: stale, password: PASSWORD });
+    expect(missing.statusCode).toBe(400);
 
     const { jar, userId } = await signedUp();
     const { hash } = (await call(null, 'GET', '/v1/privacy/notice')).json<{ hash: string }>();
@@ -243,9 +247,9 @@ describe('POST /v1/me/export', () => {
       requests: [{ category: 'information', message: 'What do you keep about me?', status: 'open' }],
       linkedAccounts: [],
     });
-      expect(data.sessions).toEqual([expect.objectContaining({ mfaLevel: 'pwd', revokedAt: null })]);
+    expect(data.sessions).toEqual([expect.objectContaining({ mfaLevel: 'link', revokedAt: null })]);
     const actions = (data.activity as Array<{ action: string }>).map((e) => e.action);
-    expect(actions).toEqual(expect.arrayContaining(['auth.signup', 'auth.login', 'account.notice_acknowledged', 'account.grievance_filed']));
+    expect(actions).toEqual(expect.arrayContaining(['auth.signup', 'auth.email_verified', 'auth.login', 'account.notice_acknowledged', 'account.grievance_filed']));
     // Another user's events, credentials and keyed hashes stay out.
     const text = res.body;
     for (const leaked of [other.userId, other.email, 'argon2', 'token_hash', 'ip_hash', 'actorIpHash']) expect(text).not.toContain(leaked);

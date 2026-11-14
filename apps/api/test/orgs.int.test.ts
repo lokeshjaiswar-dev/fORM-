@@ -168,10 +168,10 @@ describe('orgs', () => {
     }
   });
 
-  it('creates an org for a verified account', async () => {
-    const res = await as(await newUser(), 'POST', '/v1/orgs', { body: { name: 'Nope' } });
-    expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ org: { name: 'Nope' } });
+  it('needs a verified address to create an org', async () => {
+    const res = await as(await newUser({ verified: false }), 'POST', '/v1/orgs', { body: { name: 'Nope' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
   });
 
   it('changes the org and its settings with org.settings only, and audits the refusal', async () => {

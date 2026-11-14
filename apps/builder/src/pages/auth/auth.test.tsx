@@ -182,30 +182,68 @@ describe('sign-in', () => {
 });
 
 describe('sign-up and email links', () => {
-  it('creates the account, organisation and session, then opens the forms', async () => {
-    answers['POST /v1/auth/signup'] = () => ({ status: 200, body: { status: 'signed_in', user: USER } });
+  it('creates the account and asks to check the email', async () => {
+    answers['POST /v1/auth/signup'] = () => ({ status: 202, body: { status: 'verification_sent' } });
     at('/auth/sign-up');
+    expect(await screen.findByText('By creating an account you confirm that you have read the privacy notice (version 2026-10-19).')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Read the privacy notice: what we collect, why, how long we keep it, and your rights.'));
+    expect(screen.getByRole('heading', { name: 'Who is responsible' })).toBeInTheDocument();
     type('Your name', 'Asha');
-    type('Email', 'asha@example.test');
+    type('Work email', 'asha@example.test');
     type('Password', 'violet-anchor-teapot-91');
-    type('Organisation name', 'Asha org');
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    await screen.findByText('forms list');
+    expect(await screen.findByRole('status')).toHaveTextContent('We sent a link to asha@example.test.');
     expect(calls.find((c) => c.url === '/v1/auth/signup')?.body).toEqual({
       email: 'asha@example.test',
       password: 'violet-anchor-teapot-91',
       name: 'Asha',
-      orgName: 'Asha org',
+      noticeVersion: '2026-10-19',
     });
-    expect(useSessionStore.getState()).toMatchObject({ status: 'signed_in' });
+  });
+
+  it('cannot sign up without the notice, and loads the new one when it changed meanwhile', async () => {
+    answers['GET /v1/privacy/notice'] = () => ({ status: 503, body: { code: 'SERVICE_UNAVAILABLE' } });
+    at('/auth/sign-up');
+    expect(await screen.findByRole('alert')).toHaveTextContent('The privacy notice cannot be loaded, so you cannot sign up yet.');
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    answers['GET /v1/privacy/notice'] = () => ({ status: 200, body: NOTICE });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled());
+
+    answers['POST /v1/auth/signup'] = () => ({ status: 409, body: { code: 'NOTICE_OUTDATED', detail: 'The privacy notice changed while you were signing up.' } });
+    answers['GET /v1/privacy/notice'] = () => ({ status: 200, body: { ...NOTICE, version: '2026-12-01' } });
+    type('Work email', 'asha@example.test');
+    type('Password', 'violet-anchor-teapot-91');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The privacy notice changed while you were signing up.');
+    expect(await screen.findByText(/privacy notice \(version 2026-12-01\)/)).toBeInTheDocument();
+  });
+
+  it('sends the organisation name only when one is typed, and still asks to check the email', async () => {
+    answers['POST /v1/auth/signup'] = () => ({ status: 202, body: { status: 'verification_sent' } });
+    at('/auth/sign-up');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled());
+    type('Work email', 'asha@example.test');
+    type('Password', 'violet-anchor-teapot-91');
+    type('Organisation name (optional)', 'Asha org');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('We sent a link to asha@example.test.');
+    expect(calls.find((c) => c.url === '/v1/auth/signup')?.body).toEqual({
+      email: 'asha@example.test',
+      password: 'violet-anchor-teapot-91',
+      orgName: 'Asha org',
+      noticeVersion: '2026-10-19',
+    });
+    // No session: the account is usable once the emailed link is opened.
+    expect(useSessionStore.getState()).not.toMatchObject({ status: 'signed_in' });
   });
 
   it('shows a refused password', async () => {
     answers['POST /v1/auth/signup'] = () => ({ status: 422, body: { code: 'WEAK_PASSWORD', detail: 'This password is too common.' } });
     at('/auth/sign-up');
-    type('Email', 'asha@example.test');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled());
+    type('Work email', 'asha@example.test');
     type('Password', 'password123');
-    type('Organisation name', 'Asha org');
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('This password is too common.');
   });

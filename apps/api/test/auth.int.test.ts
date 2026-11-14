@@ -145,13 +145,15 @@ async function events(userId: string): Promise<Array<{ action: string; outcome: 
   }));
 }
 
-/** Sign-up: a signed-in jar, the user's id, and the first org. */
+/** Sign-up and verification: a signed-in jar and the user's id. */
 async function signedUp(email = newEmail()): Promise<{ jar: Jar; email: string; userId: string }> {
+  const since = sink.messages.length;
   const jar = new Jar();
-  const res = await call(jar, 'POST', '/v1/auth/signup', { email, password: PASSWORD, name: 'Asha' });
-  expect(res.statusCode).toBe(200);
-  expect(res.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true, totpEnabled: false } });
-  return { jar, email, userId: res.json<{ user: { id: string } }>().user.id };
+  expect((await call(jar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, name: 'Asha' })).statusCode).toBe(202);
+  const { token } = await mailTo(email, '/auth/verify', since);
+  const verified = await call(jar, 'POST', '/v1/auth/verify-email', { token });
+  expect(verified.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true, totpEnabled: false } });
+  return { jar, email, userId: verified.json<{ user: { id: string } }>().user.id };
 }
 
 async function codeFor(secret: string, offset = 0): Promise<string> {
@@ -179,7 +181,7 @@ describe('sign-up → verify → 2FA enrol → sign out → TOTP sign-in → rec
   it('runs the acceptance flow end to end against Postgres, SMTP and the KMS', async () => {
     const { jar, email, userId } = await signedUp();
     const me = await call(jar, 'GET', '/v1/me');
-    expect(me.json()).toMatchObject({ user: { id: userId, email }, session: { mfaLevel: 'pwd' }, orgs: [] });
+    expect(me.json()).toMatchObject({ user: { id: userId, email }, session: { mfaLevel: 'link' }, orgs: [] });
     expect(me.headers['cache-control']).toBe('no-store');
 
     const beforeEnrol = jar.session!;
@@ -187,7 +189,7 @@ describe('sign-up → verify → 2FA enrol → sign out → TOTP sign-in → rec
     expect(recoveryCodes).toHaveLength(10);
     // Rotation on the privilege change: a new token at the new level; the old one is dead.
     expect(jar.session).not.toBe(beforeEnrol);
-    expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ user: { totpEnabled: true }, session: { mfaLevel: 'pwd+totp' } });
+    expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ user: { totpEnabled: true }, session: { mfaLevel: 'link+totp' } });
     const stale = await app.inject({ url: '/v1/me', headers: { cookie: `__Host-fr_sess=${beforeEnrol}` } });
     expect(stale.statusCode).toBe(401);
 
@@ -224,6 +226,7 @@ describe('sign-up → verify → 2FA enrol → sign out → TOTP sign-in → rec
     expect(await events(userId)).toEqual(
       expect.arrayContaining([
         { action: 'auth.signup', outcome: 'success' },
+        { action: 'auth.email_verified', outcome: 'success' },
         { action: 'auth.login', outcome: 'success' },
         { action: 'auth.totp_setup', outcome: 'success' },
         { action: 'auth.session_rotated', outcome: 'success' },
@@ -278,20 +281,18 @@ describe('sessions', () => {
     expect((await app.inject({ url: '/v1/me', headers: { cookie: `__Host-fr_sess=${first}` } })).statusCode).toBe(401);
   });
 
-  it('creates the first organisation when orgName is sent', async () => {
-    const jar = new Jar();
-    const email = newEmail();
-    expect((await call(jar, 'POST', '/v1/auth/signup', { email, password: PASSWORD, orgName: 'Acme' })).statusCode).toBe(200);
-    expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ orgs: [{ name: 'Acme', role: 'owner' }] });
-  });
-
   it('sets a __Host- cookie: Secure, HttpOnly, SameSite=Lax, Path=/, no Domain', async () => {
+    const email = newEmail();
+    const since = sink.messages.length;
     const jar = new Jar();
-    const res = await call(jar, 'POST', '/v1/auth/signup', { email: newEmail(), password: PASSWORD, orgName: 'Cookie org' });
+    const signup = await call(jar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD });
+    expect(signup.cookies.find((c) => c.name === '__Host-fr_signup')).toMatchObject({ path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });
+    const res = await call(jar, 'POST', '/v1/auth/verify-email', { token: (await mailTo(email, '/auth/verify', since)).token });
     const cookie = res.cookies.find((c) => c.name === '__Host-fr_sess')!;
     expect(cookie).toMatchObject({ path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });
     expect(cookie.domain).toBeUndefined();
     expect(cookie.expires!.getTime()).toBeGreaterThan(Date.now() + 13 * 86_400_000);
+    expect(jar.cookies.has('__Host-fr_signup')).toBe(false);
   });
 
   it('rejects expired, revoked and malformed cookies, clears them and audits the rejection', async () => {
@@ -391,24 +392,77 @@ describe('password and email-link flows', () => {
     expect(strip(unknown)).toEqual(strip(wrong));
   });
 
-  it('refuses a taken address at sign-up', async () => {
+  it('does not reveal a taken address at sign-up; the owner gets a notice instead', async () => {
     const { email } = await signedUp();
-    const res = await call(null, 'POST', '/v1/auth/signup', { email: email.toUpperCase(), password: 'another-strong-passphrase', orgName: 'Other org' });
-    expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ code: 'EMAIL_TAKEN' });
+    const since = sink.messages.length;
+    const res = await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: email.toUpperCase(), password: 'another-strong-passphrase' });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ status: 'verification_sent' });
+    expect(await subjectsTo(email, since)).toEqual(['You already have an account']);
   });
 
   it('refuses weak passwords with the reason', async () => {
-    const res = await call(null, 'POST', '/v1/auth/signup', { email: newEmail(), password: 'password123', orgName: 'Weak org' });
+    const res = await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: newEmail(), password: 'password123' });
     expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({ code: 'WEAK_PASSWORD', detail: expect.stringMatching(/too common/) });
   });
 
-  it('signs in with the password right after sign-up, with no email step', async () => {
-    const { email, jar } = await signedUp();
-    await call(jar, 'POST', '/v1/auth/logout');
+  it('asks an unverified account to verify first, with a fresh link', async () => {
+    const email = newEmail();
+    await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD });
+    const since = sink.messages.length;
     const res = await call(null, 'POST', '/v1/auth/login', { email, password: PASSWORD });
-    expect(res.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
+    expect((await mailTo(email, '/auth/verify', since)).subject).toBe('Confirm your email address');
+  });
+
+  it('needs the password to verify a never-verified address in another browser, so a pre-registered account is not handed to its squatter', async () => {
+    const victim = newEmail();
+    const since = sink.messages.length;
+    // Someone registers the victim's address with their own password; the victim gets the verification mail.
+    const squatter = new Jar();
+    await call(squatter, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: victim, password: 'squatters-own-passphrase' });
+    const { token } = await mailTo(victim, '/auth/verify', since);
+    const victimJar = new Jar();
+    expect((await call(victimJar, 'POST', '/v1/auth/link', { token, purpose: 'verify_email' })).json()).toEqual({ email: victim, passwordRequired: true });
+    const bare = await call(victimJar, 'POST', '/v1/auth/verify-email', { token });
+    expect(bare.statusCode).toBe(401);
+    expect(bare.json()).toMatchObject({ code: 'PASSWORD_REQUIRED' });
+    expect(victimJar.session).toBeUndefined();
+    expect((await call(victimJar, 'POST', '/v1/auth/verify-email', { token, password: PASSWORD })).json()).toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    // The victim takes the account over with a reset instead; the squatter's password is gone.
+    const resetSince = sink.messages.length;
+    await call(null, 'POST', '/v1/auth/password/forgot', { email: victim });
+    const reset = await mailTo(victim, '/auth/reset', resetSince);
+    expect((await call(null, 'POST', '/v1/auth/password/reset', { token: reset.token, password: PASSWORD })).json()).toEqual({ status: 'password_reset' });
+    expect((await call(null, 'POST', '/v1/auth/login', { email: victim, password: 'squatters-own-passphrase' })).statusCode).toBe(401);
+    const signedIn = await call(null, 'POST', '/v1/auth/login', { email: victim, password: PASSWORD });
+    expect(signedIn.json()).toMatchObject({ status: 'signed_in', user: { emailVerified: true } });
+    const userId = signedIn.json<{ user: { id: string } }>().user.id;
+    expect(await events(userId)).toEqual(
+      expect.arrayContaining([
+        { action: 'auth.email_verified', outcome: 'denied', reason: 'password_required' },
+        { action: 'auth.email_verified', outcome: 'denied', reason: 'bad_password' },
+      ]),
+    );
+  });
+
+  it('verifies in another browser with the password, and in the signing-up browser without it', async () => {
+    const email = newEmail();
+    const since = sink.messages.length;
+    await call(new Jar(), 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD });
+    const { token } = await mailTo(email, '/auth/verify', since);
+    const phone = new Jar();
+    expect((await call(phone, 'POST', '/v1/auth/verify-email', { token, password: PASSWORD })).json()).toMatchObject({ status: 'signed_in', user: { emailVerified: true } });
+    // A forged sign-up cookie does not stand in for the password.
+    const other = newEmail();
+    const otherSince = sink.messages.length;
+    await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: other, password: PASSWORD });
+    const forged = new Jar();
+    forged.cookies.set('__Host-fr_signup', randomBytes(32).toString('base64url'));
+    const otherToken = (await mailTo(other, '/auth/verify', otherSince)).token;
+    expect((await call(forged, 'POST', '/v1/auth/verify-email', { token: otherToken })).json()).toMatchObject({ code: 'PASSWORD_REQUIRED' });
   });
 
   it('names the account of an emailed link before it is used, and refuses a dead link', async () => {
@@ -501,7 +555,7 @@ describe('password and email-link flows', () => {
     const { secret } = await enrol(jar);
     expect((await call(jar, 'POST', '/v1/auth/mfa/totp/disable', { code: await wrongCode(secret) })).statusCode).toBe(401);
     expect((await call(jar, 'POST', '/v1/auth/mfa/totp/disable', { code: await codeFor(secret, 1) })).statusCode).toBe(204);
-    expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ user: { totpEnabled: false }, session: { mfaLevel: 'pwd' } });
+    expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ user: { totpEnabled: false }, session: { mfaLevel: 'link' } });
   });
 
   it('asks for a recent sign-in before an authenticator is set up, so a session taken over later cannot enrol one', async () => {
@@ -583,16 +637,24 @@ describe('throttling', () => {
     );
   });
 
-  it('steps a confirmed account up to a magic link after too many guesses', async () => {
+  it('steps an unconfirmed account up to its verification link, bound to this browser (BL-210)', async () => {
     const limited = await start({}, { authLimits: { ...ROOMY, auth_account: { max: 2, windowSeconds: 3600 } } });
-    const { email, userId } = await signedUp();
+    const email = newEmail();
+    const signup = sink.messages.length;
+    expect((await call(new Jar(), 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, name: 'Asha' }, {}, limited)).statusCode).toBe(202);
+    await mailTo(email, '/auth/verify', signup);
     for (let i = 0; i < 2; i++) expect((await call(null, 'POST', '/v1/auth/login', { email, password: `guess-${i}` }, {}, limited)).statusCode).toBe(401);
     const since = sink.messages.length;
     const owner = new Jar();
     expect((await call(owner, 'POST', '/v1/auth/login', { email, password: PASSWORD }, {}, limited)).json()).toEqual({ status: 'link_sent' });
-    const { token } = await mailTo(email, '/auth/magic', since);
-    const signedIn = await call(owner, 'POST', '/v1/auth/magic-link/verify', { token }, {}, limited);
-    expect(signedIn.json()).toMatchObject({ status: 'signed_in', user: { id: userId, email } });
+    expect(owner.cookies.has('__Host-fr_signup')).toBe(true);
+    const { token } = await mailTo(email, '/auth/verify', since);
+    // The same browser redeems it without the password, as after sign-up.
+    const verified = await call(owner, 'POST', '/v1/auth/verify-email', { token }, {}, limited);
+    expect(verified.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true } });
+    expect(await events(verified.json<{ user: { id: string } }>().user.id)).toEqual(
+      expect.arrayContaining([{ action: 'auth.magic_link_sent', outcome: 'success', reason: 'step_up_verify' }]),
+    );
   });
 
   it('caps the links mailed to one address, whoever asks for them', async () => {
@@ -767,5 +829,120 @@ describe('Google and Microsoft sign-in (OIDC, SaaS only)', () => {
       expect((await call(null, 'GET', '/v1/auth/methods', undefined, {}, onprem)).json()).toMatchObject({ oauth: [] });
       expect((await call(null, 'GET', '/v1/auth/oauth/google/start', undefined, {}, onprem)).statusCode).toBe(404);
     }
+  });
+});
+
+describe('sign-up: verify first, then everything else', () => {
+  const orgCount = async (name: string) => (await owner.query('select 1 from orgs where name = $1', [name])).rowCount;
+
+  it('answers 202 with the sign-up cookie and no session, mails a link, and signs in only once the link is used', async () => {
+    const email = newEmail();
+    const since = sink.messages.length;
+    const jar = new Jar();
+    const res = await call(jar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, name: 'Asha' });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ status: 'verification_sent' });
+    expect(res.cookies.find((c) => c.name === '__Host-fr_sess')).toBeUndefined();
+    expect(jar.session).toBeUndefined();
+    expect(jar.cookies.has('__Host-fr_signup')).toBe(true);
+    const { token, subject } = await mailTo(email, '/auth/verify', since);
+    expect(subject).toBe('Confirm your email address');
+    expect((await call(jar, 'GET', '/v1/me')).statusCode).toBe(401);
+    const { rows } = await owner.query<{ email_verified_at: Date | null }>('select email_verified_at from users where email_norm = $1', [email.toLowerCase()]);
+    expect(rows[0]!.email_verified_at).toBeNull();
+
+    // Until the link is used, not even the right password signs in.
+    const second = sink.messages.length;
+    const early = await call(null, 'POST', '/v1/auth/login', { email, password: PASSWORD });
+    expect(early.statusCode).toBe(403);
+    expect(early.json()).toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
+
+    // The refused sign-in mailed a fresh link; this browser holds the first link's cookie, so the password goes with it.
+    const verified = await call(jar, 'POST', '/v1/auth/verify-email', { token: (await mailTo(email, '/auth/verify', second)).token, password: PASSWORD });
+    expect(verified.json()).toMatchObject({ status: 'signed_in', user: { email, emailVerified: true } });
+    expect(jar.session).toBeDefined();
+    await call(jar, 'POST', '/v1/auth/logout');
+    expect((await call(null, 'POST', '/v1/auth/login', { email, password: PASSWORD })).json()).toMatchObject({ status: 'signed_in' });
+    // The first link was replaced by the one the sign-in attempt mailed.
+    expect((await call(null, 'POST', '/v1/auth/verify-email', { token })).statusCode).toBe(400);
+  });
+
+  it('needs the privacy notice version, and the current one', async () => {
+    const missing = await call(null, 'POST', '/v1/auth/signup', { email: newEmail(), password: PASSWORD });
+    expect(missing.statusCode).toBe(400);
+    const stale = newEmail();
+    const refused = await call(null, 'POST', '/v1/auth/signup', { noticeVersion: '1999-01-01', email: stale, password: PASSWORD });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ code: 'NOTICE_OUTDATED' });
+    expect((await owner.query('select 1 from users where email = $1', [stale])).rowCount).toBe(0);
+  });
+
+  it('answers a taken address exactly as it answers a free one, and tells the owner by email', async () => {
+    const { email } = await signedUp();
+    const since = sink.messages.length;
+    const freeJar = new Jar();
+    const takenJar = new Jar();
+    const free = await call(freeJar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email: newEmail(), password: PASSWORD });
+    const taken = await call(takenJar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: 'another-strong-passphrase' });
+    expect(taken.statusCode).toBe(free.statusCode);
+    expect(taken.statusCode).toBe(202);
+    expect(taken.json()).toEqual(free.json());
+    expect(taken.cookies.map((c) => c.name).sort()).toEqual(free.cookies.map((c) => c.name).sort());
+    expect(takenJar.session).toBeUndefined();
+    expect(await subjectsTo(email, since)).toEqual(['You already have an account']);
+  });
+
+  it('caps the verification mails one address can be sent', async () => {
+    const limited = await start({}, { authLimits: { ...ROOMY, auth_mail: { max: 2, windowSeconds: 3600 } } });
+    const email = newEmail();
+    const since = sink.messages.length;
+    const attempts: number[] = [];
+    for (let i = 0; i < 3; i++) attempts.push((await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD }, {}, limited)).statusCode);
+    expect(attempts).toEqual([202, 202, 429]);
+    expect((await subjectsTo(email, since)).length).toBeLessThanOrEqual(2);
+  });
+
+  describe('the first organisation (orgName)', () => {
+    it('is created when the address is confirmed, owned by the new account, and not before', async () => {
+      const email = newEmail();
+      const name = `Acme ${randomUUID().slice(0, 8)}`;
+      const since = sink.messages.length;
+      const jar = new Jar();
+      expect((await call(jar, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, orgName: name })).statusCode).toBe(202);
+      expect(await orgCount(name)).toBe(0);
+      const { token } = await mailTo(email, '/auth/verify', since);
+      expect((await call(jar, 'POST', '/v1/auth/verify-email', { token })).json()).toMatchObject({ status: 'signed_in' });
+      expect(await orgCount(name)).toBe(1);
+      expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ orgs: [{ name, role: 'owner' }] });
+    });
+
+    it('is not created by a second sign-up for an address that already has an account', async () => {
+      const { email } = await signedUp();
+      const name = `Hijack ${randomUUID().slice(0, 8)}`;
+      expect((await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: 'another-strong-passphrase', orgName: name })).statusCode).toBe(202);
+      expect(await orgCount(name)).toBe(0);
+    });
+
+    it('is optional, and a verification without it leaves the account with no org', async () => {
+      const { jar } = await signedUp();
+      expect((await call(jar, 'GET', '/v1/me')).json()).toMatchObject({ orgs: [] });
+    });
+
+    it('refuses a name with control characters before anything is created', async () => {
+      const email = newEmail();
+      const res = await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, orgName: 'Bad\u0000name' });
+      expect(res.statusCode).toBe(400);
+      expect((await owner.query('select 1 from users where email = $1', [email])).rowCount).toBe(0);
+    });
+
+    it('does not turn the sign-up into an org for an unconfirmed address: create_org() still refuses it', async () => {
+      const email = newEmail();
+      await call(null, 'POST', '/v1/auth/signup', { noticeVersion: NOTICE_VERSION, email, password: PASSWORD, orgName: `Unverified ${randomUUID().slice(0, 8)}` });
+      const { rows } = await owner.query<{ n: number }>(
+        `select count(*)::int as n from memberships m join users u on u.id = m.user_id where u.email_norm = $1`,
+        [email.toLowerCase()],
+      );
+      expect(rows[0]!.n).toBe(0);
+    });
   });
 });

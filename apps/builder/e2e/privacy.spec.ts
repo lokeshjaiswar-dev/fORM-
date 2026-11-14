@@ -10,21 +10,20 @@ import { expect, test } from './test.ts';
 const USER = { id: 'u1', email: 'asha@example.test', name: 'Asha', emailVerified: true, totpEnabled: false };
 const ME = { user: USER, session: { id: 's1', mfaLevel: 'pwd', expiresAt: '2026-11-02T00:00:00Z' }, orgs: [], notice: { version: '2026-10-19', acknowledgedVersion: '2026-10-19', current: true } };
 
-test('sign-up creates an account and organisation without an email step', async ({ page }) => {
+test('sign-up shows the privacy notice and sends the version it showed', async ({ page }) => {
   let sent: unknown;
   await page.route('**/v1/auth/signup', async (route) => {
     sent = route.request().postDataJSON();
-    await route.fulfill({
-      json: { status: 'signed_in', user: { id: 'u1', email: 'asha@example.test', name: 'Asha', emailVerified: true, totpEnabled: false } },
-    });
+    await route.fulfill({ status: 202, json: { status: 'verification_sent' } });
   });
-  await page.route('**/v1/me', (route) => route.fulfill({ json: ME }));
   await page.goto('/auth/sign-up');
-  await page.getByLabel('Email').fill('asha@example.test');
+  await page.getByText('Read the privacy notice: what we collect, why, how long we keep it, and your rights.').click();
+  await expect(page.getByRole('heading', { name: 'Who is responsible' })).toBeVisible();
+  await page.getByLabel('Work email').fill('asha@example.test');
   await page.getByLabel('Password').fill('violet-anchor-teapot-91');
-  await page.getByLabel('Organisation name').fill('Asha org');
   await page.getByRole('button', { name: 'Create account' }).click();
-  expect(sent).toMatchObject({ email: 'asha@example.test', orgName: 'Asha org' });
+  await expect(page.getByRole('status')).toContainText('We sent a link to asha@example.test');
+  expect(sent).toMatchObject({ email: 'asha@example.test', noticeVersion: '2026-10-19' });
 });
 
 test('anyone can read the notice at /privacy', async ({ page }) => {

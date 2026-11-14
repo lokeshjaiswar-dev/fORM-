@@ -165,8 +165,14 @@ export function linkFor(c: AuthCtx, kind: keyof typeof LINK_PATHS, token: string
  * the message with the sign-up cookie's value. The caller sends it once the transaction has committed, so a rollback
  * never mails a dead link.
  */
-export async function verificationMail(c: AuthCtx, tx: Tx, user: Pick<AuthUser, 'id' | 'email' | 'name'>): Promise<{ mail: AuthMail; proof: string }> {
-  const token = await issueToken(tx, { userId: user.id, purpose: 'verify_email', minutes: LINK_MINUTES.verify_email, now: c.now() });
+export async function verificationMail(
+  c: AuthCtx,
+  tx: Tx,
+  user: Pick<AuthUser, 'id' | 'email' | 'name'>,
+  /** What the link carries to whoever opens it: the first organisation asked for at sign-up (`orgName`). */
+  data?: { orgName?: string },
+): Promise<{ mail: AuthMail; proof: string }> {
+  const token = await issueToken(tx, { userId: user.id, purpose: 'verify_email', minutes: LINK_MINUTES.verify_email, now: c.now(), ...(data ? { data } : {}) });
   return {
     mail: { kind: 'verify_email', to: { address: user.email, ...(user.name ? { name: user.name } : {}) }, link: linkFor(c, 'verify_email', token) },
     proof: signupProof(c, token),
@@ -196,7 +202,7 @@ export async function completeFirstFactor(
   c: AuthCtx,
   request: FastifyRequest,
   reply: FastifyReply,
-  o: { user: AuthUser; factor: FirstFactor; method: SignInMethod; presented: Account | null; inTx?: (tx: Tx) => Promise<void>; activeOrgId?: string | null },
+  o: { user: AuthUser; factor: FirstFactor; method: SignInMethod; presented: Account | null; inTx?: (tx: Tx) => Promise<void> },
 ): Promise<SignInResult> {
   const cl = client(c, request);
   const now = c.now();
@@ -224,7 +230,7 @@ export async function completeFirstFactor(
   const session = await withUser(c.db, { userId: user.id, requestId: request.id }, async (tx) => {
     await o.inTx?.(tx);
     if (o.presented?.session && o.presented.userId === user.id) await revokeSession(tx, o.presented.session.id, 'rotated', now);
-    const s = await issueSession(tx, { userId: user.id, mfaLevel: o.factor, client: cl, now, activeOrgId: o.activeOrgId });
+    const s = await issueSession(tx, { userId: user.id, mfaLevel: o.factor, client: cl, now });
     await tx.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
     await audit.append(tx, PLATFORM_ORG_KEY, {
       actorKind: 'user',
