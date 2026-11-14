@@ -194,6 +194,9 @@ importers:
       '@form/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@form/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
       '@node-rs/argon2':
         specifier: 2.2.1
         version: 2.2.1

@@ -22,6 +22,7 @@ export const PROBLEMS = {
   NOT_FOUND: { status: 404, title: 'Not found' },
   METHOD_NOT_ALLOWED: { status: 405, title: 'Method not allowed' },
   DRAFT_REV_CONFLICT: { status: 409, title: 'The draft changed since it was read' },
+  FORM_OUTDATED: { status: 409, title: 'The form changed since the page was loaded' },
   SLUG_TAKEN: { status: 409, title: 'The org address is taken' },
   EMAIL_TAKEN: { status: 409, title: 'That email address already has an account' },
   ALREADY_MEMBER: { status: 409, title: 'Already a member of the org' },

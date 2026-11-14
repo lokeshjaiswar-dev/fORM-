@@ -1,7 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
@@ -11,7 +9,7 @@ import { acceptsFile } from '@form/registry';
 import type { BlockId, CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
-import { ProblemError } from '../errors.ts';
+import { ProblemError, sendProblem } from '../errors.ts';
 import {
   contentProblem,
   DEFAULT_ACCEPT,
@@ -22,10 +20,12 @@ import {
   UPLOAD_BODY_LIMIT,
   type FileStore,
 } from '../files.ts';
+import { checkAnswers, fileRefsIn } from '../validate-submission.ts';
 
 const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
-const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string() });
+/** Display rows the page sends along (what Responses shows without the form): bounded, and never trusted as the answers. */
+const fieldRow = z.object({ key: z.string().max(128), label: z.string().max(1000), value: z.string().max(10_000) });
 
 type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
 
@@ -36,51 +36,13 @@ interface LiveForm {
   versionId: string;
   payload: PublicPayload;
   definition: FormDefinition;
+  compiled: CompiledForm;
 }
 
-const SUB_DIR = path.resolve(process.cwd(), '.data/submissions');
-const FORM_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** A version is immutable, so what is loaded for it is good for as long as it is kept; only the memory is bounded. */
 const LIVE_CACHE_MAX = 200;
 const liveByVersion = new Map<string, LiveForm>();
 const liveInflight = new Map<string, Promise<LiveForm>>();
-
-type DiskSubmission = {
-  id: string;
-  formId: string;
-  submittedAt: string;
-  locale: string;
-  answers: Record<string, unknown>;
-  fields: Array<{ key: string; label: string; value: string }>;
-};
-
-function formKey(formId: string): string {
-  return formId.toLowerCase();
-}
-
-function subPath(formId: string): string {
-  return path.join(SUB_DIR, `${formKey(formId)}.json`);
-}
-
-async function readSubmissions(formId: string): Promise<DiskSubmission[]> {
-  const id = formKey(formId);
-  if (!FORM_FILE.test(id)) return [];
-  try {
-    const parsed = JSON.parse(await readFile(subPath(id), 'utf8')) as { items?: DiskSubmission[] };
-    return Array.isArray(parsed.items) ? parsed.items.filter((row) => row && formKey(row.formId) === id && row.id) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function saveSubmission(row: DiskSubmission): Promise<void> {
-  const formId = formKey(row.formId);
-  if (!FORM_FILE.test(formId)) return;
-  const items = (await readSubmissions(formId)).filter((item) => item.id !== row.id);
-  items.unshift({ ...row, formId });
-  await mkdir(SUB_DIR, { recursive: true });
-  await writeFile(subPath(formId), JSON.stringify({ items }));
-}
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
@@ -147,7 +109,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         }),
         ...(row.media ? { media: row.media } : {}),
       };
-      const live: LiveForm = { orgId: found.orgId, formId: found.formId, versionId: found.liveVersionId, payload, definition: version.definition };
+      const live: LiveForm = { orgId: found.orgId, formId: found.formId, versionId: found.liveVersionId, payload, definition: version.definition, compiled: version.compiled };
       if (liveByVersion.size >= LIVE_CACHE_MAX) liveByVersion.delete(liveByVersion.keys().next().value!);
       liveByVersion.set(found.liveVersionId, live);
       return live;
@@ -263,85 +225,65 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       schema: {
         tags: ['runtime'],
         summary: 'Submit answers on a published form',
+        description:
+          'Respondents are anonymous. The answers are for the form\'s live version only (`formVersionId`; an older page gets FORM_OUTDATED), are evaluated and validated on the server, and every file they name must have been uploaded to this form.',
         params: slugParam,
         body: z.object({
           formVersionId: z.uuid(),
           answers: z.record(z.string(), z.unknown()),
-          fields: z.array(fieldRow).default([]),
+          fields: z.array(fieldRow).max(500).default([]),
           locale: z.string().min(2).max(35).default('en-IN'),
         }),
         response: { 200: z.object({ id: z.uuid() }) },
       },
     },
-    async (request) => {
+    async (request, reply) => {
+      // The slug is resolved now, so a form that is no longer live takes no more answers.
       const live = await loadLive(request.params.slug, request.id);
       if (request.body.formVersionId !== live.versionId) {
-        throw new ProblemError('NOTICE_OUTDATED', 'This form was updated. Reload and try again.');
+        throw new ProblemError('FORM_OUTDATED', 'This form was updated while you were filling it. Reload and try again.');
       }
+      // The answers are checked against the stored version, whatever the page claims to have validated.
+      const { errors, values } = checkAnswers(live, live.versionId, request.body.answers, request.body.locale, new Date());
+      if (errors.length > 0) {
+        return sendProblem(
+          reply,
+          'VALIDATION_FAILED',
+          'Some answers are not valid.',
+          errors.slice(0, 50).map((e) => ({ path: [e.blockId, e.path].filter(Boolean).join('.'), message: e.message })),
+        );
+      }
+      const refs = fileRefsIn(values);
       const id = randomUUID();
-      const row: DiskSubmission = {
-        id,
-        formId: live.formId,
-        submittedAt: new Date().toISOString(),
-        locale: request.body.locale,
-        answers: request.body.answers,
-        fields: request.body.fields,
-      };
-      await saveSubmission(row);
-      void persistSubmissionToDb(deps.db, request.params.slug, request.id, row).catch(() => undefined);
-      return { id };
-    },
-  );
-
-  r.post(
-    '/v1/p/by-form/:formId/submissions',
-    {
-      config: { auth: 'none' },
-      schema: {
-        tags: ['runtime'],
-        summary: 'Store a submission for a form id when the public slug is not used',
-        params: z.object({ formId: z.uuid() }),
-        body: z.object({
-          answers: z.record(z.string(), z.unknown()),
-          fields: z.array(fieldRow).default([]),
-          locale: z.string().min(2).max(35).default('en-IN'),
-        }),
-        response: { 200: z.object({ id: z.uuid() }) },
-      },
-    },
-    async (request) => {
-      const id = randomUUID();
-      await saveSubmission({
-        id,
-        formId: request.params.formId,
-        submittedAt: new Date().toISOString(),
-        locale: request.body.locale,
-        answers: request.body.answers,
-        fields: request.body.fields,
+      await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
+        if (refs.length > 0) {
+          // Every file the answers name was uploaded to this form, and is the file they say it is.
+          const ids = [...new Set(refs.map((ref) => ref.fileId))];
+          const known = ids.every((fileId) => z.uuid().safeParse(fileId).success)
+            ? await tx
+                .select({ id: formFiles.id, sizeBytes: formFiles.sizeBytes, sha256: formFiles.sha256 })
+                .from(formFiles)
+                .where(and(eq(formFiles.formId, live.formId), inArray(formFiles.id, ids)))
+            : [];
+          const byId = new Map(known.map((row) => [row.id, row]));
+          for (const ref of refs) {
+            const stored = byId.get(ref.fileId);
+            if (!stored || stored.sizeBytes !== ref.sizeBytes || stored.sha256 !== ref.sha256) {
+              throw new ProblemError('VALIDATION_FAILED', 'A file in the answers was not uploaded to this form. Upload it again.');
+            }
+          }
+        }
+        await tx.insert(formSubmissions).values({
+          id,
+          orgId: live.orgId,
+          formId: live.formId,
+          answers: values,
+          fields: request.body.fields,
+          locale: request.body.locale,
+        });
+        await tx.update(forms).set({ submissionCount: sql`${forms.submissionCount} + 1`, lastSubmissionAt: new Date() }).where(eq(forms.id, live.formId));
       });
       return { id };
     },
   );
-}
-
-async function persistSubmissionToDb(db: Db, slug: string, requestId: string, row: DiskSubmission): Promise<void> {
-  const found = await resolveFormSlug(db, slug);
-  if (!found) return;
-  await withTenant(db, { orgId: found.orgId, actor: 'system', requestId }, async (tx) => {
-    await tx.insert(formSubmissions).values({
-      id: row.id,
-      orgId: found.orgId,
-      formId: found.formId,
-      answers: row.answers,
-      fields: row.fields,
-      locale: row.locale,
-    });
-    await tx
-      .update(forms)
-      .set({
-        submissionCount: sql`${forms.submissionCount} + 1`,
-        lastSubmissionAt: new Date(),
-      })
-      .where(eq(forms.id, found.formId));
-  });
 }

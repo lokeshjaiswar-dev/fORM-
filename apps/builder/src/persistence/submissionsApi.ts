@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import { ApiProblem, ApiUnreachable, api, ensureSession, orgApi } from '@/auth/client';
+import { ApiProblem, ApiUnreachable, ensureSession, orgApi } from '@/auth/client';
 import type { StoredSubmission, SubmissionSummary } from '@/persistence/SubmissionsRepository';
 
-const created = z.object({ id: z.string() });
 const listSchema = z.object({
   items: z.array(
     z.object({
@@ -34,29 +33,6 @@ async function quiet<T>(fn: () => Promise<T>): Promise<T | null> {
     if (err instanceof ApiUnreachable || err instanceof ApiProblem) return null;
     return null;
   }
-}
-
-export async function ensureRemoteForm(id: string, title: string): Promise<void> {
-  await quiet(() => orgApi('POST', '/v1/forms', created, { id, title }));
-}
-
-export async function postRemoteSubmission(formId: string, record: StoredSubmission): Promise<string | null> {
-  const published = await quiet(() =>
-    api('POST', `/v1/p/by-form/${formId}/submissions`, created, {
-      answers: record.answers,
-      fields: record.fields,
-      locale: record.locale ?? 'en-IN',
-    }),
-  );
-  if (published?.id) return published.id;
-  const res = await quiet(() =>
-    orgApi('POST', `/v1/forms/${formId}/submissions`, created, {
-      answers: record.answers,
-      fields: record.fields,
-      locale: record.locale ?? 'en-IN',
-    }),
-  );
-  return res?.id ?? null;
 }
 
 /**

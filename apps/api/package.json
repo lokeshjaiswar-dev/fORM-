@@ -25,6 +25,7 @@
     "@form/logic": "workspace:*",
     "@form/registry": "workspace:*",
     "@form/schema": "workspace:*",
+    "@form/validation": "workspace:*",
     "@form/observability": "workspace:*",
     "@form/ports": "workspace:*",
     "@node-rs/argon2": "2.2.1",

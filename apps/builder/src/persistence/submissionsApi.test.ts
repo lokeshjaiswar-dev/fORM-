@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRemoteSubmission, listRemoteSubmissions, postRemoteSubmission } from '@/persistence/submissionsApi';
+import { getRemoteSubmission, listRemoteSubmissions } from '@/persistence/submissionsApi';
 
 const api = vi.fn();
 const orgApi = vi.fn();
@@ -50,23 +50,5 @@ describe('submissionsApi', () => {
   it('treats a refusal as no remote responses', async () => {
     orgApi.mockRejectedValue(new Error('forbidden'));
     await expect(listRemoteSubmissions('f1')).resolves.toBeNull();
-  });
-
-  it('stores a preview submission on the public route', async () => {
-    api.mockResolvedValue({ id: 's1' });
-    await expect(
-      postRemoteSubmission('f1', {
-        id: 'local',
-        formId: 'f1',
-        submittedAt: '2026-01-01T00:00:00.000Z',
-        answers: {},
-        fields: [],
-      }),
-    ).resolves.toBe('s1');
-    expect(api).toHaveBeenCalledWith('POST', '/v1/p/by-form/f1/submissions', expect.anything(), {
-      answers: {},
-      fields: [],
-      locale: 'en-IN',
-    });
   });
 });
