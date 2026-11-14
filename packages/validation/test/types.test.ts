@@ -104,7 +104,7 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     invalid: [[a.date('2025-12-31'), 'f date_out_of_range'], [a.date('2026-10-18'), 'f date_not_allowed'], [a.date('2026-02-30'), 'f invalid_date']],
   },
   date_range: {
-    block: field('date_range', 'f', { config: { allowSameDay: false, minSpanDays: 1, maxSpanDays: 14 } }),
+    block: field('date_range', 'f', { config: { pattern: 'DD/MM/YYYY', picker: 'calendar', allowSameDay: false, minSpanDays: 1, maxSpanDays: 14 } }),
     blank: [ans.raw('date_range', { start: '', end: '' })],
     valid: [ans.raw('date_range', { start: '2026-10-19', end: '2026-10-21' })],
     invalid: [

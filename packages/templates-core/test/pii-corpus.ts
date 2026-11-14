@@ -96,11 +96,11 @@ export const PII_CORPUS: PiiCase[] = [
   make('page title: phone', (d) => { if (d.pages[0]) d.pages[0].title = `Questions? ${PII.phone}`; }, [{ path: `${doc}/pages/0/title`, kind: 'phone_in' }]),
   make('submit label: email', (d) => { d.behavior.submit.label = `Send to ${PII.email2}`; }, [{ path: `${doc}/behavior/submit/label`, kind: 'email' }]),
   make('consent notice: email', (d) => {
-    d.blocks[bid('c')] = { ...field('consent', 'c'), config: { mode: 'terms', notice: rich(`Questions: ${PII.email}`), itemiseData: false, items: [{ id: id('i1'), label: inline('I agree'), requiredToSubmit: true, defaultChecked: false }], presentation: 'checkboxes', noticeVersion: 0 } };
+    d.blocks[bid('c')] = { ...field('consent', 'c'), config: { mode: 'terms', notice: rich(`Questions: ${PII.email}`), itemiseData: false, items: [{ id: id<S.ConsentItemId>('i1'), label: inline('I agree'), requiredToSubmit: true, defaultChecked: false }], presentation: 'checkboxes', noticeVersion: 0 } };
     d.pages[0]?.children.push(bid('c'));
   }, [{ path: `${doc}/blocks/c/config/notice/content/0/content/0/text`, kind: 'email' }]),
   make('consent item label: PAN', (d) => {
-    d.blocks[bid('c')] = { ...field('consent', 'c'), config: { mode: 'terms', notice: rich('Terms'), itemiseData: false, items: [{ id: id('i1'), label: inline(`I, ${PII.pan}, agree`), requiredToSubmit: true, defaultChecked: false }], presentation: 'checkboxes', noticeVersion: 0 } };
+    d.blocks[bid('c')] = { ...field('consent', 'c'), config: { mode: 'terms', notice: rich('Terms'), itemiseData: false, items: [{ id: id<S.ConsentItemId>('i1'), label: inline(`I, ${PII.pan}, agree`), requiredToSubmit: true, defaultChecked: false }], presentation: 'checkboxes', noticeVersion: 0 } };
     d.pages[0]?.children.push(bid('c'));
   }, [{ path: `${doc}/blocks/c/config/items/0/label/content/0/content/0/text`, kind: 'pan' }]),
   make('logic literal: phone', (d) => { d.logic.rules = [rule('r1', all('g1', cond('c1', ans('q1'), 'eq', { kind: 'literal', value: { type: 'text', value: PII.phone4 } })), [{ type: 'hide', targets: [bid('q2')] }])]; }, [{ path: `${doc}/logic/rules/0/when/children/0/right/value/value`, kind: 'phone_in' }]),

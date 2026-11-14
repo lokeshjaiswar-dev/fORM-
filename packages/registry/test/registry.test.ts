@@ -245,7 +245,7 @@ describe('toScalar', () => {
     const scalar = REGISTRY.single_choice.toScalar({ optionId: id('option_1') });
     expect(scalar).toEqual({ t: 'option', blockId: UNBOUND_BLOCK_ID, v: 'option_1' });
     const block = fieldBlock('multi_choice');
-    expect(answerScalar(block, { optionIds: [id('option_1'), id('option_2')] })).toEqual({
+    expect(answerScalar(block, { optionIds: [id<OptionId>('option_1'), id<OptionId>('option_2')] })).toEqual({
       t: 'list', of: 'option', items: [{ t: 'option', blockId: block.id, v: 'option_1' }, { t: 'option', blockId: block.id, v: 'option_2' }],
     });
     expect(bindScalar({ t: 'text', v: 'x' }, block.id)).toEqual({ t: 'text', v: 'x' });
