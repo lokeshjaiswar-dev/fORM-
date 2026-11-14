@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { MergeConflict, MergeResolution } from '@form/schema';
-import { ApiProblem, ApiUnreachable, CLIENT_HEADERS, DEV_USER_HEADERS, ORG_HEADER, activeOrgOf, orgApi, useSessionStore } from '@/auth/client';
+import { ApiProblem, ApiUnreachable, CLIENT_HEADERS, ORG_HEADER, activeOrgOf, orgApi, useSessionStore } from '@/auth/client';
 import { API_BASE } from '@/edition/edition';
 
 const created = z.object({ id: z.string() });
@@ -103,7 +103,6 @@ export async function mergeRemoteForms(
       headers: {
         accept: 'application/json',
         'content-type': 'application/json',
-        ...DEV_USER_HEADERS,
         ...CLIENT_HEADERS,
         ...(org ? { [ORG_HEADER]: org } : {}),
       },

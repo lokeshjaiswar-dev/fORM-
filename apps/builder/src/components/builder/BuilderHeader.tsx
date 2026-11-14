@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { runtimeEdition } from '@form/config';
@@ -16,10 +16,13 @@ import { previewVersion } from '@/lib/preview';
 import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
 import { CopyLink } from '@/components/CopyLink';
-import { fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
+import { rememberAfterSignIn } from '@/auth/returnTo';
+import { OrgRequired, SignInRequired, fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
 
 export function BuilderHeader() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const title = useDoc((d) => d.title);
   const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
@@ -60,6 +63,19 @@ export function BuilderHeader() {
       setLink(url);
       setShareOpen(true);
     } catch (err) {
+      // Not signed in (or the session ended): the draft is already saved in this browser, so sign in and come back.
+      if (err instanceof SignInRequired || (err instanceof ApiProblem && err.status === 401)) {
+        rememberAfterSignIn(pathname);
+        toast('Sign in to publish. Your form is saved in this browser.');
+        navigate('/auth/sign-in');
+        return;
+      }
+      if (err instanceof OrgRequired) {
+        rememberAfterSignIn(pathname);
+        toast('Create an organisation first: forms are published into one.');
+        navigate('/orgs/new');
+        return;
+      }
       setShareOpen(true);
       if (err instanceof ApiUnreachable) setError('The API is not running, so this form cannot be shared yet.');
       else if (err instanceof ApiProblem) {

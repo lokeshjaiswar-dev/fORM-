@@ -1,4 +1,4 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
@@ -18,10 +18,8 @@ const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string(
 
 type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
 
-const LIVE_DIR = path.resolve(process.cwd(), '.data/published');
 const SUB_DIR = path.resolve(process.cwd(), '.data/submissions');
 const FILE_DIR = path.resolve(process.cwd(), '.data/files');
-const SLUG_FILE = /^[a-z0-9][a-z0-9-]{0,127}$/i;
 const FORM_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FILE_BODY_LIMIT = 12 * 1024 * 1024;
 const LIVE_TTL_MS = 60_000;
@@ -37,33 +35,10 @@ type DiskSubmission = {
   fields: Array<{ key: string; label: string; value: string }>;
 };
 
-function livePath(slug: string): string {
-  return path.join(LIVE_DIR, `${slug}.json`);
-}
-
-export async function savePublished(body: PublicPayload): Promise<void> {
-  if (!SLUG_FILE.test(body.slug)) return;
-  liveCache.set(body.slug, { at: Date.now(), body });
-  await mkdir(LIVE_DIR, { recursive: true });
-  await writeFile(livePath(body.slug), JSON.stringify(body));
-}
-
+/** Drops the cached public copy of a slug (after a publish); other instances catch up when the entry expires. */
 export function forgetPublished(slug?: string): void {
-  if (slug) {
-    liveCache.delete(slug);
-    void unlink(livePath(slug)).catch(() => undefined);
-  } else liveCache.clear();
-}
-
-async function readPublishedFile(slug: string): Promise<PublicPayload | null> {
-  if (!SLUG_FILE.test(slug)) return null;
-  try {
-    const parsed = JSON.parse(await readFile(livePath(slug), 'utf8')) as PublicPayload;
-    if (parsed?.slug === slug && parsed.formId && parsed.version) return parsed;
-  } catch {
-    /* Missing or unreadable. */
-  }
-  return null;
+  if (slug) liveCache.delete(slug);
+  else liveCache.clear();
 }
 
 function versionIdOf(version: unknown): string | undefined {
@@ -127,9 +102,7 @@ async function saveSubmission(row: DiskSubmission): Promise<void> {
 }
 
 async function peekLive(slug: string): Promise<PublicPayload | null> {
-  const cached = liveCache.get(slug);
-  if (cached) return cached.body;
-  return readPublishedFile(slug);
+  return liveCache.get(slug)?.body ?? null;
 }
 
 export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig }): void {
@@ -139,11 +112,6 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
   async function loadLive(slug: string, requestId: string): Promise<PublicPayload> {
     const cached = liveCache.get(slug);
     if (cached && Date.now() - cached.at < LIVE_TTL_MS) return cached.body;
-    const fromDisk = await readPublishedFile(slug);
-    if (fromDisk) {
-      liveCache.set(slug, { at: Date.now(), body: fromDisk });
-      return fromDisk;
-    }
     const pending = liveInflight.get(slug);
     if (pending) return pending;
     const load = (async () => {
@@ -162,6 +130,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
             definition: formVersions.definition,
             compiled: formVersions.compiled,
             contentHash: formVersions.contentHash,
+            media: formVersions.media,
           })
           .from(formVersions)
           .where(and(eq(formVersions.id, found.liveVersionId), eq(formVersions.formId, found.formId)))
@@ -192,8 +161,9 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
           branding: false,
           thirdPartyTrackingAllowed: false,
         }),
+        ...(row.media ? { media: row.media } : {}),
       };
-      await savePublished(body);
+      liveCache.set(slug, { at: Date.now(), body });
       return body;
     })().finally(() => liveInflight.delete(slug));
     liveInflight.set(slug, load);

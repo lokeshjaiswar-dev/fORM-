@@ -6,7 +6,13 @@ import { addBlock } from '@/state/actions';
 import { undo, useHistoryShortcuts } from '@/state/history';
 import { useUiStore } from '@/state/uiStore';
 import { blockIds, resetStore } from '@/test/fixtures';
-import { publishLive } from '@/persistence/publishApi';
+import { flushAutosave } from '@/persistence/autosave';
+import { SignInRequired, publishLive } from '@/persistence/publishApi';
+
+vi.mock('@/persistence/autosave', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/persistence/autosave')>();
+  return { ...actual, flushAutosave: vi.fn().mockResolvedValue(undefined) };
+});
 
 vi.mock('@/persistence/publishApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/persistence/publishApi')>();
@@ -28,6 +34,7 @@ function renderHeader(path = '/builder/f1') {
       <Routes>
         <Route path="/builder/:id/preview?" element={<><BuilderHeader /><Shortcuts /><input aria-label="field" /><Where /></>} />
         <Route path="/forms" element={<Where />} />
+        <Route path="/auth/sign-in" element={<Where />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -92,6 +99,18 @@ describe('BuilderHeader', () => {
     expect(await screen.findByRole('dialog', { name: 'Share form' })).toBeInTheDocument();
     expect(screen.getByLabelText('Share link')).toHaveValue(`${window.location.origin}/f/hello-form`);
     expect(publishLive).toHaveBeenCalled();
+  });
+
+  it('sends someone who is not signed in to sign in, and brings them back to this form', async () => {
+    sessionStorage.clear();
+    vi.mocked(publishLive).mockRejectedValue(new SignInRequired());
+    renderHeader('/builder/f1/preview');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    await waitFor(() => expect(screen.getByLabelText('path')).toHaveTextContent('/auth/sign-in'));
+    expect(screen.queryByRole('dialog', { name: 'Share form' })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('fr.afterSignIn')).toBe('/builder/f1/preview');
+    // The draft is saved first, so nothing is lost on the way.
+    expect(flushAutosave).toHaveBeenCalled();
   });
 
   it('copies the share link with the clipboard API', async () => {

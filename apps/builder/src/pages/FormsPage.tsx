@@ -5,6 +5,7 @@ import { defineMessages } from '@form/i18n';
 import type { FormDefinition, MergeConflict, MergeResolution } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
+import { AccountMenu } from '@/auth/AccountMenu';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
 import { mergeFromRepository } from '@/lib/mergeSelected';
@@ -182,6 +183,9 @@ export function FormsPage() {
 
   return (
     <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
+      <div className="-mt-12 mb-6 flex justify-end">
+        <AccountMenu />
+      </div>
       <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
       <div className="mt-6 flex gap-2">
         <Button onClick={() => setCreating(true)}>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fragmentParam, loadSession, type SignInResult } from '@/auth/client';
+import { takeAfterSignIn } from '@/auth/returnTo';
 import { pendingInvite } from '@/org/pendingInvite';
 
 /**
- * After a first factor: on to the forms when signed in (or back to an invite opened while signed out), or to the
- * second-factor page with the ticket. `link_sent` (an emailed link instead of a session) stays on the page, which says so.
+ * After a first factor: on to the forms when signed in (or back to an invite opened while signed out, or to the form
+ * whose Publish asked for the sign-in), or to the second-factor page with the ticket. `link_sent` (an emailed link instead of a session) stays on the page, which says so.
  */
 export function useFinishSignIn(): (result: SignInResult) => Promise<void> {
   const navigate = useNavigate();
@@ -17,7 +18,8 @@ export function useFinishSignIn(): (result: SignInResult) => Promise<void> {
         return;
       }
       await loadSession();
-      navigate(pendingInvite() ? '/invite' : '/forms', { replace: true });
+      const back = takeAfterSignIn();
+      navigate(pendingInvite() ? '/invite' : (back ?? '/forms'), { replace: true });
     },
     [navigate],
   );

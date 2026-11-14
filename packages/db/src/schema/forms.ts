@@ -17,8 +17,6 @@ export const forms = pgTable(
     teamId: uuid('team_id').notNull(),
     ownerUserId: uuid('owner_user_id').notNull(),
     title: text('title').notNull(),
-    /** Public fill address (`/f/:slug`). Set on first publish. */
-    slug: text('slug'),
     lifecycle: text('lifecycle', { enum: FORM_LIFECYCLES }).notNull().default('active'),
     trashedAt: tsNull('trashed_at'),
     liveVersionId: uuid('live_version_id'),
@@ -33,6 +31,8 @@ export const forms = pgTable(
     createdAt: ts('created_at'),
     updatedAt: ts('updated_at'),
     updatedBy: uuid('updated_by'),
+    /** Public fill address (`/f/:slug`). Set on first publish. Last, as 0013 added it (the migrations test compares column order). */
+    slug: text('slug'),
   },
   (t) => [unique('forms_org_id_id_key').on(t.orgId, t.id)],
 );
@@ -69,6 +69,8 @@ export const formVersions = pgTable(
     definition: jsonb('definition').$type<Record<string, unknown>>().notNull(),
     compiled: jsonb('compiled').$type<Record<string, unknown>>().notNull(),
     contentHash: text('content_hash').notNull(),
+    /** Pictures the version uses, by asset id (data URLs), stored with the version at publish. */
+    media: jsonb('media').$type<Record<string, string>>(),
   },
   (t) => [
     foreignKey({ name: 'form_versions_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
