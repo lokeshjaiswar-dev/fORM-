@@ -1,6 +1,0 @@
-/**
- * True when an event target sits inside a Sonner toast. A toast raised from inside a modal (Dialog, Sheet, BottomSheet) is portalled outside the
- * modal's content, so pressing its Undo or close button counts as an interaction outside and would dismiss the modal. The modals call this in
- * their `onInteractOutside` and cancel the dismissal.
- */
-export declare const inToaster: (target: EventTarget | null) => boolean;

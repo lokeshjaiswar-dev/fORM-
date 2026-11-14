@@ -1,3 +1,0 @@
-import * as React from 'react';
-/** Keeps ids like `REQ-2026-0148` in one piece when a plain-text title wraps (a line must not break at the hyphen). Anything but a string is returned as is. */
-export declare function nowrapIds(children: React.ReactNode): React.ReactNode;

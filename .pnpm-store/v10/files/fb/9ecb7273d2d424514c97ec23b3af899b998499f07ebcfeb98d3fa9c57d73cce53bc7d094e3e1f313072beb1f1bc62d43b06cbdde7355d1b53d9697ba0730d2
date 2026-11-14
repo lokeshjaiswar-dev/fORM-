@@ -1,3 +1,0 @@
-/* Optional: the two fonts the tokens name (Noto Sans for text, JetBrains Mono for code). Skip this file if your app loads its own. */
-@import "@fontsource-variable/noto-sans/index.css";
-@import "@fontsource-variable/jetbrains-mono/index.css";

@@ -1,2 +1,0 @@
-/** True below 480px. Submenus use it to overlap their parent instead of leaving the screen. Internal; false on the server. */
-export declare function useNarrowScreen(): boolean;

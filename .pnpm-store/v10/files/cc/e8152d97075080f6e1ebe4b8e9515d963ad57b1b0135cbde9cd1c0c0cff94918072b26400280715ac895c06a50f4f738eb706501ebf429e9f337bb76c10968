@@ -1,4 +1,0 @@
-export declare function FileName({ name, className }: {
-    name: string;
-    className?: string;
-}): import("react").JSX.Element;

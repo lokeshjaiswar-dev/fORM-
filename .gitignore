@@ -54,3 +54,6 @@ playwright-report
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# pnpm content store (created when the store lands inside the repo, e.g. on another drive on Windows)
+.pnpm-store/
