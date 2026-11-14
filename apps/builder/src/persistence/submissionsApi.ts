@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ApiProblem, ApiUnreachable, api, orgApi } from '@/auth/client';
+import { ApiProblem, ApiUnreachable, api, ensureSession, orgApi } from '@/auth/client';
 import type { StoredSubmission, SubmissionSummary } from '@/persistence/SubmissionsRepository';
 
 const created = z.object({ id: z.string() });
@@ -21,6 +21,10 @@ const detailSchema = z.object({
   answers: z.record(z.string(), z.unknown()),
   fields: z.array(z.object({ key: z.string(), label: z.string(), value: z.string() })),
 });
+
+async function signedIn(): Promise<boolean> {
+  return (await ensureSession()).status === 'signed_in';
+}
 
 /** Best-effort API calls: signed-out or unreachable servers are ignored. */
 async function quiet<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -55,16 +59,17 @@ export async function postRemoteSubmission(formId: string, record: StoredSubmiss
   return res?.id ?? null;
 }
 
+/**
+ * Responses are read only by signed-in members of the form's org (`submissions.read`, under the database's row
+ * security). The session cookie and the active org ride on `orgApi`; a signed-out visitor sees the local ones only.
+ */
 export async function listRemoteSubmissions(formId: string): Promise<SubmissionSummary[] | null> {
-  const published = await quiet(() => api('GET', `/v1/p/by-form/${formId}/submissions`, listSchema));
-  if (published) return published.items;
+  if (!(await signedIn())) return null;
   const res = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions`, listSchema));
   return res?.items ?? null;
 }
 
 export async function getRemoteSubmission(formId: string, id: string): Promise<StoredSubmission | null> {
-  const published = await quiet(() => api('GET', `/v1/p/by-form/${formId}/submissions/${id}`, detailSchema));
-  if (published) return published;
-  const res = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions/${id}`, detailSchema));
-  return res;
+  if (!(await signedIn())) return null;
+  return quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions/${id}`, detailSchema));
 }

@@ -16,6 +16,9 @@ let orgId: string;
 let userId: string;
 let formId: string;
 let creatorId: string;
+let outsiderOrgId: string;
+let outsiderId: string;
+let viewerId: string;
 
 beforeAll(async () => {
   const adminUrl = inject('pgAdminUrl');
@@ -36,6 +39,15 @@ beforeAll(async () => {
     `insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, 'Contact')`,
     [formId, orgId, team, userId],
   );
+  viewerId = randomUUID();
+  await owner.query('insert into users (id, email, email_norm) values ($1, $2, $2)', [viewerId, 'viewer@inbox.test']);
+  await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [orgId, viewerId, 'viewer']);
+  // Another org, with its own owner: a signed-in user who is nobody in the first org.
+  outsiderOrgId = randomUUID();
+  outsiderId = randomUUID();
+  await owner.query('insert into orgs (id, slug, name) values ($1, $2, $2)', [outsiderOrgId, 'elsewhere']);
+  await owner.query('insert into users (id, email, email_norm) values ($1, $2, $2)', [outsiderId, 'owner@elsewhere.test']);
+  await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [outsiderOrgId, outsiderId, 'owner']);
 
   const parsed = parseConfig({
     NODE_ENV: 'test',
@@ -96,5 +108,59 @@ describe('form submissions', () => {
     expect(created.statusCode).toBe(200);
     const list = await app.inject({ url: `/v1/forms/${id}/submissions`, headers: as(creatorId) });
     expect(list.statusCode).toBe(403);
+  });
+});
+
+describe('who may read the submissions of a form', () => {
+  let submissionId: string;
+
+  beforeAll(async () => {
+    submissionId = randomUUID();
+    await owner.query(
+      `insert into form_submissions (id, org_id, form_id, answers, fields)
+       values ($1, $2, $3, '{"q":{"type":"short_text","value":"secret"}}', '[{"key":"q","label":"Q","value":"secret"}]')`,
+      [submissionId, orgId, formId],
+    );
+  });
+
+  it('refuses a caller with no session, on the list and on one submission', async () => {
+    for (const url of [`/v1/forms/${formId}/submissions`, `/v1/forms/${formId}/submissions/${submissionId}`]) {
+      const res = await app.inject({ url });
+      expect(res.statusCode).toBe(401);
+      expect(res.body).not.toContain('secret');
+    }
+  });
+
+  it('has no public read route any more', async () => {
+    for (const url of [`/v1/p/by-form/${formId}/submissions`, `/v1/p/by-form/${formId}/submissions/${submissionId}`]) {
+      const res = await app.inject({ url });
+      expect(res.statusCode).toBe(404);
+      expect(res.body).not.toContain('secret');
+    }
+  });
+
+  it('refuses a member of another org who names that org', async () => {
+    const res = await app.inject({ url: `/v1/forms/${formId}/submissions`, headers: { 'x-fr-dev-user': outsiderId, 'x-fr-org': orgId } });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain('secret');
+  });
+
+  it('does not show a member of another org the form, whatever org they act in', async () => {
+    const headers = { 'x-fr-dev-user': outsiderId, 'x-fr-org': outsiderOrgId };
+    const list = await app.inject({ url: `/v1/forms/${formId}/submissions`, headers });
+    expect(list.statusCode).toBe(404);
+    const one = await app.inject({ url: `/v1/forms/${formId}/submissions/${submissionId}`, headers });
+    expect(one.statusCode).toBe(404);
+    expect(one.body).not.toContain('secret');
+  });
+
+  it('lets a member with submissions.read in the form’s org read them', async () => {
+    for (const who of [userId, viewerId]) {
+      const list = await app.inject({ url: `/v1/forms/${formId}/submissions`, headers: as(who) });
+      expect(list.statusCode).toBe(200);
+      const one = await app.inject({ url: `/v1/forms/${formId}/submissions/${submissionId}`, headers: as(who) });
+      expect(one.statusCode).toBe(200);
+      expect(one.json()).toMatchObject({ id: submissionId, fields: [{ key: 'q', value: 'secret' }] });
+    }
   });
 });

@@ -111,11 +111,9 @@ describe('publish and public fill', () => {
       payload: { formVersionId: versionId, answers: {}, fields: [{ key: 'name', label: 'Name', value: 'Ada' }], locale: 'en-IN' },
     });
     expect(submit.statusCode).toBe(200);
+    // Submissions are read by signed-in members of the form's org only (GET /v1/forms/:formId/submissions).
     const list = await app.inject({ url: `/v1/p/by-form/${id}/submissions` });
-    expect(list.statusCode).toBe(200);
-    expect(list.json()).toEqual({
-      items: [expect.objectContaining({ formId: id, fieldCount: 1 })],
-    });
+    expect(list.statusCode).toBe(404);
   });
 
   it('stores a respondent file and serves it back', async () => {

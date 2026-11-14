@@ -46,8 +46,11 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
     },
     async (request) => {
       const { formId } = request.params;
-      const rows = await withTenant(deps.db, { ...tenantOf(request), readOnly: true }, (tx) =>
-        tx
+      const rows = await withTenant(deps.db, { ...tenantOf(request), readOnly: true }, async (tx) => {
+        // RLS hides another org's form, so a foreign or made-up id is a 404 rather than an empty inbox.
+        const found = await tx.select({ id: forms.id }).from(forms).where(eq(forms.id, formId)).limit(1);
+        if (!found[0]) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
+        return tx
           .select({
             id: formSubmissions.id,
             formId: formSubmissions.formId,
@@ -56,8 +59,8 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
           })
           .from(formSubmissions)
           .where(eq(formSubmissions.formId, formId))
-          .orderBy(desc(formSubmissions.submittedAt), desc(formSubmissions.id)),
-      );
+          .orderBy(desc(formSubmissions.submittedAt), desc(formSubmissions.id));
+      });
       return {
         items: rows.map((row) => ({
           id: row.id,

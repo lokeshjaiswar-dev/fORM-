@@ -130,6 +130,12 @@ export async function loadSession(): Promise<SessionState> {
   return next;
 }
 
+/** The session as far as it is known; asks the API once when nothing has yet (a page opened straight from a link). */
+export async function ensureSession(): Promise<SessionState> {
+  const known = useSessionStore.getState();
+  return known.status === 'unknown' ? loadSession() : known;
+}
+
 /** The org the builder works in: the switcher's choice, else the first org (by name). Null without any org. */
 export function activeOrgOf(me: Me): UserOrg | null {
   return me.orgs.find((o) => o.id === me.activeOrgId) ?? me.orgs[0] ?? null;

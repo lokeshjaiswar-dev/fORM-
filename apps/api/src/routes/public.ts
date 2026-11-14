@@ -342,68 +342,6 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       return { id };
     },
   );
-
-  r.get(
-    '/v1/p/by-form/:formId/submissions',
-    {
-      config: { auth: 'none' },
-      schema: {
-        tags: ['runtime'],
-        summary: 'List submissions for a published form (no sign-in)',
-        params: z.object({ formId: z.uuid() }),
-        response: {
-          200: z.object({
-            items: z.array(
-              z.object({
-                id: z.uuid(),
-                formId: z.uuid(),
-                submittedAt: z.string(),
-                fieldCount: z.number().int(),
-              }),
-            ),
-          }),
-        },
-      },
-    },
-    async (request) => {
-      const items = await readSubmissions(request.params.formId);
-      return {
-        items: items.map((row) => ({
-          id: row.id,
-          formId: row.formId,
-          submittedAt: row.submittedAt,
-          fieldCount: row.fields.length,
-        })),
-      };
-    },
-  );
-
-  r.get(
-    '/v1/p/by-form/:formId/submissions/:id',
-    {
-      config: { auth: 'none' },
-      schema: {
-        tags: ['runtime'],
-        summary: 'Read one public submission',
-        params: z.object({ formId: z.uuid(), id: z.uuid() }),
-        response: {
-          200: z.object({
-            id: z.uuid(),
-            formId: z.uuid(),
-            submittedAt: z.string(),
-            locale: z.string(),
-            answers: z.record(z.string(), z.unknown()),
-            fields: z.array(fieldRow),
-          }),
-        },
-      },
-    },
-    async (request) => {
-      const row = (await readSubmissions(request.params.formId)).find((item) => item.id === request.params.id);
-      if (!row) throw new ProblemError('NOT_FOUND', 'That submission is not on this form.');
-      return row;
-    },
-  );
 }
 
 async function persistSubmissionToDb(db: Db, slug: string, requestId: string, row: DiskSubmission): Promise<void> {
