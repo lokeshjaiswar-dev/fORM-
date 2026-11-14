@@ -46,7 +46,7 @@ export const SubmitButtonStyleSchema = z.strictObject({
 
 export const SectionNavSchema = z.strictObject({
   enabled: z.boolean(),
-  mode: z.enum(SECTION_NAV_MODES).exactOptional(),
+  mode: z.enum(SECTION_NAV_MODES),
   placement: z.enum(SECTION_NAV_PLACEMENTS),
   variant: z.enum(SECTION_NAV_VARIANTS),
   currentMarker: z.enum(SECTION_NAV_CURRENT),
