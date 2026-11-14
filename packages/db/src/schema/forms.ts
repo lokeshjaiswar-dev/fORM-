@@ -95,3 +95,23 @@ export const formSubmissions = pgTable(
     index('form_submissions_form_idx').on(t.orgId, t.formId, t.submittedAt),
   ],
 );
+
+/** What a respondent uploaded to a published form; the bytes are in the file store. RLS: `form_files_tenant`. */
+export const formFiles = pgTable(
+  'form_files',
+  {
+    id: uuid('id').primaryKey(),
+    orgId: uuid('org_id').notNull(),
+    formId: uuid('form_id').notNull(),
+    blockId: text('block_id').notNull(),
+    name: text('name').notNull(),
+    mime: text('mime').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    createdAt: ts('created_at'),
+  },
+  (t) => [
+    foreignKey({ name: 'form_files_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
+    index('form_files_form_idx').on(t.orgId, t.formId, t.createdAt),
+  ],
+);

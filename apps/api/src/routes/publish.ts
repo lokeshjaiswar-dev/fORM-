@@ -9,7 +9,6 @@ import { FormDefinitionSchema, slugOf, type FormDefinition } from '@form/schema'
 import { z } from 'zod';
 import { accountOf, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
-import { forgetPublished } from './public.ts';
 
 const published = z.object({
   slug: z.string(),
@@ -152,15 +151,13 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
       const { id } = request.params;
       const tenant = tenantOf(request);
       const userId = accountOf(request).userId;
-      const live = await withTenant(deps.db, tenant, async (tx) => {
+      return withTenant(deps.db, tenant, async (tx) => {
         const [form] = await tx.select().from(forms).where(eq(forms.id, id)).limit(1);
         if (!form) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
         const [draftRow] = await tx.select().from(formDrafts).where(eq(formDrafts.formId, id)).limit(1);
         if (!draftRow) throw new ProblemError('NOT_FOUND', 'That form has no draft to publish.');
         return freeze(tx, { orgId: tenant.orgId, formId: id, userId, definition: parsedDefinition(draftRow.draft, id), media: request.body?.media });
       });
-      forgetPublished(live.slug);
-      return live;
     },
   );
 }

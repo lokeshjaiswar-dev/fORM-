@@ -109,6 +109,11 @@ export async function api<T>(method: Method, path: string, schema: z.ZodType<T> 
   return parsed.data;
 }
 
+/** A GET that answers bytes (a respondent's file): with the session cookie, and `org` as `X-FR-Org`. */
+export async function apiBlob(path: string, o: { org?: string | null } = {}): Promise<Blob> {
+  return (await send('GET', path, undefined, o)).blob();
+}
+
 export type SessionState = { status: 'unknown' } | { status: 'signed_out' } | { status: 'unreachable' } | { status: 'signed_in'; me: Me };
 
 export const useSessionStore = create<SessionState>(() => ({ status: 'unknown' }));
@@ -137,6 +142,12 @@ export function activeOrgOf(me: Me): UserOrg | null {
 }
 
 export const useActiveOrg = (): UserOrg | null => useSessionStore((s) => (s.status === 'signed_in' ? activeOrgOf(s.me) : null));
+
+/** A call in the active org that answers bytes. */
+export function orgBlob(path: string): Promise<Blob> {
+  const s = useSessionStore.getState();
+  return apiBlob(path, { org: s.status === 'signed_in' ? (activeOrgOf(s.me)?.id ?? null) : null });
+}
 
 /** A call in the active org. */
 export function orgApi<T>(method: Method, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {

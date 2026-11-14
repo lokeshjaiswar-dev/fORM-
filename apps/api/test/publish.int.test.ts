@@ -189,20 +189,3 @@ describe('the pictures a form uses', () => {
     expect((await owner.query('select 1 from form_versions where form_id = $1', [id])).rowCount).toBe(0);
   });
 });
-
-describe('respondent files (replaced by the form-bound upload in the next change)', () => {
-  it('stores a respondent file and serves it back', async () => {
-    const id = randomUUID();
-    const data = Buffer.from('hello-file').toString('base64');
-    const stored = await app.inject({
-      method: 'POST',
-      url: '/v1/p/files',
-      payload: { id, name: 'note.txt', mime: 'text/plain', data },
-    });
-    expect(stored.statusCode).toBe(200);
-    const got = await app.inject({ url: `/v1/p/files/${id}` });
-    expect(got.statusCode).toBe(200);
-    expect(got.headers['content-type']).toMatch(/text\/plain/);
-    expect(got.body).toBe('hello-file');
-  });
-});

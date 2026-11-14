@@ -53,13 +53,13 @@ function previewFields(fields: ReadableField[], n = 3): ReadableField[] {
   return fields.filter((field) => field.value || field.media?.length).slice(0, n);
 }
 
-function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime?: string | undefined }) {
+function StoredFile({ formId, fileId, name, mime }: { formId: string; fileId: string; name: string; mime?: string | undefined }) {
   const [url, setUrl] = useState<string | null>(null);
   const [resolvedMime, setMime] = useState(mime ?? '');
   useEffect(() => {
     let objectUrl: string | undefined;
     let live = true;
-    loadSubmissionFile(fileId).then((row) => {
+    loadSubmissionFile(formId, fileId).then((row) => {
       if (!live || !row) return;
       objectUrl = URL.createObjectURL(row.blob);
       setUrl(objectUrl);
@@ -69,7 +69,7 @@ function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime
       live = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [fileId]);
+  }, [formId, fileId]);
   const image = resolvedMime.startsWith('image/') || (mime ?? '').startsWith('image/');
   if (url && image) return <img src={url} alt={name} className="mt-2 max-h-52 max-w-full rounded-[8px] border border-border object-contain" />;
   if (url) {
@@ -82,11 +82,11 @@ function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime
   return <span className="text-[15px]">{name}</span>;
 }
 
-function FieldMedia({ media }: { media: AnswerMedia[] }) {
+function FieldMedia({ formId, media }: { formId: string; media: AnswerMedia[] }) {
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {media.map((item, i) => {
-        if (item.fileId) return <StoredFile key={item.fileId} fileId={item.fileId} name={item.name} mime={item.mime} />;
+        if (item.fileId) return <StoredFile key={item.fileId} formId={formId} fileId={item.fileId} name={item.name} mime={item.mime} />;
         if (item.assetId) {
           const src = themeImageUrl(item.assetId);
           return src ? <img key={`${item.assetId}-${i}`} src={src} alt={item.name} className="size-20 rounded-[8px] border border-border object-cover" /> : null;
@@ -97,7 +97,7 @@ function FieldMedia({ media }: { media: AnswerMedia[] }) {
   );
 }
 
-function FieldValue({ field, compact }: { field: ReadableField; compact?: boolean }) {
+function FieldValue({ formId, field, compact }: { formId: string; field: ReadableField; compact?: boolean }) {
   const files = field.media?.filter((item) => item.fileId) ?? [];
   const pictures = field.media?.filter((item) => item.assetId) ?? [];
   const fileNames = files.map((item) => item.name).join(', ');
@@ -105,8 +105,8 @@ function FieldValue({ field, compact }: { field: ReadableField; compact?: boolea
   return (
     <>
       {field.value && !hideFileName ? <span className={compact ? 'truncate' : 'whitespace-pre-wrap'}>{field.value}</span> : null}
-      {pictures.length ? <FieldMedia media={pictures} /> : null}
-      {files.length ? <FieldMedia media={files} /> : null}
+      {pictures.length ? <FieldMedia formId={formId} media={pictures} /> : null}
+      {files.length ? <FieldMedia formId={formId} media={files} /> : null}
     </>
   );
 }
@@ -235,7 +235,7 @@ export function ResponsesPage() {
                         <div key={field.key} className="min-w-0">
                           <dt className="text-[12px] text-muted-foreground">{field.label}</dt>
                           <dd className="mt-0.5 text-[15px] leading-6">
-                            <FieldValue field={field} compact />
+                            <FieldValue formId={id} field={field} compact />
                           </dd>
                         </div>
                       ))}
@@ -261,7 +261,7 @@ export function ResponsesPage() {
                 <div key={field.key} className={i === 0 ? 'pb-4' : 'border-t border-border py-4'}>
                   <dt className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{field.label}</dt>
                   <dd className="mt-1.5 text-[16px] leading-6">
-                    {field.value || field.media?.length ? <FieldValue field={field} /> : '—'}
+                    {field.value || field.media?.length ? <FieldValue formId={id} field={field} /> : '—'}
                   </dd>
                 </div>
               ))}

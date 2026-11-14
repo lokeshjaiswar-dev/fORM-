@@ -3,12 +3,12 @@ import { useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
-import { RuntimeFormVersionSchema, type RuntimeFormVersion } from '@form/schema';
+import { RuntimeFormVersionSchema, type IsoInstant, type RuntimeFormVersion } from '@form/schema';
 import { API_BASE } from '@/edition/edition';
 import { hydrateThemeImages } from '@/components/builder/design/uploads';
-import { previewUploader } from '@/lib/preview';
 import { BUILDER_LOCALE } from '@/i18n';
 import { answerRows } from '@/persistence/answerRows';
+import { publicUploader } from '@/persistence/filesApi';
 
 const payloadSchema = z.object({
   slug: z.string(),
@@ -22,7 +22,8 @@ type Load = { status: 'loading' } | { status: 'missing' } | { status: 'error'; m
 export function PublicFillPage() {
   const { slug = '' } = useParams();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
-  const startedAt = useMemo(() => new Date().toISOString(), []);
+  const startedAt = useMemo(() => new Date().toISOString() as IsoInstant, []);
+  const uploader = useMemo(() => publicUploader(slug), [slug]);
 
   useEffect(() => {
     let live = true;
@@ -71,7 +72,7 @@ export function PublicFillPage() {
         mode="live"
         status={load.version.status}
         locale={BUILDER_LOCALE}
-        uploader={previewUploader}
+        uploader={uploader}
         session={{ startedAt, pageUrl: window.location.href }}
         onSubmit={async (payload: SubmitPayload) => {
           const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(load.slug)}/submissions`, {

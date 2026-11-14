@@ -1,16 +1,27 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
-import { formSubmissions, formVersions, forms, resolveFormSlug, withTenant, type Db } from '@form/db';
+import { formFiles, formSubmissions, formVersions, forms, resolveFormSlug, withTenant, type Db } from '@form/db';
 import { projectForRuntime } from '@form/logic';
-import type { CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
+import { acceptsFile } from '@form/registry';
+import type { BlockId, CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
 import { ProblemError } from '../errors.ts';
+import {
+  contentProblem,
+  DEFAULT_ACCEPT,
+  isNeverStored,
+  MAX_SIGNATURE_BYTES,
+  MAX_UPLOAD_BYTES,
+  normaliseFileName,
+  UPLOAD_BODY_LIMIT,
+  type FileStore,
+} from '../files.ts';
 
 const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
@@ -18,13 +29,21 @@ const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string(
 
 type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
 
+/** A published form as the public routes use it: what the page gets, and the stored definition the server checks against. */
+interface LiveForm {
+  orgId: string;
+  formId: string;
+  versionId: string;
+  payload: PublicPayload;
+  definition: FormDefinition;
+}
+
 const SUB_DIR = path.resolve(process.cwd(), '.data/submissions');
-const FILE_DIR = path.resolve(process.cwd(), '.data/files');
 const FORM_FILE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const FILE_BODY_LIMIT = 12 * 1024 * 1024;
-const LIVE_TTL_MS = 60_000;
-const liveCache = new Map<string, { at: number; body: PublicPayload }>();
-const liveInflight = new Map<string, Promise<PublicPayload>>();
+/** A version is immutable, so what is loaded for it is good for as long as it is kept; only the memory is bounded. */
+const LIVE_CACHE_MAX = 200;
+const liveByVersion = new Map<string, LiveForm>();
+const liveInflight = new Map<string, Promise<LiveForm>>();
 
 type DiskSubmission = {
   id: string;
@@ -34,18 +53,6 @@ type DiskSubmission = {
   answers: Record<string, unknown>;
   fields: Array<{ key: string; label: string; value: string }>;
 };
-
-/** Drops the cached public copy of a slug (after a publish); other instances catch up when the entry expires. */
-export function forgetPublished(slug?: string): void {
-  if (slug) liveCache.delete(slug);
-  else liveCache.clear();
-}
-
-function versionIdOf(version: unknown): string | undefined {
-  if (typeof version !== 'object' || version === null || !('versionId' in version)) return undefined;
-  const id = (version as { versionId: unknown }).versionId;
-  return typeof id === 'string' ? id : undefined;
-}
 
 function formKey(formId: string): string {
   return formId.toLowerCase();
@@ -66,32 +73,6 @@ async function readSubmissions(formId: string): Promise<DiskSubmission[]> {
   }
 }
 
-function fileBinPath(id: string): string {
-  return path.join(FILE_DIR, `${id}.bin`);
-}
-
-function fileMetaPath(id: string): string {
-  return path.join(FILE_DIR, `${id}.json`);
-}
-
-async function saveUploadedFile(id: string, name: string, mime: string, bytes: Buffer): Promise<void> {
-  await mkdir(FILE_DIR, { recursive: true });
-  await writeFile(fileBinPath(id), bytes);
-  await writeFile(fileMetaPath(id), JSON.stringify({ name, mime }));
-}
-
-async function readUploadedFile(id: string): Promise<{ name: string; mime: string; bytes: Buffer } | null> {
-  if (!FORM_FILE.test(id)) return null;
-  try {
-    const meta = JSON.parse(await readFile(fileMetaPath(id), 'utf8')) as { name?: unknown; mime?: unknown };
-    if (typeof meta.name !== 'string' || typeof meta.mime !== 'string') return null;
-    const bytes = await readFile(fileBinPath(id));
-    return { name: meta.name, mime: meta.mime, bytes };
-  } catch {
-    return null;
-  }
-}
-
 async function saveSubmission(row: DiskSubmission): Promise<void> {
   const formId = formKey(row.formId);
   if (!FORM_FILE.test(formId)) return;
@@ -101,23 +82,26 @@ async function saveSubmission(row: DiskSubmission): Promise<void> {
   await writeFile(subPath(formId), JSON.stringify({ items }));
 }
 
-async function peekLive(slug: string): Promise<PublicPayload | null> {
-  return liveCache.get(slug)?.body ?? null;
-}
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
-export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig }): void {
+export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig; files: FileStore }): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const edition: RuntimeEdition = runtimeEdition(editionSummary(deps.config.edition));
 
-  async function loadLive(slug: string, requestId: string): Promise<PublicPayload> {
-    const cached = liveCache.get(slug);
-    if (cached && Date.now() - cached.at < LIVE_TTL_MS) return cached.body;
-    const pending = liveInflight.get(slug);
+  /**
+   * The live version of a slug. The slug is resolved on every request, so a form that was unpublished, archived or
+   * trashed stops answering at once; what is loaded for a version id is cached, because a version never changes.
+   */
+  async function loadLive(slug: string, requestId: string): Promise<LiveForm> {
+    const found = await resolveFormSlug(deps.db, slug);
+    if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+    const cached = liveByVersion.get(found.liveVersionId);
+    if (cached && cached.formId === found.formId) return cached;
+    const pending = liveInflight.get(found.liveVersionId);
     if (pending) return pending;
     const load = (async () => {
-      const found = await resolveFormSlug(deps.db, slug);
-      if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      const rows = await withTenant(deps.db, { orgId: found.orgId, actor: 'system', requestId, readOnly: true }, (tx) =>
+      // A respondent reads one version of one org's form: the org comes from the slug, never from the caller.
+      const rows = await withTenant(deps.db, { orgId: found.orgId, actor: 'respondent', requestId, readOnly: true }, (tx) =>
         tx
           .select({
             id: formVersions.id,
@@ -152,21 +136,23 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         templateLineage: [],
         variablesSnapshot: { variables: {} },
       };
-      const body: PublicPayload = {
+      const payload: PublicPayload = {
         slug,
         formId: found.formId,
         version: projectForRuntime(version, { state: 'open' }, {
           edition,
-          upload: { presignUrl: '', maxFileBytes: 10 * 1024 * 1024 },
+          upload: { presignUrl: '', maxFileBytes: MAX_UPLOAD_BYTES },
           branding: false,
           thirdPartyTrackingAllowed: false,
         }),
         ...(row.media ? { media: row.media } : {}),
       };
-      liveCache.set(slug, { at: Date.now(), body });
-      return body;
-    })().finally(() => liveInflight.delete(slug));
-    liveInflight.set(slug, load);
+      const live: LiveForm = { orgId: found.orgId, formId: found.formId, versionId: found.liveVersionId, payload, definition: version.definition };
+      if (liveByVersion.size >= LIVE_CACHE_MAX) liveByVersion.delete(liveByVersion.keys().next().value!);
+      liveByVersion.set(found.liveVersionId, live);
+      return live;
+    })().finally(() => liveInflight.delete(found.liveVersionId));
+    liveInflight.set(found.liveVersionId, load);
     return load;
   }
 
@@ -188,59 +174,85 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         },
       },
     },
-    async (request) => loadLive(request.params.slug, request.id),
+    async (request) => ({ ...(await loadLive(request.params.slug, request.id)).payload, slug: request.params.slug }),
   );
 
+  const uploaded = z.object({
+    fileId: z.uuid(),
+    name: z.string(),
+    sizeBytes: z.number().int(),
+    mime: z.string(),
+    sha256: z.string(),
+    scan: z.literal('skipped'),
+  });
+
   r.post(
-    '/v1/p/files',
+    '/v1/p/:slug/files',
     {
       config: { auth: 'none' },
-      bodyLimit: FILE_BODY_LIMIT,
+      bodyLimit: UPLOAD_BODY_LIMIT,
       schema: {
         tags: ['runtime'],
-        summary: 'Store a respondent file so Responses can open it on another device',
+        summary: 'Upload a file to an upload or signature field of a published form',
+        description:
+          "Respondents are anonymous, so this is public, but it only takes files for a field the form's live version has, within that field's type and size rules. The server names the file (a uuid); a client-chosen id is ignored. Downloads are for signed-in members of the owning org only.",
+        params: slugParam,
         body: z.object({
-          id: z.uuid(),
+          blockId: z.string().min(1).max(64),
+          purpose: z.enum(['file', 'signature']).default('file'),
           name: z.string().min(1).max(255),
           mime: z.string().min(1).max(255),
           data: z.string().min(1),
         }),
-        response: { 200: z.object({ id: z.uuid() }) },
+        response: { 200: uploaded },
       },
     },
     async (request) => {
-      const { id, name, mime, data } = request.body;
-      let bytes: Buffer;
-      try {
-        bytes = Buffer.from(data, 'base64');
-      } catch {
-        throw new ProblemError('VALIDATION_FAILED', 'The file could not be read.');
+      const { blockId, purpose, mime: declared, data } = request.body;
+      const live = await loadLive(request.params.slug, request.id);
+      const block = live.definition.blocks[blockId as BlockId];
+      if (!block || block.type !== (purpose === 'signature' ? 'signature' : 'file_upload')) {
+        throw new ProblemError('VALIDATION_FAILED', 'This form has no field that takes a file here.');
       }
-      if (bytes.length === 0 || bytes.length > FILE_BODY_LIMIT) {
-        throw new ProblemError('PAYLOAD_TOO_LARGE', 'That file is too large.');
-      }
-      await saveUploadedFile(id, name, mime, bytes);
-      return { id };
-    },
-  );
 
-  r.get(
-    '/v1/p/files/:id',
-    {
-      config: { auth: 'none' },
-      schema: {
-        tags: ['runtime'],
-        summary: 'Download a stored respondent file',
-        params: z.object({ id: z.uuid() }),
-      },
-    },
-    async (request, reply) => {
-      const file = await readUploadedFile(request.params.id);
-      if (!file) throw new ProblemError('NOT_FOUND', 'That file is not stored.');
-      return reply
-        .header('x-file-name', encodeURIComponent(file.name))
-        .type(file.mime)
-        .send(file.bytes);
+      const name = purpose === 'signature' ? 'signature.png' : normaliseFileName(request.body.name);
+      const mime = declared.trim().toLowerCase();
+      let max: number;
+      if (block.type === 'file_upload') {
+        const configured = block.config.accept;
+        const accept =
+          configured.extensions.length === 0 && configured.mimeTypes.length === 0
+            ? { extensions: [...DEFAULT_ACCEPT.extensions], mimeTypes: [...DEFAULT_ACCEPT.mimeTypes] }
+            : configured;
+        if (isNeverStored(name, mime) || !acceptsFile({ name, mime }, accept)) {
+          throw new ProblemError('UNSUPPORTED_MEDIA_TYPE', 'This kind of file is not accepted here.');
+        }
+        max = Math.min(block.config.maxFileBytes, MAX_UPLOAD_BYTES);
+      } else {
+        if (mime !== 'image/png') throw new ProblemError('UNSUPPORTED_MEDIA_TYPE', 'A signature is a PNG picture.');
+        max = MAX_SIGNATURE_BYTES;
+      }
+      // Checked before decoding, so an oversize body never becomes a buffer.
+      if (data.length > Math.ceil(max / 3) * 4 + 4) throw new ProblemError('PAYLOAD_TOO_LARGE', 'That file is too large.');
+      if (!BASE64.test(data)) throw new ProblemError('VALIDATION_FAILED', 'The file could not be read.');
+      const bytes = Buffer.from(data, 'base64');
+      if (bytes.length === 0) throw new ProblemError('VALIDATION_FAILED', 'The file is empty.');
+      if (bytes.length > max) throw new ProblemError('PAYLOAD_TOO_LARGE', 'That file is too large.');
+      if (contentProblem(bytes, name, mime)) throw new ProblemError('UNSUPPORTED_MEDIA_TYPE', 'The file is not the kind of file its name says.');
+
+      const id = randomUUID();
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      try {
+        await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
+          await tx.insert(formFiles).values({ id, orgId: live.orgId, formId: live.formId, blockId, name, mime, sizeBytes: bytes.length, sha256 });
+          // Bytes before commit: a failed write rolls the row back; a failed commit leaves an unreferenced file, removed below.
+          await deps.files.put(id, bytes);
+        });
+      } catch (err) {
+        await deps.files.remove(id);
+        throw err;
+      }
+      return { fileId: id, name, sizeBytes: bytes.length, mime, sha256, scan: 'skipped' as const };
     },
   );
 
@@ -262,10 +274,8 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       },
     },
     async (request) => {
-      const live = (await peekLive(request.params.slug)) ?? (await loadLive(request.params.slug, request.id).catch(() => null));
-      if (!live) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      const expected = versionIdOf(live.version);
-      if (expected && request.body.formVersionId !== expected) {
+      const live = await loadLive(request.params.slug, request.id);
+      if (request.body.formVersionId !== live.versionId) {
         throw new ProblemError('NOTICE_OUTDATED', 'This form was updated. Reload and try again.');
       }
       const id = randomUUID();

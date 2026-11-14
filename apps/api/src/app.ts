@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -14,6 +15,8 @@ import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts
 import type { ApiConfig } from './config.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
+import { createFileStore, type FileStore } from './files.ts';
+import { formFileRoutes } from './routes/form-files.ts';
 import { formRoutes } from './routes/forms.ts';
 import { publicFormRoutes } from './routes/public.ts';
 import { publishRoutes } from './routes/publish.ts';
@@ -47,6 +50,11 @@ export interface AppDeps {
    * argon2id hashing and parallel test files would trip it on a loaded machine.
    */
   underPressure?: false;
+  /**
+   * Where respondent files are kept (tests); default `.data/files` under the working directory. The filesystem store is
+   * temporary: the StoragePort/S3 adapter with presigned uploads and scanning replaces it in WP-1.14.
+   */
+  files?: FileStore;
   now?: () => Date;
 }
 
@@ -110,7 +118,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['content-type', 'if-match', 'idempotency-key', 'x-fr-client', ORG_HEADER, 'x-request-id', ...(config.authDevHeaders ? [DEV_USER_HEADER] : [])],
-    exposedHeaders: ['x-request-id', 'etag', 'x-file-name'],
+    exposedHeaders: ['x-request-id', 'etag'],
     maxAge: 600,
   });
   await app.register(cookie);
@@ -183,7 +191,9 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   });
   formRoutes(app, { db: handle.db });
   publishRoutes(app, { db: handle.db });
-  publicFormRoutes(app, { db: handle.db, config });
+  const files = deps.files ?? createFileStore(path.resolve(process.cwd(), '.data/files'));
+  publicFormRoutes(app, { db: handle.db, config, files });
+  formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
   submissionRoutes(app, { db: handle.db });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);

@@ -1,4 +1,5 @@
-import type { FormDefinition } from '@form/schema';
+import { DEFAULT_COMPLIANCE, REGISTRY } from '@form/registry';
+import type { FormDefinition, Locale } from '@form/schema';
 
 const para = (text: string) => ({
   type: 'doc' as const,
@@ -87,5 +88,32 @@ export function publishableDraft(formId: string, title = 'Live form'): FormDefin
       systemMessages: {},
       reviewedConsentLocales: [],
     },
+  } as unknown as FormDefinition;
+}
+
+type FieldType = 'file_upload' | 'signature' | 'short_text' | 'email' | 'number';
+
+/** A value field of a registry type, on its default config (`config` is merged over it), as the builder creates one. */
+export function fieldBlock(id: string, type: FieldType, config: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) {
+  const defaults = DEFAULT_COMPLIANCE[type];
+  return {
+    id,
+    type,
+    key: id,
+    label: { type: 'doc' as const, content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: id }] }] },
+    required: false,
+    compliance: { ...defaults, purposeIds: defaults.classification === 'none' ? [] : ['pur_1'] },
+    config: { ...REGISTRY[type].defaultConfig('en-IN' as Locale), ...config },
+    ...extra,
+  };
+}
+
+/** `publishableDraft` with `blocks` placed on its one page. */
+export function draftWith(formId: string, blocks: Array<ReturnType<typeof fieldBlock>>, title = 'Live form'): FormDefinition {
+  const base = publishableDraft(formId, title);
+  return {
+    ...base,
+    blocks: Object.fromEntries(blocks.map((b) => [b.id, b])),
+    pages: [{ ...base.pages[0]!, children: blocks.map((b) => b.id) }],
   } as unknown as FormDefinition;
 }

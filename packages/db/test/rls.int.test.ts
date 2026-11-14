@@ -84,6 +84,16 @@ const TABLES: Record<string, TableSpec> = {
       sql`insert into form_submissions (id, org_id, form_id, answers, fields)
           values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, '{}', '[]')`,
   },
+  form_files: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'name',
+    update: 'denied',
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256)
+          values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, 'upload', 'cv.pdf', 'application/pdf', 4, ${'0'.repeat(64)})`,
+  },
   audit_log: { scope: { by: 'org' }, select: 0, touch: 'reason', update: 'denied', delete: 'denied' },
   audit_pending: { scope: { by: 'org', column: 'org_key' }, select: 'denied', touch: 'event', update: 'denied', delete: 'denied' },
   audit_heads: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'seq', update: 'denied', delete: 'denied' },

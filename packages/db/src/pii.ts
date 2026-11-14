@@ -62,6 +62,11 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     erase: 'delete',
     retainBasis: 'with the form or retention.sweep / dsr.execute',
   },
+  form_files: {
+    columns: ['name', 'sha256'],
+    erase: 'delete',
+    retainBasis: 'with the form or retention.sweep / dsr.execute, which also delete the stored bytes (file store, WP-1.14)',
+  },
   audit_pending: { columns: ['event'], erase: 'ttl', retainBasis: 'seconds: moved into audit_log by audit.chain' },
   audit_log: {
     columns: ['actor_id', 'impersonator_id', 'session_id', 'api_key_id', 'actor_ip_hash', 'actor_ua', 'metadata'],

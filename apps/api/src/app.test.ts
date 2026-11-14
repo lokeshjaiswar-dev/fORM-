@@ -367,6 +367,7 @@ describe('OpenAPI', () => {
       '/v1/csp-reports',
       '/v1/forms',
       '/v1/forms/merge',
+      '/v1/forms/{formId}/files/{id}',
       '/v1/forms/{formId}/submissions',
       '/v1/forms/{formId}/submissions/{id}',
       '/v1/forms/{id}/draft',
@@ -393,9 +394,8 @@ describe('OpenAPI', () => {
       '/v1/org/settings',
       '/v1/orgs',
       '/v1/p/by-form/{formId}/submissions',
-      '/v1/p/files',
-      '/v1/p/files/{id}',
       '/v1/p/{slug}',
+      '/v1/p/{slug}/files',
       '/v1/p/{slug}/submissions',
       '/v1/privacy/notice',
     ]);
