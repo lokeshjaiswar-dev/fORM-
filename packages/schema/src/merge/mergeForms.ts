@@ -2,6 +2,7 @@ import type { FieldBlock, StoredBlock } from '../v2/blocks.ts';
 import type { FormDefinition } from '../v2/definition.ts';
 import type { Action, Rule } from '../v2/logic.ts';
 import type { BlockId, FieldKey, FormId, PageId } from '../v2/ids.ts';
+import { clone } from './clone.ts';
 import { combineFields, conflictMessage, summarizeField } from './combine.ts';
 import { fieldMatchKey, isFieldBlock, normalizeLabel, parseMatchKey, plainLabelText } from './labels.ts';
 import { remapValue, uniqueKey } from './remap.ts';
@@ -158,7 +159,7 @@ function copyTree(
 
   const id = (existing ?? newId()) as BlockId;
   map.set(oldId, id);
-  const copied = remapValue(structuredClone(block), map) as StoredBlock;
+  const copied = remapValue(clone(block), map) as StoredBlock;
   copied.id = id;
   if (isContainer(block) && isContainer(copied)) {
     copied.config = {
@@ -201,7 +202,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
   }
   if (conflicts.length) return { ok: false, conflicts };
 
-  const base = structuredClone(inputs[0]!.definition);
+  const base = clone(inputs[0]!.definition);
   base.formId = options.newFormId as FormId;
   base.title = options.title?.trim() || inputs.map((i) => i.title.trim() || 'Untitled form').join(' + ');
 
@@ -234,7 +235,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
       const chosen = resolutionFor(resolutions, key);
       if (chosen) {
         const pick = chosen.chosenFormId === input.id ? block : keep;
-        const applied = structuredClone(pick);
+        const applied = clone(pick);
         applied.id = keep.id;
         applied.key = keep.key;
         if (pick === block) mapOptionIds(keep, pick, map);
@@ -289,7 +290,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
     });
 
     for (const rule of src.logic.rules) {
-      const copied = remapValue(structuredClone(rule), map) as Rule;
+      const copied = remapValue(clone(rule), map) as Rule;
       copied.id = (map.get(rule.id) ?? copied.id) as Rule['id'];
       base.logic.rules.push(copied);
       ruleOrigin.set(copied.id, { formId: input.id, formTitle: input.title });

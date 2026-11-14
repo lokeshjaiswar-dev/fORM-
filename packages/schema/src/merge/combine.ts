@@ -2,6 +2,7 @@ import type { FieldBlock } from '../v2/blocks.ts';
 import type { DataClassification, FieldCompliance } from '../v2/compliance.ts';
 import type { ChoiceOption } from '../v2/config.ts';
 import type { FieldMessages } from '../v2/envelope.ts';
+import { clone } from './clone.ts';
 import { fieldMatchKey, normalizeLabel, plainLabelText } from './labels.ts';
 
 export type CombineOk = { ok: true; field: FieldBlock; optionMap: Map<string, string> };
@@ -311,7 +312,7 @@ export function combineFields(left: FieldBlock, right: FieldBlock): CombineResul
   const bounds = mergeBounds(asRecord(config.value) ?? {});
   if (bounds) return bounds;
 
-  const field = structuredClone(left);
+  const field = clone(left);
   field.required = left.required || right.required;
   field.compliance = compliance.value;
   field.config = JSON.parse(JSON.stringify(config.value)) as FieldBlock['config'];
