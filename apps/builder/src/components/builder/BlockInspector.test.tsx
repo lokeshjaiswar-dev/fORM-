@@ -364,6 +364,25 @@ describe('BlockInspector form title', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Normal' }));
     expect(doc().titleStyle).toMatchObject({ weight: 'normal' });
   });
+
+  it('keeps a half-typed size out of the document and clamps it when the field is left', async () => {
+    resetStore([block('short_text', 'name')]);
+    const user = userEvent.setup();
+    useUiStore.getState().openInspector(TITLE_INSPECTOR_ID);
+    render(<BlockInspector />);
+    const size = screen.getByRole('spinbutton', { name: 'Title size' });
+    await user.type(size, '5');
+    expect(size).toHaveValue(5);
+    expect(doc().titleStyle).toBeUndefined();
+    await user.tab();
+    expect(size).toHaveValue(20);
+    expect(doc().titleStyle).toEqual({ sizePx: 20 });
+    await user.clear(size);
+    await user.type(size, '90');
+    await user.tab();
+    expect(size).toHaveValue(72);
+    expect(doc().titleStyle).toEqual({ sizePx: 72 });
+  });
 });
 
 describe('BlockInspector submit', () => {

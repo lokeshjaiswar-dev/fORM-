@@ -3,6 +3,7 @@ import { FORM_TITLE_WEIGHTS, type FormTitleStyle, type FormTitleWeight, type Hex
 import { TITLE_SECTION_ID } from '@form/renderer';
 import { t } from '@/i18n';
 import type { Patch } from '@/lib/patch';
+import { useDraft } from '@/lib/useDraft';
 import { setTitleStyle } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Field, SectionTitle, SelectField } from '@/components/builder/inspector/parts';
@@ -55,6 +56,46 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
 
 const weightLabel = (weight: FormTitleWeight): string => t(M[`inspector.form_title_weight_${weight}`]);
 
+const MIN_SIZE = 20;
+const MAX_SIZE = 72;
+
+/**
+ * The title size in px. While typing, only a size inside the allowed range is stored: clamping every keystroke would
+ * turn the "5" of "52" into 20 before the "2" could be typed. Leaving the field clamps what is left.
+ */
+function TitleSize({ value, onChange }: { value: number | undefined; onChange: (sizePx: number | undefined) => void }) {
+  const stored = value === undefined ? '' : String(value);
+  const [text, setText] = useDraft(stored);
+  return (
+    <Input
+      type="number"
+      min={MIN_SIZE}
+      max={MAX_SIZE}
+      className="h-8"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const raw = e.target.value.trim();
+        if (!raw) onChange(undefined);
+        else {
+          const size = Number(raw);
+          if (Number.isInteger(size) && size >= MIN_SIZE && size <= MAX_SIZE) onChange(size);
+        }
+      }}
+      onBlur={() => {
+        const size = Number(text.trim());
+        if (!text.trim() || !Number.isFinite(size)) {
+          setText(stored);
+          return;
+        }
+        const clamped = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(size)));
+        setText(String(clamped));
+        onChange(clamped);
+      }}
+    />
+  );
+}
+
 export function TitleInspector() {
   const style = useDoc((d) => d.titleStyle) ?? {};
   const set = (patch: Patch<FormTitleStyle>) => setTitleStyle(patch);
@@ -65,21 +106,7 @@ export function TitleInspector() {
       <p className="text-[12px] text-muted-foreground">{t(M['inspector.form_title_theme_hint'])}</p>
       <ColorField label={t(M['inspector.form_title_text_color'])} value={style.textColor} fallback="#111111" onChange={(textColor) => set({ textColor })} />
       <Field label={t(M['inspector.form_title_size'])} hint={t(M['inspector.form_title_size_hint'])}>
-        <Input
-          type="number"
-          min={20}
-          max={72}
-          className="h-8"
-          value={style.sizePx ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value.trim();
-            if (!raw) set({ sizePx: undefined });
-            else {
-              const sizePx = Number(raw);
-              if (Number.isFinite(sizePx)) set({ sizePx: Math.min(72, Math.max(20, Math.round(sizePx))) });
-            }
-          }}
-        />
+        <TitleSize value={style.sizePx} onChange={(sizePx) => set({ sizePx })} />
       </Field>
       <Field label={t(M['inspector.form_title_align'])}>
         <ToggleGroup
