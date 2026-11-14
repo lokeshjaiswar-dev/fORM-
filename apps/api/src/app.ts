@@ -83,7 +83,6 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     createDb(config.database.url, {
       max: config.database.poolMax,
       applicationName: 'fr-api',
-      connectionTimeoutMs: 60_000,
       onError: (err) => app.log.error({ err }, 'idle database connection failed'),
     });
   if (!deps.db) app.addHook('onClose', () => handle.close());

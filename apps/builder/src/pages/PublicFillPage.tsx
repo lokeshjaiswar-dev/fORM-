@@ -19,6 +19,11 @@ const payloadSchema = z.object({
 
 type Load = { status: 'loading' } | { status: 'missing' } | { status: 'error'; message: string } | { status: 'ready'; version: RuntimeFormVersion; slug: string };
 
+/*
+ * A respondent is anonymous: these calls never carry the session cookie, even from a browser that is signed in to the
+ * builder (`credentials: 'omit'`), so the API's CSRF guard, which only looks at requests riding on that cookie, has
+ * nothing to refuse and a form's author can fill their own live form.
+ */
 export function PublicFillPage() {
   const { slug = '' } = useParams();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
@@ -28,7 +33,7 @@ export function PublicFillPage() {
   useEffect(() => {
     let live = true;
     const loadOnce = async (): Promise<Load> => {
-      const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(slug)}`, { headers: { accept: 'application/json' } });
+      const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(slug)}`, { credentials: 'omit', headers: { accept: 'application/json' } });
       if (res.status === 404) return { status: 'missing' };
       if (!res.ok) return { status: 'error', message: 'This form could not be loaded.' };
       const parsed = payloadSchema.safeParse(await res.json());
@@ -77,6 +82,7 @@ export function PublicFillPage() {
         onSubmit={async (payload: SubmitPayload) => {
           const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(load.slug)}/submissions`, {
             method: 'POST',
+            credentials: 'omit',
             headers: { accept: 'application/json', 'content-type': 'application/json' },
             body: JSON.stringify({
               formVersionId: payload.formVersionId,

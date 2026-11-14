@@ -33,6 +33,7 @@ export function publicUploader(slug: string): (request: UploadRequest) => Promis
   return async ({ blockId, purpose, file, name }) => {
     const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(slug)}/files`, {
       method: 'POST',
+      credentials: 'omit',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ blockId, purpose, name, mime: file.type || 'application/octet-stream', data: await blobToBase64(file) }),
     });

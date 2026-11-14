@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe('publicUploader', () => {
-  it('posts the file to the form’s own upload route, naming the field, with no client id and no cookie', async () => {
+  it('posts the file to the form’s own upload route, naming the field, with no client id, and never the session cookie', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(REF), { status: 200, headers: { 'content-type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchMock);
     const ref = await publicUploader('hello-1234')({ blockId: 'cv' as never, purpose: 'file', file: new Blob(['abc'], { type: 'text/plain' }), name: 'a.txt' });
@@ -35,7 +35,7 @@ describe('publicUploader', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/v1\/p\/hello-1234\/files$/);
     expect(init.method).toBe('POST');
-    expect(init.credentials).toBeUndefined();
+    expect(init.credentials).toBe('omit');
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(body).toEqual({ blockId: 'cv', purpose: 'file', name: 'a.txt', mime: 'text/plain', data: btoa('abc') });
     expect(body).not.toHaveProperty('id');

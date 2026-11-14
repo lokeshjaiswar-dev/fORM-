@@ -1,4 +1,7 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { FastifyInstance } from 'fastify';
@@ -129,6 +132,37 @@ describe('problem+json', () => {
     expect(lines.some((l) => l.msg === 'request failed' && JSON.stringify(l).includes('10.0.0.5'))).toBe(true);
   });
 
+  it('treats a database that cannot be reached like any other failure: a plain 500, no detail, and an audit record', async () => {
+    const written: Array<Record<string, unknown>> = [];
+    const dialect = new PgDialect();
+    const tx = {
+      execute: async (q: SQL) => {
+        const { sql, params } = dialect.sqlToQuery(q);
+        if (sql.startsWith('insert into audit_pending')) written.push(JSON.parse(params[1] as string) as Record<string, unknown>);
+      },
+    };
+    const auditDb = { db: { transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) } as unknown as Db, pool: {} as pg.Pool, close: async () => {} };
+    const { app: a } = await app(config(), { auditDb });
+    const messages = ['connect ECONNREFUSED 10.0.0.5:5432', 'timeout exceeded when trying to connect', 'Connection terminated unexpectedly'];
+    messages.forEach((message, i) => {
+      a.get(`/db-down-${i}`, { config: { auth: 'none' } }, async () => {
+        throw new Error(message);
+      });
+    });
+    for (const i of messages.keys()) {
+      const res = await a.inject({ url: `/db-down-${i}` });
+      expect(res.statusCode).toBe(500);
+      expect(res.json()).toMatchObject({ code: 'INTERNAL', title: 'Internal error' });
+      expect(res.json()).not.toHaveProperty('detail');
+      expect(res.body).not.toMatch(/database|10\.0\.0\.5|Publish|timeout/i);
+    }
+    expect(written.map((e) => [e['action'], e['reason']])).toEqual([
+      ['request.failed', 'INTERNAL'],
+      ['request.failed', 'INTERNAL'],
+      ['request.failed', 'INTERNAL'],
+    ]);
+  });
+
   it('audits 5xx and 403 responses on the audit pool, and answers even when that write fails', async () => {
     const written: Array<{ orgKey: string; event: Record<string, unknown> }> = [];
     const settings: unknown[] = [];
@@ -219,6 +253,12 @@ describe('security headers, CORS and logs', () => {
     expect(String(ok.headers['access-control-allow-headers'])).not.toContain('x-fr-dev-user');
     const evil = await preflight('https://evil.test');
     expect(evil.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('lets the builder origin read only the request id and the etag of a response', async () => {
+    const { app: a } = await app();
+    const res = await a.inject({ url: '/livez', headers: { origin: 'https://app.form.test' } });
+    expect(res.headers['access-control-expose-headers']).toBe('x-request-id, etag');
   });
 
   it('keys the client on the hop the trusted proxy added, not a client-chosen X-Forwarded-For', async () => {
@@ -339,6 +379,38 @@ describe('CSP violation reports', () => {
 });
 
 describe('OpenAPI', () => {
+  it('counts the routes that answer without a session, so a new public route is a decision', () => {
+    const root = fileURLToPath(new URL('.', import.meta.url));
+    const files = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? files(path.join(dir, e.name)) : /\.ts$/.test(e.name) && !/\.test\.ts$/.test(e.name) ? [path.join(dir, e.name)] : [],
+      );
+    const open: Record<string, number> = {};
+    for (const file of files(root)) {
+      const n = readFileSync(file, 'utf8').split("auth: 'none'").length - 1;
+      if (n > 0) open[path.relative(root, file).split(path.sep).join('/')] = n;
+    }
+    // Why each is public on purpose. app.ts: the API description. routes/health.ts: livez and readyz, no data.
+    // routes/meta.ts: the edition summary, no data. routes/csp-reports.ts: browsers send reports without credentials.
+    // modules/auth/routes.ts (11): methods, sign-up, link, verify-email, login, magic-link, magic-link/verify,
+    // password/forgot, password/reset, mfa/totp, mfa/recovery: they create the session or answer before there is one.
+    // modules/auth/oidc.ts (2): the OAuth start and callback. modules/account/routes.ts: the privacy notice shown
+    // before sign-up. modules/orgs/members.ts: the invite lookup by its secret token. routes/public.ts (3): a published
+    // form by slug, its file uploads, its answers: a respondent has no account (the anonymous writes are bound to the
+    // live version of one form and validated there).
+    expect(open).toEqual({
+      'app.ts': 1,
+      'modules/account/routes.ts': 1,
+      'modules/auth/oidc.ts': 2,
+      'modules/auth/routes.ts': 11,
+      'modules/orgs/members.ts': 1,
+      'routes/csp-reports.ts': 1,
+      'routes/health.ts': 2,
+      'routes/meta.ts': 1,
+      'routes/public.ts': 3,
+    });
+  });
+
   it('documents the routes and the security schemes', async () => {
     const { app: a } = await app();
     const res = await a.inject({ url: '/v1/openapi.json' });

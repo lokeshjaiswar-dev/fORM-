@@ -81,7 +81,7 @@ export function BuilderHeader() {
       else if (err instanceof ApiProblem) {
         setError(
           err.code === 'SERVICE_UNAVAILABLE' || err.code === 'INTERNAL'
-            ? 'The database did not answer in time. Try Publish again.'
+            ? 'This form could not be published right now. Try Publish again in a moment.'
             : err.message || 'This form could not be published.',
         );
       }

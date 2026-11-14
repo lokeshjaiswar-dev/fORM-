@@ -254,8 +254,8 @@ export function formRoutes(app: FastifyInstance, deps: { db: Db }): void {
 
       const merged = mergeForms(inputs, {
         newFormId: randomUUID(),
-        title: request.body.title,
-        resolutions: request.body.resolutions,
+        ...(request.body.title !== undefined ? { title: request.body.title } : {}),
+        ...(request.body.resolutions !== undefined ? { resolutions: request.body.resolutions } : {}),
         newId: () => randomUUID(),
       });
       if (!merged.ok) {
