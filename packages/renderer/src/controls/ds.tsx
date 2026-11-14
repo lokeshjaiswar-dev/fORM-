@@ -23,6 +23,17 @@ const NONE = '__fr_none__';
 
 export type DsOption = { value: string; label: string };
 
+/**
+ * `exactOptionalPropertyTypes`: the @dmacq/ui components declare `placeholder?: string`, which means "absent or a
+ * string", not "or undefined". Spread the props that might be unset through this so unset ones are left out
+ * instead of passed as `undefined`. The cast is safe: the loop copies only the entries whose value is not `undefined`.
+ */
+function omitUndefined<T extends Record<string, unknown>>(props: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(props)) if (value !== undefined) out[key] = value;
+  return out as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
 export function DsSelect({
   id,
   value,
@@ -108,18 +119,20 @@ export function DsCombobox({
 }) {
   return (
     <Combobox
-      id={id}
-      className={className}
       options={options.map((option) => ({ value: option.value, label: option.label }))}
-      value={value || undefined}
       onValueChange={(next) => onChange(next)}
-      placeholder={placeholder}
-      searchPlaceholder={searchPlaceholder ?? placeholder}
-      disabled={disabled}
-      aria-invalid={invalid}
-      aria-describedby={describedBy}
-      aria-required={required}
-      aria-label={ariaLabel}
+      {...omitUndefined({
+        id,
+        className,
+        value: value || undefined,
+        placeholder,
+        searchPlaceholder: searchPlaceholder ?? placeholder,
+        disabled,
+        'aria-invalid': invalid,
+        'aria-describedby': describedBy,
+        'aria-required': required,
+        'aria-label': ariaLabel,
+      })}
     />
   );
 }
@@ -153,18 +166,20 @@ export function DsMultiSelect({
 }) {
   return (
     <MultiSelect
-      id={id}
       options={options.map((option) => ({ value: option.value, label: option.label }))}
       value={value}
       onValueChange={onChange}
-      placeholder={placeholder}
-      searchPlaceholder={searchPlaceholder ?? placeholder}
-      disabled={disabled}
-      aria-invalid={invalid}
-      aria-describedby={describedBy}
-      aria-required={required}
-      aria-label={ariaLabel}
-      aria-labelledby={labelledBy}
+      {...omitUndefined({
+        id,
+        placeholder,
+        searchPlaceholder: searchPlaceholder ?? placeholder,
+        disabled,
+        'aria-invalid': invalid,
+        'aria-describedby': describedBy,
+        'aria-required': required,
+        'aria-label': ariaLabel,
+        'aria-labelledby': labelledBy,
+      })}
     />
   );
 }

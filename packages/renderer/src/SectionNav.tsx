@@ -76,7 +76,8 @@ export function SectionNav({
     >
       <ol className="fr-section-nav-list">
         {steps.map((step, i) => {
-          const interactive = Boolean(onSelect) && step.id !== SUBMIT_SECTION_ID;
+          const select = step.id !== SUBMIT_SECTION_ID ? onSelect : undefined;
+          const interactive = select !== undefined;
           const inner = (
             <>
               {nav.variant === 'dots' && (nav.chrome ?? 'cards') !== 'circles' ? <span className="fr-section-nav-dot" aria-hidden /> : null}
@@ -101,7 +102,7 @@ export function SectionNav({
                   className="fr-section-nav-step"
                   onClick={(event) => {
                     event.stopPropagation();
-                    onSelect(step.id);
+                    select(step.id);
                   }}
                 >
                   {inner}

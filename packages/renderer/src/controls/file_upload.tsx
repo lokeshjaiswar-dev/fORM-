@@ -78,7 +78,7 @@ export function FileUpload({ block, field }: ControlProps<'file_upload'>) {
         <ul className="fr-file-list" aria-live="polite">
           {files.map((f) => (
             <li key={f.fileId} className="fr-file">
-              <Chip kind="input" size="sm" onRemove={locked ? undefined : () => remove(f.fileId)} removeLabel={t(MESSAGES['file.remove'], { name: f.name })}>
+              <Chip kind="input" size="sm" {...(locked ? {} : { onRemove: () => remove(f.fileId) })} removeLabel={t(MESSAGES['file.remove'], { name: f.name })}>
                 {f.name}
               </Chip>
             </li>
@@ -89,7 +89,7 @@ export function FileUpload({ block, field }: ControlProps<'file_upload'>) {
                 kind="input"
                 size="sm"
                 color={p.error ? 'negative' : 'neutral'}
-                onRemove={p.error ? () => setPending((list) => list.filter((x) => x.key !== p.key)) : undefined}
+                {...(p.error ? { onRemove: () => setPending((list) => list.filter((x) => x.key !== p.key)) } : {})}
                 removeLabel={t(MESSAGES['file.remove'], { name: p.name })}
               >
                 {p.error ?? t(MESSAGES['file.uploading'], { name: p.name })}

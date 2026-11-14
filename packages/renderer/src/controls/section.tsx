@@ -19,7 +19,8 @@ export function Section({ block }: ControlProps<'section'>) {
       {children.map((child) => <Block key={child.id} block={child} />)}
     </div>
   );
-  if (!c.collapsible) {
+  /* A collapsible section needs a title to click on; without one it is just a group, always open. */
+  if (!c.collapsible || !c.title) {
     return (
       <section className="fr-section">
         {c.title ? <h2 className="fr-section-title"><RichTextView doc={c.title} inline resolve={resolve} /></h2> : null}

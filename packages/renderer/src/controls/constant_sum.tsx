@@ -10,7 +10,7 @@ export function ConstantSumField({ block, field }: ControlProps<'constant_sum'>)
   const { text } = usePipes();
   const answer = useAnswer(block);
   const values = answer.value ?? {};
-  const total = Object.values(values).reduce((a, n) => a + (typeof n === 'number' ? n : 0), 0);
+  const total = Object.values(values).reduce<number>((a, n) => a + (typeof n === 'number' ? n : 0), 0);
   const attrs = inputAttrs(field);
 
   const setPart = (id: OptionId, raw: string) => {

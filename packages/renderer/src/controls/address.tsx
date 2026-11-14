@@ -1,4 +1,4 @@
-import type { AddressPart, CountryCode } from '@form/schema';
+import type { AddressPart } from '@form/schema';
 import { COUNTRY_OPTIONS, IN_STATES } from '@form/registry';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
@@ -48,8 +48,8 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
         const label = block.config.sublabels?.[part] || t(MESSAGES[LABELS[part]]);
         const id = `${field.ids.input}-${part}`;
         if (part === 'country') {
-          const allowed = countryMode === 'list' ? new Set(block.config.country.allowed ?? []) : null;
-          const options = COUNTRY_OPTIONS.filter((o) => !allowed || allowed.has(o.id as CountryCode));
+          const allowed = countryMode === 'list' ? new Set<string>(block.config.country.allowed ?? []) : null;
+          const options = COUNTRY_OPTIONS.filter((o) => !allowed || allowed.has(o.id));
           return (
             <label key={part} className="fr-address-part" htmlFor={id}>
               <span>{label}</span>
