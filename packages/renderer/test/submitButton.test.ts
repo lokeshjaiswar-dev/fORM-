@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import type { HexColor } from '@form/schema';
 import { submitButtonPresentation } from '../src/submitButton.ts';
+import { id } from './build.ts';
 
 describe('submitButtonPresentation', () => {
   it('maps colours, size, shape and full width', () => {
     const present = submitButtonPresentation({
       label: 'Go',
       align: 'full',
-      bgColor: '#111111',
-      textColor: '#eeeeee',
+      bgColor: id<HexColor>('#111111'),
+      textColor: id<HexColor>('#eeeeee'),
       size: 'lg',
       shape: 'pill',
     }, true);

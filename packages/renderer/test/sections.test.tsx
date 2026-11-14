@@ -19,7 +19,7 @@ function sample() {
     ],
     [page('p1', ['s_personal', 'name']), page('p2', ['s_edu', 'school']), page('p3', ['s_pay', 'amount'])],
   );
-  return { ...def, behavior: { ...def.behavior, sectionNav: { ...DEFAULT_SECTION_NAV, currentMarker: 'pulse', includeSubmit: true } } };
+  return { ...def, behavior: { ...def.behavior, sectionNav: { ...DEFAULT_SECTION_NAV, currentMarker: 'pulse' as const, includeSubmit: true } } };
 }
 
 describe('section breaks', () => {

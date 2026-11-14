@@ -3,9 +3,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AVAILABLE_TYPES } from '@form/registry';
-import { ANSWER_VALUE_SCHEMAS, AnswersSchema, type AnswerValue, type FieldBlock, type ValueFieldType } from '@form/schema';
+import { ANSWER_VALUE_SCHEMAS, AnswersSchema, type AnswerValue, type ConsentItemId, type FieldBlock, type ValueFieldType } from '@form/schema';
 import { CONTROLS, FormRenderer, type SubmitPayload } from '../src/index.ts';
-import { content, fakeUploader, field, form, page, props, rich, runtime } from './build.ts';
+import { content, fakeUploader, field, form, id, page, props, rich, runtime } from './build.ts';
 
 /*
  * The contract per available type (WP-0.10): render → answer → validate → clear → payload shape. Each case answers
@@ -148,7 +148,7 @@ const CASES: Case[] = [
     clear: (user) => user.click(screen.getByRole('checkbox')),
     expected: (answer) => {
       expect(answer.type).toBe('consent');
-      if (answer.type === 'consent') expect(answer.value.items.item_1).toBe(true);
+      if (answer.type === 'consent') expect(answer.value.items[id<ConsentItemId>('item_1')]).toBe(true);
     },
   },
   {
