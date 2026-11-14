@@ -44,7 +44,8 @@ describe('Form settings Logic', () => {
     await user.click(screen.getByRole('button', { name: 'Add a check' }));
     panel.unmount();
     render(<FormPreview />);
-    fireEvent.change(screen.getByRole('combobox', { name: /State/ }), { target: { value: 'mh' } });
+    await user.click(screen.getByRole('combobox', { name: /State/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Maharashtra' }));
     const gstin = screen.getByRole('textbox', { name: /GSTIN/ });
     await user.type(gstin, '29AAAAA0000A1Z5');
     await user.click(screen.getByRole('button', { name: 'Submit' }));

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useSessionStore } from '@/auth/client';
 import { NoticePage } from './NoticePage';
@@ -150,7 +151,8 @@ describe('/account/privacy', () => {
     at('/account/privacy');
     const requests = await screen.findByRole('region', { name: 'Questions, corrections and complaints' });
     expect(await within(requests).findByText('Write to the Grievance Officer at privacy@form.test, or send a request here. We answer within 90 days.')).toBeInTheDocument();
-    fireEvent.change(within(requests).getByLabelText('Kind of request'), { target: { value: 'correction' } });
+    await userEvent.setup().click(within(requests).getByRole('combobox', { name: 'Kind of request' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Correct my data' }));
     fireEvent.change(within(requests).getByLabelText('Your request'), { target: { value: 'Fix my name.' } });
     answers['GET /v1/me/grievances'] = () => ({ status: 200, body: { items: [GRIEVANCE] } });
     fireEvent.click(within(requests).getByRole('button', { name: 'Send request' }));
