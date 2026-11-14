@@ -100,8 +100,18 @@ export interface SubmitButtonStyle {
   shape?: SubmitButtonShape;
 }
 
+/**
+ * Spelled as a flat object, not `{ … } & SubmitButtonStyle`: an intersection is not identical to the object that
+ * `SubmitButtonStyleSchema.extend({ … })` infers, so the twin assertion (`toEqualTypeOf`) would fail.
+ */
+interface SubmitBehavior extends SubmitButtonStyle {
+  label: LabelText;
+  align: 'left' | 'center' | 'right' | 'full';
+  printButton?: boolean;
+}
+
 export interface Behavior {
-  submit: { label: LabelText; align: 'left' | 'center' | 'right' | 'full'; printButton?: boolean } & SubmitButtonStyle; // FLD-50
+  submit: SubmitBehavior; // FLD-50
   navigation: { allowBack: boolean; showPageTitles: boolean; autoAdvance?: boolean; keyboardShortcuts?: boolean };
   /** Present when the form uses section breaks; omitted on older forms. */
   sectionNav?: SectionNav;
