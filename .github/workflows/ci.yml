@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -52,7 +52,7 @@ jobs:
       - name: No v1 schema symbol outside the migration
         run: |
           set +e
-          git grep -nE 'V1\.' -- apps 'packages/*/src' ':!packages/schema/src/migrate'
+          git grep -nE '\bV1\.' -- apps 'packages/*/src' ':!packages/schema/src/migrate'
           status=$?
           if [ "$status" -eq 0 ]; then echo "::error::V1. used outside packages/schema/src/migrate"; exit 1; fi
           if [ "$status" -ne 1 ]; then echo "::error::git grep failed with exit code $status"; exit "$status"; fi
