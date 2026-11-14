@@ -44,6 +44,7 @@ describe('builder actions', () => {
 
   it('addRepeatingGroup inserts the group and its child fields', () => {
     const groupId = addRepeatingGroup({ type: 'repeating_group', configOverrides: {} });
+    if (!groupId) throw new Error('the repeating group was not added');
     const group = get(groupId);
     expect(group.type).toBe('repeating_group');
     if (group.type !== 'repeating_group') return;
@@ -57,6 +58,7 @@ describe('builder actions', () => {
 
   it('addChildBlock nests a field in a section', () => {
     const sectionId = addBlock({ type: 'section', configOverrides: {} });
+    if (!sectionId) throw new Error('the section was not added');
     const child = addChildBlock(sectionId, { type: 'short_text', configOverrides: {} });
     const section = get(sectionId);
     expect(get(child).type).toBe('short_text');

@@ -184,7 +184,7 @@ describe('routes', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta' }));
     fireEvent.click(screen.getByRole('button', { name: 'Merge selected' }));
-    expect(await screen.findByDisplayValue('Alpha + Beta', OPENS)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('Alpha + Beta', {}, OPENS)).toBeInTheDocument();
     expect(path()?.startsWith('/builder/')).toBe(true);
   });
 
@@ -201,7 +201,7 @@ describe('routes', () => {
     expect(await screen.findByRole('heading', { name: 'These fields cannot be combined' }, OPENS)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('radio')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Merge with these choices' }));
-    expect(await screen.findByDisplayValue(/Test form/, OPENS)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/Test form/, {}, OPENS)).toBeInTheDocument();
   });
 
   it('BL-143: reopening a v1 draft migrates it once, saves it back as v2 and shows what changed', async () => {

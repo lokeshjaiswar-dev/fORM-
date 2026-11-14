@@ -41,7 +41,7 @@ describe('InlineEditor', () => {
     await waitFor(() => {
       const sel = document.getSelection();
       expect(sel?.toString()).toBe('');
-      expect(editable(container).contains(sel?.anchorNode)).toBe(true);
+      expect(editable(container).contains(sel?.anchorNode ?? null)).toBe(true);
     });
   });
 

@@ -123,7 +123,7 @@ describe('registry views (FND-03)', () => {
     const user = userEvent.setup();
     const input = screen.getByLabelText('Section name');
     await user.clear(input);
-    expect((doc().blocks.s1 as { config: { name: string } }).config.name).toBe('');
+    expect((doc().blocks['s1' as BlockId] as { config: { name: string } }).config.name).toBe('');
     expect(input).toHaveValue('');
   });
 

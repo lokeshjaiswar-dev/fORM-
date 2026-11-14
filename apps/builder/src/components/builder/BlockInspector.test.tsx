@@ -214,7 +214,7 @@ describe('BlockInspector validation', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/names' } });
     expect(get('emp_name').apiValidation).toEqual({ url: 'https://hr.example.com/names', method: 'POST', parser: 'json' });
     await user.click(screen.getByRole('radio', { name: 'GET' }));
-    expect(get('emp_name').apiValidation?.method).toBe('GET');
+    expect(get('emp_name').apiValidation).toMatchObject({ method: 'GET' });
   });
 
   it('enables API validation on any answer field', async () => {
