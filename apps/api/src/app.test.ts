@@ -64,7 +64,8 @@ describe('health', () => {
     const echoed = await a.inject({ url: '/livez', headers: { 'x-request-id': 'req-123' } });
     expect(echoed.headers['x-request-id']).toBe('req-123');
     const replaced = await a.inject({ url: '/livez', headers: { 'x-request-id': 'bad id\nwith newline' } });
-    expect(replaced.headers['x-request-id']).not.toContain('bad');
+    // Replaced by a fresh uuid (a uuid is hex, so it may contain "bad": check the shape, not the absence of the text).
+    expect(replaced.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('readyz is ok when the database answers and the clock is in range or unchecked', async () => {
