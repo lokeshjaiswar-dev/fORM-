@@ -36,6 +36,8 @@ function RequiredMark() {
   return (
     <>
       <span className="fr-required" aria-hidden="true"><span>*</span></span>
+      {/* The space keeps the accessible name "name (required)", not "name(required)". */}
+      {' '}
       <span className="fr-sr-only">{t(MESSAGES['field.required'])}</span>
     </>
   );
