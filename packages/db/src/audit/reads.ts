@@ -146,10 +146,17 @@ export const auditReads = {
   },
 
   /** An export request; `reason` is required when it includes sensitive fields. */
-  async export(tx: Tx, ctx: ReadCtx, i: { formId: string; exportId: string; format: string; includeSensitive: boolean; reason?: string | null }): Promise<void> {
+  async export(
+    tx: Tx,
+    ctx: ReadCtx,
+    i: { formId: string; exportId: string; format: string; includeSensitive: boolean; reason?: string | null; client?: ReadClient },
+  ): Promise<void> {
     if (i.includeSensitive && !i.reason?.trim()) throw new TypeError('auditReads.export: includeSensitive needs a reason');
     await audit.append(tx, ctx.orgId, {
       ...auditActor(ctx),
+      sessionId: i.client?.sessionId ?? null,
+      actorIpHash: i.client?.actorIpHash ?? null,
+      actorUa: i.client?.actorUa ?? null,
       action: 'submission.exported',
       resourceType: 'export',
       resourceId: i.exportId,

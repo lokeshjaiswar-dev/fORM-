@@ -174,6 +174,23 @@ describe('audited reads over many ids (BL-192)', () => {
     await expect(auditReads.gridPage(tx, ctx, { formId: FORM, submissionIds: uuids(MAX_AUDITED_PAGE_IDS + 1), page: 1, filtered: false })).rejects.toThrow(RangeError);
   });
 
+  it('files an export request with the session and the keyed address like the other reads, and refuses sensitive fields without a reason', async () => {
+    const { tx, events } = recorder();
+    const client = { sessionId: '0190f5a2-7c1e-7a00-8000-0000000000a1', actorIpHash: 'ab'.repeat(16), actorUa: 'vitest' };
+    await auditReads.export(tx, ctx, { formId: FORM, exportId: '0190f5a2-7c1e-7a00-8000-0000000000e1', format: 'xlsx', includeSensitive: true, reason: 'DSR #12', client });
+    const [event] = events as unknown as Array<Record<string, unknown>>;
+    expect(event).toMatchObject({
+      action: 'submission.exported',
+      resourceType: 'export',
+      reason: 'DSR #12',
+      sessionId: client.sessionId,
+      actorIpHash: client.actorIpHash,
+      actorUa: 'vitest',
+      metadata: { format: 'xlsx', includeSensitive: true },
+    });
+    await expect(auditReads.export(tx, ctx, { formId: FORM, exportId: '0190f5a2-7c1e-7a00-8000-0000000000e2', format: 'csv', includeSensitive: true, reason: '  ' })).rejects.toThrow(TypeError);
+  });
+
   it('chunks by the real size of the ids, so long ids and short ones both fit', () => {
     const long = Array.from({ length: 200 }, (_, i) => `${String(i).padStart(4, '0')}-${'x'.repeat(300)}`);
     for (const ids of [uuids(500), long, ['a', ...long, 'b'], []]) {
