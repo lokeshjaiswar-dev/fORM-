@@ -4,6 +4,7 @@ import { applyDocumentOps } from '@form/templates-core';
 import { APP_IDS, KEY_PATTERN, childrenOf, isField, placementOf, takenKeys, type IdSource } from '@/lib/definition';
 import { deleteBlock, duplicateBlock, moveBlock, pasteBlock, placeBeside, setWidth, updateBlock } from '@/state/commands/blocks';
 import { mergePage, splitPage } from '@/state/commands/pages';
+import { addReviewUnit, removeReviewUnit, renameReviewUnit, reviewPrecondition } from '@/state/commands/review';
 import { ruleTargets, syncInitiallyHidden } from '@/state/commands/rules';
 import { CommandSchema, type Command } from '@/state/commands/types';
 import { commit } from '@/state/history';
@@ -103,6 +104,10 @@ function precondition(doc: FormDefinition, command: Command): string | null {
       return doc.pages.findIndex((p) => p.id === command.pageId) > 0 ? null : `page '${command.pageId}' has no page before it`;
     case 'remove_rule':
       return doc.logic.rules.some((r) => r.id === command.id) ? null : `no rule '${command.id}'`;
+    case 'add_review_unit':
+    case 'rename_review_unit':
+    case 'remove_review_unit':
+      return reviewPrecondition(doc, command);
     case 'replace_document':
       return command.doc.formId === doc.formId ? null : `document '${command.doc.formId}' is not '${doc.formId}'`;
     default:
@@ -201,6 +206,15 @@ export function applyCommand(doc: FormDefinition, input: Command, ids: IdSource 
         if (rule) syncInitiallyHidden(draft, ruleTargets(rule));
         break;
       }
+      case 'add_review_unit':
+        addReviewUnit(draft, command.unit);
+        break;
+      case 'rename_review_unit':
+        renameReviewUnit(draft, command.id, command.name);
+        break;
+      case 'remove_review_unit':
+        removeReviewUnit(draft, command.id);
+        break;
     }
   });
   if (command.type === 'update_block') {
@@ -271,6 +285,8 @@ export function coalesceKey(command: Command, doc: FormDefinition): string | nul
       const rule = doc.logic.rules.find((r) => r.id === command.rule.id);
       return rule ? typingKey(`rule:${rule.id}`, rule, command.rule as unknown as Plain) : null;
     }
+    case 'rename_review_unit':
+      return `review_unit:${command.id}`;
     default:
       return null;
   }

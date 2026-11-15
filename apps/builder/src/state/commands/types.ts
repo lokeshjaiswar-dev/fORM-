@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   BehaviorSchema, BlockIdSchema, BlockSchema, DocumentOpSchema, EndingIdSchema, EndingSchema, FormDefinitionSchema, FormTitleStyleSchema, PageIdSchema, PurposeSchema,
-  RichDocSchema, RuleIdSchema, RuleSchema, ThemeSchema,
+  ReviewUnitIdSchema, ReviewUnitSchema, RichDocSchema, RuleIdSchema, RuleSchema, ThemeSchema,
   type Behavior, type Block, type BlockId, type DocumentOp, type Ending, type EndingId, type FormDefinition, type FormTitleStyle, type PageId, type Purpose,
-  type RichDoc, type Rule, type RuleId, type Theme,
+  type ReviewUnit, type ReviewUnitId, type RichDoc, type Rule, type RuleId, type Theme,
 } from '@form/schema';
 
 /**
@@ -48,6 +48,9 @@ export type Command =
   | { type: 'merge_page'; pageId: PageId }
   | { type: 'set_rule'; rule: Rule }
   | { type: 'remove_rule'; id: RuleId }
+  | { type: 'add_review_unit'; unit: ReviewUnit }
+  | { type: 'rename_review_unit'; id: ReviewUnitId; name: string }
+  | { type: 'remove_review_unit'; id: ReviewUnitId }
   | { type: 'replace_document'; doc: FormDefinition };
 
 const index = z.number().int().nonnegative();
@@ -77,5 +80,8 @@ export const CommandSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('merge_page'), pageId: PageIdSchema }),
   z.strictObject({ type: z.literal('set_rule'), rule: RuleSchema }),
   z.strictObject({ type: z.literal('remove_rule'), id: RuleIdSchema }),
+  z.strictObject({ type: z.literal('add_review_unit'), unit: ReviewUnitSchema }),
+  z.strictObject({ type: z.literal('rename_review_unit'), id: ReviewUnitIdSchema, name: z.string() }),
+  z.strictObject({ type: z.literal('remove_review_unit'), id: ReviewUnitIdSchema }),
   z.strictObject({ type: z.literal('replace_document'), doc: FormDefinitionSchema }),
 ]);
