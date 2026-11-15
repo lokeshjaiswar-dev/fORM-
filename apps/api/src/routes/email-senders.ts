@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { audit, auditActor, emailSenders, notifications, secrets, users, withTenant, type Db, type Tx } from '@form/db';
-import type { Mailer, OrgSecrets } from '@form/ports';
+import { isPortError, type Mailer, type OrgSecrets } from '@form/ports';
 import { accountOf, clientInfo, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
 import { hex } from '../modules/auth/crypto.ts';
@@ -88,6 +88,16 @@ export function scrubMailError(message: string): string {
     .trim();
   return cleaned.length > 300 ? `${cleaned.slice(0, 297)}...` : cleaned;
 }
+
+/**
+ * What a test send shows and stores when the egress guard refused the relay. The guard's own text names the address the
+ * host resolved to: on SaaS anyone may own an org, point a sender at an internal name and press Test, so returning it (or
+ * keeping it in `last_test_error`) would answer "what is the private address of this name?". The text goes to the server
+ * log only. A name that did not resolve reaches here as `unavailable` ("<host> did not resolve"), which names only the
+ * host the caller typed.
+ */
+export const MAIL_ADDRESS_REFUSED = 'The mail server address is not allowed: private, internal and other addresses this server may not connect to are refused.';
+export const MAIL_ADDRESS_UNRESOLVED = 'The mail server name did not resolve.';
 
 const smtpUrlField = z
   .string()
@@ -443,7 +453,10 @@ export function emailSenderRoutes(app: FastifyInstance, deps: EmailSenderRouteDe
       try {
         const mailer = deps.orgMailer(tenant.orgId);
         const verified = await mailer.verify(sender.smtpSecretId);
-        if (!verified.ok) {
+        if (!verified.ok && verified.code === 'egress_denied') {
+          request.log.warn({ guard: verified.error }, 'email sender test: the egress guard refused the relay');
+          error = MAIL_ADDRESS_REFUSED;
+        } else if (!verified.ok) {
           error = scrubMailError(verified.error ?? '') || 'The mail server did not accept the connection.';
         } else {
           await mailer.send({
@@ -458,7 +471,13 @@ export function emailSenderRoutes(app: FastifyInstance, deps: EmailSenderRouteDe
         const code = (err as { code?: unknown }).code;
         // Only the class of the failure is logged: the error text can name the relay.
         request.log.warn({ code: typeof code === 'string' ? code : undefined, name: (err as Error | undefined)?.name }, 'email sender test message failed');
-        error = scrubMailError(err instanceof Error ? err.message : '') || 'The test message could not be sent.';
+        if (isPortError(err, 'egress_denied')) {
+          // The guard's text holds the resolved address (see MAIL_ADDRESS_REFUSED): the log keeps it, the answer never does.
+          request.log.warn({ guard: err.message }, 'email sender test: the egress guard refused the relay');
+          error = err.cause !== undefined ? MAIL_ADDRESS_UNRESOLVED : MAIL_ADDRESS_REFUSED;
+        } else {
+          error = scrubMailError(err instanceof Error ? err.message : '') || 'The test message could not be sent.';
+        }
       }
 
       const ok = error === null;

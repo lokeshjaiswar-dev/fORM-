@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 import nodemailer from 'nodemailer';
-import { MailDeliveryError, PortError, type EgressGuard, type MailAddress, type MailMessage, type MailRefusal, type Mailer } from '@form/ports';
+import { MailDeliveryError, PortError, isPortError, type EgressGuard, type MailAddress, type MailMessage, type MailRefusal, type Mailer } from '@form/ports';
 import { hasControlChars } from '../text.ts';
 
 /** Per-org SMTP senders (`email_senders.smtp_secret_id`): the secret behind a ref is an SMTP URL with credentials. */
@@ -151,7 +151,18 @@ export function createSmtpMailer(o: SmtpMailerOptions = {}): Mailer {
       url = resolved;
       guard = o.senders!.egress;
     }
-    const pinned = guard ? (await guard.assertAllowed(new URL(url))).pinnedIp : undefined;
+    const target = new URL(url);
+    let pinned: string | undefined;
+    if (guard) {
+      try {
+        pinned = (await guard.assertAllowed(target)).pinnedIp;
+      } catch (e) {
+        // The guard keeps the resolver's error as the cause when the name did not resolve: that may be a DNS blip, not a
+        // refusal, so it is an outage worth a retry (as `egressHttp` does). A refusal of the address stays `egress_denied`.
+        if (isPortError(e, 'egress_denied') && e.cause !== undefined) throw new PortError('unavailable', `${target.hostname} did not resolve`, { cause: e });
+        throw e;
+      }
+    }
     return nodemailer.createTransport(transportOptions(url, timeout, pinned));
   }
 
@@ -192,7 +203,8 @@ export function createSmtpMailer(o: SmtpMailerOptions = {}): Mailer {
         await t.verify();
         return { ok: true };
       } catch (e) {
-        return { ok: false, error: (e as Error).message };
+        // The code tells a caller what kind of failure it was without parsing the text; see MailVerifyResult for why that matters.
+        return { ok: false, error: (e as Error).message, ...(e instanceof PortError ? { code: e.code } : {}) };
       } finally {
         t?.close();
       }

@@ -4,10 +4,11 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createKeyfileKeyProvider, createOrgSecrets } from '@form/adapters/kms';
 import { provision } from '@form/db';
-import { PortError, type MailMessage, type Mailer, type OrgSecrets } from '@form/ports';
+import { PortError, type MailMessage, type MailVerifyResult, type Mailer, type OrgSecrets } from '@form/ports';
 import { createTestDatabase } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
 import { parseConfig } from '../src/config.ts';
+import { MAIL_ADDRESS_REFUSED, MAIL_ADDRESS_UNRESOLVED } from '../src/routes/email-senders.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 import { draftWith, fieldBlock } from './publishable-draft.ts';
 
@@ -55,7 +56,7 @@ const mailer = {
   orgs: [] as string[],
   verifyCalls: [] as Array<string | undefined>,
   sent: [] as MailMessage[],
-  verifyResult: { ok: true } as { ok: boolean; error?: string },
+  verifyResult: { ok: true } as MailVerifyResult,
   sendError: undefined as Error | undefined,
   reset() {
     this.orgs = [];
@@ -302,6 +303,42 @@ describe('the test send', () => {
     const withBody = await call('POST', `/v1/email-senders/${made.id}/test`, { body: { to: 'attacker@example.test' } });
     expect(withBody.statusCode, withBody.body).toBe(200);
     expect(mailer.sent.at(-1)!.to).toEqual([{ address: emailOf(user.owner) }]);
+  });
+
+  it('never returns or stores the address the egress guard resolved the relay to: a fixed sentence instead (no DNS oracle for internal names)', async () => {
+    const made = await create();
+    const IPV4 = /\b\d{1,3}(?:\.\d{1,3}){3}\b/;
+    const IPV6 = /\b[0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7}\b|::1\b/i;
+    const noAddress = async (res: { body: string }) => {
+      const row = (await senderRow(made.id))!;
+      for (const text of [res.body, row.last_test_error ?? '']) {
+        expect(text).not.toMatch(IPV4);
+        expect(text).not.toMatch(IPV6);
+        expect(text).not.toContain('mail.internal');
+      }
+      return row;
+    };
+
+    // verify(): the guard's exact text for an internal name on SaaS.
+    mailer.reset();
+    mailer.verifyResult = { ok: false, code: 'egress_denied', error: 'egress to smtp://mail.internal:25 denied: 10.42.7.13 is not a public address' };
+    const viaVerify = await call('POST', `/v1/email-senders/${made.id}/test`);
+    expect(viaVerify.json()).toMatchObject({ ok: false, verifiedAt: null, error: MAIL_ADDRESS_REFUSED });
+    expect((await noAddress(viaVerify)).last_test_error).toBe(MAIL_ADDRESS_REFUSED);
+
+    // send() throwing the guard's refusal (an IPv6 answer this time).
+    mailer.reset();
+    mailer.sendError = new PortError('egress_denied', 'egress to smtp://mail.internal:25 denied: fd00:7:13::25 is not a public address');
+    const viaSend = await call('POST', `/v1/email-senders/${made.id}/test`);
+    expect(viaSend.json()).toMatchObject({ ok: false, error: MAIL_ADDRESS_REFUSED });
+    await noAddress(viaSend);
+
+    // A name that did not resolve: the guard keeps the resolver's error as the cause, and the answer says so without the guard's text.
+    mailer.reset();
+    mailer.sendError = new PortError('egress_denied', 'egress to mail.internal denied: it does not resolve', { cause: new Error('getaddrinfo ENOTFOUND mail.internal') });
+    const unresolved = await call('POST', `/v1/email-senders/${made.id}/test`);
+    expect(unresolved.json()).toMatchObject({ ok: false, error: MAIL_ADDRESS_UNRESOLVED });
+    await noAddress(unresolved);
   });
 
   it('records a send that throws as a failed test, with the error scrubbed of addresses, and no echo of what it said', async () => {

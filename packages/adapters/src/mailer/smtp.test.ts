@@ -92,7 +92,7 @@ describe('SMTP mailer', () => {
     it('refuses an unknown sender', async () => {
       const mailer = createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}`, senders: senders() });
       await expectPortError(mailer.send({ ...message, senderSecretRef: 'secret-other' }), 'not_found');
-      expect(await mailer.verify('secret-other')).toEqual({ ok: false, error: 'no such SMTP sender' });
+      expect(await mailer.verify('secret-other')).toEqual({ ok: false, error: 'no such SMTP sender', code: 'not_found' });
       await expectPortError(createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}` }).send({ ...message, senderSecretRef: 'secret-acme' }), 'not_found');
     });
 
@@ -100,7 +100,24 @@ describe('SMTP mailer', () => {
       const before = orgSink.messages.length;
       const mailer = createSmtpMailer({ url: `smtp://${sink.host}:${sink.port}`, senders: senders(createEgressGuard({ policy: 'open' })) });
       await expectPortError(mailer.send({ ...message, senderSecretRef: 'secret-acme' }), 'egress_denied');
+      // verify says which kind of failure it was, so a caller can show a fixed sentence and not the guard's text (which names the address).
+      expect(await mailer.verify('secret-acme')).toEqual({ ok: false, error: expect.stringMatching(/denied/), code: 'egress_denied' });
       expect(orgSink.messages.length).toBe(before);
+    });
+
+    it('treats an org relay whose name does not resolve as an outage to retry, not a refusal, with no address in the text', async () => {
+      const unresolved = createEgressGuard({
+        policy: 'open',
+        resolve: async () => {
+          throw Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' });
+        },
+      });
+      const mailer = createSmtpMailer({
+        url: `smtp://${sink.host}:${sink.port}`,
+        senders: { resolve: async () => 'smtp://relay.nowhere.example:25', egress: unresolved },
+      });
+      await expectPortError(mailer.send({ ...message, senderSecretRef: 'secret-acme' }), 'unavailable');
+      expect(await mailer.verify('secret-acme')).toEqual({ ok: false, error: 'relay.nowhere.example did not resolve', code: 'unavailable' });
     });
   });
 

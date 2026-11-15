@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { disclosures, emailMessages, emailSenders, forms, isUuid, notifications, txExecutor, uuidV7Time, type Tx } from '@form/db';
-import { JOB_POLICIES, PortError, toIsoInstant, type MailMessage, type SubmissionEvent } from '@form/ports';
+import { JOB_POLICIES, PortError, isPortError, toIsoInstant, type MailMessage, type SubmissionEvent } from '@form/ports';
 import { NotificationConfigSchema, type NotificationConfig } from '@form/schema';
 import { disclosableFields, disclosedFieldKeys, recordDisclosure, type DisclosableField } from '../effects/disclosure.ts';
 import type { EffectDeps } from '../effects/deps.ts';
@@ -275,11 +275,20 @@ type Prepared =
 
 const MAX_ERROR = 1000;
 
+/** What the delivery log says when the egress guard refused the relay: never the guard's own text (see scrubError). */
+export const MAIL_ADDRESS_REFUSED = 'the mail server address is not allowed (private, internal or not permitted)';
+/** The guard could not resolve the relay's name: perhaps a DNS blip, so it is retried like an outage. */
+export const MAIL_ADDRESS_UNRESOLVED = 'the mail server name did not resolve';
+
 /**
  * The text a delivery log row may keep of an error: its code and message with every URL (an SMTP URL carries credentials)
  * and every address (an SMTP answer often repeats the recipient) replaced, cut to what the column holds.
  */
 function scrubError(err: unknown): string {
+  // The egress guard's text names the address the relay's host resolved to. On SaaS anyone may own an org and point a
+  // sender at an internal name, and every member with submissions.read sees this row in the Email log: keeping the text
+  // would tell them the private address of that name. A fixed sentence only; the guard's text goes to the worker log.
+  if (isPortError(err, 'egress_denied')) return `egress_denied: ${err.cause !== undefined ? MAIL_ADDRESS_UNRESOLVED : MAIL_ADDRESS_REFUSED}`;
   const code = err instanceof PortError ? err.code : 'error';
   const message = err instanceof Error ? err.message : String(err);
   const scrubbed = replaceControls(
@@ -297,7 +306,8 @@ class EmailSendError extends Error {
 }
 
 /** Only a server that was not reachable, or answered "try later", is worth another attempt; a refusal or a bad message is final. Anything unexpected is retried. */
-const isTemporary = (err: unknown): boolean => !(err instanceof PortError) || err.code === 'unavailable';
+const isTemporary = (err: unknown): boolean =>
+  !(err instanceof PortError) || err.code === 'unavailable' || (err.code === 'egress_denied' && err.cause !== undefined);
 
 /** `email.send` for one message: the first unit of work. Reads the log row, renders the message again and marks the row `sending`. */
 async function prepareSend(deps: EffectDeps, tx: Tx, orgId: string, id: string): Promise<Prepared> {
@@ -466,6 +476,7 @@ function emailSend(deps: EffectDeps) {
       }
 
       const error = scrubError(failure);
+      if (isPortError(failure, 'egress_denied')) log.warn({ emailMessageId: id, guard: failure.message }, 'email.send: the egress guard refused the relay');
       if (!isTemporary(failure)) {
         await inTenant((tx) => tx.update(emailMessages).set({ status: 'failed', attempts: sql`${emailMessages.attempts} + 1`, lastError: error }).where(where));
         log.warn({ emailMessageId: id, attempt: job.attempt, error }, 'email.send: refused for good; not retrying');

@@ -104,8 +104,8 @@ describe('the org mailer on a real database and key', () => {
     expect(await senders.at(-1)!.resolve(secretB)).toBeUndefined();
     expect(unwraps).toEqual([]);
     // Through the real mailer: no such sender, the same answer as for an id that was never a secret.
-    expect(await mailer.verify(secretB)).toEqual({ ok: false, error: 'no such SMTP sender' });
-    expect(await mailer.verify(randomUUID())).toEqual({ ok: false, error: 'no such SMTP sender' });
+    expect(await mailer.verify(secretB)).toEqual({ ok: false, error: 'no such SMTP sender', code: 'not_found' });
+    expect(await mailer.verify(randomUUID())).toEqual({ ok: false, error: 'no such SMTP sender', code: 'not_found' });
     await expect(mailer.send({ from: { address: 'a@org-a.test' }, to: [{ address: 'x@y.test' }], subject: 's', text: 't', senderSecretRef: secretB })).rejects.toMatchObject({
       code: 'not_found',
     });
@@ -126,7 +126,7 @@ describe('the org mailer on a real database and key', () => {
     const mailer = mailerFor(orgA);
     const checked = await mailer.verify(secretA);
     // The secret was opened (this is the egress check on its URL), and the guard said no: a private address, nothing allowlisted.
-    expect(checked).toEqual({ ok: false, error: expect.stringMatching(/^egress to smtp:\/\/127\.0\.0\.1:2525 denied/) });
+    expect(checked).toEqual({ ok: false, error: expect.stringMatching(/^egress to smtp:\/\/127\.0\.0\.1:2525 denied/), code: 'egress_denied' });
     expect(JSON.stringify(checked)).not.toMatch(/org-a-pass|org-a-user/);
   });
 });

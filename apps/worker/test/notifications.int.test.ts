@@ -11,7 +11,7 @@ import { unavailableOrgSecrets, type EffectDeps } from '../src/effects/deps.ts';
 import { resolveRecipients } from '../src/effects/email/recipients.ts';
 import { jobGuard } from '../src/guard.ts';
 import { createEffectFanout, createEffectJobs, createSubmissionFanout, type JobDefinition } from '../src/jobs/index.ts';
-import { notificationsConsumer } from '../src/jobs/notifications.ts';
+import { MAIL_ADDRESS_REFUSED, MAIL_ADDRESS_UNRESOLVED, notificationsConsumer } from '../src/jobs/notifications.ts';
 import { runJob, startWorker } from '../src/runtime.ts';
 import { answered, compiledOf, definitionOf, emailDoc, maskedField, MARKETING, notificationConfig, omittedField, para, personal, pipe, RESPOND, table, text } from './email-fixtures.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
@@ -641,6 +641,26 @@ describe('email.send', () => {
     await send(a, m.id);
     expect(await messageById(m.id)).toMatchObject({ status: 'failed', attempts: 1 });
     expect(mail.sent).toHaveLength(1);
+  });
+
+  it('keeps no address the egress guard resolved the relay to in last_error, which every reader of the Email log sees (no DNS oracle)', async () => {
+    const refused = await queued();
+    mail.script.push(new PortError('egress_denied', 'egress to smtp://mail.internal:25 denied: 10.42.7.13 is not a public address'));
+    await send(a, refused.id);
+    const row = await messageById(refused.id);
+    expect(row).toMatchObject({ status: 'failed', attempts: 1, last_error: `egress_denied: ${MAIL_ADDRESS_REFUSED}` });
+    expect(row.last_error).not.toMatch(/\d{1,3}(?:\.\d{1,3}){3}|mail\.internal/);
+
+    const v6 = await queued();
+    mail.script.push(new PortError('egress_denied', 'egress to smtp://mail.internal:25 denied: fd00:7:13::25 is not a public address'));
+    await send(a, v6.id);
+    expect((await messageById(v6.id)).last_error).toBe(`egress_denied: ${MAIL_ADDRESS_REFUSED}`);
+
+    // A name that did not resolve (the guard keeps the resolver's error as the cause) may be a DNS blip: retried, and still no guard text.
+    const unresolved = await queued();
+    mail.script.push(new PortError('egress_denied', 'egress to mail.internal denied: it does not resolve', { cause: new Error('getaddrinfo ENOTFOUND mail.internal') }));
+    await expect(send(a, unresolved.id)).rejects.toThrow();
+    expect(await messageById(unresolved.id)).toMatchObject({ status: 'retrying', attempts: 1, last_error: `egress_denied: ${MAIL_ADDRESS_UNRESOLVED}` });
   });
 
   it('an unexpected error is treated as temporary and retried', async () => {

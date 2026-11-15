@@ -1,4 +1,4 @@
-import { PortError } from './common.ts';
+import { PortError, type PortErrorCode } from './common.ts';
 
 export interface MailAddress {
   address: string;
@@ -74,5 +74,16 @@ export class MailDeliveryError extends PortError {
  */
 export interface Mailer {
   send(m: MailMessage): Promise<MailSent>;
-  verify(senderSecretRef?: string): Promise<{ ok: boolean; error?: string }>;
+  verify(senderSecretRef?: string): Promise<MailVerifyResult>;
+}
+
+/**
+ * The answer of `Mailer.verify`. `error` is the failure's own text; `code` is its PortError code when it is one. A caller
+ * that shows the answer to anyone must not show `error` for `egress_denied`: the guard's text names the address the
+ * host resolved to, which may be an internal one (a DNS oracle for whoever chose the host).
+ */
+export interface MailVerifyResult {
+  ok: boolean;
+  error?: string;
+  code?: PortErrorCode;
 }
