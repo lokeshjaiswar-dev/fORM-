@@ -88,12 +88,15 @@ Both proxy `/v1` to `pnpm dev:api` (`http://127.0.0.1:8080`, or `FR_DEV_API_URL`
 
 ## What keeps the build clean
 
-The e2e fixture (`apps/builder/e2e/test.ts`) listens for `securitypolicyviolation` on every page and fails any test that raises one. `e2e/csp.spec.ts` checks the headers, provokes one violation of each kind (an HTML sink, an injected `<style>`, a foreign `fetch` and image) and finds each in the reports, and checks that a framed builder is refused. Three dependencies needed changes to run under this policy:
+The e2e fixture (`apps/builder/e2e/test.ts`) listens for `securitypolicyviolation` on every page and fails any test that raises one. `e2e/csp.spec.ts` checks the headers, provokes one violation of each kind (an HTML sink, an injected `<style>`, a foreign `fetch` and image) and finds each in the reports, and checks that a framed builder is refused. Five dependencies, and one build default, needed changes to run under this policy:
 
 | Dependency | Problem | Fix |
 |---|---|---|
 | zod 4 | Its JIT compiles parsers with `new Function`, and the probe for that is already a violation | `src/csp.ts` sets `z.config({ jitless: true })` before any other module loads |
 | Tiptap | Injects its base styles as a `<style>` element through `innerHTML` | Editors run with `injectCSS: false`; the rules are in `src/index.css` |
 | sonner | Injects its stylesheet as a `<style>` element when it loads | The production build drops that call (`noInjectedStyles` in `security/vite.ts`, which fails the build if the call changes shape); `main.tsx` imports `sonner/dist/styles.css` |
+| Radix Select and ScrollArea | Write a viewport `<style>` through `innerHTML` when they mount, which throws under Trusted Types and `style-src`, so the whole React tree stops rendering | The build takes the element out and bundles the same rules into the stylesheet (`radixViewportStyles` in `vite.config.ts`, which fails the build if the element changes shape) |
+| react-remove-scroll (Radix Dialog, Select, DropdownMenu) | Appends a `<style>` for the scroll lock, whose rules depend on the scrollbar width | The build replaces react-style-singleton's stylesheet with a constructable one in `document.adoptedStyleSheets` (`adoptedScrollLockStyles` in `vite.config.ts`, which fails the build if the module changes shape) |
+| Vite (fonts) | Inlines assets under 4 kB, so a small font subset became a `data:` URL that `font-src 'self'` refuses | `build.assetsInlineLimit` never inlines a font file |
 
 A new dependency that injects styles or evaluates strings fails the e2e suite. Fix it the same way. Do not loosen the policy.
