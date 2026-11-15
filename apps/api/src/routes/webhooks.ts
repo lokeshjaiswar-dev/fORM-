@@ -1,15 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import type { EditionConfig } from '@form/config';
 import type { Db } from '@form/db';
-import type { EgressGuard, KeyProvider, Queue } from '@form/ports';
+import type { EgressGuard, OrgSecrets, Queue } from '@form/ports';
 
 export interface WebhookRouteDeps {
   /** The request pool: every read and write goes through `withTenant` on it, so row-level security limits it to the caller's org. */
   db: Db;
   /** The small separate pool for denied and failed audit records (ADR-0006). */
   auditDb: Db;
-  /** Seals the signing secret under the org's key context (`sealOrgSecret`); without it the routes that make one answer 503. */
-  keys?: KeyProvider | undefined;
+  /**
+   * Seals the signing secret under the org's key context (`orgSecrets.seal`, kind `webhook_hmac`); without it the routes
+   * that make one answer 503. The route never imports `@form/adapters` (the `adapters-only-from-composition-roots` rule):
+   * `main.ts` builds this with `createOrgSecrets(keys)` from `@form/adapters/kms` and `app.ts` passes it through.
+   */
+  orgSecrets?: OrgSecrets | undefined;
   /** Core's producer queue: a replay sends `webhook.deliver` through it inside the transaction that inserts the delivery. */
   queue?: Queue | undefined;
   /** Keys the IP hash of audit records (`config.auth.secret`). */

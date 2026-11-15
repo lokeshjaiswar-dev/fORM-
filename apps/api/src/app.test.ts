@@ -10,7 +10,7 @@ import type pg from 'pg';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
-import type { KeyProvider, Queue } from '@form/ports';
+import type { KeyProvider, OrgSecrets, Queue } from '@form/ports';
 import { collect, coverage, ISOLATION_CASES, type CollectedRoute } from '../test/isolation-cases/index.ts';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
 import { clientInfo } from './auth.ts';
@@ -458,23 +458,29 @@ describe('CSP violation reports', () => {
 describe('stub route modules (approvals, notifications, webhooks, exports)', () => {
   const MODULES = ['reviews', 'email-senders', 'notifications', 'webhooks', 'exports'];
 
-  it('registers every module once, with the db, the audit db, the secret and the clock, and the queue and keys the app was given', async () => {
+  it('registers every module once, with the db, the audit db, the secret and the clock, and the queue and org secrets the app was given', async () => {
     const queue = { send: async () => null } as unknown as Queue;
     const keys = { wrap: async () => ({ wrapped: new Uint8Array(), kekRef: 'k' }) } as unknown as KeyProvider;
+    // A route seals secrets through this port, which the composition root builds from the KMS; the routes never import an adapter.
+    const orgSecrets: OrgSecrets = { seal: async () => Promise.reject(new Error('not used')), open: async () => Promise.reject(new Error('not used')) };
     const cfg = config();
     registered.calls.length = 0;
-    await app(cfg, { queue, keys });
+    await app(cfg, { queue, keys, orgSecrets });
     expect(registered.calls.map((c) => c.module)).toEqual(MODULES);
     for (const { module, deps } of registered.calls) {
       expect(deps, module).toMatchObject({ db: expect.anything(), auditDb: expect.anything(), secret: cfg.auth.secret, now: expect.any(Function) });
       expect(deps['db'], module).not.toBe(deps['auditDb']);
     }
     const by = Object.fromEntries(registered.calls.map((c) => [c.module, c.deps]));
-    // The queue is Core's producer, passed on as it is (never made again here); keys seal org secrets.
-    expect(by['reviews']).toMatchObject({ queue, keys });
-    expect(by['email-senders']).toMatchObject({ keys });
-    expect(by['webhooks']).toMatchObject({ queue, keys });
+    // The queue is Core's producer, passed on as it is (never made again here).
+    expect(by['reviews']).toMatchObject({ queue });
+    expect(by['webhooks']).toMatchObject({ queue });
     expect(by['exports']).toMatchObject({ queue });
+    // The two modules that store an org secret get the sealer, and never the raw KMS: they cannot wrap a key under another context.
+    expect(by['email-senders']).toMatchObject({ orgSecrets });
+    expect(by['webhooks']).toMatchObject({ orgSecrets });
+    expect(by['email-senders']).not.toHaveProperty('keys');
+    expect(by['webhooks']).not.toHaveProperty('keys');
   });
 
   it('registers no route yet: the stubs add nothing to the API, and every auth:user route still has an isolation case', async () => {

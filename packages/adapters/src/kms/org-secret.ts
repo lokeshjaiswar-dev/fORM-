@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { PortError, type KeyProvider } from '@form/ports';
+import { PortError, type KeyProvider, type OrgSecretContext, type OrgSecrets, type SealedOrgSecret } from '@form/ports';
 import { z } from 'zod';
 
 /**
@@ -15,6 +15,10 @@ import { z } from 'zod';
  *
  * What is stored is `SealedOrgSecret`, a jsonb value with no plaintext in it. A secret is never returned by an API after
  * it is created and never logged; nothing here puts a plaintext, a key or the stored value into an error message.
+ *
+ * Who calls this: the api and the worker may not import `@form/adapters` (the `adapters-only-from-composition-roots`
+ * rule), so they take an `OrgSecrets` (the interface in `@form/ports`) in their deps, and the composition root
+ * (`apps/api/src/main.ts`, `apps/worker/src/main.ts`) builds it with `createOrgSecrets(keys)` below.
  */
 
 /** Up to 16 KiB: an SMTP URL or an HMAC key is far smaller, and the row stays small. */
@@ -28,7 +32,10 @@ const b64Length = (n: number) => Math.ceil((n * 4) / 3);
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const b64 = z.string().regex(BASE64URL);
 
-/** The stored shape. `iv` and `tag` have the exact length of 12 and 16 bytes, so a truncated value fails here, not in OpenSSL. */
+/**
+ * The stored shape. `iv` and `tag` have the exact length of 12 and 16 bytes, so a truncated value fails here, not in OpenSSL.
+ * `satisfies` ties it to the port's `SealedOrgSecret`: a change to one that the other does not follow fails the build.
+ */
 export const sealedOrgSecretSchema = z.object({
   v: z.literal(1),
   alg: z.literal('A256GCM'),
@@ -39,16 +46,7 @@ export const sealedOrgSecretSchema = z.object({
   iv: b64.length(b64Length(IV_BYTES)),
   tag: b64.length(b64Length(TAG_BYTES)),
   ct: b64.min(1).max(b64Length(MAX_ORG_SECRET_BYTES)),
-});
-
-export type SealedOrgSecret = z.infer<typeof sealedOrgSecretSchema>;
-
-/** What a secret is bound to: its org, its row and its kind (`smtp`, `webhook_hmac`, ...). */
-export interface OrgSecretContext {
-  orgId: string;
-  secretId: string;
-  kind: string;
-}
+}) satisfies z.ZodType<SealedOrgSecret>;
 
 /** A short token: no `:` (it separates the parts of the AAD) and no spaces or control characters. */
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
@@ -113,4 +111,12 @@ export async function openOrgSecret(keys: KeyProvider, ctx: OrgSecretContext, st
 /** `openOrgSecret` for a secret that was sealed from text (an SMTP URL): the UTF-8 string. */
 export async function openOrgSecretText(keys: KeyProvider, ctx: OrgSecretContext, stored: unknown): Promise<string> {
   return new TextDecoder().decode(await openOrgSecret(keys, ctx, stored));
+}
+
+/** `sealOrgSecret` and `openOrgSecret` bound to one `KeyProvider`: what the composition roots hand to the routes and jobs. */
+export function createOrgSecrets(keys: KeyProvider): OrgSecrets {
+  return {
+    seal: (ctx, plaintext) => sealOrgSecret(keys, ctx, plaintext),
+    open: (ctx, stored) => openOrgSecret(keys, ctx, stored),
+  };
 }

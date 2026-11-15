@@ -10,7 +10,7 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fast
 import type { DestinationStream } from 'pino';
 import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
 import { cachedClockCheck, type ClockStatus } from '@form/observability';
-import type { KeyProvider, Mailer, Queue } from '@form/ports';
+import type { KeyProvider, Mailer, OrgSecrets, Queue } from '@form/ports';
 import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
 import { createServiceLogger } from './log.ts';
@@ -50,6 +50,12 @@ export interface AppDeps {
   mailer?: Mailer;
   /** Wraps TOTP secrets (the composition root passes the KMS); without it, two-factor enrolment answers 503. */
   keys?: KeyProvider;
+  /**
+   * Seals and opens the secrets of an org (the SMTP URL of an email sender, the signing key of a webhook) under the org's
+   * key context. The composition root builds it with `createOrgSecrets(keys)` from `@form/adapters/kms`, the one place an
+   * adapter may be imported; routes get it as this `@form/ports` interface. Without it the routes that store a secret answer 503.
+   */
+  orgSecrets?: OrgSecrets;
   /** Overrides the HIBP lookup that `PASSWORD_BREACH_CHECK=hibp` turns on; null turns it off. */
   breached?: BreachCheck | null;
   /** Overrides of the auth rate limits (tests). */
@@ -227,9 +233,9 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   // Approvals, notifications, webhooks and exports (WP-2.33, WP-1.16, WP-1.18, WP-1.17). Each module is registered here
   // once, empty, and its task fills its own files, so no feature task edits this list.
   registerReviewModule(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, keys: deps.keys, secret: config.auth.secret, now });
-  emailSenderRoutes(app, { db: handle.db, auditDb: auditHandle.db, keys: deps.keys, secret: config.auth.secret, now });
+  emailSenderRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, secret: config.auth.secret, now });
   notificationRoutes(app, { db: handle.db, auditDb: auditHandle.db, secret: config.auth.secret, now });
-  webhookRoutes(app, { db: handle.db, auditDb: auditHandle.db, keys: deps.keys, queue: deps.queue, secret: config.auth.secret, now });
+  webhookRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, queue: deps.queue, secret: config.auth.secret, now });
   exportRoutes(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, secret: config.auth.secret, now });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);

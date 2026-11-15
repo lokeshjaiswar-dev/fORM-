@@ -1,14 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '@form/db';
-import type { KeyProvider, Mailer } from '@form/ports';
+import type { Mailer, OrgSecrets } from '@form/ports';
 
 export interface EmailSenderRouteDeps {
   /** The request pool: every read and write goes through `withTenant` on it, so row-level security limits it to the caller's org. */
   db: Db;
   /** The small separate pool for denied and failed audit records (ADR-0006). */
   auditDb: Db;
-  /** Seals an SMTP URL under the org's key context (`sealOrgSecret`); without it the routes that store one answer 503. */
-  keys?: KeyProvider | undefined;
+  /**
+   * Seals an SMTP URL under the org's key context (`orgSecrets.seal`, kind `smtp`); without it the routes that store one
+   * answer 503. The route never imports `@form/adapters` (the `adapters-only-from-composition-roots` rule): `main.ts` builds
+   * this with `createOrgSecrets(keys)` from `@form/adapters/kms` and `app.ts` passes it through.
+   */
+  orgSecrets?: OrgSecrets | undefined;
   /** Keys the IP hash of audit records (`config.auth.secret`). */
   secret: Uint8Array;
   now: () => Date;

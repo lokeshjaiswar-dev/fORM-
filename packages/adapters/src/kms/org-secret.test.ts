@@ -1,10 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
-import { ZodError } from 'zod';
-import { PortError, type KeyProvider } from '@form/ports';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { ZodError, type z } from 'zod';
+import { PortError, type KeyProvider, type OrgSecretContext, type OrgSecrets, type SealedOrgSecret } from '@form/ports';
 import { expectPortError, utf8 } from '@form/testkit';
 import { createKeyfileKeyProvider } from './keyfile.ts';
-import { MAX_ORG_SECRET_BYTES, openOrgSecret, openOrgSecretText, sealOrgSecret, sealedOrgSecretSchema, type OrgSecretContext, type SealedOrgSecret } from './org-secret.ts';
+import { MAX_ORG_SECRET_BYTES, createOrgSecrets, openOrgSecret, openOrgSecretText, sealOrgSecret, sealedOrgSecretSchema } from './org-secret.ts';
 
 const ORG_A = '01970000-0000-7000-8000-00000000000a';
 const ORG_B = '01970000-0000-7000-8000-00000000000b';
@@ -215,5 +215,51 @@ describe('org secrets', () => {
       const sealed = await sealOrgSecret(keys, ctx, utf8('पासवर्ड-密码-🔑'));
       expect(await openOrgSecretText(keys, ctx, sealed)).toBe('पासवर्ड-密码-🔑');
     });
+  });
+});
+
+/**
+ * The api and the worker may not import `@form/adapters` (the `adapters-only-from-composition-roots` rule in
+ * `.dependency-cruiser.cjs`): they receive an `OrgSecrets` typed in `@form/ports`, and the composition root builds it here.
+ */
+describe('createOrgSecrets (what the composition roots hand to routes and jobs)', () => {
+  it('is the port interface of @form/ports, and the stored shape is the port type', () => {
+    expectTypeOf(createOrgSecrets).returns.toEqualTypeOf<OrgSecrets>();
+    expectTypeOf<z.infer<typeof sealedOrgSecretSchema>>().toEqualTypeOf<SealedOrgSecret>();
+  });
+
+  it('seals and opens through the port, bound to one KeyProvider', async () => {
+    const orgSecrets: OrgSecrets = createOrgSecrets(keyfile());
+    const sealed = await orgSecrets.seal(ctx, PLAINTEXT);
+    expect(sealedOrgSecretSchema.safeParse(sealed).success).toBe(true);
+    expect(JSON.stringify(sealed)).not.toContain('hunter2');
+    expect(new TextDecoder().decode(await orgSecrets.open(ctx, JSON.parse(JSON.stringify(sealed))))).toBe(PLAINTEXT);
+  });
+
+  it('wraps under the org of the context it is given, so another org cannot open the value', async () => {
+    const seen: string[] = [];
+    const real = keyfile();
+    const spy: KeyProvider = {
+      ...real,
+      wrap: (key, c) => (seen.push(`wrap:${c.orgId}`), real.wrap(key, c)),
+      unwrap: (wrapped, ref, c) => (seen.push(`unwrap:${c.orgId}`), real.unwrap(wrapped, ref, c)),
+    };
+    const orgSecrets = createOrgSecrets(spy);
+    const sealed = await orgSecrets.seal(ctx, PLAINTEXT);
+    await orgSecrets.open(ctx, sealed);
+    expect(seen).toEqual([`wrap:${ORG_A}`, `unwrap:${ORG_A}`]);
+    await expectPortError(orgSecrets.open({ ...ctx, orgId: ORG_B }, sealed), 'integrity');
+    await expectPortError(orgSecrets.open({ ...ctx, kind: 'webhook_hmac' }, sealed), 'integrity');
+  });
+
+  it('keeps the validation of the stored shape: a malformed value is a zod error without the plaintext', async () => {
+    const error = await createOrgSecrets(keyfile())
+      .open(ctx, { smtpUrl: PLAINTEXT })
+      .then(
+        () => undefined,
+        (err: unknown) => err,
+      );
+    expect(error).toBeInstanceOf(ZodError);
+    expect(String(error)).not.toContain('hunter2');
   });
 });

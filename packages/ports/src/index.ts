@@ -10,3 +10,4 @@ export * from './guardian.ts';
 export * from './audit-sink.ts';
 export * from './egress.ts';
 export * from './queue.ts';
+export * from './org-secrets.ts';
