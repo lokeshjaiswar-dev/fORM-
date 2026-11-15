@@ -7,6 +7,9 @@ const base = {
   JOB_SIGNING_KEYS: 'k1:secret',
   KMS_KEYFILE_PATH: '/run/secrets/form-master.key',
   AUDIT_SYSLOG_URL: 'tcp://siem:514',
+  // Production sends mail and links to the builder: both are required there (see "the mailer and the builder URL").
+  SMTP_URL: 'smtp://relay.corp.local:587',
+  PUBLIC_BUILDER_URL: 'https://forms.corp.local',
 };
 
 describe('parseConfig', () => {
@@ -42,6 +45,13 @@ describe('parseConfig', () => {
         requireAnchor: true,
       },
       storage: undefined,
+      mailer: {
+        driver: 'smtp',
+        smtpUrl: 'smtp://relay.corp.local:587',
+        from: { address: 'no-reply@form.local', name: 'fORM-' },
+        messageIdDomain: 'form.local',
+      },
+      publicBuilderUrl: 'https://forms.corp.local',
     });
   });
 
@@ -82,6 +92,8 @@ describe('parseConfig', () => {
         KMS_KEYFILE_PATH: '/run/secrets/form-master.key',
         AUDIT_SYSLOG_URL: 'tls://siem:6514',
         AUDIT_RETIRED_SIGNING_KEY_IDS: 'audit-v0, audit-old',
+        SMTP_URL: 'smtp://relay:25',
+        PUBLIC_BUILDER_URL: 'https://forms.example',
       },
       (p) => files[p]!,
     );
@@ -158,5 +170,66 @@ describe('parseConfig', () => {
     expect(all).toMatch(/KMS_KEY_ID: is required with KMS_DRIVER=vault/);
     expect(all).toMatch(/KMS_SIGNING_SEED_FILE: is required/);
     expect(all).toMatch(/AUDIT_OTLP_URL: set AUDIT_SYSLOG_URL or AUDIT_OTLP_URL, not both/);
+  });
+});
+
+describe('the mailer and the builder URL (WP-1.16)', () => {
+  const { SMTP_URL: _smtp, PUBLIC_BUILDER_URL: _builder, ...bare } = base;
+
+  it('parses the platform mailer and the builder address, with the API’s defaults and no trailing slash', () => {
+    const r = parseConfig({
+      ...bare,
+      SMTP_URL: 'smtps://mailer:s3cret@smtp.corp.local:465',
+      MAIL_FROM: 'forms@corp.local',
+      MAIL_FROM_NAME: 'Corp forms',
+      MAIL_MESSAGE_ID_DOMAIN: 'Mail.Corp.Local',
+      PUBLIC_BUILDER_URL: 'https://forms.corp.local///',
+    });
+    expect(r.ok && { mailer: r.config.mailer, url: r.config.publicBuilderUrl }).toEqual({
+      mailer: {
+        driver: 'smtp',
+        smtpUrl: 'smtps://mailer:s3cret@smtp.corp.local:465',
+        from: { address: 'forms@corp.local', name: 'Corp forms' },
+        messageIdDomain: 'Mail.Corp.Local',
+      },
+      url: 'https://forms.corp.local',
+    });
+    // Outside production nothing is required: Mailpit and the dev builder, and the Message-ID domain follows MAIL_FROM.
+    const dev = parseConfig({ ...bare, NODE_ENV: 'development' });
+    expect(dev.ok && { mailer: dev.config.mailer, url: dev.config.publicBuilderUrl }).toEqual({
+      mailer: { driver: 'smtp', smtpUrl: undefined, from: { address: 'no-reply@form.local', name: 'fORM-' }, messageIdDomain: 'form.local' },
+      url: 'http://localhost:5173',
+    });
+  });
+
+  it('refuses production with MAILER_DRIVER=smtp and no SMTP_URL, and accepts the log driver without one', () => {
+    const withBuilder = { ...bare, PUBLIC_BUILDER_URL: base.PUBLIC_BUILDER_URL };
+    const r = parseConfig(withBuilder);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toEqual([expect.stringMatching(/^SMTP_URL: is required in production with MAILER_DRIVER=smtp/)]);
+    expect(parseConfig({ ...withBuilder, MAILER_DRIVER: 'smtp' }).ok).toBe(false);
+    const logged = parseConfig({ ...withBuilder, MAILER_DRIVER: 'log' });
+    expect(logged.ok && logged.config.mailer).toMatchObject({ driver: 'log', smtpUrl: undefined });
+    expect(parseConfig({ ...bare, NODE_ENV: 'development' }).ok).toBe(true);
+  });
+
+  it('refuses production without PUBLIC_BUILDER_URL: the emails link to the builder', () => {
+    const { PUBLIC_BUILDER_URL: _, ...noBuilder } = base;
+    const r = parseConfig(noBuilder);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toEqual([expect.stringMatching(/^PUBLIC_BUILDER_URL: is required in production/)]);
+  });
+
+  it('reads SMTP_URL from SMTP_URL_FILE, which wins over the variable, and refuses a URL that is not smtp', () => {
+    const r = parseConfig({ ...bare, PUBLIC_BUILDER_URL: base.PUBLIC_BUILDER_URL, SMTP_URL: 'smtp://ignored:25', SMTP_URL_FILE: '/run/secrets/smtp' }, () => 'smtps://u:p@relay:465\n');
+    expect(r.ok && r.config.mailer.smtpUrl).toBe('smtps://u:p@relay:465');
+    const bad = parseConfig({ ...base, SMTP_URL: 'https://relay', MAIL_FROM: 'not-an-address', MAIL_MESSAGE_ID_DOMAIN: 'no_dots', PUBLIC_BUILDER_URL: 'forms' });
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    const all = bad.errors.join('\n');
+    expect(all).toMatch(/SMTP_URL: expected smtp:\/\/host:port/);
+    expect(all).toMatch(/MAIL_FROM/);
+    expect(all).toMatch(/MAIL_MESSAGE_ID_DOMAIN: expected a host name/);
+    expect(all).toMatch(/PUBLIC_BUILDER_URL/);
   });
 });

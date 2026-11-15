@@ -17,6 +17,7 @@ const postgresUrl = (role: string) => z.string().regex(/^postgres(ql)?:\/\//, `e
 const QUEUE_PATTERN = /^[a-z][a-z_]*(\.[a-z_]+)*(\.\*)?$/;
 
 const KEY_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const HOSTNAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/;
 
 const headerList = z.string().transform((s, ctx) => {
   const out: Record<string, string> = {};
@@ -73,9 +74,25 @@ export const workerEnvSchema = z
     /** `name=value` headers for the collector, e.g. an API key; a secret, so usually `AUDIT_OTLP_HEADERS_FILE`. */
     AUDIT_OTLP_HEADERS: headerList.optional(),
     AUDIT_RETENTION_YEARS: z.coerce.number().int().min(1).max(30).default(7),
+    /**
+     * The platform mailer, for messages that name no org sender (a notification without a sender). The same variables as the
+     * API's: `smtp` (Mailpit by default outside production) or `log` (nothing is sent; the log says that a message would go).
+     */
+    MAILER_DRIVER: z.enum(['smtp', 'log']).default('smtp'),
+    SMTP_URL: z.string().regex(/^smtps?:\/\/[^/]+/, 'expected smtp://host:port or smtps://user:pass@host:port').optional(),
+    MAIL_FROM: z.email().default('no-reply@form.local'),
+    MAIL_FROM_NAME: z.string().min(1).max(100).default('fORM-'),
+    /** The domain of the Message-IDs the worker makes (`<id@domain>`); default: the domain of MAIL_FROM. */
+    MAIL_MESSAGE_ID_DOMAIN: z.string().regex(HOSTNAME, 'expected a host name such as mail.example.org').optional(),
+    /** The builder's public address: the "view response" buttons of notification emails link to it. */
+    PUBLIC_BUILDER_URL: z.url().optional(),
   })
   .superRefine((env, ctx) => {
-    if (env.AUDIT_SYSLOG_URL && env.AUDIT_OTLP_URL) ctx.addIssue({ code: 'custom', path: ['AUDIT_OTLP_URL'], message: 'set AUDIT_SYSLOG_URL or AUDIT_OTLP_URL, not both' });
+    const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+    if (env.AUDIT_SYSLOG_URL && env.AUDIT_OTLP_URL) issue('AUDIT_OTLP_URL', 'set AUDIT_SYSLOG_URL or AUDIT_OTLP_URL, not both');
+    const production = env.NODE_ENV === 'production';
+    if (production && env.MAILER_DRIVER === 'smtp' && !env.SMTP_URL) issue('SMTP_URL', 'is required in production with MAILER_DRIVER=smtp');
+    if (production && !env.PUBLIC_BUILDER_URL) issue('PUBLIC_BUILDER_URL', 'is required in production: notification emails link to the builder');
   });
 
 export interface WorkerConfig {
@@ -104,15 +121,19 @@ export interface WorkerConfig {
     /** Production refuses a checkpoint it cannot anchor in a WORM bucket or a SIEM. */
     requireAnchor: boolean;
   };
-  /** The `audit` bucket (checkpoints when it has Object Lock, and archives). */
+  /** The `audit` bucket (checkpoints when it has Object Lock, and archives), and the `exports` bucket of the export files. */
   storage: StorageConfig | undefined;
+  /** The platform mailer (messages with no org sender) and what every message is built from. */
+  mailer: { driver: 'smtp' | 'log'; smtpUrl: string | undefined; from: { address: string; name: string }; messageIdDomain: string };
+  /** The builder's origin, without a trailing slash (`http://localhost:5173` outside production when unset). */
+  publicBuilderUrl: string;
 }
 
 export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; errors: string[] };
 
 type Env = Record<string, string | undefined>;
 
-const FILE_KEYS = ['DATABASE_URL', 'QUEUE_DATABASE_URL', 'JOB_SIGNING_KEYS', 'AUDIT_OTLP_HEADERS'];
+const FILE_KEYS = ['DATABASE_URL', 'QUEUE_DATABASE_URL', 'JOB_SIGNING_KEYS', 'AUDIT_OTLP_HEADERS', 'SMTP_URL'];
 
 /** Parses everything and reports every problem at once; `*_FILE` secrets win over plain variables. */
 export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) => readFileSync(p, 'utf8')): ConfigResult {
@@ -184,6 +205,13 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
         requireAnchor: e.NODE_ENV === 'production',
       },
       storage: storage.config,
+      mailer: {
+        driver: e.MAILER_DRIVER,
+        smtpUrl: e.SMTP_URL,
+        from: { address: e.MAIL_FROM, name: e.MAIL_FROM_NAME },
+        messageIdDomain: e.MAIL_MESSAGE_ID_DOMAIN ?? e.MAIL_FROM.slice(e.MAIL_FROM.lastIndexOf('@') + 1).toLowerCase(),
+      },
+      publicBuilderUrl: (e.PUBLIC_BUILDER_URL ?? 'http://localhost:5173').replace(/\/+$/, ''),
     },
   };
 }
