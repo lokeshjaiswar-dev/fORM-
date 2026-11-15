@@ -4,6 +4,7 @@ import { defineMessages, type MessageId } from '@form/i18n';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { VIEWS, type View } from '@/persistence/submissionsApi';
+import { ExportMenu } from '@/components/responses/ExportMenu';
 import { PANEL_ID, tabId } from '@/components/responses/panelIds';
 import { NO_FILTERS, hasFilters, rangeIsBackwards, type ReadFilter, type ResponseFilters, type StatusFilter } from '@/components/responses/filters';
 import { statusLabel } from '@/components/responses/format';
@@ -37,14 +38,21 @@ const TAB_LABELS: Record<View, MessageId> = {
 const CONTROL = 'h-8 rounded-[8px] border border-border-control bg-background px-2 text-[13px] text-foreground';
 
 export interface ResponsesToolbarProps {
+  /** The form whose responses these are: the Export menu asks for an export of it. */
+  formId: string;
   view: View;
   onView: (view: View) => void;
   filters: ResponseFilters;
   onFilters: (filters: ResponseFilters) => void;
+  /** The ids of the responses ticked in the grid, which an export can be limited to. */
+  selectedIds: readonly string[];
 }
 
-/** The folders (Inbox, Archived, Trash) as tabs, the search box, and the filters: dates, read state, starred and status. */
-export function ResponsesToolbar({ view, onView, filters, onFilters }: ResponsesToolbarProps) {
+/**
+ * The folders (Inbox, Archived, Trash) as tabs, the search box, and the filters: dates, read state, starred and status;
+ * and, for a member whose role may export, the Export menu.
+ */
+export function ResponsesToolbar({ formId, view, onView, filters, onFilters, selectedIds }: ResponsesToolbarProps) {
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const set = (change: Partial<ResponseFilters>) => onFilters({ ...filters, ...change });
 
@@ -122,6 +130,7 @@ export function ResponsesToolbar({ view, onView, filters, onFilters }: Responses
             {t(M['responses.filter.clear'])}
           </Button>
         ) : null}
+        <ExportMenu formId={formId} selectedIds={selectedIds} from={filters.from} to={filters.to} />
       </div>
       {rangeIsBackwards(filters) ? (
         <p role="alert" className="text-[13px] text-destructive">

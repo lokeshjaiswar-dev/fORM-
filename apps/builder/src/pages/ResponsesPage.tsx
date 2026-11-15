@@ -251,7 +251,7 @@ export function ResponsesPage() {
         </div>
       </div>
 
-      <ResponsesToolbar view={view} onView={setView} filters={filters} onFilters={setFilters} />
+      <ResponsesToolbar formId={id} view={view} onView={setView} filters={filters} onFilters={setFilters} selectedIds={selectedIds} />
 
       {selectedIds.length > 0 ? <BulkBar view={view} count={selectedIds.length} busy={busy} onAct={(action) => void act(action)} onClear={() => setSelection({})} /> : null}
       <div role="status" aria-live="polite" className={notice?.kind === 'error' ? 'text-[13px] text-destructive' : 'text-[13px] text-muted-foreground'}>
