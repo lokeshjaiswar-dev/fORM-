@@ -153,6 +153,12 @@ describe('SR-3: answers that Postgres cannot store end as an anonymous 500, logg
     expect({ status: res.statusCode, leakedLogLines: leaked.length }).toEqual({ status: 400, leakedLogLines: 0 });
   });
 
+  it('answers 400 for a locale that is not a language tag (it is stored as sent, and handed to Intl)', async () => {
+    const form = await publish('SR3 locale', [fieldBlock('comment', 'short_text')]);
+    const res = await submit(form.slug, { formVersionId: form.versionId, answers: { comment: text('ok') }, locale: '<script>x' });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('answers 400 for a NUL in an answer', async () => {
     const form = await publish('SR3 nul answer', [fieldBlock('comment', 'short_text')]);
     const res = await submit(form.slug, { formVersionId: form.versionId, answers: { comment: text('x\u0000y') } });
