@@ -492,6 +492,7 @@ describe('OpenAPI', () => {
       '/v1/forms/merge',
       '/v1/forms/{formId}/files/{id}',
       '/v1/forms/{formId}/submissions',
+      '/v1/forms/{formId}/submissions/bulk',
       '/v1/forms/{formId}/submissions/{id}',
       '/v1/forms/{id}',
       '/v1/forms/{id}/access',

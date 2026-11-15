@@ -101,7 +101,9 @@ const view = (slug: string, headers: Record<string, string> = {}) => app.inject(
 async function shown(formId: string, submissionId: string): Promise<{ fields: Array<{ key: string; label: string; value: string }>; locale: string }> {
   const res = await app.inject({ url: `/v1/forms/${formId}/submissions/${submissionId}`, headers: as() });
   expect(res.statusCode, res.body).toBe(200);
-  return res.json();
+  // The detail also says each row's block id, type and whether it is masked (WP-1.15); what is checked here is the text.
+  const { fields, locale } = res.json<{ fields: Array<{ key: string; label: string; value: string }>; locale: string }>();
+  return { fields: fields.map(({ key, label, value }) => ({ key, label, value })), locale };
 }
 
 describe('POST /v1/p/by-form/:formId/submissions', () => {
