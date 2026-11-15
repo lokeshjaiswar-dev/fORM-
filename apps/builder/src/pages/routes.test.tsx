@@ -295,11 +295,28 @@ describe('routes', () => {
   it('BL-143: reopening a v1 draft migrates it once, saves it back as v2 and shows what changed', async () => {
     const repo = new MemoryRepository();
     await repo.save({ id: 'old', format: LEGACY_FORMAT, rev: 2, savedAt: NOW, doc: v1Form([{ id: 'q', type: 'text', label: 'Question' }], { redirectUrl: 'http://example.com', password: 'hunter2' }) });
+    // The v1 file's password goes to the API (WP-1.07, BL-145): the form row, then the access settings, then the password.
+    const sent: Array<{ method: string; path: string; body: unknown }> = [];
+    const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const path = String(url);
+        if (!path.startsWith('/v1/forms')) return Promise.resolve(json(404, {}));
+        sent.push({ method: init?.method ?? 'GET', path, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
+        if (path === '/v1/forms') return Promise.resolve(json(201, { id: 'old' }));
+        if (path === '/v1/forms/old/access') return Promise.resolve(json(200, { rev: 0, enabled: true, hasPassword: false, embedAllowlist: [], screens: {}, acceptPreviousVersionsHours: 72 }));
+        return Promise.resolve(json(200, { hasPassword: true }));
+      }),
+    );
     renderApp(repo, '/builder/old');
     expect(await screen.findByDisplayValue('Old form', {}, OPENS)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show' }));
     expect(screen.getByRole('region', { name: 'Form notes' })).toHaveTextContent('the redirect URL is not https');
-    expect(repo.records.get('old')).toMatchObject({ format: DOCUMENT_FORMAT, rev: 3, doc: { formId: 'old', schemaVersion: 2 }, ops: { password: 'hunter2' } });
-    expect(JSON.stringify(repo.records.get('old')?.doc)).not.toContain('hunter2');
+    expect(screen.getByRole('region', { name: 'Form notes' })).toHaveTextContent('are now settings on the server');
+    expect(sent.find((c) => c.method === 'PUT' && c.path === '/v1/forms/old/access/password')?.body).toEqual({ password: 'hunter2' });
+    expect(repo.records.get('old')).toMatchObject({ format: DOCUMENT_FORMAT, rev: 3, doc: { formId: 'old', schemaVersion: 2 }, ops: {} });
+    // The plaintext password is in neither the saved draft nor the saved local settings (BL-145).
+    expect(JSON.stringify(repo.records.get('old'))).not.toContain('hunter2');
   });
 });

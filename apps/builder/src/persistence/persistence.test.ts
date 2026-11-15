@@ -92,13 +92,14 @@ describe('autosave', () => {
     setTitle('Two');
     expect(repo.records.size).toBe(0);
     await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
-    expect(repo.records.get('test')).toMatchObject({ id: 'test', format: DOCUMENT_FORMAT, rev: 5, savedAt: NOW, doc: { title: 'Two', schemaVersion: 2 }, ops: { open: true } });
+    expect(repo.records.get('test')).toMatchObject({ id: 'test', format: DOCUMENT_FORMAT, rev: 5, savedAt: NOW, doc: { title: 'Two', schemaVersion: 2 }, ops: {} });
     undo();
     await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
     expect(repo.records.get('test')).toMatchObject({ rev: 6, doc: { title: 'Test form' } });
-    updateOps({ open: false });
+    // The slot for browser-only FormOps is empty since WP-1.07, but a change to it is still a change that gets saved.
+    updateOps({});
     await vi.advanceTimersByTimeAsync(AUTOSAVE_MS);
-    expect(repo.records.get('test')).toMatchObject({ rev: 7, ops: { open: false } });
+    expect(repo.records.get('test')).toMatchObject({ rev: 7, ops: {} });
     expect(states).toEqual(['saving', 'saved', 'saving', 'saved', 'saving', 'saved']);
     expect(saved).toEqual([5, 6, 7]);
     await autosave.stop();
@@ -168,7 +169,8 @@ describe('openStored', () => {
   it('reads a stored v2 draft under its record id, through the strict definition twin', () => {
     const stored = { ...newStoredForm('abc', NOW), doc: formWith([block('short_text', 'q', { label: 'Q' })]) };
     const opened = openStored(stored, NOW as IsoInstant);
-    expect(opened).toMatchObject({ ok: true, notes: [], migrated: false, doc: { formId: 'abc', blocks: { q: { label: inlineDoc('Q') } } }, ops: { open: true, password: '' } });
+    expect(opened).toMatchObject({ ok: true, notes: [], migrated: false, doc: { formId: 'abc', blocks: { q: { label: inlineDoc('Q') } } }, ops: {} });
+    expect(opened).not.toHaveProperty('legacy');
   });
 
   it('refuses another format and a document the twin rejects', () => {
@@ -188,10 +190,13 @@ describe('openStored', () => {
     expect(opened.doc.formId).toBe('abc');
     expect(opened.doc.pages.map((p) => p.children)).toEqual([['name'], ['mail']]);
     expect(opened.doc.blocks['name' as never]).toMatchObject({ type: 'short_text', required: true });
-    expect(opened.ops).toMatchObject({ open: false, password: 'hunter2', closedMessage: { content: [{ content: [{ text: 'Closed for now' }] }] } });
+    // The password and closed state are not FormOps of this browser: they are handed on to the API (`settleLegacyAccess`).
+    expect(opened.ops).toEqual({});
+    expect(opened.legacy).toMatchObject({ password: 'hunter2', closed: true, closedMessage: { content: [{ content: [{ text: 'Closed for now' }] }] } });
     expect(JSON.stringify(opened.doc)).not.toContain('hunter2');
+    expect(JSON.stringify(opened.ops)).not.toContain('hunter2');
     const codes = opened.notes.map((n) => n.code);
-    expect(codes).toEqual(expect.arrayContaining(['converted_to_v2', 'repaired_unknown_key', 'redirect_dropped', 'password_extracted', 'password_kept']));
+    expect(codes).toEqual(expect.arrayContaining(['converted_to_v2', 'repaired_unknown_key', 'redirect_dropped', 'password_extracted']));
     expect(codes).not.toContain('default_purpose_added');
   });
 
@@ -209,7 +214,8 @@ describe('importV1', () => {
     const imported = importV1(v1, 'new-id', NOW as IsoInstant);
     if (!imported.ok) throw new Error(imported.error);
     expect(imported.doc.formId).toBe('new-id');
-    expect(imported.ops.password).toBe('hunter2');
+    expect(imported.legacy).toMatchObject({ password: 'hunter2', closed: false });
+    expect(imported.ops).toEqual({});
     const codes = imported.notes.map((n) => n.code);
     expect(codes).toEqual(expect.arrayContaining(['repaired_unknown_key', 'redirect_dropped', 'password_extracted', 'dangling_logic_source']));
     expect(imported.notes.find((n) => n.code === 'redirect_dropped')?.detail).toMatch(/^the redirect URL is not https/);

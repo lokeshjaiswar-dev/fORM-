@@ -119,7 +119,7 @@ export function DraftConflictDialog() {
     const id = uid();
     const doc = currentDoc();
     const title = t(M['conflict.copy_title'], { title: doc.title.trim() || t(M['conflict.untitled']) });
-    await repo.save({ ...newStoredForm(id, new Date().toISOString(), { ...doc, title }), ops: { ...currentOps(), password: '' } });
+    await repo.save({ ...newStoredForm(id, new Date().toISOString(), { ...doc, title }), ops: currentOps() });
     await takeTheirs();
     toast(t(M['conflict.copied']), { action: { label: t(M['conflict.open_copy']), onClick: () => navigate(builderPath(id)) } });
   }

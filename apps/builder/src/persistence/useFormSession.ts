@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { IsoInstant } from '@form/schema';
+import { activeOrgOf, useSessionStore } from '@/auth/client';
 import { loadDocument } from '@/state/history';
 import { loadOps } from '@/state/opsStore';
 import { blockOrder } from '@/lib/definition';
 import { resetUi, useUiStore, type LoadNote, type TabConflict } from '@/state/uiStore';
 import { startAutosave, whenSaved, type Autosave } from '@/persistence/autosave';
-import { openStored } from '@/persistence/openForm';
+import { openStored, settleLegacyAccess } from '@/persistence/openForm';
 import { DOCUMENT_FORMAT, DraftConflict, type DocumentRepository, type StoredForm } from '@/persistence/DocumentRepository';
 import { useRepository } from '@/persistence/repository';
 import { watchTabs, type TabWatch } from '@/persistence/tabChannel';
@@ -60,6 +61,13 @@ export function useFormSession(id: string): Session {
       if (!result.ok) {
         setSession({ status: 'error', message: result.error });
         return;
+      }
+      // A password or closed state an older build kept in this browser goes to the API now, before a v1 file is replaced by its conversion (BL-145).
+      if (result.legacy && disputed === null) {
+        const session = useSessionStore.getState();
+        const org = session.status === 'signed_in' ? (activeOrgOf(session.me)?.id ?? null) : null;
+        result.notes.push(...(await settleLegacyAccess(stored, result, { org, repo })));
+        if (!live) return;
       }
       let rev = stored.rev;
       let serverRev = stored.serverRev;
