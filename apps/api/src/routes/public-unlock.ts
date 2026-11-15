@@ -15,7 +15,7 @@ export interface PublicUnlockDeps {
 
 /**
  * The respondent's password unlock for a protected form, `POST /v1/p/:slug/unlock` (WP-1.07). A stub until that work
- * package: it registers nothing. The route will be `auth: 'none'` (a respondent has no account), so its commit must say
+ * package: it registers nothing. The route will be public, with no session (a respondent has no account), so its commit must say
  * why, and it must be throttled per IP and form like the other public writes.
  */
 export function publicUnlockRoutes(app: FastifyInstance, deps: PublicUnlockDeps): void {

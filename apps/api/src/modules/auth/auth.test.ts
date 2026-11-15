@@ -87,7 +87,10 @@ describe('recovery codes', () => {
 });
 
 describe('passwords', () => {
-  it('hashes with argon2id and verifies in constant work for a missing hash', async () => {
+  // Five argon2id operations at 64 MiB and three passes: about four seconds of CPU on its own, more when every package's
+  // tests run at once. It is the one test that is slow by nature, so it alone gets a longer timeout; the config keeps the
+  // default 5 s for the rest (BL-177).
+  it('hashes with argon2id and verifies in constant work for a missing hash', { timeout: 30_000 }, async () => {
     const h = await hashPassword('correct horse battery staple');
     expect(h).toMatch(/^\$argon2id\$v=19\$m=65536,t=3,p=1\$/);
     expect(await verifyPassword(h, 'correct horse battery staple')).toBe(true);

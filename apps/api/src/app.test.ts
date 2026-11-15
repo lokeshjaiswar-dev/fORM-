@@ -7,7 +7,7 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
@@ -48,6 +48,14 @@ async function app(cfg = config(), deps: AppDeps = {}) {
   apps.push(a);
   return { app: a, lines };
 }
+
+/*
+ * The first buildApp() of a run loads Fastify and its plugins, which takes seconds when every package's tests run at once.
+ * It is paid here, in a hook with the longer `hookTimeout` of vitest.config.ts, so the tests below keep the default timeout.
+ */
+beforeAll(async () => {
+  await (await app()).app.ready();
+});
 
 afterEach(async () => {
   for (const a of apps.splice(0)) await a.close();
