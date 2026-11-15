@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { createKeyfileKeyProvider } from '@form/adapters/kms';
 import { createSmtpMailer } from '@form/adapters/mailer';
+import { createPostgresSearchIndex } from '@form/adapters/search';
 import { bootstrapRoles, provision } from '@form/db';
 import { createTestDatabase, startMailpit, startMockOidcProvider, startPostgres } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
@@ -79,6 +80,8 @@ try {
   const app = await buildApp(parsed.config, {
     keys: createKeyfileKeyProvider({ masterKey: randomBytes(32) }),
     mailer: createSmtpMailer({ url: mailpit.smtpUrl }),
+    // The responses grid's search (WP-1.15) answers 503 without a search index, as main.ts gives it one.
+    searchIndex: createPostgresSearchIndex,
     authLimits: { auth_any: { max: 600, windowSeconds: 60 } },
   });
   stops.push(() => app.close());
