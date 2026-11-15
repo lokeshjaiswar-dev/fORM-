@@ -9,6 +9,17 @@ import type { AuditEventSpec } from './spec.ts';
  * credentials, a subject or a body, so the chain can be read by someone who may not read the answers.
  */
 export const NOTIFICATIONS_EVENTS = {
+  'notification.saved': {
+    outcomes: ['success'],
+    resourceType: 'notification',
+    description:
+      "A form's notification was created or saved (`change` is `created` or `updated`); the metadata names the keys of the notification that changed, its kind, trigger and revision, how many recipients and purposes it has and whether any recipient is outside the people who may read answers. Never an address, a subject or a body.",
+  },
+  'notification.deleted': {
+    outcomes: ['success'],
+    resourceType: 'notification',
+    description: "A form's notification was deleted; the metadata holds its kind and trigger, never its recipients or text.",
+  },
   'email_sender.saved': {
     outcomes: ['success'],
     resourceType: 'email_sender',
