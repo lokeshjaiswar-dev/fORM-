@@ -45,7 +45,9 @@ export async function listRemoteSubmissions(formId: string): Promise<SubmissionS
   return res?.items ?? null;
 }
 
+/** One response from the API, marked as the server's: its rows are the ones the server built, and the page shows those. */
 export async function getRemoteSubmission(formId: string, id: string): Promise<StoredSubmission | null> {
   if (!(await signedIn())) return null;
-  return quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions/${id}`, detailSchema));
+  const row = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions/${id}`, detailSchema));
+  return row ? { ...row, source: 'server' } : null;
 }

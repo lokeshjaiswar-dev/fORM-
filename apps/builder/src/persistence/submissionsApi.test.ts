@@ -31,10 +31,10 @@ describe('submissionsApi', () => {
     expect(api).not.toHaveBeenCalled();
   });
 
-  it('reads one response through the org route', async () => {
+  it('reads one response through the org route, marked as the server’s so its rows are shown as built there', async () => {
     const row = { id: 's1', formId: 'f1', submittedAt: '2026-01-01T00:00:00.000Z', answers: {}, fields: [] };
     orgApi.mockResolvedValue(row);
-    await expect(getRemoteSubmission('f1', 's1')).resolves.toEqual(row);
+    await expect(getRemoteSubmission('f1', 's1')).resolves.toEqual({ ...row, source: 'server' });
     expect(orgApi).toHaveBeenCalledWith('GET', '/v1/forms/f1/submissions/s1', expect.anything());
     expect(api).not.toHaveBeenCalled();
   });

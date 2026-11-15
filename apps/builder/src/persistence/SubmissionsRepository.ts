@@ -14,6 +14,11 @@ export const storedSubmissionSchema = z.object({
   locale: z.string().optional(),
   answers: z.record(z.string(), z.unknown()),
   fields: z.array(submissionFieldSchema),
+  /**
+   * `server`: a response read from the API, whose `fields` the server built from the answers it validated. A preview
+   * response made in this browser has none; its rows were built here, by this browser, from its own answers.
+   */
+  source: z.literal('server').optional(),
 });
 export type StoredSubmission = z.infer<typeof storedSubmissionSchema>;
 

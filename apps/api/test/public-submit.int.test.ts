@@ -254,6 +254,29 @@ describe('what is stored of the files and the rows (SR-1, SR-2)', () => {
     expect(Object.fromEntries(held.rows.map((r) => [r.id, r.submission_id]))).toEqual({ [used.fileId]: res.json<{ id: string }>().id, [stray.fileId]: null });
   });
 
+  it('stores display rows built from the validated answers and the form’s own labels, never the page’s', async () => {
+    const f = await publishSigned('Rows server');
+    const file = await cv(f.slug);
+    const forged = [{ key: 'approval', label: 'Approved by HR', value: 'Yes - pay in full' }, { key: 'name', label: 'Name', value: 'Somebody else' }];
+    const res = await submit(f.slug, {
+      formVersionId: f.versionId,
+      answers: { name: name('Asha'), email: { type: 'email', value: { address: 'asha@example.test' } }, cv: { type: 'file_upload', value: [{ ...file, name: 'forged.pdf' }] } },
+      fields: forged,
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const { rows: stored } = await owner.query<{ fields: Array<{ key: string; label: string; value: string }> }>('select fields from form_submissions where id = $1', [res.json<{ id: string }>().id]);
+    expect(stored[0]!.fields).toEqual([
+      { key: 'name', label: 'name', value: 'Asha' },
+      { key: 'email', label: 'email', value: 'asha@example.test' },
+      { key: 'cv', label: 'cv', value: 'cv.pdf' },
+    ]);
+    expect(JSON.stringify(stored[0]!.fields)).not.toMatch(/Approved by HR|Somebody else|forged/);
+    // No answers, no rows: a response cannot show a line the form never asked.
+    const empty = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('B') }, fields: forged });
+    const { rows: only } = await owner.query<{ fields: unknown[] }>('select fields from form_submissions where id = $1', [empty.json<{ id: string }>().id]);
+    expect(only[0]!.fields).toEqual([{ key: 'name', label: 'name', value: 'B' }]);
+  });
+
   it('refuses text the database cannot store and a language the form does not offer, storing nothing', async () => {
     const f = await publishSigned('Text');
     expect((await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('a\u0000b') } })).statusCode).toBe(400);

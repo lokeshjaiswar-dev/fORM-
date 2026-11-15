@@ -153,8 +153,26 @@ function decodeStoredValue(value: string): string {
   }
 }
 
-/** Rebuild from the form when it is available so labels and media stay current. */
-export function readableFields(definition: FormDefinition | null, record: { answers: Record<string, unknown>; fields: SubmissionField[] }): ReadableField[] {
+/**
+ * The rows a response is shown as. A response read from the API (`source: 'server'`) is shown as the server built it:
+ * from the answers it validated and the form's own labels, so a respondent cannot add a line of their own ("Approved
+ * by HR: Yes"). Its pictures and files, which a row has no room for, are matched in from the answers by the field's key.
+ * A preview response made in this browser is rebuilt from the form when it is available, so labels and media stay
+ * current.
+ */
+export function readableFields(
+  definition: FormDefinition | null,
+  record: { answers: Record<string, unknown>; fields: SubmissionField[]; source?: 'server' | undefined },
+): ReadableField[] {
+  if (record.source === 'server') {
+    const media = new Map((definition ? answerRows(definition, record.answers as Answers) : []).map((row) => [row.key, row.media]));
+    return record.fields
+      .filter((field) => field.label || field.value)
+      .map((field) => {
+        const found = media.get(field.key);
+        return found?.length ? { ...field, media: found } : field;
+      });
+  }
   if (definition) {
     const rebuilt = answerRows(definition, record.answers as Answers);
     if (rebuilt.length) return rebuilt;

@@ -17,6 +17,11 @@ export function unstorableText(text: string): 'control_character' | 'broken_unic
   return null;
 }
 
+/** Text the server makes (from a form's own labels and options) made storable: control characters become spaces, a lone surrogate U+FFFD. */
+export function storableText(text: string): string {
+  return text.replace(new RegExp(CONTROL, 'g'), ' ').replace(new RegExp(LONE_SURROGATE, 'g'), '�');
+}
+
 /**
  * The path of the first string (a key or a value, at any depth) in a parsed JSON value that cannot be kept, or null.
  * Iterative, so a deeply nested body cannot exhaust the stack.

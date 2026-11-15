@@ -21,6 +21,7 @@ import {
   UPLOAD_BODY_LIMIT,
   type FileStore,
 } from '../files.ts';
+import { displayRows } from '../display-rows.ts';
 import { storableJson, storableString } from '../text-safety.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
 import { checkAnswers } from '../validate-submission.ts';
@@ -287,7 +288,8 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
           orgId: live.orgId,
           formId: live.formId,
           answers: values,
-          fields: request.body.fields,
+          // Built here from the validated answers; what the page sent along as "rows" is ignored (SR-2).
+          fields: displayRows(live.definition, values),
           locale: request.body.locale,
         });
         // The form's counters and the hold on the files are kept by a trigger on this INSERT (0019): a respondent
