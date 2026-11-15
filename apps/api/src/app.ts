@@ -193,7 +193,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   formRoutes(app, { db: handle.db });
   publishRoutes(app, { db: handle.db });
   const files = deps.files ?? createFileStore(path.resolve(process.cwd(), '.data/files'));
-  publicFormRoutes(app, { db: handle.db, config, files });
+  publicFormRoutes(app, { db: handle.db, config, files, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
   submissionRoutes(app, { db: handle.db });
   metaRoutes(app, { edition: config.edition });

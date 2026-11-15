@@ -9,7 +9,9 @@ import { acceptsFile } from '@form/registry';
 import type { BlockId, CompiledForm, FieldError, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
+import { clientInfo } from '../auth.ts';
 import { ProblemError, sendProblem } from '../errors.ts';
+import type { Throttle, ThrottleKey } from '../modules/auth/throttle.ts';
 import {
   baseMime,
   capBytes,
@@ -87,7 +89,7 @@ function uploadBodyLimit(live: LiveForm): number {
 /** The most files one submission may name (the narrow lookup of 0019 takes at most this many ids). */
 const MAX_FILES_PER_SUBMISSION = 100;
 
-export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig; files: FileStore }): void {
+export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date }): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const edition: RuntimeEdition = runtimeEdition(editionSummary(deps.config.edition));
 
@@ -158,12 +160,25 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
     return load;
   }
 
-  /** The live form of a public request's slug, resolved before its body is read; a refusal closes the connection, so the body is not uploaded for nothing. */
-  async function liveBeforeBody(request: FastifyRequest, reply: FastifyReply): Promise<LiveForm> {
+  /**
+   * Before the body of an anonymous write (an upload or a submission) is read: counts the request against the caller's
+   * limits, and resolves the form. The caller is an IP hash (a keyed hash of the address, never the address): first
+   * its budget over every form, before anything about the form is looked up, then its budget for this form. Past either
+   * is `429` problem+json with `Retry-After`, audited once per window like the sign-in limits. An unknown form is a 404,
+   * whatever the body. Every refusal closes the connection, so a client does not go on sending a body nobody reads.
+   */
+  async function admit(request: FastifyRequest, reply: FastifyReply, kind: 'files' | 'submit'): Promise<LiveForm> {
     try {
+      const { ipHash } = clientInfo(request, deps.config.auth.secret, deps.now());
+      const [ipBucket, formBucket] = kind === 'files' ? (['auth_files_ip', 'auth_files_form'] as const) : (['auth_submit_ip', 'auth_submit_form'] as const);
+      const tooMany = 'Too many requests from this address. Try again later.';
+      await deps.throttle.hit(request, reply, [{ bucket: ipBucket, key: ipHash }], { ipHash }, tooMany);
       const slug = (request.params as { slug?: unknown }).slug;
       if (typeof slug !== 'string' || !SLUG.test(slug)) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      return await loadLive(slug, request.id);
+      const live = await loadLive(slug, request.id);
+      const perForm: ThrottleKey = { bucket: formBucket, key: new Uint8Array(createHash('sha256').update(ipHash).update(live.formId).digest().subarray(0, 16)) };
+      await deps.throttle.hit(request, reply, [perForm], { ipHash }, tooMany);
+      return live;
     } catch (err) {
       reply.header('connection', 'close');
       throw err;
@@ -207,7 +222,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
    * limit. Without this, every request read and JSON-parsed up to 14 MB before anything about the form was looked at.
    */
   const guardUpload = async (request: FastifyRequest, reply: FastifyReply, payload: RequestPayload): Promise<RequestPayload> => {
-    const live = await liveBeforeBody(request, reply);
+    const live = await admit(request, reply, 'files');
     const limit = uploadBodyLimit(live);
     const declared = request.headers['content-length'];
     if (declared !== undefined && Number(declared) > limit) {
@@ -292,6 +307,11 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
     '/v1/p/:slug/submissions',
     {
       config: { auth: 'none' },
+      // Limits and the slug are looked at before the body (up to 1 MiB of answers) is read and parsed.
+      preParsing: async (request, reply, payload) => {
+        await admit(request, reply, 'submit');
+        return payload;
+      },
       schema: {
         tags: ['runtime'],
         summary: 'Submit answers on a published form',

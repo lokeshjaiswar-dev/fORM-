@@ -192,7 +192,22 @@ export async function authSession(db: Executor, tokenHash: Uint8Array, idleSecon
   };
 }
 
-export const AUTH_THROTTLE_BUCKETS = ['auth_any', 'auth_login', 'auth_account', 'auth_mfa', 'auth_mail'] as const;
+/**
+ * Buckets of `auth_throttle_hit()` (its names are `auth_` and lower-case letters). The first five are sign-in limits;
+ * `auth_files_*` and `auth_submit_*` count the anonymous writes of respondents (uploads and submissions) per IP hash
+ * and per IP hash and form, the same keyed-hash counters, so no address is stored.
+ */
+export const AUTH_THROTTLE_BUCKETS = [
+  'auth_any',
+  'auth_login',
+  'auth_account',
+  'auth_mfa',
+  'auth_mail',
+  'auth_files_ip',
+  'auth_files_form',
+  'auth_submit_ip',
+  'auth_submit_form',
+] as const;
 export type AuthThrottleBucket = (typeof AUTH_THROTTLE_BUCKETS)[number];
 
 /** One hit in the bucket's current window: the window's total so far and when it ends. */

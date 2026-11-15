@@ -22,6 +22,14 @@ export const DEFAULT_AUTH_LIMITS: Record<AuthThrottleBucket, Limit> = {
   auth_account: { max: 30, windowSeconds: 3600 },
   auth_mfa: { max: 30, windowSeconds: 3600 },
   auth_mail: { max: 10, windowSeconds: 3600 },
+  // Anonymous respondent writes (`POST /v1/p/:slug/files` and `/submissions`), counted the same way. Per IP hash over
+  // every form, so one address cannot spray many forms; and per IP hash and form, so it cannot flood one. A person
+  // fills a form in a few requests, so these are far above that, and still enough for a classroom behind one address.
+  // Ten-minute windows. (A flood from many addresses is a job for the edge: rate limits and a captcha.)
+  auth_files_ip: { max: 240, windowSeconds: 600 },
+  auth_files_form: { max: 120, windowSeconds: 600 },
+  auth_submit_ip: { max: 120, windowSeconds: 600 },
+  auth_submit_form: { max: 60, windowSeconds: 600 },
 };
 
 export interface ThrottleKey {
