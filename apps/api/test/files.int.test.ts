@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -168,6 +169,36 @@ describe('POST /v1/p/:slug/files (respondents are anonymous)', () => {
     expect(over.statusCode).toBe(413);
     const huge = await upload({ blockId: 'anything', name: 'big.txt', mime: 'text/plain', data: 'A'.repeat(14 * 1024 * 1024) });
     expect(huge.statusCode).toBe(413);
+    expect(await stored()).toEqual(before);
+  });
+
+  it('refuses by the declared length, before reading the body, and cuts off a body of no declared length that grows past the limit', async () => {
+    const before = await stored();
+    // The form's largest field ("anything", 10 MiB) can need about 14 MB of body. What the header declares decides, not
+    // what is sent (the body here is one byte).
+    const declared = await app.inject({
+      method: 'POST',
+      url: `/v1/p/${slug}/files`,
+      headers: { 'content-type': 'application/json', 'content-length': String(20 * 1024 * 1024) },
+      payload: '{',
+    });
+    // A body that is shorter than it says is refused as too large before it is read, not as malformed after.
+    expect(declared.statusCode).toBe(413);
+    expect(declared.json()).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+    // No declared length (chunked): counted as it arrives, and cut off past the same limit.
+    const chunks = Readable.from(
+      (async function* () {
+        yield Buffer.from('{"blockId":"anything","name":"a.txt","mime":"text/plain","data":"');
+        for (let i = 0; i < 16; i++) yield Buffer.alloc(1024 * 1024, 0x41);
+        yield Buffer.from('"}');
+      })(),
+    );
+    const streamed = await app.inject({ method: 'POST', url: `/v1/p/${slug}/files`, headers: { 'content-type': 'application/json' }, payload: chunks });
+    expect(streamed.statusCode).toBe(413);
+    expect(streamed.json()).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+    // Slug first: an unknown form is a 404 however the body arrives, and so is an address that is not a slug at all.
+    const strange = await app.inject({ method: 'POST', url: '/v1/p/no%00such', headers: { 'content-type': 'application/json' }, payload: '{}' });
+    expect(strange.statusCode).toBe(404);
     expect(await stored()).toEqual(before);
   });
 

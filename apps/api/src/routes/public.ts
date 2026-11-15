@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, RequestPayload } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
 import { formFiles, formFilesCheck, formSubmissions, formVersions, resolveFormSlug, withTenant, type Db } from '@form/db';
@@ -12,6 +12,7 @@ import type { ApiConfig } from '../config.ts';
 import { ProblemError, sendProblem } from '../errors.ts';
 import {
   baseMime,
+  capBytes,
   contentProblem,
   DEFAULT_ACCEPT,
   isNeverStored,
@@ -19,6 +20,7 @@ import {
   MAX_UPLOAD_BYTES,
   normaliseFileName,
   UPLOAD_BODY_LIMIT,
+  uploadBodyLimitFor,
   type FileStore,
 } from '../files.ts';
 import { displayRows } from '../display-rows.ts';
@@ -58,6 +60,16 @@ const liveByVersion = new Map<string, LiveForm>();
 const liveInflight = new Map<string, Promise<LiveForm>>();
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** The biggest request body an upload to this form can need: the largest file one of its fields takes, as base64 in JSON. */
+function uploadBodyLimit(live: LiveForm): number {
+  let biggest = 0;
+  for (const block of Object.values(live.definition.blocks)) {
+    if (block?.type === 'file_upload') biggest = Math.max(biggest, Math.min(block.config.maxFileBytes, MAX_UPLOAD_BYTES));
+    else if (block?.type === 'signature') biggest = Math.max(biggest, MAX_SIGNATURE_BYTES);
+  }
+  return uploadBodyLimitFor(biggest);
+}
 
 /** The most files one submission may name (the narrow lookup of 0019 takes at most this many ids). */
 const MAX_FILES_PER_SUBMISSION = 100;
@@ -134,6 +146,18 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
     return load;
   }
 
+  /** The live form of a public request's slug, resolved before its body is read; a refusal closes the connection, so the body is not uploaded for nothing. */
+  async function liveBeforeBody(request: FastifyRequest, reply: FastifyReply): Promise<LiveForm> {
+    try {
+      const slug = (request.params as { slug?: unknown }).slug;
+      if (typeof slug !== 'string' || !SLUG.test(slug)) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+      return await loadLive(slug, request.id);
+    } catch (err) {
+      reply.header('connection', 'close');
+      throw err;
+    }
+  }
+
   r.get(
     '/v1/p/:slug',
     {
@@ -164,11 +188,29 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
     scan: z.literal('skipped'),
   });
 
+  /**
+   * Before the body of an anonymous upload is read: the slug must be a live form (else 404), and a body bigger than the
+   * biggest file this form takes (its largest `maxFileBytes`, a signature's 2 MiB) is refused from its `Content-Length`
+   * (413) without reading a byte; a body that declares no length is counted as it arrives and cut off past the same
+   * limit. Without this, every request read and JSON-parsed up to 14 MB before anything about the form was looked at.
+   */
+  const guardUpload = async (request: FastifyRequest, reply: FastifyReply, payload: RequestPayload): Promise<RequestPayload> => {
+    const live = await liveBeforeBody(request, reply);
+    const limit = uploadBodyLimit(live);
+    const declared = request.headers['content-length'];
+    if (declared !== undefined && Number(declared) > limit) {
+      reply.header('connection', 'close');
+      throw new ProblemError('PAYLOAD_TOO_LARGE', 'That file is too large.');
+    }
+    return capBytes(payload, limit, () => new ProblemError('PAYLOAD_TOO_LARGE', 'That file is too large.'));
+  };
+
   r.post(
     '/v1/p/:slug/files',
     {
       config: { auth: 'none' },
       bodyLimit: UPLOAD_BODY_LIMIT,
+      preParsing: guardUpload,
       schema: {
         tags: ['runtime'],
         summary: 'Upload a file to an upload or signature field of a published form',

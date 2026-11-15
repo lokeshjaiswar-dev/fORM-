@@ -1,5 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Transform, type Readable } from 'node:stream';
 
 /*
  * Respondent files: the rules for what may be stored and how it is served back, and the byte store.
@@ -14,8 +15,29 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 /** A signature is a small PNG of a pad: far under this. */
 export const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
 
-/** The request body limit for an upload: the base64 of the biggest file, plus the JSON around it. */
-export const UPLOAD_BODY_LIMIT = Math.ceil(MAX_UPLOAD_BYTES / 3) * 4 + 4096;
+/** The request body an upload of a file of at most `bytes` needs: its base64, plus the JSON around it. */
+export const uploadBodyLimitFor = (bytes: number): number => Math.ceil(bytes / 3) * 4 + 4096;
+
+/** The request body limit for an upload whatever the form: the base64 of the biggest file any form may take. */
+export const UPLOAD_BODY_LIMIT = uploadBodyLimitFor(MAX_UPLOAD_BYTES);
+
+/**
+ * `source` passed through, unchanged, until it has carried more than `limit` bytes; then the stream fails with
+ * `onExceed()`. For a body that declares no length (chunked), where nothing is known to be too big until it is.
+ */
+export function capBytes(source: Readable, limit: number, onExceed: () => Error): Readable {
+  let seen = 0;
+  const counter = new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      seen += chunk.length;
+      if (seen > limit) done(onExceed());
+      else done(null, chunk);
+    },
+  });
+  // Errors of the source travel on; nothing is left listening when the counter fails.
+  source.once('error', (err) => counter.destroy(err));
+  return source.pipe(counter);
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
