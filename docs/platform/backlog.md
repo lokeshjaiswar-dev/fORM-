@@ -274,3 +274,27 @@ Source: the Phase 0 batch-2 integration report (WP-0.12, 0.15, 0.04, T0.1, 0.13,
 | BL-263 | adapters | [WP-1.03 review] The GCP KMS `decrypt()` (`packages/adapters/src/kms/gcp.ts`) checks `keyRef` only against `CRYPTO_KEY`, whose `[^/]+` segments allow `..`, `?` and `#`, so a `keyRef` read back from the database can change the request path or query on the KMS host before `:decrypt`; the Vault and Azure drivers pin `keyRef` to their configured key | Require `keyRef === o.keyName`, or a strict `[A-Za-z0-9_-]+` charset per segment, as the Vault and Azure drivers do | WP-1.11 | open |
 | BL-264 | adapters | [WP-1.03 review] Vault transit encrypt creates a missing key when the token policy allows it, so a mistyped `KMS_KEY_ID` silently gets a new, unprovisioned root key: `sealSigningSeed` and `wrap` succeed against a key the operator never created or backed up (`packages/adapters/src/kms/vault.ts`) | At open or seal time read `GET <mount>/keys/<key>` and refuse a missing key or one that is not `aes256-gcm96`; otherwise document that the token policy must deny create on `transit/encrypt` | WP-1.11 | open |
 | BL-265 | adapters, docs | [WP-1.03 review] `@form/adapters` drops the conventional root export (`".": "./src/index.ts"`) for eleven per-family subpath exports (`@form/adapters/<family>`) with no `src/index.ts`. Architecture §2 and the WP-1.03 as-built note document it and the dependency-cruiser rules `no-deep-import` and `adapter-families-apart` enforce it, but the workspace convention and the WP deviations do not mention it. Accepted at merge as a documented exception | Record the exception where the convention is defined (an ADR or the conventions list) | unassigned | open |
+| BL-266 | api, db, tools | [Security review, 15 Nov 2026] Forms and drafts put into an org through the anonymous `POST /v1/p/publish` (migrations 0014 and 0015, removed by 0016) may still be live: the function filed them under the org's first owner, so they look like that owner's own, and nothing recorded who sent them | Run `tools/audit/guest-published-versions.sql` once per deployment that ran such a build, ask each org about the rows it lists, and unpublish what the org does not recognise (section below). Never delete. From this build the member publish route records `form.published` for every version, so a version without one is old | unassigned | open |
+
+## Guest-published forms (BL-266)
+
+**What happened.** For a short time (migration 0014 and 0015 applied until 0016) the API had a public route, `POST /v1/p/publish`, that called a security-definer function, `guest_publish_form()`. It put the form and a draft it was sent into "the first active org", with that org's owner as author, and made it the live form at a public address. Anyone who could reach the API could do that to any customer's org, and people could then fill the form. Migration 0016 removed the function and the route; this build also records a `form.published` audit event on every member publish. What the route did before cannot be undone by code, and which rows it made cannot be read off the data with certainty, so the answer is a read-only report and a human decision.
+
+**When to run it.** Once, on every deployment (demo, staging, production, an on-prem install) whose database was migrated by a build that had 0014 or 0015 but not yet 0016. On a deployment that went straight from 0013 or earlier to 0016 or later the query returns no row in the window and there is nothing to do. It is safe to run again; it changes nothing (two SELECTs).
+
+**How.** As the schema owner (`fr_migrator`, which sees every org):
+
+```
+psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f tools/audit/guest-published-versions.sql
+```
+
+The first result lists every published version with no `form.published` event, with the evidence for the guest path: `in_guest_window` (published between the 0014 and 0016 migrations), `same_transaction_as_form` and `same_transaction_as_draft` (the guest function wrote the form, draft and version in one transaction, so their timestamps are identical to the microsecond; the member route never does), `published_by_email` (the owner it was filed under), `is_live`, `has_submissions`. The second result lists the drafts the function wrote. Versions published before this build have no event whatever their origin, so read the columns together: a row that is in the window and matches a same-transaction column is almost certainly the guest path; a row outside the window cannot be.
+
+**What to do with a row.**
+
+1. Do not delete anything. The versions are evidence, and the submissions belong to the org.
+2. Per org, send its owner the short list: form title, public address, publish time, whether it took responses. Ask whether they published it.
+3. A form the org recognises: no action. It can be published again from the builder to leave a `form.published` record.
+4. A form the org does not recognise: have the org (or support, under the org's request and with an audit record) archive or unpublish it, so its address stops answering (the public routes resolve the live version on every request). Keep the draft and versions.
+5. A form that already has submissions and is not the org's: the org decides whether to tell the people who filled it, and whether this is a personal-data incident for its own records; the platform's privacy contact helps with the assessment.
+6. Note the run in the incident log: date, deployment, rows listed, rows confirmed.

@@ -116,6 +116,30 @@ describe('publish and public fill', () => {
     const res = await app.inject({ url: '/v1/p/missing-form' });
     expect(res.statusCode).toBe(404);
   });
+
+  it('records who published each version on the org’s audit log (form.published), without an address', async () => {
+    const id = await savedForm();
+    const live = (await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: { ...as(userId), 'user-agent': 'audit-test' }, payload: {} })).json<{ slug: string; versionId: string; number: number }>();
+    const { rows } = await owner.query<{ event: Record<string, unknown> }>(`select event from audit_pending where org_key = $1 and event->>'action' = 'form.published' and event->>'resourceId' = $2`, [orgId, live.versionId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.event).toMatchObject({
+      actorKind: 'user',
+      actorId: userId,
+      action: 'form.published',
+      resourceType: 'form_version',
+      resourceId: live.versionId,
+      formId: id,
+      outcome: 'success',
+      metadata: { number: live.number, slug: live.slug },
+    });
+    expect(JSON.stringify(rows[0]!.event)).not.toMatch(/127\.0\.0\.1/);
+    // A publish that fails (no draft) records nothing.
+    const created = await app.inject({ method: 'POST', url: '/v1/forms', headers: as(userId), payload: { title: 'No draft' } });
+    const bare = created.json<{ id: string }>().id;
+    await app.inject({ method: 'POST', url: `/v1/forms/${bare}/publish`, headers: as(userId), payload: {} });
+    const none = await owner.query(`select 1 from audit_pending where event->>'action' = 'form.published' and event->>'formId' = $1`, [bare]);
+    expect(none.rows).toEqual([]);
+  });
 });
 
 describe('publishing needs a signed-in member with forms.publish', () => {

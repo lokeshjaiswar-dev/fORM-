@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { eq, max } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { formDrafts, forms, formVersions, withTenant, type Db, type Tx } from '@form/db';
+import { audit, auditActor, formDrafts, forms, formVersions, withTenant, type Db, type Tx } from '@form/db';
 import { compile } from '@form/logic';
 import { REGISTRY } from '@form/registry';
 import { FormDefinitionSchema, slugOf, type FormDefinition } from '@form/schema';
 import { z } from 'zod';
-import { accountOf, tenantOf } from '../auth.ts';
+import { accountOf, clientInfo, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
+import { hex } from '../modules/auth/crypto.ts';
 
 const published = z.object({
   slug: z.string(),
@@ -119,7 +120,7 @@ async function freeze(
   return { slug, versionId, number };
 }
 
-export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
+export function publishRoutes(app: FastifyInstance, deps: { db: Db; secret: Uint8Array; now: () => Date }): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
 
   r.get(
@@ -169,12 +170,28 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
       const { id } = request.params;
       const tenant = tenantOf(request);
       const userId = accountOf(request).userId;
+      const cl = clientInfo(request, deps.secret, deps.now());
       return withTenant(deps.db, tenant, async (tx) => {
         const [form] = await tx.select().from(forms).where(eq(forms.id, id)).limit(1);
         if (!form) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
         const [draftRow] = await tx.select().from(formDrafts).where(eq(formDrafts.formId, id)).limit(1);
         if (!draftRow) throw new ProblemError('NOT_FOUND', 'That form has no draft to publish.');
-        return freeze(tx, { orgId: tenant.orgId, formId: id, userId, definition: parsedDefinition(draftRow.draft, id), media: request.body?.media });
+        const live = await freeze(tx, { orgId: tenant.orgId, formId: id, userId, definition: parsedDefinition(draftRow.draft, id), media: request.body?.media });
+        // In the same transaction as the version: a live form with no record of who published it is what the retired
+        // anonymous route left behind (tools/audit/guest-published-versions.sql looks for versions without this event).
+        await audit.append(tx, tenant.orgId, {
+          ...auditActor(tenant),
+          sessionId: accountOf(request).session?.id ?? null,
+          actorIpHash: hex(cl.ipHash),
+          actorUa: cl.ua,
+          action: 'form.published',
+          resourceType: 'form_version',
+          resourceId: live.versionId,
+          formId: id,
+          outcome: 'success',
+          metadata: { number: live.number, slug: live.slug },
+        });
+        return live;
       });
     },
   );

@@ -238,6 +238,11 @@ export const AUDIT_EVENTS = {
     resourceType: 'export',
     description: 'A submissions export was requested; includeSensitive needs a reason.',
   },
+  'form.published': {
+    outcomes: ['success'],
+    resourceType: 'form_version',
+    description: 'A saved draft was frozen as the live version of a form (version number and public slug in metadata). Versions published before this record existed have none.',
+  },
   'file.downloaded': {
     outcomes: ['success'],
     resourceType: 'file',
