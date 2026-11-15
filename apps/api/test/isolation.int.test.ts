@@ -29,6 +29,7 @@ import {
   type Res,
   type SeedEnv,
 } from './isolation-cases/index.ts';
+import { ISOLATION_STORAGE } from './isolation-cases/exports.ts';
 
 /*
  * The cross-org isolation suite for the API (WP-1.06: "every endpoint in the RLS suite"; the table-level suite is
@@ -100,6 +101,8 @@ beforeAll(async () => {
     keys,
     // The org email senders seal their SMTP URL under the org's key (WP-1.16), so their cases can reach the database.
     orgSecrets: createOrgSecrets(keys),
+    // The export routes answer 503 without an object store; the exports cases put org A's finished file in this one.
+    storage: ISOLATION_STORAGE,
     // Dozens of auth requests from one address in a minute are the point of this suite, not an attack.
     authLimits: { auth_any: { max: 100_000, windowSeconds: 60 } },
     onRoute: (route) => collect(routes, route),
