@@ -1,5 +1,5 @@
 import { valueDefinition } from '@form/registry';
-import type { Answers, FieldBlock, FileRef, FormDefinition, ValueFieldType } from '@form/schema';
+import type { Answers, FieldBlock, FormDefinition, ValueFieldType } from '@form/schema';
 import { toPlain } from '@form/schema';
 import { blockOrder, isField } from '@/lib/definition';
 import type { SubmissionField } from '@/persistence/SubmissionsRepository';
@@ -66,51 +66,6 @@ function fieldLabel(block: FieldBlock): string {
   return toPlain(block.label).trim() || block.key;
 }
 
-function asFileRef(value: unknown): FileRef | null {
-  if (!value || typeof value !== 'object') return null;
-  const rec = value as Record<string, unknown>;
-  if (typeof rec.fileId !== 'string' || typeof rec.name !== 'string') return null;
-  return rec as unknown as FileRef;
-}
-
-export type AnswerMedia = { fileId?: string; assetId?: string; name: string; mime?: string };
-
-export type ReadableField = SubmissionField & { media?: AnswerMedia[] };
-
-function mediaFor(block: FieldBlock, answer: unknown): AnswerMedia[] {
-  const value = answerValue(answer);
-  if (block.type === 'file_upload' && Array.isArray(value)) {
-    return value.flatMap((item) => {
-      const file = asFileRef(item);
-      return file ? [{ fileId: file.fileId, name: file.name, mime: file.mime }] : [];
-    });
-  }
-  if (block.type === 'signature' && value && typeof value === 'object') {
-    const file = asFileRef((value as { file?: unknown }).file);
-    return file ? [{ fileId: file.fileId, name: file.name, mime: file.mime }] : [];
-  }
-  if ((block.type === 'single_choice' || block.type === 'multi_choice') && 'display' in block.config && block.config.display === 'image') {
-    const options = block.config.options;
-    const ids: string[] = [];
-    if (block.type === 'single_choice' && value && typeof value === 'object') {
-      const optionId = (value as { optionId?: unknown }).optionId;
-      if (typeof optionId === 'string') ids.push(optionId);
-    }
-    if (block.type === 'multi_choice' && value && typeof value === 'object') {
-      const optionIds = (value as { optionIds?: unknown }).optionIds;
-      if (Array.isArray(optionIds)) ids.push(...optionIds.filter((id): id is string => typeof id === 'string'));
-    }
-    return ids.flatMap((id) => {
-      const option = options.find((o) => o.id === id);
-      const assetId = option?.image?.assetId;
-      if (!assetId) return [];
-      const name = typeof option.label === 'string' ? option.label : id;
-      return [{ assetId, name }];
-    });
-  }
-  return [];
-}
-
 /** One readable line for a stored answer, using option labels and field text — never raw JSON. */
 export function displayAnswer(block: FieldBlock | undefined, answer: unknown): string {
   const value = answerValue(answer);
@@ -121,63 +76,19 @@ export function displayAnswer(block: FieldBlock | undefined, answer: unknown): s
   return joinReadable(value);
 }
 
-function looksLikeJson(value: string): string {
-  return value.trim();
-}
-
-function isJson(value: string): boolean {
-  const t = looksLikeJson(value);
-  return t.startsWith('{') || t.startsWith('[');
-}
-
-/** Labels and readable values for a filled form, in document order (including nested sections). */
-export function answerRows(definition: FormDefinition, answers: Answers): ReadableField[] {
-  const rows: ReadableField[] = [];
+/**
+ * Labels and readable values for a filled form, in document order (including nested sections). The preview and the
+ * published page keep these beside the answers of a response made in this browser; the Responses page does not use
+ * them: it shows what the API built from the answers it validated (WP-1.15).
+ */
+export function answerRows(definition: FormDefinition, answers: Answers): SubmissionField[] {
+  const rows: SubmissionField[] = [];
   for (const id of blockOrder(definition)) {
     const block = definition.blocks[id];
     if (!isField(block)) continue;
     const answer = answers[block.id];
     if (!answer) continue;
-    const media = mediaFor(block, answer);
-    rows.push({ key: block.key, label: fieldLabel(block), value: displayAnswer(block, answer), ...(media.length ? { media } : {}) });
+    rows.push({ key: block.key, label: fieldLabel(block), value: displayAnswer(block, answer) });
   }
   return rows;
-}
-
-function decodeStoredValue(value: string): string {
-  if (!isJson(value)) return value;
-  try {
-    return joinReadable(JSON.parse(value) as unknown) || value;
-  } catch {
-    return value;
-  }
-}
-
-/**
- * The rows a response is shown as. A response read from the API (`source: 'server'`) is shown as the server built it:
- * from the answers it validated and the form's own labels, so a respondent cannot add a line of their own ("Approved
- * by HR: Yes"). Its pictures and files, which a row has no room for, are matched in from the answers by the field's key.
- * A preview response made in this browser is rebuilt from the form when it is available, so labels and media stay
- * current.
- */
-export function readableFields(
-  definition: FormDefinition | null,
-  record: { answers: Record<string, unknown>; fields: SubmissionField[]; source?: 'server' | undefined },
-): ReadableField[] {
-  if (record.source === 'server') {
-    const media = new Map((definition ? answerRows(definition, record.answers as Answers) : []).map((row) => [row.key, row.media]));
-    return record.fields
-      .filter((field) => field.label || field.value)
-      .map((field) => {
-        const found = media.get(field.key);
-        return found?.length ? { ...field, media: found } : field;
-      });
-  }
-  if (definition) {
-    const rebuilt = answerRows(definition, record.answers as Answers);
-    if (rebuilt.length) return rebuilt;
-  }
-  return record.fields
-    .filter((field) => field.label || field.value)
-    .map((field) => ({ ...field, value: decodeStoredValue(field.value) }));
 }
