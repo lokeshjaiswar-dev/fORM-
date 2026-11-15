@@ -22,4 +22,9 @@ export const ACCESS_EVENTS = {
     resourceType: 'form',
     description: "A form's public address was changed; the old address keeps resolving and the metadata names both.",
   },
+  'form.unlock_failed': {
+    outcomes: ['denied'],
+    resourceType: 'form',
+    description: "A respondent's password for a protected form was not accepted; filed with the keyed hash of the address only (no password, no user).",
+  },
 } as const satisfies Record<string, AuditEventSpec>;

@@ -11,4 +11,9 @@ export const ACCESS_PROBLEMS = {
   ACCESS_REV_REQUIRED: { status: 428, title: 'Send the revision you read in If-Match' },
   /** The slug is held by another form (its address or one it used to have), in this org or another. */
   FORM_SLUG_TAKEN: { status: 409, title: 'That address is already used by another form' },
+  /**
+   * The respondent's password was not accepted. One answer for a wrong password and for a form that has none, so the
+   * answer does not say which forms are protected.
+   */
+  FORM_UNLOCK_FAILED: { status: 401, title: 'The password is not right' },
 } as const satisfies Record<string, ProblemSpec>;

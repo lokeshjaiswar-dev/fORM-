@@ -446,7 +446,8 @@ describe('OpenAPI', () => {
     // modules/auth/oidc.ts (2): the OAuth start and callback. modules/account/routes.ts: the privacy notice shown
     // before sign-up. modules/orgs/members.ts: the invite lookup by its secret token. routes/public.ts (3): a published
     // form by slug, its file uploads, its answers: a respondent has no account (the anonymous writes are bound to the
-    // live version of one form and validated there).
+    // live version of one form and validated there). routes/public-unlock.ts (1): the respondent's password check for a
+    // protected form: the password is the credential, the route is limited per address and form, and every refusal is audited.
     expect(open).toEqual({
       'app.ts': 1,
       'modules/account/routes.ts': 1,
@@ -456,6 +457,7 @@ describe('OpenAPI', () => {
       'routes/csp-reports.ts': 1,
       'routes/health.ts': 2,
       'routes/meta.ts': 1,
+      'routes/public-unlock.ts': 1,
       'routes/public.ts': 3,
     });
   });
@@ -527,6 +529,7 @@ describe('OpenAPI', () => {
       '/v1/p/{slug}',
       '/v1/p/{slug}/files',
       '/v1/p/{slug}/submissions',
+      '/v1/p/{slug}/unlock',
       '/v1/privacy/notice',
     ]);
     expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);

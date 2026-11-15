@@ -30,6 +30,11 @@ export const DEFAULT_AUTH_LIMITS: Record<AuthThrottleBucket, Limit> = {
   auth_files_form: { max: 120, windowSeconds: 600 },
   auth_submit_ip: { max: 120, windowSeconds: 600 },
   auth_submit_form: { max: 60, windowSeconds: 600 },
+  // Password attempts on a protected form (`POST /v1/p/:slug/unlock`), per IP hash and form. Every attempt counts, the
+  // right password too (a refund after the fact would let parallel guesses through), so this is the sign-in limit
+  // (`auth_login`): ten tries in fifteen minutes. The per-visit-token budget that spares a shared address arrives with
+  // the runtime host (WP-1.09, architecture §3.5 `runtime_unlock`).
+  auth_unlock_form: { max: 10, windowSeconds: 900 },
 };
 
 export interface ThrottleKey {

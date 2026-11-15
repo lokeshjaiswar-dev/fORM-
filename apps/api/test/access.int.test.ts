@@ -6,13 +6,14 @@ import { createDb, provision, resolveFormSlug, type DbHandle } from '@form/db';
 import { createTestDatabase } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
 import { parseConfig, type ApiConfig } from '../src/config.ts';
+import { verifyAccessToken } from '../src/runtime/access-token.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 import { publishableDraft } from './publishable-draft.ts';
 
 /*
- * WP-1.07 access API: settings with revisions, the password and the public address. One of the acceptance lines is about
- * every response of every access route (no hash, no argon2 string, errors included): `call` records each response and
- * the last test scans them.
+ * WP-1.07 access API: settings with revisions, the password, the public address, and the respondent's unlock. The
+ * unlock route is exercised here too, because one of the acceptance lines is about every response of every access and
+ * unlock route (no hash, no argon2 string, errors included): `call` records each response and the last test scans them.
  */
 
 const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as const;
@@ -85,6 +86,13 @@ async function call(method: Method, url: string, o: { user?: string; org?: strin
     ...(o.ip ? { remoteAddress: o.ip } : {}),
   });
   seen.push({ route: `${method} ${url.replace(UUID, ':id').replace(/^(\/v1\/p\/)[^/]+/, '$1:slug')}`, status: res.statusCode, body: res.body });
+  return res;
+}
+
+/** The unlock route has no session: a respondent. */
+async function unlock(slug: string, password: string, ip = '198.51.100.7') {
+  const res = await app.inject({ method: 'POST', url: `/v1/p/${slug}/unlock`, remoteAddress: ip, payload: { password } });
+  seen.push({ route: 'POST /v1/p/:slug/unlock', status: res.statusCode, body: res.body });
   return res;
 }
 
@@ -484,7 +492,28 @@ describe('the public address', () => {
   });
 });
 
-describe('responses of the access routes', () => {
+describe('the unlock route, seen from the access API', () => {
+  it('accepts the password the access API set and refuses every other, and the token is for this form and version only', async () => {
+    const form = await newForm({ publish: true });
+    await call('PUT', `/v1/forms/${form.id}/access/password`, { body: { password: 'violet-anchor-teapot-91' } });
+    const wrong = await unlock(form.slug!, 'violet-anchor-teapot-92');
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.json()).toMatchObject({ code: 'FORM_UNLOCK_FAILED' });
+    const right = await unlock(form.slug!, 'violet-anchor-teapot-91');
+    expect(right.statusCode, right.body).toBe(200);
+    const { accessToken, expiresAt } = right.json<{ accessToken: string; expiresAt: string }>();
+    const scope = { formId: form.id, versionScope: form.versionId! };
+    expect(verifyAccessToken(config.auth.secret, accessToken, scope, new Date())).toMatchObject({ formId: form.id });
+    expect(verifyAccessToken(config.auth.secret, accessToken, { ...scope, formId: randomUUID() }, new Date())).toBeNull();
+    expect(new Date(expiresAt).getTime() - Date.now()).toBeGreaterThan(7190_000);
+
+    // Removing the password ends the unlock: the same text no longer opens anything.
+    await call('DELETE', `/v1/forms/${form.id}/access/password`);
+    expect((await unlock(form.slug!, 'violet-anchor-teapot-91')).statusCode).toBe(401);
+  });
+});
+
+describe('responses of the access and unlock routes', () => {
   it('never carry password_hash or an argon2 string, errors included', async () => {
     const routes = new Set(seen.map((s) => s.route));
     // The scan means something only if the suite reached every route and both kinds of answer.
@@ -495,6 +524,7 @@ describe('responses of the access routes', () => {
       'DELETE /v1/forms/:id/access/password',
       'GET /v1/forms/:id/slug',
       'PUT /v1/forms/:id/slug',
+      'POST /v1/p/:slug/unlock',
     ]) {
       expect(routes, route).toContain(route);
       const answers = seen.filter((s) => s.route === route);
