@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -25,6 +24,7 @@ import { accountOf, clientInfo, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
 import { attachmentHeader } from '../files.ts';
 import { hex } from '../modules/auth/crypto.ts';
+import { uuidv7 } from '../uuid7.ts';
 
 export interface ExportRouteDeps {
   /** The request pool: every read and write goes through `withTenant` on it, so row-level security limits it to the caller's org. */
@@ -275,7 +275,7 @@ export function exportRoutes(app: FastifyInstance, deps: ExportRouteDeps): void 
           throw new ProblemError('EXPORT_QUOTA_REACHED', `${MAX_PER_DAY} exports were asked for in the last 24 hours. Try again later.`);
         }
 
-        const id = randomUUID();
+        const id = uuidv7(now.getTime());
         const [inserted] = await tx
           .insert(exportJobs)
           .values({ id, orgId: tenant.orgId, formId, requestedBy: userId, format, scope, includeSensitive, reason, idempotencyKey: key })
