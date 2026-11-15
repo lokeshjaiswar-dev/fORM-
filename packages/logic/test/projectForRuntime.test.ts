@@ -1,7 +1,9 @@
+import { RuntimeFormVersionSchema } from '@form/schema';
 import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import { evalStateJson, evaluate, projectForRuntime, stepKey } from '../src/index.ts';
 import { META, a, ans, bid, cond, field, form, hide, id, num, page, rule, versionOf } from './build.ts';
+import { REVIEW_ASSIGNMENTS, reviewForm } from './corpus/review.ts';
 
 const origin: S.Origin = { bindingId: id<S.TemplateBindingId>('binding_1'), sourceId: 'src_1' };
 const publicConfig: S.RuntimeFormVersion['publicConfig'] = {
@@ -88,5 +90,62 @@ describe('projectForRuntime', () => {
     expect(evaluate(v, {}, META, 'server').serverEffects).toEqual([]);
     const trace = evaluate(v, answers, META, 'client', { trace: true }).trace ?? [];
     expect(trace.map((t) => [stepKey(t.step), t.fired])).toEqual([['on_path:p1', null], ['rule:client', false], ['rule:mixed', true], ['rule:server', null]]);
+  });
+});
+
+describe('projectForRuntime and review units (WP-2.33)', () => {
+  /** A published version whose unit objects carry keys that belong to the server only, as a hostile or future draft might. */
+  function reviewed(): S.FormVersion {
+    const def = reviewForm();
+    const units = (def.review?.units ?? []).map((unit) => ({ ...unit, groupId: 'g_secret', visibility: 'own_unit', 'x-note': 'internal' }));
+    return versionOf({ ...def, review: { units } as unknown as S.FormReviewDefinition });
+  }
+
+  it('keeps unit ids and names only: no targets, groups, visibility or reviewUnits', () => {
+    const v = reviewed();
+    expect(v.compiled.reviewUnits).toBeDefined();
+    const runtime = projectForRuntime(v, { state: 'open' }, publicConfig);
+    expect(runtime.definition.review).toMatchInlineSnapshot(`
+      {
+        "units": [
+          {
+            "id": "u_applicant",
+            "name": "Applicant details",
+          },
+          {
+            "id": "u_contact",
+            "name": "Contact details",
+          },
+          {
+            "id": "u_bank",
+            "name": "Bank details",
+          },
+        ],
+      }
+    `);
+    expect(runtime.compiled).not.toHaveProperty('reviewUnits');
+    expect(RuntimeFormVersionSchema.safeParse(JSON.parse(JSON.stringify(runtime))).success).toBe(true);
+    const json = JSON.stringify(runtime);
+    for (const leak of ['reviewUnits', 'groupId', 'g_secret', 'visibility', 'own_unit', 'x-note', 'internal']) expect(json).not.toContain(leak);
+    for (const assignment of REVIEW_ASSIGNMENTS) expect(json).not.toContain(assignment.groupId);
+  });
+
+  it('does not touch the version it projects, and leaves a form without review as it was', () => {
+    const v = reviewed();
+    const before = JSON.stringify(v);
+    projectForRuntime(v, { state: 'open' }, publicConfig);
+    expect(JSON.stringify(v)).toBe(before);
+    const plain = projectForRuntime(version(), { state: 'open' }, publicConfig);
+    expect(plain.definition).not.toHaveProperty('review');
+    expect(plain.compiled).not.toHaveProperty('reviewUnits');
+  });
+
+  it('evaluates to the same client state as the version it was projected from', () => {
+    const v = reviewed();
+    const runtime = projectForRuntime(v, { state: 'open' }, publicConfig);
+    const pages = v.definition.pages.map((p) => p.id);
+    for (const answers of [{}, { [bid('applicant')]: a.text('skip') }, { [bid('has_bank')]: a.single('no') }] as S.Answers[]) {
+      expect(evalStateJson(evaluate(runtime, answers, META, 'client'), pages)).toBe(evalStateJson(evaluate(v, answers, META, 'client'), pages));
+    }
   });
 });

@@ -11,7 +11,7 @@ describe('determinism corpus (Node)', () => {
   const cases = runCorpus();
 
   it('covers the 35 parity fixtures × 200 answer sets, random forms and the edge-case fixtures', () => {
-    expect(cases.filter((c) => !/^(text|numbers|meta|random|caseFold)/.test(c.name))).toHaveLength(35 * 200);
+    expect(cases.filter((c) => !/^(text|numbers|meta|random|review|caseFold)/.test(c.name))).toHaveLength(35 * 200);
     expect(cases.filter((c) => c.name.startsWith('random_')).length).toBeGreaterThanOrEqual(15 * 20);
     expect(new Set(cases.map((c) => c.name)).size).toBe(cases.length);
   });

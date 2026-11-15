@@ -12,4 +12,5 @@ export * from '../build.ts';
 export * from './determinism.ts';
 export * from './generate.ts';
 export * from './random.ts';
+export * from './review.ts';
 export * from './v1.ts';

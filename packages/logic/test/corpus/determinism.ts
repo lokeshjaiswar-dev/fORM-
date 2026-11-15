@@ -6,6 +6,7 @@ import { caseFold, compile, evalStateJson, evaluate, textLength } from '../../sr
 import { META, a, all, ans, bid, cond, field, form, heading, hide, id, meta, num, page, rule, text, versionOf } from '../build.ts';
 import { V1_FORMS, rng, v1AnswerSets } from './generate.ts';
 import { randomAnswers, randomForm } from './random.ts';
+import { reviewCases } from './review.ts';
 import { toV2, toV2Answers } from './v1.ts';
 
 /*
@@ -103,6 +104,7 @@ export function runCorpus(): CorpusCase[] {
     const rr = rng(9_000 + i);
     cases.push(...run(def, Array.from({ length: 20 }, () => ({ answers: randomAnswers(rr, def), meta: { urlParams: rr.chance(0.5) ? { src: 'ad' } : {} } })), `random_${i + 1}`));
   }
+  cases.push(...reviewCases());
   cases.push({ name: 'caseFold', json: JSON.stringify(TRICKY_TEXT.map((t) => [caseFold(t), textLength(t)])) });
   return cases;
 }

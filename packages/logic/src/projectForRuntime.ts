@@ -26,7 +26,8 @@ function clientRules(rules: readonly Rule[]): Array<Rule<ClientAction>> {
 
 /**
  * The runtime projection (I11): no builder notes, origin stamps or server actions; the compiled form
- * keeps `reads` for incremental evaluation but only for the steps of rules it keeps, and drops `dataInventory` and `taint`.
+ * keeps `reads` for incremental evaluation but only for the steps of rules it keeps, and drops `dataInventory`, `taint` and
+ * `reviewUnits`; `review` shrinks to unit ids and names.
  */
 export const projectForRuntime: ProjectForRuntime = (version, status, publicConfig) => {
   const def = version.definition as FormDefinition;
@@ -36,8 +37,11 @@ export const projectForRuntime: ProjectForRuntime = (version, status, publicConf
     return [id, rest];
   }));
   const rules = clientRules(def.logic.rules);
-  const definition = stripOrigins({ ...def, blocks, logic: { ...def.logic, rules } }) as PublicFormDefinition;
-  const { dataInventory: _inventory, taint: _taint, plan, reads, ...compiled } = version.compiled;
+  /* WP-2.33: the respondent gets each review unit's id and name, never its target (page or block ids), group or visibility. */
+  const { review, ...rest } = def;
+  const publicReview = review ? { review: { units: review.units.map((unit) => ({ id: unit.id, name: unit.name })) } } : {};
+  const definition = stripOrigins({ ...rest, ...publicReview, blocks, logic: { ...def.logic, rules } }) as PublicFormDefinition;
+  const { dataInventory: _inventory, taint: _taint, reviewUnits: _reviewUnits, plan, reads, ...compiled } = version.compiled;
   /* Steps of dropped rules go too: server-only rules, and rules with no actions at all. */
   const kept = new Set<string>(rules.map((r) => r.id));
   const clientPlan = plan.filter((step): step is Exclude<typeof step, { scope: 'server' }> =>

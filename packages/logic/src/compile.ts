@@ -81,6 +81,8 @@ export const compile: Compile = (def, registry) => {
     reads: Object.fromEntries(plan.map((s) => [s.key, s.reads])),
     dataInventory: dataInventory(def, analysis.placement),
     taint: taintOf(def, graph, order),
+    /* Only when the form has `review`, so a form without it compiles to exactly what it did before WP-2.33. */
+    ...(def.review ? { reviewUnits: checked.reviewUnits } : {}),
     definitionHash: contentHash(def),
   };
   return { ok: true, compiled };

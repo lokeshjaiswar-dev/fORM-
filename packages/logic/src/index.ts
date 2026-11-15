@@ -7,6 +7,8 @@ export { createEvaluator, evaluate } from './evaluate.ts';
 export type { EvaluableVersion, Evaluator } from './evaluate.ts';
 export { ALIASES, OPERAND_OPERATORS, UNARY, compare, equal } from './operators.ts';
 export { projectForRuntime } from './projectForRuntime.ts';
+export { applicableUnits, checkReviewUnits, reviewUnitAnswersHash, reviewUnitIssues, reviewUnitMembership, visibleBlocksForReviewer } from './reviewUnits.ts';
+export type { ReviewUnitApplicability, ReviewUnitCheck } from './reviewUnits.ts';
 export { CONDITION_LIMITS, EXPR_LIMITS } from './subset.ts';
 export { CASE_FOLD_UNICODE_VERSION, caseFold, comparable, nfc, textLength } from './text.ts';
 export { evalStateJson, traceEntry } from './trace.ts';
