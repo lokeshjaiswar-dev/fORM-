@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { activeOrgOf, useSessionStore } from '@/auth/client';
 import type { DocumentRepository } from '@/persistence/DocumentRepository';
+import { clearLegacyBuilderDbOnce } from '@/persistence/legacyBuilderDb';
 import { RepositoryCtx, repositoryFor } from '@/persistence/repository';
 
 /**
@@ -17,9 +18,16 @@ const NO_SESSION: DocumentRepository = {
 /**
  * Gives the app its repository: the one passed in (tests), or the signed-in member's active org (WP-1.06). Switching
  * the active org gives every page a different repository, so a page reloads its forms instead of showing the last org's.
+ *
+ * The first time someone is signed in, the old signed-out builder's IndexedDB database is deleted (BL-273): it may hold
+ * form passwords in plain text, and nothing reads it any more.
  */
 export function RepositoryProvider({ repo, children }: { repo?: DocumentRepository; children: ReactNode }) {
   const orgId = useSessionStore((s) => (s.status === 'signed_in' ? (activeOrgOf(s.me)?.id ?? null) : null));
+  const signedIn = useSessionStore((s) => s.status === 'signed_in');
   const value = repo ?? (orgId ? repositoryFor(orgId) : NO_SESSION);
+  useEffect(() => {
+    if (signedIn) void clearLegacyBuilderDbOnce();
+  }, [signedIn]);
   return <RepositoryCtx.Provider value={value}>{children}</RepositoryCtx.Provider>;
 }

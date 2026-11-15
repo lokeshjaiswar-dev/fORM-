@@ -15,11 +15,12 @@ import { resetUi, useUiStore } from '@/state/uiStore';
 import { MemoryRepository, formWith, resetStore } from '@/test/fixtures';
 
 /*
- * BL-145 end to end, from the session's side: a form an older build saved with a password or a closed state in this
- * browser, opened while the server cannot take them. Autosave writes the whole FormOps store over the cached copy on
- * every save, so the access that is still to be sent has to be part of what the session carries; otherwise the first
- * save drops it, the next open finds nothing to send and shows no note, and a form the author switched off stays open.
- * The API is mocked, as in persistence.test.ts; the routes themselves are proved in apps/api.
+ * BL-145 and BL-273 end to end, from the session's side: a form an older build saved with a password or a closed state
+ * in this browser, opened while the server cannot take them. Autosave writes the whole FormOps store over the cached copy
+ * on every save, so the closed state that is still to be sent has to be part of what the session carries; otherwise the
+ * first save drops it, the next open finds nothing to send and shows no note, and a form the author switched off stays
+ * open. The password is the exception: it is sent in the request at open, and gone from the copy and the session after
+ * it, whatever the request answered. The API is mocked, as in persistence.test.ts; the routes themselves are proved in apps/api.
  */
 
 const ORG = 'org-1';
@@ -62,7 +63,7 @@ const me: Me = {
 
 /** The form is closed with its own message and has a password: the two things that must not be dropped. */
 const closedAndLocked = { open: false, closedMessage: richDoc('Closed for the season.'), password: 'hunter2' };
-const PENDING = { password: 'hunter2', closed: true, closedMessage: richDoc('Closed for the season.') };
+const PENDING = { closed: true, closedMessage: richDoc('Closed for the season.') };
 
 const serverDraft = (draftRev: number, title = 'Theirs') => ({ draftRev, draft: { ...formWith([]), formId: 'test', title }, updatedAt: LATER, updatedBy: 'u2' });
 
@@ -75,7 +76,17 @@ const cachedWith = async (patch: Partial<StoredForm>) => {
   return cache;
 };
 
-const heldIn = (cache: MemoryRepository) => legacyAccessOf(cache.records.get('test')?.ops);
+/** What the cached copy still has to send: its pending slot, or null when there is none. */
+const heldIn = (cache: MemoryRepository) => {
+  const ops = cache.records.get('test')?.ops;
+  return legacyAccessOf(ops) ? (ops as { pendingAccess?: unknown }).pendingAccess : null;
+};
+
+/** Nothing the cache, the session's ops or the document hold has the plaintext password in it. */
+const holdsNoPassword = (cache: MemoryRepository) => {
+  expect(JSON.stringify(cache.records.get('test'))).not.toContain('hunter2');
+  expect(JSON.stringify(currentOps())).not.toContain('hunter2');
+};
 
 async function advance(ms: number) {
   await act(async () => {
@@ -88,7 +99,7 @@ async function opened(result: { current: { status: string } }) {
   expect(result.current.status).toBe('ready');
 }
 
-describe('legacy access a form could not send at open survives the session (BL-145)', () => {
+describe('legacy access a form could not send at open: the closed state survives the session, the password does not (BL-145, BL-273)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     resetStore();
@@ -109,25 +120,28 @@ describe('legacy access a form could not send at open survives the session (BL-1
     useSessionStore.setState({ status: 'unknown' }, true);
   });
 
-  it('a dirty copy opened while the API is out of reach keeps the password and the closed state through its own autosave, and sends them at the next open', async () => {
+  it('a dirty copy opened while the API is out of reach keeps the closed state through its own autosave and sends it at the next open; the password was dropped at once', async () => {
     const cache = await cachedWith({ dirty: true });
     for (const call of [getRemoteDraft, getAccess, putRemoteDraft]) call.mockRejectedValue(new ApiUnreachable());
 
     const first = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
     await opened(first.result);
-    expect(useUiStore.getState().notes).toEqual([expect.objectContaining({ code: 'access_kept' })]);
+    expect(useUiStore.getState().notes).toEqual([expect.objectContaining({ code: 'access_password_dropped' }), expect.objectContaining({ code: 'access_kept' })]);
     expect(currentOps().pendingAccess).toEqual(PENDING);
+    holdsNoPassword(cache);
 
     // The dirty copy goes up after 2 s: the repository writes the cache first, even with the server out of reach.
     await advance(API_SAVE_MS);
     expect(putRemoteDraft).toHaveBeenCalled();
     expect(cache.records.get('test')).toMatchObject({ dirty: true, serverRev: 5 });
     expect(heldIn(cache)).toEqual(PENDING);
+    holdsNoPassword(cache);
     first.unmount();
     await advance(0);
     expect(heldIn(cache)).toEqual(PENDING);
+    holdsNoPassword(cache);
 
-    // The next open reaches the server: both settings go up, and the copy is cleared.
+    // The next open reaches the server: the closed state goes up, and the copy is cleared. There is no password to send.
     getRemoteDraft.mockResolvedValue(serverDraft(5, 'Same'));
     getAccess.mockResolvedValue(defaults);
     putRemoteDraft.mockImplementation((_org: string, _id: string, _doc: unknown, expected: number) => Promise.resolve({ draftRev: expected + 1, updatedAt: LATER }));
@@ -135,7 +149,7 @@ describe('legacy access a form could not send at open survives the session (BL-1
     await opened(second.result);
     expect(useUiStore.getState().notes).toEqual([expect.objectContaining({ code: 'access_moved' })]);
     expect(saveAccess).toHaveBeenCalledExactlyOnceWith(ORG, 'test', expect.objectContaining({ enabled: false, screens: { closed: { content: richDoc('Closed for the season.') } } }), 0);
-    expect(setFormPassword).toHaveBeenCalledExactlyOnceWith(ORG, 'test', 'hunter2');
+    expect(setFormPassword).not.toHaveBeenCalled();
     expect(currentOps()).toEqual({});
     await advance(API_SAVE_MS);
     expect(heldIn(cache)).toBeNull();
@@ -143,14 +157,15 @@ describe('legacy access a form could not send at open survives the session (BL-1
     second.unmount();
   });
 
-  it('a clean copy keeps them through the author’s first edit when the member cannot manage access yet (403)', async () => {
+  it('a clean copy keeps the closed state through the author’s first edit when the member cannot manage access yet (403)', async () => {
     const cache = await cachedWith({ dirty: false });
     getAccess.mockRejectedValue(new ApiProblem(403, 'FORBIDDEN', 'No access'));
 
     const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
     await opened(result);
-    expect(useUiStore.getState().notes).toEqual([expect.objectContaining({ code: 'access_kept' })]);
+    expect(useUiStore.getState().notes).toEqual([expect.objectContaining({ code: 'access_password_dropped' }), expect.objectContaining({ code: 'access_kept' })]);
     expect(heldIn(cache)).toEqual(PENDING);
+    holdsNoPassword(cache);
 
     act(() => {
       setTitle('Edited');
@@ -162,6 +177,7 @@ describe('legacy access a form could not send at open survives the session (BL-1
     expect(putRemoteDraft).toHaveBeenCalled();
     expect(cache.records.get('test')).toMatchObject({ dirty: false, serverRev: 6 });
     expect(heldIn(cache)).toEqual(PENDING);
+    holdsNoPassword(cache);
     unmount();
   });
 
@@ -175,6 +191,7 @@ describe('legacy access a form could not send at open survives the session (BL-1
     await opened(result);
     expect(cache.records.get('test')).toMatchObject({ doc: { title: 'Newer' }, serverRev: 5 });
     expect(heldIn(cache)).toEqual(PENDING);
+    holdsNoPassword(cache);
     unmount();
   });
 
@@ -188,34 +205,55 @@ describe('legacy access a form could not send at open survives the session (BL-1
       return { cache, ...hook };
     };
 
-    it('sends nothing yet and keeps the access in the copy and in the session', async () => {
+    it('sends the access at once, because a password may not wait for the author’s choice, and the merge still waits', async () => {
       const { cache, unmount } = await behind();
-      expect(getAccess).not.toHaveBeenCalled();
-      expect(setFormPassword).not.toHaveBeenCalled();
-      expect(heldIn(cache)).toEqual(PENDING);
-      expect(currentOps().pendingAccess).toEqual(PENDING);
+      expect(setFormPassword).toHaveBeenCalledExactlyOnceWith(ORG, 'test', 'hunter2');
+      expect(saveAccess).toHaveBeenCalledExactlyOnceWith(ORG, 'test', expect.objectContaining({ enabled: false }), 0);
+      expect(heldIn(cache)).toBeNull();
+      holdsNoPassword(cache);
+      // The author's own changes are still the cached copy's, unsent, and nothing was put to the server draft.
+      expect(cache.records.get('test')).toMatchObject({ dirty: true, serverRev: 3, doc: { title: 'Mine' } });
+      expect(putRemoteDraft).not.toHaveBeenCalled();
       discardPending();
       unmount();
     });
 
-    it('"keep mine" writes the session’s ops over the copy without dropping it', async () => {
-      const { cache, unmount } = await behind();
-      await act(async () => {
-        await keepMine();
-      });
-      expect(putRemoteDraft).toHaveBeenCalledWith(ORG, 'test', expect.objectContaining({ title: 'Mine' }), 5);
-      expect(heldIn(cache)).toEqual(PENDING);
-      unmount();
-    });
+    describe('when the server cannot take the access just then', () => {
+      const behindOffline = async () => {
+        getAccess.mockRejectedValue(new ApiProblem(503, 'UNAVAILABLE', ''));
+        return behind();
+      };
 
-    it('"take theirs" replaces the draft and keeps the access, even if nothing is typed afterwards', async () => {
-      const { cache, unmount } = await behind();
-      await act(async () => {
-        await takeTheirs();
+      it('the closed state stays in the copy and in the session, and the password is dropped', async () => {
+        const { cache, unmount } = await behindOffline();
+        expect(heldIn(cache)).toEqual(PENDING);
+        expect(currentOps().pendingAccess).toEqual(PENDING);
+        holdsNoPassword(cache);
+        discardPending();
+        unmount();
       });
-      expect(cache.records.get('test')).toMatchObject({ doc: { title: 'Theirs' }, dirty: false, serverRev: 5 });
-      expect(heldIn(cache)).toEqual(PENDING);
-      unmount();
+
+      it('"keep mine" writes the session’s ops over the copy without dropping the closed state', async () => {
+        const { cache, unmount } = await behindOffline();
+        await act(async () => {
+          await keepMine();
+        });
+        expect(putRemoteDraft).toHaveBeenCalledWith(ORG, 'test', expect.objectContaining({ title: 'Mine' }), 5);
+        expect(heldIn(cache)).toEqual(PENDING);
+        holdsNoPassword(cache);
+        unmount();
+      });
+
+      it('"take theirs" replaces the draft and keeps the closed state, even if nothing is typed afterwards', async () => {
+        const { cache, unmount } = await behindOffline();
+        await act(async () => {
+          await takeTheirs();
+        });
+        expect(cache.records.get('test')).toMatchObject({ doc: { title: 'Theirs' }, dirty: false, serverRev: 5 });
+        expect(heldIn(cache)).toEqual(PENDING);
+        holdsNoPassword(cache);
+        unmount();
+      });
     });
   });
 });

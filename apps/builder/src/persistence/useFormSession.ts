@@ -6,7 +6,7 @@ import { loadOps } from '@/state/opsStore';
 import { blockOrder } from '@/lib/definition';
 import { resetUi, useUiStore, type LoadNote, type TabConflict } from '@/state/uiStore';
 import { startAutosave, whenSaved, type Autosave } from '@/persistence/autosave';
-import { holdLegacyAccess, openStored, settleLegacyAccess } from '@/persistence/openForm';
+import { openStored, settleLegacyAccess } from '@/persistence/openForm';
 import { DOCUMENT_FORMAT, DraftConflict, type DocumentRepository, type StoredForm } from '@/persistence/DocumentRepository';
 import { useRepository } from '@/persistence/repository';
 import { watchTabs, type TabWatch } from '@/persistence/tabChannel';
@@ -62,20 +62,15 @@ export function useFormSession(id: string): Session {
         setSession({ status: 'error', message: result.error });
         return;
       }
-      // The FormOps this session works with and autosave writes over the cached copy on every save. Legacy access the server has not taken is part of them (`pendingAccess`); without it the first save would drop it.
+      // The FormOps this session works with and autosave writes over the cached copy on every save. A closed state the server has not taken is part of them (`pendingAccess`); without it the first save would drop it.
       let ops = result.ops;
       if (result.legacy) {
-        if (disputed === null) {
-          // A password or closed state an older build kept in this browser goes to the API now, before a v1 file is replaced by its conversion (BL-145).
-          const session = useSessionStore.getState();
-          const org = session.status === 'signed_in' ? (activeOrgOf(session.me)?.id ?? null) : null;
-          const settled = await settleLegacyAccess(stored, result, { org, repo });
-          result.notes.push(...settled.notes);
-          ops = settled.ops;
-        } else {
-          // The author has a merge to resolve first, so nothing is sent yet. "Keep mine" and "take theirs" must not drop it either.
-          ops = await holdLegacyAccess(stored, result, repo);
-        }
+        // A password or closed state an older build kept in this browser goes to the API now, before a v1 file is replaced by its conversion (BL-145). A form behind the merge dialog is no exception: the access settings are not part of the draft being disputed, and a plaintext password may not wait for the author's choice (BL-273).
+        const session = useSessionStore.getState();
+        const org = session.status === 'signed_in' ? (activeOrgOf(session.me)?.id ?? null) : null;
+        const settled = await settleLegacyAccess(stored, result, { org, repo });
+        result.notes.push(...settled.notes);
+        ops = settled.ops;
         if (!live) return;
       }
       let rev = stored.rev;

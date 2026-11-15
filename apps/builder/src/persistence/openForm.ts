@@ -4,7 +4,7 @@ import { ApiProblem } from '@/auth/client';
 import { t } from '@/i18n';
 import { blankDefinition } from '@/lib/definition';
 import { migrateDraft, readV1, type V1Read } from '@/lib/migrate';
-import { LocalOpsSchema, defaultOps, legacyAccessOf, withPendingAccess, type LegacyAccess, type LocalOps } from '@/state/opsStore';
+import { LocalOpsSchema, defaultOps, legacyAccessOf, pendingOf, withPendingAccess, type LegacyAccess, type LocalOps } from '@/state/opsStore';
 import type { LoadNote } from '@/state/uiStore';
 import { getAccess, inputOf, saveAccess, setFormPassword } from '@/persistence/accessApi';
 import { DOCUMENT_FORMAT, LEGACY_FORMAT, type DocumentRepository, type StoredForm } from '@/persistence/DocumentRepository';
@@ -15,7 +15,8 @@ import { createRemoteForm } from '@/persistence/draftsApi';
  * v1 and has just been converted; the session saves the result once (BL-143). `legacy` is the password and/or closed
  * state the stored copy still held from before access settings lived on the server: `settleLegacyAccess` sends it to
  * the API and clears the local copy (BL-145). `ops` never holds it (`pendingAccess` is left out): what the session
- * carries on is the ops `settleLegacyAccess` or `holdLegacyAccess` answer.
+ * carries on is the ops `settleLegacyAccess` answers. `legacy` is also the only place a plaintext password is held: it
+ * lives in memory for the request that sends it and is written nowhere (BL-273).
  */
 export type Opened = { ok: true; doc: FormDefinition; ops: LocalOps; notes: LoadNote[]; migrated: boolean; legacy?: LegacyAccess } | { ok: false; error: string };
 export type OpenedForm = Extract<Opened, { ok: true }>;
@@ -35,7 +36,8 @@ const M = defineMessages('builder', {
   'load.repaired_defaulted': 'a missing value took its default',
   'load.access_moved': 'The password and closed setting this form kept in this browser are now settings on the server, under Access. The password is stored hashed and cannot be shown again.',
   'load.access_refused': 'The server did not accept the password or closed setting this form kept in this browser ({reason}). Set them again under Access.',
-  'load.access_kept': 'The password and closed setting this form kept in this browser could not be sent to the server just now. They stay here and are sent the next time the form opens.',
+  'load.access_kept': 'The closed setting this form kept in this browser could not be sent to the server just now. It stays here and is sent the next time the form opens.',
+  'load.access_password_dropped': 'The password this form kept in this browser could not be sent to the server just now. It was removed from this browser rather than kept, so set a new password under Access.',
   'load.access_lost': 'The password and closed setting from this form’s old file could not be sent to the server just now, and the converted form replaces the old copy. Set them again under Access.',
 });
 
@@ -148,8 +150,8 @@ export interface Settled {
   notes: LoadNote[];
   /**
    * The FormOps to load into the store, which autosave then keeps writing over the cached copy. When the server could
-   * not take the legacy access yet they hold it as `pendingAccess`, so no later save (the first edit, a merge's "keep
-   * mine") drops it; once the server took it or refused it for good they do not.
+   * not take the closed state yet they hold it as `pendingAccess`, so no later save (the first edit, a merge's "keep
+   * mine") drops it; once the server took it or refused it for good they do not. They never hold a password.
    */
   ops: LocalOps;
 }
@@ -161,45 +163,32 @@ async function rewriteCopy(stored: StoredForm, ops: LocalOps, repo: LegacyEnv['r
     if (stored.dirty === true && repo.saveLocal) await repo.saveLocal(next);
     else await repo.save({ ...next, dirty: false });
   } catch {
-    // The copy could not be rewritten now; the next open finds it again, and the server's own settings win then.
+    // The copy could not be rewritten now; the next open finds it again and sends it again, and the server's own settings win then.
   }
 }
 
 /**
- * Keeps the legacy access of a copy that is staying: it goes into the session's ops as `pendingAccess`, and the copy is
- * rewritten in the same shape at once. Without that the session's first save would write ops without it over the copy
- * (autosave writes the whole store, and a copy opened dirty is written before anyone types), and the password or the
- * closed state would be gone with no message. The rewrite also moves a copy in the older shape into the slot before a
- * cache write can blank its password (`CachingApiRepository` does that when it takes a newer server draft in).
- *
- * `settleLegacyAccess` calls it when the server cannot take the access yet. `useFormSession` calls it on its own for a
- * form that opens behind the merge dialog, where nothing is sent until the author has chosen.
- */
-export async function holdLegacyAccess(stored: StoredForm, opened: OpenedForm, repo: LegacyEnv['repo']): Promise<LocalOps> {
-  if (!opened.legacy) return opened.ops;
-  const ops = withPendingAccess(opened.ops, opened.legacy);
-  // A v1 file is replaced by its conversion right after, which the session saves with these ops.
-  if (!opened.migrated) await rewriteCopy(stored, ops, repo);
-  return ops;
-}
-
-/**
  * Moves what a stored form still holds from before access settings lived on the server (BL-145): its plaintext
- * password and closed state go to the API (`PUT .../access`, `PUT .../access/password`), and once the server has taken
- * them, or refused them for good, the browser's copy is rewritten without them. The answer is the notes to show and the
- * ops the session continues with.
+ * password and closed state go to the API (`PUT .../access`, `PUT .../access/password`), and the browser's copy is
+ * rewritten without them. The answer is the notes to show and the ops the session continues with.
  *
- * A server that cannot be reached, or that cannot be asked yet (a 401 or 403 until the member may manage the form),
- * leaves the access in the copy to try again at the next open: the password is not lost. It is kept in the session's
- * ops too (`holdLegacyAccess`), because the session saves those over the copy on every change. A v1 file is the
- * exception, because the session replaces it with the converted v2 draft right after this, so its notes say to set the
- * password again. The caller saves the converted draft itself (`migrated`); a v2 copy is rewritten here, in this
- * browser only, without sending the draft to the server.
+ * The password is sent once, and is gone from this browser when that request has answered, whatever it answered
+ * (BL-273): it is not kept for a later open, in the copy or in `pendingAccess`. A password at rest in IndexedDB is a
+ * secret that new code would be writing, and the older build that wrote it is gone. When the server could not be
+ * reached or asked (a 401 or 403 until the member may manage the form, a 5xx, no session) the note says the password
+ * was removed and to set a new one under Access. Nothing of this form was ever on the server with that password, so no
+ * protected form is left open that the server held.
+ *
+ * The closed state is not a secret, so it may wait: it is kept as `pendingAccess` (in the session's ops too, because the
+ * session saves those over the copy on every change) and goes up at the next open. A v1 file is the exception, because
+ * the session replaces it with the converted v2 draft right after this, so its note says to set both again. The caller
+ * saves the converted draft itself (`migrated`); a v2 copy is rewritten here, in this browser only, without sending the
+ * draft to the server.
  */
 export async function settleLegacyAccess(stored: StoredForm, opened: OpenedForm, env: LegacyEnv): Promise<Settled> {
   const { legacy } = opened;
   if (!legacy) return { notes: [], ops: opened.ops };
-  const note = (code: string, detail: string): LoadNote[] => [{ code, path: '/access', detail }];
+  const note = (code: string, detail: string): LoadNote => ({ code, path: '/access', detail });
 
   let unsent = env.org === null;
   let refusal: ApiProblem | null = null;
@@ -212,16 +201,21 @@ export async function settleLegacyAccess(stored: StoredForm, opened: OpenedForm,
     }
   }
 
-  if (unsent) {
-    if (opened.migrated) return { notes: note('access_lost', t(M['load.access_lost'])), ops: opened.ops };
-    return { notes: note('access_kept', t(M['load.access_kept'])), ops: await holdLegacyAccess(stored, opened, env.repo) };
-  }
+  if (unsent && opened.migrated) return { notes: [note('access_lost', t(M['load.access_lost']))], ops: opened.ops };
 
-  if (!opened.migrated) await rewriteCopy(stored, opened.ops, env.repo);
-  return {
-    notes: refusal
-      ? note('access_refused', t(M['load.access_refused'], { reason: refusal.message || String(refusal.status) }))
-      : note('access_moved', t(M['load.access_moved'])),
-    ops: opened.ops,
-  };
+  // The request is over: the copy is rewritten without the plaintext password, with only the closed state left to try again.
+  const pending = unsent ? pendingOf(legacy) : null;
+  const ops = withPendingAccess(opened.ops, pending);
+  if (!opened.migrated) await rewriteCopy(stored, ops, env.repo);
+
+  if (!unsent) {
+    return {
+      notes: [refusal ? note('access_refused', t(M['load.access_refused'], { reason: refusal.message || String(refusal.status) })) : note('access_moved', t(M['load.access_moved']))],
+      ops,
+    };
+  }
+  const notes: LoadNote[] = [];
+  if (legacy.password !== '') notes.push(note('access_password_dropped', t(M['load.access_password_dropped'])));
+  if (pending) notes.push(note('access_kept', t(M['load.access_kept'])));
+  return { notes, ops };
 }

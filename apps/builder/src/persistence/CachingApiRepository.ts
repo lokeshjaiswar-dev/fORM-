@@ -14,15 +14,23 @@ import {
 import { createRemoteForm, getRemoteDraft, listRemoteForms, putRemoteDraft, trashRemoteForm } from '@/persistence/draftsApi';
 
 /**
- * A form's local FormOps for the cache: no live `password` key goes to IndexedDB while signed in (BL-145). This build
- * has none; a copy an older build saved may, and any write through here blanks it. The password of such a copy that the
- * server has not taken yet is kept as `ops.pendingAccess` instead (`holdLegacyAccess`), the one place it may wait for the
- * next open, because blanking it there would drop the author's setting without a word.
+ * A form's local FormOps for the cache: no plaintext password goes to IndexedDB while signed in, in any key (BL-145,
+ * BL-273). This build has none; a copy an older build saved may, as a top-level `password` or inside `pendingAccess`,
+ * and any write through here removes it. The session has read it by then (`load` hands the open form the copy as it was
+ * cached, and `settleLegacyAccess` sends the password before it rewrites the copy), so what is blanked here is only
+ * what nobody could have sent. The closed state beside it is not a secret and stays.
  */
 function scrubbed(form: StoredForm): StoredForm {
   const ops = form.ops;
-  if (typeof ops !== 'object' || ops === null || !('password' in ops) || ops.password === '') return form;
-  return { ...form, ops: { ...ops, password: '' } };
+  if (typeof ops !== 'object' || ops === null) return form;
+  let next: Record<string, unknown> = ops as Record<string, unknown>;
+  if ('password' in next && next.password !== '') next = { ...next, password: '' };
+  const pending = next.pendingAccess;
+  if (typeof pending === 'object' && pending !== null && 'password' in pending) {
+    const { password: _secret, ...rest } = pending as Record<string, unknown>;
+    next = { ...next, pendingAccess: rest };
+  }
+  return next === ops ? form : { ...form, ops: next };
 }
 
 /**

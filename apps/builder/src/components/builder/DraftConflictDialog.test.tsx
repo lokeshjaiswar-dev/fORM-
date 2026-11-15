@@ -136,16 +136,15 @@ describe('DraftConflictDialog', () => {
     expect(cache.records.get('test')).toMatchObject({ serverRev: 7, dirty: false, doc: { title: 'Theirs' } });
   });
 
-  it('copy mine leaves access the server has not taken with this form: the copy has none of it', async () => {
-    loadOps({ pendingAccess: { password: 'hunter2', closed: true } });
+  it('copy mine leaves a closed state the server has not taken with this form: the copy has none of it', async () => {
+    loadOps({ pendingAccess: { closed: true } });
     await openConflict(theirs(7));
     fireEvent.click(screen.getByRole('button', { name: 'Copy mine to a new form' }));
     await waitFor(() => expect(currentDoc().title).toBe('Theirs'));
     const [, copyId] = createRemoteForm.mock.calls[0] as [string, string, string];
     expect(cache.records.get(copyId)?.ops).toEqual({});
-    expect(JSON.stringify(cache.records.get(copyId))).not.toContain('hunter2');
     // It is still waiting for this form's next open.
-    expect(cache.records.get('test')?.ops).toMatchObject({ pendingAccess: { password: 'hunter2', closed: true } });
+    expect(cache.records.get('test')?.ops).toMatchObject({ pendingAccess: { closed: true } });
   });
 
   it('says so when the server draft cannot be read, and still offers keep mine', async () => {
