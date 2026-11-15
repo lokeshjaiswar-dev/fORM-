@@ -5,20 +5,22 @@ import { ApiProblem, ApiUnreachable } from '@/auth/client';
 
 describe('statusLabel', () => {
   it('names every processing state the database knows', () => {
-    expect(['complete', 'spam', 'pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'archived', 'trashed'].map(statusLabel)).toEqual([
+    expect(['complete', 'spam', 'pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'pending_review', 'rejected', 'archived', 'trashed'].map(statusLabel)).toEqual([
       'Complete',
       'Spam',
       'Awaiting payment',
       'Payment failed',
       'Checking files',
       'Awaiting guardian consent',
+      'Under review',
+      'Rejected',
       'Archived',
       'In trash',
     ]);
   });
 
   it('shows a state it does not know as the API named it', () => {
-    expect(statusLabel('pending_review')).toBe('pending_review');
+    expect(statusLabel('pending_something_new')).toBe('pending_something_new');
   });
 });
 

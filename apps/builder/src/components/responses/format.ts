@@ -8,6 +8,8 @@ const M = defineMessages('builder', {
   'responses.status.payment_failed': 'Payment failed',
   'responses.status.pending_scan': 'Checking files',
   'responses.status.pending_guardian_consent': 'Awaiting guardian consent',
+  'responses.status.pending_review': 'Under review',
+  'responses.status.rejected': 'Rejected',
   'responses.status.archived': 'Archived',
   'responses.status.trashed': 'In trash',
   'responses.version': 'v{n}',
@@ -43,6 +45,8 @@ const STATUS_MESSAGES: Record<string, MessageId> = {
   payment_failed: M['responses.status.payment_failed'],
   pending_scan: M['responses.status.pending_scan'],
   pending_guardian_consent: M['responses.status.pending_guardian_consent'],
+  pending_review: M['responses.status.pending_review'],
+  rejected: M['responses.status.rejected'],
   archived: M['responses.status.archived'],
   trashed: M['responses.status.trashed'],
 };
