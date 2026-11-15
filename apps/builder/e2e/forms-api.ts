@@ -7,9 +7,11 @@ import type { Route } from '@playwright/test';
  * /builder needs a signed-in session and somewhere to save to. This answers `GET /v1/me`, the forms list, a form's
  * draft with `If-Match` (a stale write is a 409 with the server draft, as the real API sends it), validate, publish and
  * trash, the two reads the form settings make when the Review tab opens (a form's review settings, the org's review
- * groups; both empty), and the reads the Emails and Email log tabs and the Email senders page make (a form's notifications,
- * its email log, the org's senders and members; nothing set up yet). The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks are the
- * API's, and run in apps/api/test/publish.int.test.ts. A spec about what the server decides belongs in a `*.stack.spec.ts`.
+ * groups; both empty), the reads the Emails and Email log tabs and the Email senders page make (a form's notifications,
+ * its email log, the org's senders and members; nothing set up yet) and the one the Webhooks tab makes (a form's
+ * webhooks; none). The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks
+ * are the API's, and run in apps/api/test/publish.int.test.ts. A spec about what the server decides belongs in a
+ * `*.stack.spec.ts`.
  *
  * e2e/test.ts gives every test one of these as the `formsApi` fixture, routed for the whole browser context (a second
  * tab shares it), and signed in as `ME` unless the suite says `test.use({ signedIn: false })`. The app is not told
@@ -144,6 +146,17 @@ export class FakeFormsApi {
       if (!this.signedIn) return unauthenticated();
       record();
       return route.fulfill({ json: { items: [{ userId: USER.id, email: USER.email, name: USER.name, role: 'owner', status: 'active', joinedAt: '2026-01-01T00:00:00.000Z' }], accessLinks: false } });
+    }
+
+    // A form's webhooks (WP-1.18): the Webhooks tab of the form settings lists them when it opens. A form nobody set one up
+    // for answers the empty list, with the no-store header the real route sends. Making, saving and replaying them is the
+    // stack suite's: the fake answers only the read, so a spec that opens the tab sees the "no webhooks yet" state.
+    const webhooksRead = /^\/v1\/forms\/([^/]+)\/webhooks$/.exec(path);
+    if (method === 'GET' && webhooksRead) {
+      if (!this.signedIn) return unauthenticated();
+      record();
+      if (!this.forms.has(decodeURIComponent(webhooksRead[1] ?? ''))) return route.fulfill(problem(404, 'NOT_FOUND', 'That form is not in this organisation.'));
+      return route.fulfill({ json: { items: [] }, headers: { 'cache-control': 'no-store' } });
     }
 
     const match = /^\/v1\/forms\/([^/]+)\/(draft|validate|publish|trash|review|notifications|email-log)$/.exec(path);
