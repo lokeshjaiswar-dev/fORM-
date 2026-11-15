@@ -49,6 +49,8 @@ export const workerEnvSchema = z
     /** SIGTERM: how long running jobs may finish before they are failed back to the queue (keep under the pod's grace period). */
     WORKER_SHUTDOWN_GRACE_MS: z.coerce.number().int().min(1000).max(600_000).default(25_000),
     WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(500).max(60_000).default(2000),
+    /** Where the API keeps respondents' uploaded files (its `FILE_STORE_DIR`; default `.data/files` under the working directory): the `drafts.expire` sweep removes the bytes of unattached uploads there. */
+    FILE_STORE_DIR: z.string().min(1).optional(),
     /** Enqueue `templates.seed` at boot (architecture §7.3: seeding runs in the worker). */
     TEMPLATES_SEED_SYSTEM_PACKS: flag.default(true),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
@@ -83,6 +85,8 @@ export interface WorkerConfig {
   queue: { url: string; sharesDatabase: boolean; signingKeys: string; pollIntervalMs: number };
   queues: string[] | undefined;
   shutdownGraceMs: number;
+  /** The respondent file store's directory (`FILE_STORE_DIR`), when set. */
+  filesDir: string | undefined;
   seedTemplates: boolean;
   telemetry: { endpoint: string | undefined; serviceName: string; sampleRatio: number };
   ntp: { servers: string[]; maxOffsetMs: number };
@@ -163,6 +167,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
       },
       queues: e.WORKER_QUEUES,
       shutdownGraceMs: e.WORKER_SHUTDOWN_GRACE_MS,
+      filesDir: e.FILE_STORE_DIR,
       seedTemplates: e.TEMPLATES_SEED_SYSTEM_PACKS,
       telemetry: { endpoint: e.OTEL_EXPORTER_OTLP_ENDPOINT, serviceName: e.OTEL_SERVICE_NAME, sampleRatio: e.OTEL_TRACES_SAMPLER_ARG },
       ntp: { servers: e.NTP_SERVERS ?? [], maxOffsetMs: e.NTP_MAX_OFFSET_MS },

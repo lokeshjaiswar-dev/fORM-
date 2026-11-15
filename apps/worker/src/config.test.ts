@@ -10,6 +10,13 @@ const base = {
 };
 
 describe('parseConfig', () => {
+  it('takes the respondent file directory the upload sweep removes bytes from, from FILE_STORE_DIR', () => {
+    const none = parseConfig(base);
+    expect(none.ok && none.config.filesDir).toBeUndefined();
+    const set = parseConfig({ ...base, FILE_STORE_DIR: '/var/lib/form/files' });
+    expect(set.ok && set.config.filesDir).toBe('/var/lib/form/files');
+  });
+
   it('applies defaults; the queue shares the app database', () => {
     const r = parseConfig(base);
     expect(r.ok && r.config).toEqual({

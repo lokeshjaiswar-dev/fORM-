@@ -33,8 +33,10 @@ const [
   { jobGuard },
   { startWorker },
   { onShutdownSignal },
-  { createAuditJobs, JOB_DEFINITIONS },
+  { createAuditJobs, createUploadJobs, JOB_DEFINITIONS },
   { startAuditChainDispatcher },
+  { createUploadStore },
+  path,
   { randomBytes },
 ] = await Promise.all([
   import('@form/db'),
@@ -48,6 +50,8 @@ const [
   import('./signals.ts'),
   import('./jobs/index.ts'),
   import('./audit/dispatcher.ts'),
+  import('./file-store.ts'),
+  import('node:path'),
   import('node:crypto'),
 ]);
 
@@ -111,6 +115,8 @@ if (keys && config.audit.requireAnchor && !sink) {
 }
 const jobs = [
   ...JOB_DEFINITIONS,
+  // drafts.expire: the upload GC. It removes bytes where the API wrote them, so FILE_STORE_DIR must name the API's directory.
+  ...createUploadJobs({ files: createUploadStore(config.filesDir ?? path.resolve(process.cwd(), '.data/files')) }),
   ...(keys
     ? createAuditJobs({
         keys,

@@ -67,6 +67,8 @@ export const apiEnvSchema = z
     /** Checked at boot and by /readyz; unset skips the check. */
     NTP_SERVERS: list.optional(),
     NTP_MAX_OFFSET_MS: z.coerce.number().int().min(1).default(1000),
+    /** Where respondents' uploaded files are kept (default `.data/files` under the working directory). The worker's `drafts.expire` sweep must be given the same directory. */
+    FILE_STORE_DIR: z.string().min(1).optional(),
     /** Header authentication (`X-FR-Dev-User`) for tests and local development, next to sessions. */
     AUTH_DEV_HEADERS: flag.default(false),
     /** The API's own origin: OAuth redirect URIs (`<url>/v1/auth/oauth/<provider>/callback`). */
@@ -127,6 +129,8 @@ export interface ApiConfig {
   trustProxy: false | number | string[];
   telemetry: { endpoint: string | undefined; serviceName: string; sampleRatio: number };
   ntp: { servers: string[]; maxOffsetMs: number };
+  /** The file store's directory (`FILE_STORE_DIR`), when set. The filesystem store is temporary: the S3 adapter replaces it in WP-1.14. */
+  filesDir: string | undefined;
   authDevHeaders: boolean;
   auth: AuthConfig;
   mailer: { driver: 'smtp' | 'log'; smtpUrl: string | undefined; from: { address: string; name: string } };
@@ -227,6 +231,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
       trustProxy: e.TRUST_PROXY,
       telemetry: { endpoint: e.OTEL_EXPORTER_OTLP_ENDPOINT, serviceName: e.OTEL_SERVICE_NAME, sampleRatio: e.OTEL_TRACES_SAMPLER_ARG },
       ntp: { servers: e.NTP_SERVERS ?? [], maxOffsetMs: e.NTP_MAX_OFFSET_MS },
+      filesDir: e.FILE_STORE_DIR,
       authDevHeaders: e.AUTH_DEV_HEADERS,
       auth: {
         secret: new Uint8Array(e.AUTH_SECRET ? Buffer.from(e.AUTH_SECRET, 'base64url') : randomBytes(32)),

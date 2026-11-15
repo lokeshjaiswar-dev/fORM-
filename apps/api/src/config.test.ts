@@ -13,6 +13,13 @@ const base = {
 };
 
 describe('parseConfig', () => {
+  it('takes the respondent file directory from FILE_STORE_DIR, the same one the worker sweep is given', () => {
+    const none = parseConfig(base);
+    expect(none.ok && none.config.filesDir).toBeUndefined();
+    const set = parseConfig({ ...base, FILE_STORE_DIR: '/var/lib/form/files' });
+    expect(set.ok && set.config.filesDir).toBe('/var/lib/form/files');
+  });
+
   it('applies defaults', () => {
     const r = parseConfig(base);
     expect(r.ok && r.config).toMatchObject({

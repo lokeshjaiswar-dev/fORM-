@@ -9,6 +9,7 @@ export { auditChain, heartbeat, partitionsMaintain, templatesSeed };
 export { AUDIT_CHAIN_LAG_WARN_MS } from './audit-chain.ts';
 export { createAuditJobs, type AuditJobDeps } from './audit.ts';
 export { PARTITION_MONTHS_AHEAD } from './partitions.ts';
+export { createUploadJobs, removeUnattachedUploads, UNATTACHED_AFTER_HOURS } from './uploads-gc.ts';
 
 /**
  * The handler registry: one definition per queue this worker serves. A queue missing here is not worked. The
