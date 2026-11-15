@@ -1,9 +1,12 @@
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
+import type { Tx } from '../client.ts';
 import { normaliseAuditEvent, type AuditEvent } from './append.ts';
 import { archivableMonth, isArchivable, monthBounds } from './archive.ts';
 import { checkpointMessage } from './checkpoint.ts';
+import { auditIdChunks, auditReads, MAX_AUDITED_PAGE_IDS } from './reads.ts';
 import { AUDIT_GENESIS, chainHash, recordFromPending, toHex } from './record.ts';
-import { scrubAuditMetadata, storableText } from './scrub.ts';
+import { MAX_METADATA_BYTES, scrubAuditMetadata, storableText } from './scrub.ts';
 
 const ORG = '0190f5a2-7c1e-7a00-8000-000000000001';
 const USER = '0190f5a2-7c1e-7a00-8000-000000000002';
@@ -112,5 +115,73 @@ describe('archive months', () => {
     expect(isArchivable('2025-09', new Date('2026-10-19T00:00:00Z'))).toBe(false);
     expect(monthBounds('2024-12')).toEqual({ start: new Date('2024-12-01T00:00:00Z'), end: new Date('2025-01-01T00:00:00Z') });
     expect(() => monthBounds('2024-13')).toThrow(/YYYY-MM/);
+  });
+});
+
+describe('audited reads over many ids (BL-192)', () => {
+  const dialect = new PgDialect();
+  const ctx = { orgId: ORG, actor: 'user' as const, userId: USER, requestId: 'req-1' };
+  const FORM = '0190f5a2-7c1e-7a00-8000-0000000000f0';
+  const uuids = (n: number) => Array.from({ length: n }, (_, i) => `0190f5a2-7c1e-7a00-8000-${String(i).padStart(12, '0')}`);
+
+  /** A transaction that keeps the audit_pending events the reads write, as the scrubbed JSON the chain worker would read. */
+  function recorder() {
+    const events: Array<{ action: string; metadata: Record<string, unknown> }> = [];
+    const tx = {
+      execute: async (query: Parameters<typeof dialect.sqlToQuery>[0]) => {
+        events.push(JSON.parse(dialect.sqlToQuery(query).params[1] as string));
+        return { rows: [] };
+      },
+    } as unknown as Tx;
+    return { tx, events };
+  }
+
+  const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+  it('stores every id of a page of 500 across records, each within the metadata limit', async () => {
+    const ids = uuids(MAX_AUDITED_PAGE_IDS);
+    // Put in one record, as before the fix, they are over the limit and every id is dropped.
+    expect(scrubAuditMetadata({ ids, count: ids.length })).toEqual({ _omitted: 'metadata over 16 KiB' });
+    const { tx, events } = recorder();
+    await auditReads.gridPage(tx, ctx, { formId: FORM, submissionIds: ids, page: 3, filtered: true });
+    expect(events.length).toBeGreaterThan(1);
+    expect(events.every((e) => e.action === 'submission.page_viewed')).toBe(true);
+    expect(events.every((e) => !('_omitted' in e.metadata) && bytes(e.metadata) <= MAX_METADATA_BYTES)).toBe(true);
+    expect(events.flatMap((e) => e.metadata.ids as string[])).toEqual(ids);
+    expect(events.map((e) => [e.metadata.part, e.metadata.parts, e.metadata.count, e.metadata.page, e.metadata.filtered])).toEqual(
+      events.map((_, i) => [i + 1, events.length, 500, 3, true]),
+    );
+  });
+
+  it('leaves one record, with the keys it always had, for a page that fits one', async () => {
+    const ids = uuids(2);
+    const { tx, events } = recorder();
+    await auditReads.gridPage(tx, ctx, { formId: FORM, submissionIds: ids, page: 1, filtered: false });
+    expect(events.map((e) => e.metadata)).toEqual([{ ids, count: 2, page: 1, filtered: false }]);
+    // A page with no rows is still a read.
+    const empty = recorder();
+    await auditReads.gridPage(empty.tx, ctx, { formId: FORM, submissionIds: [], page: 1, filtered: true });
+    expect(empty.events.map((e) => e.metadata)).toEqual([{ ids: [], count: 0, page: 1, filtered: true }]);
+  });
+
+  it('splits API reads the same way and refuses more ids than it will record, instead of dropping the rest', async () => {
+    const ids = uuids(MAX_AUDITED_PAGE_IDS);
+    const { tx, events } = recorder();
+    await auditReads.api(tx, ctx, { formId: FORM, submissionIds: ids });
+    expect(events.flatMap((e) => e.metadata.ids as string[])).toEqual(ids);
+    expect(events.every((e) => e.action === 'submission.api_read' && e.metadata.count === 500)).toBe(true);
+    await expect(auditReads.api(tx, ctx, { formId: FORM, submissionIds: uuids(MAX_AUDITED_PAGE_IDS + 1) })).rejects.toThrow(RangeError);
+    await expect(auditReads.gridPage(tx, ctx, { formId: FORM, submissionIds: uuids(MAX_AUDITED_PAGE_IDS + 1), page: 1, filtered: false })).rejects.toThrow(RangeError);
+  });
+
+  it('chunks by the real size of the ids, so long ids and short ones both fit', () => {
+    const long = Array.from({ length: 200 }, (_, i) => `${String(i).padStart(4, '0')}-${'x'.repeat(300)}`);
+    for (const ids of [uuids(500), long, ['a', ...long, 'b'], []]) {
+      const chunks = auditIdChunks(ids);
+      expect(chunks.flat()).toEqual(ids);
+      for (const chunk of chunks) expect(bytes({ ids: chunk, count: ids.length, page: 1, filtered: true, part: 9, parts: 9 })).toBeLessThanOrEqual(MAX_METADATA_BYTES);
+    }
+    expect(auditIdChunks([])).toEqual([[]]);
+    expect(auditIdChunks(uuids(10))).toHaveLength(1);
   });
 });
