@@ -30,4 +30,9 @@ export const REVIEWS_EVENTS = {
     resourceType: 'review_group',
     description: 'A member was taken out of a review group (the member is the `userId` in the metadata); units assigned to the group are no longer theirs to check.',
   },
+  'review.settings_updated': {
+    outcomes: ['success'],
+    resourceType: 'form',
+    description: "A form's review settings were saved (which units are reviewed, by which group, in which order); the metadata names the keys that changed and the new revision, never an answer.",
+  },
 } as const satisfies Record<string, AuditEventSpec>;

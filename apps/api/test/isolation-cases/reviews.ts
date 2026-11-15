@@ -62,6 +62,20 @@ const cases: IsolationCase[] = [
     call: (f) => ({ url: `/v1/org/review-groups/${f.extra.reviewGroupId}/members/${f.a.ownerId}` }),
     note: 'Would empty org A’s group of its one checker; the baseline check proves the member is still there.',
   },
+  {
+    route: 'GET /v1/forms/:id/review',
+    call: (f) => ({ url: `/v1/forms/${f.a.formId}/review` }),
+    note: 'Org A’s own owner gets 200 for the same request (the suite checks it): the defaults, for a form nobody set up. Org B must not learn that the form exists.',
+  },
+  {
+    route: 'PUT /v1/forms/:id/review',
+    call: (f) => ({
+      url: `/v1/forms/${f.a.formId}/review`,
+      body: { enabled: true, distinctCheckers: true, units: [] },
+      headers: { 'if-match': '0' },
+    }),
+    note: 'A valid body with the revision a first save sends: it would switch review on for org A’s form and insert a form_review_settings row, if the form were visible.',
+  },
 ];
 
 export const REVIEWS_ISOLATION: IsolationDomain = { cases, seed };

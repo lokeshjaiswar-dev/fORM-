@@ -488,8 +488,8 @@ describe('stub route modules (approvals, notifications, webhooks, exports)', () 
     const routes: CollectedRoute[] = [];
     const { app: a } = await app(config(), { onRoute: (route) => collect(routes, route) });
     await a.ready();
-    // The review groups routes are filled in (WP-2.33); the rest are still stubs.
-    expect(routes.filter((r) => /\/v1\/(forms\/[^/]+\/(review|notifications|email-log|webhooks)|email-senders|exports)/.test(r.key))).toEqual([]);
+    // The approvals setup routes (review groups, a form's review settings) are filled in (WP-2.33); the rest are still stubs.
+    expect(routes.filter((r) => /\/v1\/(forms\/[^/]+\/(notifications|email-log|webhooks)|email-senders|exports)/.test(r.key))).toEqual([]);
     const { missing, stale, duplicate } = coverage(routes, ISOLATION_CASES);
     expect({ missing, stale, duplicate }).toEqual({ missing: [], stale: [], duplicate: [] });
   });
@@ -787,6 +787,7 @@ describe('OpenAPI', () => {
       '/v1/forms/{id}/live',
       '/v1/forms/{id}/publish',
       '/v1/forms/{id}/restore',
+      '/v1/forms/{id}/review',
       '/v1/forms/{id}/slug',
       '/v1/forms/{id}/trash',
       '/v1/forms/{id}/validate',
