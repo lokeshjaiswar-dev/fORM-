@@ -22,16 +22,27 @@ const STACK = {
 };
 
 const stops: Array<() => Promise<unknown>> = [];
-let stopping = false;
-async function stop(code: number): Promise<never> {
-  if (!stopping) {
-    stopping = true;
-    for (const s of stops.reverse()) await s().catch(() => {});
-  }
-  process.exit(code);
+/** How long one stop may take. A close that hangs (a keep-alive socket of the browser) must not keep the containers running. */
+const STOP_STEP_MS = 15_000;
+let stopping: Promise<void> | undefined;
+/**
+ * Stops everything that was started, newest first, then exits. Each step is bounded, so the containers (started first,
+ * stopped last) are always removed. A second request to stop (`stop` on stdin, then stdin closing, then a SIGTERM from a
+ * runner that grew impatient) waits for the first one instead of exiting halfway: exiting before the container stops have
+ * run leaves Postgres and Mailpit running on the Docker host, where nothing else removes them (Ryuk is off).
+ */
+function stop(code: number): Promise<never> {
+  stopping ??= (async () => {
+    for (const s of stops.reverse()) {
+      await Promise.race([s().catch(() => {}), new Promise((r) => setTimeout(r, STOP_STEP_MS).unref())]);
+    }
+  })();
+  return stopping.then(() => process.exit(code));
 }
-process.once('SIGINT', () => void stop(0));
-process.once('SIGTERM', () => void stop(0));
+// `on`, not `once`: a group SIGTERM reaches this process twice (directly, and relayed by tsx), and a second signal with no
+// handler left would kill it before the containers are stopped.
+process.on('SIGINT', () => void stop(0));
+process.on('SIGTERM', () => void stop(0));
 process.stdin.on('data', (chunk: Buffer) => {
   if (chunk.toString('utf8').includes('stop')) void stop(0);
 });
