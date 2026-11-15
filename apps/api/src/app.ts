@@ -20,15 +20,20 @@ import { createFileStore, type FileStore } from './files.ts';
 import type { SearchIndexFactory } from './submissions/search.ts';
 import { formFileRoutes } from './routes/form-files.ts';
 import { accessRoutes } from './routes/access.ts';
+import { emailSenderRoutes } from './routes/email-senders.ts';
+import { exportRoutes } from './routes/exports.ts';
 import { formRoutes } from './routes/forms.ts';
+import { notificationRoutes } from './routes/notifications.ts';
 import { publicFormRoutes } from './routes/public.ts';
 import { publicUnlockRoutes } from './routes/public-unlock.ts';
 import { publishRoutes } from './routes/publish.ts';
 import { submissionRoutes } from './routes/submissions.ts';
+import { webhookRoutes } from './routes/webhooks.ts';
 import { healthRoutes } from './routes/health.ts';
 import { metaRoutes } from './routes/meta.ts';
 import { createLogMailer, createThrottle, DEFAULT_AUTH_LIMITS, hibpBreachCheck, registerAuthModule, registerCsrfGuard } from './modules/auth/index.ts';
 import { registerOrgModule } from './modules/orgs/index.ts';
+import { registerReviewModule } from './modules/reviews/index.ts';
 import type { BreachCheck } from './modules/auth/passwords.ts';
 import type { Limit } from './modules/auth/throttle.ts';
 
@@ -219,6 +224,13 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   publicUnlockRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
   submissionRoutes(app, { db: handle.db, files, secret: config.auth.secret, searchIndex: deps.searchIndex, now });
+  // Approvals, notifications, webhooks and exports (WP-2.33, WP-1.16, WP-1.18, WP-1.17). Each module is registered here
+  // once, empty, and its task fills its own files, so no feature task edits this list.
+  registerReviewModule(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, keys: deps.keys, secret: config.auth.secret, now });
+  emailSenderRoutes(app, { db: handle.db, auditDb: auditHandle.db, keys: deps.keys, secret: config.auth.secret, now });
+  notificationRoutes(app, { db: handle.db, auditDb: auditHandle.db, secret: config.auth.secret, now });
+  webhookRoutes(app, { db: handle.db, auditDb: auditHandle.db, keys: deps.keys, queue: deps.queue, secret: config.auth.secret, now });
+  exportRoutes(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, secret: config.auth.secret, now });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);
   app.get('/v1/openapi.json', { config: { auth: 'none' }, schema: { hide: true } }, async () => app.swagger());

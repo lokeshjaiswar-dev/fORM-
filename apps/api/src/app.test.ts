@@ -7,13 +7,41 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
+import type { KeyProvider, Queue } from '@form/ports';
+import { collect, coverage, ISOLATION_CASES, type CollectedRoute } from '../test/isolation-cases/index.ts';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
 import { clientInfo } from './auth.ts';
 import { parseConfig, type ApiConfig } from './config.ts';
 import { ProblemError } from './errors.ts';
+
+/**
+ * The stub modules of the approvals, notifications, webhooks and exports work (WP-2.33, WP-1.16..1.18) wrapped so a test
+ * sees that `buildApp` registers each one and with which deps. They call through, so the app is the real one.
+ */
+const registered = vi.hoisted(() => ({ calls: [] as Array<{ module: string; deps: Record<string, unknown> }> }));
+vi.mock('./modules/reviews/index.ts', async (original) => {
+  const m = await original<typeof import('./modules/reviews/index.ts')>();
+  return { ...m, registerReviewModule: ((app, deps) => (registered.calls.push({ module: 'reviews', deps: { ...deps } }), m.registerReviewModule(app, deps))) as typeof m.registerReviewModule };
+});
+vi.mock('./routes/email-senders.ts', async (original) => {
+  const m = await original<typeof import('./routes/email-senders.ts')>();
+  return { ...m, emailSenderRoutes: ((app, deps) => (registered.calls.push({ module: 'email-senders', deps: { ...deps } }), m.emailSenderRoutes(app, deps))) as typeof m.emailSenderRoutes };
+});
+vi.mock('./routes/notifications.ts', async (original) => {
+  const m = await original<typeof import('./routes/notifications.ts')>();
+  return { ...m, notificationRoutes: ((app, deps) => (registered.calls.push({ module: 'notifications', deps: { ...deps } }), m.notificationRoutes(app, deps))) as typeof m.notificationRoutes };
+});
+vi.mock('./routes/webhooks.ts', async (original) => {
+  const m = await original<typeof import('./routes/webhooks.ts')>();
+  return { ...m, webhookRoutes: ((app, deps) => (registered.calls.push({ module: 'webhooks', deps: { ...deps } }), m.webhookRoutes(app, deps))) as typeof m.webhookRoutes };
+});
+vi.mock('./routes/exports.ts', async (original) => {
+  const m = await original<typeof import('./routes/exports.ts')>();
+  return { ...m, exportRoutes: ((app, deps) => (registered.calls.push({ module: 'exports', deps: { ...deps } }), m.exportRoutes(app, deps))) as typeof m.exportRoutes };
+});
 
 function config(env: Record<string, string> = {}): ApiConfig {
   const r = parseConfig({
@@ -424,6 +452,38 @@ describe('CSP violation reports', () => {
       headers: { origin: 'https://app.form.test', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' },
     });
     expect(res.headers['access-control-allow-origin']).toBe('https://app.form.test');
+  });
+});
+
+describe('stub route modules (approvals, notifications, webhooks, exports)', () => {
+  const MODULES = ['reviews', 'email-senders', 'notifications', 'webhooks', 'exports'];
+
+  it('registers every module once, with the db, the audit db, the secret and the clock, and the queue and keys the app was given', async () => {
+    const queue = { send: async () => null } as unknown as Queue;
+    const keys = { wrap: async () => ({ wrapped: new Uint8Array(), kekRef: 'k' }) } as unknown as KeyProvider;
+    const cfg = config();
+    registered.calls.length = 0;
+    await app(cfg, { queue, keys });
+    expect(registered.calls.map((c) => c.module)).toEqual(MODULES);
+    for (const { module, deps } of registered.calls) {
+      expect(deps, module).toMatchObject({ db: expect.anything(), auditDb: expect.anything(), secret: cfg.auth.secret, now: expect.any(Function) });
+      expect(deps['db'], module).not.toBe(deps['auditDb']);
+    }
+    const by = Object.fromEntries(registered.calls.map((c) => [c.module, c.deps]));
+    // The queue is Core's producer, passed on as it is (never made again here); keys seal org secrets.
+    expect(by['reviews']).toMatchObject({ queue, keys });
+    expect(by['email-senders']).toMatchObject({ keys });
+    expect(by['webhooks']).toMatchObject({ queue, keys });
+    expect(by['exports']).toMatchObject({ queue });
+  });
+
+  it('registers no route yet: the stubs add nothing to the API, and every auth:user route still has an isolation case', async () => {
+    const routes: CollectedRoute[] = [];
+    const { app: a } = await app(config(), { onRoute: (route) => collect(routes, route) });
+    await a.ready();
+    expect(routes.filter((r) => /\/v1\/(org\/review-groups|forms\/[^/]+\/(review|notifications|email-log|webhooks)|email-senders|exports)/.test(r.key))).toEqual([]);
+    const { missing, stale, duplicate } = coverage(routes, ISOLATION_CASES);
+    expect({ missing, stale, duplicate }).toEqual({ missing: [], stale: [], duplicate: [] });
   });
 });
 
