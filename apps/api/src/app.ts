@@ -118,7 +118,8 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['content-type', 'if-match', 'idempotency-key', 'x-fr-client', ORG_HEADER, 'x-request-id', ...(config.authDevHeaders ? [DEV_USER_HEADER] : [])],
-    exposedHeaders: ['x-request-id', 'etag'],
+    // content-disposition: the Responses page names a downloaded file by the server's header, not by the answer.
+    exposedHeaders: ['x-request-id', 'etag', 'content-disposition'],
     maxAge: 600,
   });
   await app.register(cookie);

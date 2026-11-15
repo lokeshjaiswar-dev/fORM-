@@ -278,10 +278,10 @@ describe('security headers, CORS and logs', () => {
     expect(evil.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('lets the builder origin read only the request id and the etag of a response', async () => {
+  it('lets the builder origin read only the request id, the etag and the file name of a response', async () => {
     const { app: a } = await app();
     const res = await a.inject({ url: '/livez', headers: { origin: 'https://app.form.test' } });
-    expect(res.headers['access-control-expose-headers']).toBe('x-request-id, etag');
+    expect(res.headers['access-control-expose-headers']).toBe('x-request-id, etag, content-disposition');
   });
 
   it('keys the client on the hop the trusted proxy added, not a client-chosen X-Forwarded-For', async () => {

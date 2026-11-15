@@ -26,8 +26,11 @@ import { draftWith, fieldBlock } from './publishable-draft.ts';
 
 const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as const;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-/** The first bytes of a Windows program (MZ header): no magic `sniff` knows, so a `.txt` claim is not checked. */
-const EXE = Buffer.concat([Buffer.from('MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00', 'latin1'), Buffer.alloc(64, 0x41)]);
+/**
+ * Plain notes, what a respondent really uploads as notes.txt. The proof used a Windows program (MZ header) here, which
+ * passed the old upload check; the SR-7 fix refuses it at upload, so the rename is shown with a file the check approves.
+ */
+const NOTES = Buffer.from('Meeting notes, 15 Nov\n');
 
 let app: FastifyInstance;
 let owner: pg.Pool;
@@ -95,8 +98,8 @@ describe('SR-1: a file reference in the answers is bound to the stored file only
     // A field that leaves the type open (both accept lists empty): the upload route falls back to DEFAULT_ACCEPT
     // (txt allowed), but the answer validation treats empty lists as "anything".
     const form = await publish('SR1 rename', [fieldBlock('doc', 'file_upload', { accept: { extensions: [], mimeTypes: [] } })]);
-    // A Windows program, uploaded as notes.txt: no magic number sniff() knows, so the .txt claim passes.
-    const file = await upload(form.slug, 'doc', 'notes.txt', 'text/plain', EXE);
+    // A text file, uploaded as notes.txt: the upload check approves it as exactly that.
+    const file = await upload(form.slug, 'doc', 'notes.txt', 'text/plain', NOTES);
     expect(file.name).toBe('notes.txt');
     // The answer renames it. The Responses page offers it as <a href=blob: download="Invoice-0423.exe">, and a blob
     // URL's download name wins over the API's Content-Disposition.

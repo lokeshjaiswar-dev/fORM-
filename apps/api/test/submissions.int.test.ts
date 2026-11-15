@@ -68,19 +68,29 @@ afterAll(async () => {
 const as = (user: string) => ({ 'x-fr-dev-user': user, 'x-fr-org': orgId, ...BROWSER });
 
 describe('form submissions', () => {
-  it('stores a submission and returns it with the filled fields', async () => {
-    const created = await app.inject({
-      method: 'POST',
-      url: `/v1/forms/${formId}/submissions`,
-      headers: as(userId),
-      payload: {
-        answers: { name: { type: 'short_text', value: 'Asha' } },
-        fields: [{ key: 'name', label: 'Name', value: 'Asha' }],
-        locale: 'en-IN',
-      },
-    });
-    expect(created.statusCode).toBe(200);
-    const { id } = created.json<{ id: string }>();
+  it('has no route that creates a submission: members read responses, only the published page writes them', async () => {
+    const before = (await owner.query('select count(*)::int as n from form_submissions where form_id = $1', [formId])).rows[0].n;
+    for (const headers of [as(userId), {}]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/forms/${formId}/submissions`,
+        headers,
+        payload: { answers: { name: { type: 'short_text', value: 'forged' } }, fields: [{ key: 'approval', label: 'Approved by HR', value: 'Yes' }], locale: 'en-IN' },
+      });
+      expect(res.statusCode).toBe(404);
+    }
+    expect((await owner.query('select count(*)::int as n from form_submissions where form_id = $1', [formId])).rows[0].n).toBe(before);
+  });
+
+  it('lists a stored submission and returns it with the filled fields', async () => {
+    const id = randomUUID();
+    await owner.query(`insert into form_submissions (id, org_id, form_id, answers, fields, locale) values ($1, $2, $3, $4, $5, 'en-IN')`, [
+      id,
+      orgId,
+      formId,
+      JSON.stringify({ name: { type: 'short_text', value: 'Asha' } }),
+      JSON.stringify([{ key: 'name', label: 'Name', value: 'Asha' }]),
+    ]);
 
     const list = await app.inject({ url: `/v1/forms/${formId}/submissions`, headers: as(userId) });
     expect(list.statusCode).toBe(200);

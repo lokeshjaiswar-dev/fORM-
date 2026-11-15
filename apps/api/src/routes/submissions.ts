@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { formSubmissions, forms, withTenant, type Db } from '@form/db';
@@ -22,13 +21,11 @@ export const submissionDetail = submissionSummary.extend({
   fields: z.array(fieldRow),
 });
 
-const createBody = z.object({
-  answers: z.record(z.string(), z.unknown()),
-  fields: z.array(fieldRow).default([]),
-  locale: z.string().min(2).max(35).default('en-IN'),
-});
-
-/** List, read, and create submissions for a form in the active org. */
+/**
+ * List and read the submissions of a form in the active org. There is no route to create one: a response comes from
+ * the published page (`POST /v1/p/:slug/submissions`), which validates it against the live version and binds its files;
+ * the builder's preview keeps its rehearsal responses in the browser and sends nothing here.
+ */
 export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -104,46 +101,6 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
         answers: row.answers,
         fields: row.fields,
       };
-    },
-  );
-
-  r.post(
-    '/v1/forms/:formId/submissions',
-    {
-      config: { auth: 'user', perm: 'submissions.edit' },
-      schema: {
-        tags: ['submissions'],
-        summary: 'Store a submission',
-        security: [{ session: [], org: [] }, { devUser: [], org: [] }],
-        params: z.object({ formId: z.uuid() }),
-        body: createBody,
-        response: { 200: z.object({ id: z.uuid() }) },
-      },
-    },
-    async (request) => {
-      const { formId } = request.params;
-      const id = randomUUID();
-      const tenant = tenantOf(request);
-      await withTenant(deps.db, tenant, async (tx) => {
-        const found = await tx.select({ id: forms.id }).from(forms).where(eq(forms.id, formId)).limit(1);
-        if (!found[0]) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
-        await tx.insert(formSubmissions).values({
-          id,
-          orgId: tenant.orgId,
-          formId,
-          answers: request.body.answers,
-          fields: request.body.fields,
-          locale: request.body.locale,
-        });
-        await tx
-          .update(forms)
-          .set({
-            submissionCount: sql`${forms.submissionCount} + 1`,
-            lastSubmissionAt: new Date(),
-          })
-          .where(eq(forms.id, formId));
-      });
-      return { id };
     },
   );
 }

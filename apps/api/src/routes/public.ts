@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
 import { formFiles, formFilesCheck, formSubmissions, formVersions, resolveFormSlug, withTenant, type Db } from '@form/db';
 import { projectForRuntime } from '@form/logic';
 import { acceptsFile } from '@form/registry';
-import type { BlockId, CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
+import type { BlockId, CompiledForm, FieldError, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
 import { ProblemError, sendProblem } from '../errors.ts';
@@ -22,7 +22,8 @@ import {
   type FileStore,
 } from '../files.ts';
 import { storableJson, storableString } from '../text-safety.ts';
-import { checkAnswers, fileRefsIn } from '../validate-submission.ts';
+import { bindFileRefs, fileUses } from '../submission-files.ts';
+import { checkAnswers } from '../validate-submission.ts';
 
 /** What `publicSlug` makes (lower-case letters, digits, hyphens), allowing a little more; never a control character. */
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/;
@@ -262,31 +263,24 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         return sendProblem(reply, 'VALIDATION_FAILED', 'This form is not offered in that language.', [{ path: 'locale', message: 'not a language of this form' }]);
       }
       // The answers are checked against the stored version, whatever the page claims to have validated.
-      const { errors, values } = checkAnswers(live, live.versionId, request.body.answers, request.body.locale, new Date());
-      if (errors.length > 0) {
-        return sendProblem(
-          reply,
-          'VALIDATION_FAILED',
-          'Some answers are not valid.',
-          errors.slice(0, 50).map((e) => ({ path: [e.blockId, e.path].filter(Boolean).join('.'), message: e.message })),
-        );
-      }
-      const refs = fileRefsIn(values);
+      const checked = checkAnswers(live, live.versionId, request.body.answers, request.body.locale, new Date());
+      if (checked.errors.length > 0) return invalid(reply, checked.errors);
+      let values = checked.values;
+      const uses = fileUses(values);
       const id = randomUUID();
-      await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
-        if (refs.length > 0) {
-          // Every file the answers name was uploaded to this form, and is the file they say it is.
-          const ids = [...new Set(refs.map((ref) => ref.fileId))];
+      const stored = await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
+        if (uses.length > 0) {
+          // Every file the answers name was uploaded to this form, for the very field that holds it, and is the file
+          // they say it is. The references are then rewritten from what the upload route recorded (name, type, size,
+          // hash), and the answers checked once more against the true type and size.
+          const ids = [...new Set(uses.map((use) => String(use.ref['fileId'])))];
           if (ids.length > MAX_FILES_PER_SUBMISSION) throw new ProblemError('VALIDATION_FAILED', 'Too many files in one submission.');
           // Through the narrow definer function: a respondent context cannot read form_files (SR-5).
           const known = ids.every((fileId) => z.uuid().safeParse(fileId).success) ? await formFilesCheck(tx, live.formId, ids) : [];
-          const byId = new Map(known.map((row) => [row.id, row]));
-          for (const ref of refs) {
-            const stored = byId.get(ref.fileId);
-            if (!stored || stored.sizeBytes !== ref.sizeBytes || stored.sha256 !== ref.sha256) {
-              throw new ProblemError('VALIDATION_FAILED', 'A file in the answers was not uploaded to this form. Upload it again.');
-            }
-          }
+          const bound = bindFileRefs(values, new Map(known.map((row) => [row.id, row])));
+          const again = checkAnswers(live, live.versionId, bound, request.body.locale, new Date());
+          if (again.errors.length > 0) return { errors: again.errors };
+          values = again.values;
         }
         await tx.insert(formSubmissions).values({
           id,
@@ -298,8 +292,19 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         });
         // The form's counters and the hold on the files are kept by a trigger on this INSERT (0019): a respondent
         // context may not write `forms` or `form_files`.
+        return { errors: [] };
       });
+      if (stored.errors.length > 0) return invalid(reply, stored.errors);
       return { id };
     },
+  );
+}
+
+function invalid(reply: FastifyReply, errors: FieldError[]): FastifyReply {
+  return sendProblem(
+    reply,
+    'VALIDATION_FAILED',
+    'Some answers are not valid.',
+    errors.slice(0, 50).map((e) => ({ path: [e.blockId, e.path].filter(Boolean).join('.'), message: e.message })),
   );
 }

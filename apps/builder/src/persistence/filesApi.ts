@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FileRef } from '@form/schema';
 import type { UploadRequest } from '@form/renderer';
-import { ApiProblem, ApiUnreachable, ensureSession, orgBlob } from '@/auth/client';
+import { activeOrgOf, ensureSession, ORG_HEADER } from '@/auth/client';
 import { API_BASE } from '@/edition/edition';
 import { getSubmissionFile } from '@/persistence/blobStore';
 
@@ -45,20 +45,51 @@ export function publicUploader(slug: string): (request: UploadRequest) => Promis
 }
 
 /**
+ * The file name a download response names: the RFC 5987 `filename*` when there is one (the full name), else the quoted
+ * `filename` fallback. Never a path: only the last part, so a header can only ever name a file in the Downloads folder.
+ */
+export function downloadName(contentDisposition: string | null): string | undefined {
+  if (!contentDisposition) return undefined;
+  const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(contentDisposition)?.[1];
+  let name: string | undefined;
+  if (encoded) {
+    try {
+      name = decodeURIComponent(encoded.trim());
+    } catch {
+      name = undefined;
+    }
+  }
+  name ??= /filename\s*=\s*"([^"]*)"/i.exec(contentDisposition)?.[1];
+  // eslint-disable-next-line no-control-regex
+  const last = name?.split(/[\\/]/).pop()?.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return last ? last : undefined;
+}
+
+/**
  * A respondent's file for the Responses page: a preview file kept in this browser, else the org's copy, which only a
- * signed-in member with `submissions.read` can download (`GET /v1/forms/:formId/files/:id`).
+ * signed-in member with `submissions.read` can download (`GET /v1/forms/:formId/files/:id`). The name comes from the
+ * server's `Content-Disposition` (the name the upload check approved), never from the answer, which a respondent
+ * typed: the browser takes a link's `download` name over the response's header, so a name from the answer could turn
+ * `notes.txt` into `Invoice.exe`.
  */
 export async function loadSubmissionFile(formId: string, id: string): Promise<{ blob: Blob; name: string; mime: string } | undefined> {
   const local = await getSubmissionFile(id);
   if (local) return local;
-  if ((await ensureSession()).status !== 'signed_in') return undefined;
-  let blob: Blob;
+  const session = await ensureSession();
+  if (session.status !== 'signed_in') return undefined;
+  const org = activeOrgOf(session.me)?.id;
+  let res: Response;
   try {
-    blob = await orgBlob(`/v1/forms/${encodeURIComponent(formId)}/files/${encodeURIComponent(id)}`);
-  } catch (err) {
-    if (err instanceof ApiProblem || err instanceof ApiUnreachable) return undefined;
-    throw err;
+    res = await fetch(`${API_BASE}/v1/forms/${encodeURIComponent(formId)}/files/${encodeURIComponent(id)}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: org ? { [ORG_HEADER]: org } : {},
+    });
+  } catch {
+    return undefined;
   }
+  if (!res.ok) return undefined;
+  const blob = await res.blob();
   // Not kept in this browser: the next person to use it would read the file without the API's checks.
-  return { blob, name: 'file', mime: blob.type || 'application/octet-stream' };
+  return { blob, name: downloadName(res.headers.get('content-disposition')) ?? 'file', mime: blob.type || 'application/octet-stream' };
 }

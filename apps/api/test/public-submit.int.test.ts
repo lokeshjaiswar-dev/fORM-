@@ -186,3 +186,82 @@ describe('POST /v1/p/:slug/submissions', () => {
     });
   });
 });
+
+describe('what is stored of the files and the rows (SR-1, SR-2)', () => {
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  type FileRef = { fileId: string; name: string; sizeBytes: number; mime: string; sha256: string; scan: string };
+  const send = async (slug: string, blockId: string, body: Record<string, unknown>) => {
+    const res = await app.inject({ method: 'POST', url: `/v1/p/${slug}/files`, payload: { blockId, ...body } });
+    expect(res.statusCode, res.body).toBe(200);
+    return res.json<FileRef>();
+  };
+  const cv = (slug: string, bytes = PDF) => send(slug, 'cv', { name: 'cv.pdf', mime: 'application/pdf', data: bytes.toString('base64') });
+  const sig = (slug: string) => send(slug, 'sig', { purpose: 'signature', name: 'signature.png', mime: 'image/png', data: PNG.toString('base64') });
+  const signature = (file: Record<string, unknown>) => ({ type: 'signature', value: { method: 'drawn', file } });
+
+  async function publishSigned(title: string): Promise<{ id: string; slug: string; versionId: string }> {
+    const blocks = [...FIELDS(), fieldBlock('sig', 'signature')];
+    const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title } })).json<{ id: string }>();
+    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft: draftWith(id, blocks, title) } })).statusCode).toBe(200);
+    const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: {} });
+    expect(live.statusCode).toBe(200);
+    return { id, ...live.json<{ slug: string; versionId: string }>() };
+  }
+
+  it('rewrites every file reference from the upload row: name, type and scan state are the stored ones', async () => {
+    const f = await publishSigned('Rewrite');
+    const file = await cv(f.slug);
+    const res = await submit(f.slug, {
+      formVersionId: f.versionId,
+      answers: { name: name('A'), cv: { type: 'file_upload', value: [{ ...file, name: 'renamed.pdf', scan: 'clean' }] } },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const stored = (await rows(f.id))[0]!.answers as { cv: { value: FileRef[] } };
+    expect(stored.cv.value).toEqual([{ fileId: file.fileId, name: 'cv.pdf', sizeBytes: PDF.length, mime: 'application/pdf', sha256: file.sha256, scan: 'skipped' }]);
+  });
+
+  it('keeps a signature’s file bound to the signature field, and a document’s to its own', async () => {
+    const f = await publishSigned('Kinds');
+    const doc = await cv(f.slug);
+    const drawn = await sig(f.slug);
+    // A document named as the signature, and the signature named as a document.
+    const asSignature = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A'), sig: signature(doc) } });
+    expect(asSignature.statusCode).toBe(400);
+    const asDocument = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A'), cv: { type: 'file_upload', value: [drawn] } } });
+    expect(asDocument.statusCode).toBe(400);
+    expect(await rows(f.id)).toEqual([]);
+    const ok = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A'), cv: { type: 'file_upload', value: [doc] }, sig: signature({ ...drawn, name: 'my-signature.exe' }) } });
+    expect(ok.statusCode, ok.body).toBe(200);
+    const stored = (await rows(f.id))[0]!.answers as { sig: { value: { file: FileRef } } };
+    expect(stored.sig.value.file).toMatchObject({ fileId: drawn.fileId, name: 'signature.png', mime: 'image/png', scan: 'skipped' });
+  });
+
+  it('refuses a file named in a field that takes no file', async () => {
+    const f = await publishSigned('Smuggled');
+    const doc = await cv(f.slug);
+    const res = await submit(f.slug, { formVersionId: f.versionId, answers: { name: { type: 'short_text', value: { fileId: doc.fileId } } } });
+    expect(res.statusCode).toBe(400);
+    expect(await rows(f.id)).toEqual([]);
+  });
+
+  it('holds the files a stored submission names, so only unreferenced uploads are left for the orphan sweep', async () => {
+    const f = await publishSigned('Holds');
+    const used = await cv(f.slug);
+    const stray = await cv(f.slug, Buffer.concat([PDF, Buffer.from('% another\n')]));
+    const res = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A'), cv: { type: 'file_upload', value: [used] } } });
+    expect(res.statusCode).toBe(200);
+    const held = await owner.query<{ id: string; submission_id: string | null }>('select id, submission_id from form_files where form_id = $1 order by created_at', [f.id]);
+    expect(Object.fromEntries(held.rows.map((r) => [r.id, r.submission_id]))).toEqual({ [used.fileId]: res.json<{ id: string }>().id, [stray.fileId]: null });
+  });
+
+  it('refuses text the database cannot store and a language the form does not offer, storing nothing', async () => {
+    const f = await publishSigned('Text');
+    expect((await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('a\u0000b') } })).statusCode).toBe(400);
+    expect((await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('lone \ud800 surrogate') } })).statusCode).toBe(400);
+    const language = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A') }, locale: 'fr-FR' });
+    expect(language.statusCode).toBe(400);
+    expect(language.json()).toMatchObject({ code: 'VALIDATION_FAILED', errors: [{ path: 'locale' }] });
+    expect(await rows(f.id)).toEqual([]);
+    expect((await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A') }, locale: 'en-IN' })).statusCode).toBe(200);
+  });
+});

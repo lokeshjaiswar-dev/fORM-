@@ -53,9 +53,15 @@ function previewFields(fields: ReadableField[], n = 3): ReadableField[] {
   return fields.filter((field) => field.value || field.media?.length).slice(0, n);
 }
 
+/**
+ * A file the respondent uploaded. The name offered for saving it is the one the server sent with the file (the name
+ * the upload check approved), never the name in the answer: a link's `download` name wins over the response's own
+ * header, and an answer's name is whatever the respondent typed (or, on an older response, whatever they sent).
+ */
 function StoredFile({ formId, fileId, name, mime }: { formId: string; fileId: string; name: string; mime?: string | undefined }) {
   const [url, setUrl] = useState<string | null>(null);
   const [resolvedMime, setMime] = useState(mime ?? '');
+  const [savedAs, setSavedAs] = useState<string | null>(null);
   useEffect(() => {
     let objectUrl: string | undefined;
     let live = true;
@@ -63,6 +69,7 @@ function StoredFile({ formId, fileId, name, mime }: { formId: string; fileId: st
       if (!live || !row) return;
       objectUrl = URL.createObjectURL(row.blob);
       setUrl(objectUrl);
+      setSavedAs(row.name);
       if (row.mime) setMime(row.mime);
     }).catch(() => undefined);
     return () => {
@@ -70,12 +77,13 @@ function StoredFile({ formId, fileId, name, mime }: { formId: string; fileId: st
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [formId, fileId]);
+  const shown = savedAs ?? name;
   const image = resolvedMime.startsWith('image/') || (mime ?? '').startsWith('image/');
-  if (url && image) return <img src={url} alt={name} className="mt-2 max-h-52 max-w-full rounded-[8px] border border-border object-contain" />;
+  if (url && image) return <img src={url} alt={shown} className="mt-2 max-h-52 max-w-full rounded-[8px] border border-border object-contain" />;
   if (url) {
     return (
-      <a href={url} download={name} className="mt-1 inline-block text-[14px] text-primary underline">
-        {name}
+      <a href={url} download={shown} className="mt-1 inline-block text-[14px] text-primary underline">
+        {shown}
       </a>
     );
   }
@@ -101,7 +109,8 @@ function FieldValue({ formId, field, compact }: { formId: string; field: Readabl
   const files = field.media?.filter((item) => item.fileId) ?? [];
   const pictures = field.media?.filter((item) => item.assetId) ?? [];
   const fileNames = files.map((item) => item.name).join(', ');
-  const hideFileName = files.length > 0 && (!field.value || field.value === fileNames);
+  // The server joins several file names with "; " (the export's separator), the page with ", ": the same names.
+  const hideFileName = files.length > 0 && (!field.value || field.value === fileNames || field.value.replaceAll('; ', ', ') === fileNames);
   return (
     <>
       {field.value && !hideFileName ? <span className={compact ? 'truncate' : 'whitespace-pre-wrap'}>{field.value}</span> : null}
