@@ -46,6 +46,55 @@ function radixViewportStyles(): Plugin {
   };
 }
 
+const STYLE_SINGLETON_MODULE = /[\\/]node_modules[\\/]react-style-singleton[\\/]dist[\\/]es2015[\\/]singleton\.js$/;
+/** react-style-singleton's `stylesheetSingleton`, kept in a constructable stylesheet that `document` adopts instead of a `<style>` element. */
+const ADOPTED_STYLESHEET_SINGLETON = `export var stylesheetSingleton = function () {
+  var counter = 0;
+  var sheet = null;
+  return {
+    add: function (style) {
+      if (counter == 0) {
+        sheet = new CSSStyleSheet();
+        sheet.replaceSync(style);
+        document.adoptedStyleSheets = document.adoptedStyleSheets.concat(sheet);
+      }
+      counter++;
+    },
+    remove: function () {
+      counter--;
+      if (!counter && sheet) {
+        var gone = sheet;
+        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(function (s) { return s !== gone; });
+        sheet = null;
+      }
+    },
+  };
+};
+`;
+
+/**
+ * Production builds only. Every Radix overlay that locks scrolling (Dialog, the open Select, DropdownMenu) mounts
+ * react-remove-scroll, which writes its `body[data-scroll-locked]` rules into a `<style>` element it appends to the
+ * head. `style-src 'self'` refuses that element, so opening the New form dialog raised a violation. The rules depend on
+ * the scrollbar width, so they cannot be a fixed rule in the stylesheet; this keeps them in a constructable stylesheet
+ * the document adopts, which the policy does not govern (it limits `<style>` elements and `style=""` markup, not the
+ * CSSOM). The module is replaced whole, and the build fails if its shape changes.
+ */
+function adoptedScrollLockStyles(): Plugin {
+  return {
+    name: 'fr-adopted-scroll-lock-styles',
+    apply: 'build',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!STYLE_SINGLETON_MODULE.test(id.split('?')[0] ?? '')) return null;
+      if (!code.includes('export var stylesheetSingleton = function ()') || !code.includes("document.createElement('style')")) {
+        this.error(`${id}: react-style-singleton no longer looks as expected; review adoptedScrollLockStyles in vite.config.ts`);
+      }
+      return { code: ADOPTED_STYLESHEET_SINGLETON, map: null };
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   /* VITE_API_URL: the API origin when it is not the builder's own (SaaS: api.form.example). Unset: same origin. */
   const apiUrl = loadEnv(mode, root, 'VITE_').VITE_API_URL;
@@ -57,7 +106,7 @@ export default defineConfig(({ mode }) => {
   /* Reports go to the local collector, through `report-uri` only (see BuilderHeaderOptions.reportTo). */
   const reports = { reportUri: DEV_CSP_REPORT_PATH, reportTo: false };
   return {
-    plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles(), radixViewportStyles()],
+    plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles(), radixViewportStyles(), adoptedScrollLockStyles()],
     /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
     assetsInclude: ['**/*.formpack'],
     build: {
