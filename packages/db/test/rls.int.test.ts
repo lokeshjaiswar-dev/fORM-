@@ -22,7 +22,7 @@ import {
   type TenantCtx,
   type Tx,
 } from '../src/index.ts';
-import { failure, insertSubmission, insertSubmissionSql, newSubmission, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
+import { effectsOf, failure, insertSubmission, insertSubmissionSql, newSubmission, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
 import { isolationSuite, publicTables, type TableSpec } from './isolation.ts';
 
 let t: TestDb;
@@ -1420,5 +1420,122 @@ describe('form_id_counters', () => {
     // A counter belongs to a form of its own org.
     const foreign = await failure(t.owner.query(`insert into form_id_counters (form_id, block_id, org_id) values ($1, 'x', $2)`, [seed.a.formIds[0], seed.b.orgId]));
     expect(pgCode(foreign)).toBe('23503');
+  });
+});
+
+describe('webhooks, disclosures and purposes (WP-1.18, WP-1.16, migration 0023)', () => {
+  type Ctx = Omit<TenantCtx, 'requestId' | 'orgId'>;
+  const as = <T>(ctx: Ctx, fn: (tx: Tx) => Promise<T>) => withTenant(t.app.db, { orgId: seed.b.orgId, requestId: 'effects-rls', ...ctx }, fn);
+  const fx = () => effectsOf(seed.b);
+  /** A member who holds everything an editor-like role holds except data.route. */
+  const noRoute = (): Ctx => ({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit', 'submissions.read', 'submissions.export', 'org.settings', 'ops.manage'] });
+  const withRoute = (): Ctx => ({ ...noRoute(), perms: [...(noRoute().perms ?? []), 'data.route'] });
+  const system: Ctx = { actor: 'system' };
+  const insertWebhook = (id: string) =>
+    sql`insert into webhooks (id, org_id, form_id, url, secret_id, events, purpose_ids)
+        values (${id}, ${seed.b.orgId}, ${seed.b.formIds[1]}, 'https://hooks.example.test/second', ${fx().hookSecretId}, '{submission.created}', '{contact}')`;
+  const webhookCount = (ctx: Ctx) => as(ctx, async (tx) => Number((await tx.execute<{ n: string }>(sql`select count(*)::text as n from webhooks`)).rows[0]!.n));
+  const ownWebhooks = async () => Number((await t.owner.query<{ n: string }>('select count(*)::text as n from webhooks where org_id = $1', [seed.b.orgId])).rows[0]!.n);
+  /** The name of the constraint a failed statement broke, also when drizzle wraps the pg error. */
+  const constraintOf = (err: unknown): string | undefined => {
+    for (let e: unknown = err; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
+      const c = (e as { constraint?: unknown }).constraint;
+      if (typeof c === 'string') return c;
+    }
+    return undefined;
+  };
+
+  it('shows webhooks and takes an insert only from a user with data.route (or a system job)', async () => {
+    const before = await ownWebhooks();
+    expect(before).toBeGreaterThan(0);
+    // Without data.route the table is empty for the user and an insert is refused, whatever else the role holds.
+    expect(await webhookCount(noRoute())).toBe(0);
+    expect(pgCode(await failure(as(noRoute(), (tx) => tx.execute(insertWebhook(randomUUID())))))).toBe('42501');
+    expect(pgCode(await failure(as({ actor: 'api_key', perms: ['forms.read', 'submissions.read'] }, (tx) => tx.execute(insertWebhook(randomUUID())))))).toBe('42501');
+    expect(pgCode(await failure(as({ actor: 'respondent' }, (tx) => tx.execute(insertWebhook(randomUUID())))))).toBe('42501');
+    expect(await ownWebhooks()).toBe(before);
+    // With data.route it reads every webhook of the org and may add one; the system job reads them too.
+    expect(await webhookCount(withRoute())).toBe(before);
+    expect(await webhookCount(system)).toBe(before);
+    await as(withRoute(), (tx) => tx.execute(insertWebhook(randomUUID())));
+    expect(await ownWebhooks()).toBe(before + 1);
+    expect(await webhookCount(withRoute())).toBe(before + 1);
+  });
+
+  it('lets only data.route change or delete a webhook: the same user without it changes nothing', async () => {
+    const id = randomUUID();
+    await as(withRoute(), (tx) => tx.execute(insertWebhook(id)));
+    const touched = await as(noRoute(), (tx) => tx.execute(sql`update webhooks set enabled = false where id = ${id} returning 1`));
+    expect(touched.rows).toEqual([]);
+    const removed = await as(noRoute(), (tx) => tx.execute(sql`delete from webhooks where id = ${id} returning 1`));
+    expect(removed.rows).toEqual([]);
+    expect((await t.owner.query('select enabled from webhooks where id = $1', [id])).rows).toEqual([{ enabled: true }]);
+    expect((await as(withRoute(), (tx) => tx.execute(sql`update webhooks set enabled = false where id = ${id} returning 1`))).rows).toHaveLength(1);
+    expect((await as(withRoute(), (tx) => tx.execute(sql`delete from webhooks where id = ${id} returning 1`))).rows).toHaveLength(1);
+  });
+
+  it('refuses UPDATE and DELETE on disclosures with "permission denied" to every context, a system job and a full-permission member included', async () => {
+    const own = async () => (await t.owner.query<{ id: string; display_name: string }>('select id, display_name from disclosures where org_id = $1 order by id', [seed.b.orgId])).rows;
+    const before = await own();
+    expect(before.length).toBeGreaterThan(0);
+    const everything: Ctx = { actor: 'user', userId: seed.b.ownerId, perms: ['submissions.read', 'submissions.delete', 'submissions.edit', 'compliance.dsr', 'data.route', 'org.settings', 'forms.edit'] };
+    const apiKey: Ctx = { actor: 'api_key', perms: ['submissions.read'] };
+    for (const ctx of [system, everything, { actor: 'respondent' } as Ctx, apiKey]) {
+      const update = await failure(as(ctx, (tx) => tx.execute(sql`update disclosures set display_name = 'rewritten'`)));
+      expect(pgCode(update), `${ctx.actor} update`).toBe('42501');
+      expect(String((update as { cause?: { message?: string } }).cause?.message ?? update)).toMatch(/permission denied for table disclosures/);
+      const remove = await failure(as(ctx, (tx) => tx.execute(sql`delete from disclosures`)));
+      expect(pgCode(remove), `${ctx.actor} delete`).toBe('42501');
+      expect(String((remove as { cause?: { message?: string } }).cause?.message ?? remove)).toMatch(/permission denied for table disclosures/);
+    }
+    expect(await own()).toEqual(before);
+  });
+
+  it('lets any context of the org append to the ledger (the submit transaction is a respondent) but read it only with submissions.read, compliance.dsr or as a system job', async () => {
+    const id = randomUUID();
+    const append = sql`insert into disclosures (id, org_id, submission_id, submission_received_at, recipient_kind, recipient_id, display_name, field_keys)
+      values (${id}, ${seed.b.orgId}, ${fx().submissionId}, ${fx().submissionReceivedAt.toISOString()}::timestamptz, 'notification', ${fx().notificationId}, 'o***@example.test', '{email}')`;
+    await as({ actor: 'respondent' }, (tx) => tx.execute(append));
+    const visible = (ctx: Ctx) => as(ctx, async (tx) => (await tx.execute<{ id: string }>(sql`select id from disclosures where id = ${id}`)).rows.length);
+    expect(await visible({ actor: 'respondent' })).toBe(0);
+    expect(await visible({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit', 'data.route'] })).toBe(0);
+    expect(await visible({ actor: 'api_key', perms: ['forms.read'] })).toBe(0);
+    expect(await visible({ actor: 'user', userId: seed.b.viewerId, perms: ['submissions.read'] })).toBe(1);
+    expect(await visible({ actor: 'user', userId: seed.b.ownerId, perms: ['compliance.dsr'] })).toBe(1);
+    expect(await visible(system)).toBe(1);
+    // Nor can it be read back from the INSERT that wrote it, by a context that may not read it.
+    const returning = await failure(as({ actor: 'respondent' }, (tx) => tx.execute(sql`${append} returning id`)));
+    expect(pgCode(returning)).toBe('42501');
+  });
+
+  it('refuses a notification or a webhook with purpose_ids {} (or a null or empty purpose) with the check constraint, through fr_app and as the owner', async () => {
+    const notification = (purposes: string) =>
+      sql`insert into notifications (id, org_id, form_id, kind, trigger, config, purpose_ids)
+          values (${randomUUID()}, ${seed.b.orgId}, ${seed.b.formIds[1]}, 'owner', 'submitted', '{}', ${sql.raw(purposes)})`;
+    const webhook = (purposes: string) =>
+      sql`insert into webhooks (id, org_id, form_id, url, secret_id, events, purpose_ids)
+          values (${randomUUID()}, ${seed.b.orgId}, ${seed.b.formIds[1]}, 'https://hooks.example.test/p', ${fx().hookSecretId}, '{submission.created}', ${sql.raw(purposes)})`;
+    for (const purposes of [`'{}'`, `'{NULL}'`, `'{""}'`, `'{contact,""}'`, `ARRAY[]::text[]`]) {
+      for (const [table, build, ctx] of [
+        ['notifications', notification, system],
+        ['webhooks', webhook, withRoute()],
+      ] as const) {
+        const err = await failure(as(ctx, (tx) => tx.execute(build(purposes))));
+        expect(pgCode(err), `${table} ${purposes}`).toBe('23514');
+        expect(constraintOf(err), `${table} ${purposes}`).toBe(`${table}_purpose_ids_check`);
+      }
+    }
+    // As the owner, which skips RLS: the constraint is the table's own, not the policy's.
+    const ownerErr = await failure(
+      t.owner.query(`insert into notifications (id, org_id, form_id, kind, trigger, config, purpose_ids) values ($1, $2, $3, 'owner', 'submitted', '{}', '{}')`, [
+        randomUUID(),
+        seed.b.orgId,
+        seed.b.formIds[1],
+      ]),
+    );
+    expect(pgCode(ownerErr)).toBe('23514');
+    // One purpose is enough.
+    await as(system, (tx) => tx.execute(notification(`'{contact}'`)));
+    await as(withRoute(), (tx) => tx.execute(webhook(`'{contact,marketing}'`)));
   });
 });

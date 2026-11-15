@@ -749,3 +749,103 @@ describe('migration 0022 on a database that holds responses and settings', () =>
     }
   });
 });
+
+describe('migration 0023 on a database that holds responses (WP-1.16, WP-1.17, WP-1.18)', () => {
+  const EFFECT_TABLES = ['secrets', 'email_senders', 'notifications', 'email_messages', 'webhooks', 'webhook_deliveries', 'exports', 'disclosures'];
+
+  /** A database migrated to 0022 with one org, form, version and response in it. */
+  async function at22() {
+    const adminUrl = inject('pgAdminUrl');
+    const database = await createTestDatabase(adminUrl);
+    const admin = new pg.Client({ connectionString: adminUrl });
+    await admin.connect();
+    try {
+      await bootstrapDatabase(admin, database);
+    } finally {
+      await admin.end();
+    }
+    const c = new pg.Client({ connectionString: roleUrl(adminUrl, ROLES.migrator, TEST_PASSWORDS.migrator, database) });
+    await c.connect();
+    const files = await loadMigrations();
+    expect((await migrate(c, files.filter((m) => m.version <= 22))).version).toBe(22);
+    const org = randomUUID();
+    const user = randomUUID();
+    const form = randomUUID();
+    const version = randomUUID();
+    await c.query(`insert into orgs (id, slug, name) values ($1, 'effects', 'Effects')`, [org]);
+    await c.query(`insert into users (id, email, email_norm, password_hash) values ($1, 'o@effects.test', 'o@effects.test', 'x')`, [user]);
+    await c.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [form, org, randomUUID(), user, 'Contact']);
+    await c.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash) values ($1, $2, $3, 1, 2, $4, '{}', '{}', $5)`,
+      [version, org, form, user, 'ab'.repeat(32)],
+    );
+    const key = newSubmissionKey(new Date());
+    await c.query(
+      `insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta)
+       values ($1, $2, $3, $4, $5, $6, 0, 'complete', '{}', '{}', '{}')`,
+      [key.id, key.receivedAt, org, form, version, Buffer.alloc(32)],
+    );
+    return { c, files, org, user, form, submission: key };
+  }
+
+  it('is the file after 0022, applies on top of it, and leaves the data that was there alone', async () => {
+    const m = await at22();
+    try {
+      expect(m.files.find((f) => f.version === 23)?.name).toBe('notify_webhooks_exports');
+      expect(m.files.find((f) => f.version === 22)).toBeDefined();
+      const result = await migrate(m.c, m.files.filter((f) => f.version <= 23));
+      expect(result).toEqual({ applied: ['0023_notify_webhooks_exports'], version: 23 });
+      for (const table of EFFECT_TABLES) expect((await m.c.query('select to_regclass($1)::text as t', [`public.${table}`])).rows[0], table).toEqual({ t: table });
+      // What 0021 and the earlier migrations hold is as it was.
+      expect((await m.c.query('select count(*)::int as n from submissions')).rows[0]).toEqual({ n: 1 });
+      expect((await m.c.query('select count(*)::int as n from forms')).rows[0]).toEqual({ n: 1 });
+      // Every table forces RLS and has its policies, the definers are pinned and not public: the meta-checks stay quiet.
+      expect(await rlsViolations(m.c)).toEqual([]);
+    } finally {
+      await m.c.end();
+    }
+  });
+
+  it('puts the two logs in monthly partitions in schema parts: forced RLS, owned by the migrator, nobody else granted', async () => {
+    const m = await at22();
+    try {
+      await migrate(m.c, m.files.filter((f) => f.version <= 23));
+      for (const table of ['email_messages', 'webhook_deliveries']) {
+        const partitions = await partitionsOf(m.c, table);
+        // The current month and three more (create_partitions), none of them the default.
+        expect(partitions, table).toHaveLength(4);
+        for (const p of partitions) {
+          expect(p, p.name).toMatchObject({ name: expect.stringMatching(new RegExp(`^parts\\.${table}_\\d{4}_\\d{2}$`)), forced: true, owner: 'fr_migrator', grantees: ['fr_migrator'] });
+        }
+      }
+      // The same two tables are range-partitioned on created_at, and no other new table is partitioned.
+      const { rows } = await m.c.query<{ table: string; key: string }>(
+        `select c.relname as table, pg_get_partkeydef(c.oid) as key from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind = 'p' and c.relname = any($1) order by 1`,
+        [EFFECT_TABLES],
+      );
+      expect(rows).toEqual([
+        { table: 'email_messages', key: 'RANGE (created_at)' },
+        { table: 'webhook_deliveries', key: 'RANGE (created_at)' },
+      ]);
+    } finally {
+      await m.c.end();
+    }
+  });
+
+  it('keeps resolve_job_org, its grant and its owner, and adds the three resource types', async () => {
+    const m = await at22();
+    try {
+      const before = (await m.c.query<{ acl: string; owner: string }>(`select p.proacl::text as acl, pg_get_userbyid(p.proowner) as owner from pg_proc p where p.proname = 'resolve_job_org'`)).rows[0]!;
+      await migrate(m.c, m.files.filter((f) => f.version <= 23));
+      const after = (await m.c.query<{ acl: string; owner: string; secdef: boolean; config: string[] }>(
+        `select p.proacl::text as acl, pg_get_userbyid(p.proowner) as owner, p.prosecdef as secdef, p.proconfig as config from pg_proc p where p.proname = 'resolve_job_org'`,
+      )).rows[0]!;
+      expect(after).toMatchObject({ acl: before.acl, owner: before.owner, secdef: true, config: ['search_path=pg_catalog, public'] });
+      expect((await m.c.query('select resolve_job_org($1, $2) as org', ['form', m.form])).rows[0]).toEqual({ org: m.org });
+      for (const type of ['email_message', 'webhook_delivery', 'export']) expect((await m.c.query('select resolve_job_org($1, $2) as org', [type, randomUUID()])).rows[0], type).toEqual({ org: null });
+    } finally {
+      await m.c.end();
+    }
+  });
+});

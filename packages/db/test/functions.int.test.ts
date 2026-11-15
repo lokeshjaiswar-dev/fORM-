@@ -15,7 +15,7 @@ import {
   type OrgSpanningJob,
   type PartitionedTable,
 } from '../src/index.ts';
-import { failure, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
+import { effectsOf, failure, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
 
 let t: TestDb;
 let seed: Seed;
@@ -64,6 +64,43 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
     expect(await resolveJobOrg(t.app.db, 'org', seed.b.orgId)).toBe(seed.b.orgId);
     expect(await resolveJobOrg(t.app.db, 'form', randomUUID())).toBeNull();
     expect(pgCode(await failure(resolveJobOrg(t.app.db, 'submission' as 'form', randomUUID())))).toBe('22023');
+  });
+
+  it('resolve_job_org names the org of an email message, a webhook delivery and an export (the rows fan-out child jobs carry), and still answers the old four', async () => {
+    const [a, b] = [effectsOf(seed.a), effectsOf(seed.b)];
+    expect(await resolveJobOrg(t.app.db, 'email_message', a.emailMessageId)).toBe(seed.a.orgId);
+    expect(await resolveJobOrg(t.app.db, 'email_message', b.emailMessageId)).toBe(seed.b.orgId);
+    expect(await resolveJobOrg(t.app.db, 'webhook_delivery', a.deliveryId)).toBe(seed.a.orgId);
+    expect(await resolveJobOrg(t.app.db, 'webhook_delivery', b.deliveryId)).toBe(seed.b.orgId);
+    expect(await resolveJobOrg(t.app.db, 'export', a.exportId)).toBe(seed.a.orgId);
+    expect(await resolveJobOrg(t.app.db, 'export', b.exportId)).toBe(seed.b.orgId);
+    // An id that is none of them, an id of another kind of row, and the id of a row under the wrong type answer null.
+    for (const type of ['email_message', 'webhook_delivery', 'export'] as const) expect(await resolveJobOrg(t.app.db, type, randomUUID()), type).toBeNull();
+    expect(await resolveJobOrg(t.app.db, 'export', a.emailMessageId)).toBeNull();
+    expect(await resolveJobOrg(t.app.db, 'email_message', a.exportId)).toBeNull();
+    // The cases that were there before 0023 keep their answers.
+    expect(await resolveJobOrg(t.app.db, 'org', seed.a.orgId)).toBe(seed.a.orgId);
+    expect(await resolveJobOrg(t.app.db, 'form', seed.a.formIds[1])).toBe(seed.a.orgId);
+    expect(await resolveJobOrg(t.app.db, 'form_draft', seed.a.formIds[0])).toBe(seed.a.orgId);
+    const chain = randomUUID();
+    expect(await resolveJobOrg(t.app.db, 'audit_chain', chain)).toBeNull();
+    await t.owner.query(`insert into audit_heads (org_key, seq, hash) values ($1, 0, $2)`, [chain, Buffer.alloc(32)]);
+    expect(await resolveJobOrg(t.app.db, 'audit_chain', chain)).toBe(chain);
+    // A resource type the database does not know is still refused, not answered with null.
+    expect(pgCode(await failure(resolveJobOrg(t.app.db, 'webhook' as 'form', a.webhookId)))).toBe('22023');
+  });
+
+  it('finds a message that lives in a month other than the current one, by id alone', async () => {
+    // A partition for two months ahead holds the row; the resolver does not need to be told which month.
+    await createPartitions(t.app.db, 'email_messages', 2);
+    const id = randomUUID();
+    const fx = effectsOf(seed.a);
+    await t.owner.query(
+      `insert into email_messages (id, created_at, org_id, form_id, submission_id, submission_received_at, notification_id, role, to_display_masked, subject_hash, message_id)
+       values ($1, date_trunc('month', now() at time zone 'UTC') + interval '2 months' + interval '3 days', $2, $3, $4, $5, $6, 'owner', '{a}', $7, 'x')`,
+      [id, seed.a.orgId, seed.a.formIds[0], fx.submissionId, fx.submissionReceivedAt, fx.notificationId, Buffer.alloc(32)],
+    );
+    expect(await resolveJobOrg(t.app.db, 'email_message', id)).toBe(seed.a.orgId);
   });
 
   it('create_partitions is idempotent and creates forced-RLS partitions in parts that fr_app cannot touch', async () => {
