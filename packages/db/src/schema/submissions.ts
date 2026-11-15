@@ -30,6 +30,7 @@ export const ANSWER_CODEC_PLAIN = 0;
  * column grants: it inserts the identity and answer columns, updates the inbox and edit columns, and can never set the
  * retention columns (`deleteAfter`, `statutoryHoldUntil`, `legalHold`, until WP-1.22), `seq`, or move a row to another
  * form, version or month. `deleteAfter` is filled by a trigger (received_at + 10 years) for an insert that names none.
+ * Insert through `recordSubmission()`: Drizzle's own INSERT lists every column, including the ones fr_app may not name.
  */
 export const submissions = pgTable(
   'submissions',

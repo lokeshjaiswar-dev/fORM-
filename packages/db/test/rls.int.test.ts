@@ -3,6 +3,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   accountDelete,
+  ANSWER_CODEC_PLAIN,
   assertTenantCtx,
   formAccessPasswordHash,
   formAccess,
@@ -10,6 +11,8 @@ import {
   forms,
   orgs,
   partitionsOf,
+  recordSubmission,
+  submissions,
   userPublicColumns,
   users,
   uuidV7,
@@ -997,6 +1000,7 @@ const respondentOnly: SubmissionCtx = { actor: 'respondent' };
 const systemOnly: SubmissionCtx = { actor: 'system' };
 const apiKeyOnly: SubmissionCtx = { actor: 'api_key', perms: ['forms.read', 'forms.edit'] };
 const readerEditor = (): SubmissionCtx => ({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'submissions.read', 'submissions.edit'] });
+const HASH_BYTES = Buffer.alloc(32);
 const messageOf = (err: unknown) => String((err as { cause?: { message?: string } }).cause?.message ?? err);
 
 describe('uuid_v7_ts', () => {
@@ -1140,6 +1144,62 @@ describe('submissions: who reads a row, and which columns anyone writes', () => 
     // The editor can change the row because the role says submissions.edit; a reader cannot.
     const reader: SubmissionCtx = { actor: 'user', userId: seed.b.viewerId, perms: ['forms.read', 'submissions.read'] };
     expect((await submissionsAs(reader, (tx) => tx.execute(sql`update submissions set read = false where id = ${row.id} returning 1`))).rows).toEqual([]);
+  });
+
+  it('records a response through recordSubmission(), the one INSERT fr_app may run, and Drizzle’s own insert is refused', async () => {
+    const row = newSubmission(seed.b, 0, { answers: { name: { type: 'short_text', value: 'Asha' } } });
+    const bidx = [Buffer.alloc(32, 1), Buffer.alloc(32, 2)];
+    await submissionsAs(respondentOnly, (tx) =>
+      recordSubmission(tx, {
+        id: row.id,
+        receivedAt: row.receivedAt,
+        orgId: row.orgId,
+        formId: row.formId,
+        formVersionId: row.formVersionId,
+        definitionHash: Buffer.alloc(32, 7),
+        answerCodecVersion: ANSWER_CODEC_PLAIN,
+        status: 'complete',
+        answers: row.answers as Record<string, unknown>,
+        computed: { path: ['page_1'] },
+        meta: { locale: 'hi-IN' },
+        principalBidx: bidx,
+      }),
+    );
+    const { rows } = await t.owner.query<{ hash: string; answers: unknown; computed: unknown; meta: unknown; principal_bidx: Buffer[] }>(
+      `select encode(definition_hash, 'hex') as hash, answers, computed, meta, principal_bidx from submissions where id = $1 and received_at = $2`,
+      [row.id, row.receivedAt],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ hash: '07'.repeat(32), answers: row.answers, computed: { path: ['page_1'] }, meta: { locale: 'hi-IN' } });
+    expect(rows[0]!.principal_bidx.map((b) => b.toString('hex'))).toEqual(bidx.map((b) => b.toString('hex')));
+    // Without blind indexes the column stays null.
+    const plain = newSubmission(seed.b, 0);
+    await submissionsAs(respondentOnly, (tx) =>
+      recordSubmission(tx, { ...plain, definitionHash: Buffer.alloc(32), answerCodecVersion: 0, status: 'complete', answers: {}, computed: {}, meta: {} }),
+    );
+    expect((await t.owner.query('select principal_bidx from submissions where id = $1', [plain.id])).rows).toEqual([{ principal_bidx: null }]);
+    // Drizzle lists every column of the table in an INSERT, `default` for the ones it is not given, and fr_app may not name
+    // delete_after or seq: that is why the route uses recordSubmission().
+    const orm = newSubmission(seed.b, 0);
+    const refused = await failure(
+      submissionsAs(respondentOnly, (tx) =>
+        tx.insert(submissions).values({
+          id: orm.id,
+          receivedAt: orm.receivedAt,
+          orgId: orm.orgId,
+          formId: orm.formId,
+          formVersionId: orm.formVersionId,
+          definitionHash: HASH_BYTES,
+          answerCodecVersion: 0,
+          status: 'complete',
+          answers: {},
+          computed: {},
+          meta: {},
+          deleteAfter: new Date(),
+        }),
+      ),
+    );
+    expect(pgCode(refused)).toBe('42501');
   });
 
   it('fills delete_after with received_at + 10 years in UTC, and numbers rows with one identity nobody can name', async () => {
