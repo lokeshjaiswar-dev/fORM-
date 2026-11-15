@@ -58,26 +58,31 @@ export function FormListItem({ row, source, actions, selected, onToggleSelected,
   const stamp = when(row.updatedAt);
   const meta = !stamp ? '' : inTrash ? t(M['forms.trashed_since'], { when: stamp }) : t(M[source === 'server' ? 'forms.updated' : 'forms.saved'], { when: stamp });
 
+  // On a narrow screen the date goes under the title, and the buttons wrap under both, so nothing is squeezed to nothing.
   const content = (
     <>
       <FileText className="size-4 shrink-0 text-text-subtle" />
-      <span className="min-w-0 flex-1 truncate text-[15px]">{title}</span>
-      {row.isLive ? (
-        <Badge variant="success" size="sm">
-          {t(M['forms.live'])}
-        </Badge>
-      ) : null}
-      {row.unsynced ? (
-        <Badge variant="warning" size="sm">
-          {t(M['forms.unsynced'])}
-        </Badge>
-      ) : null}
-      <span className="shrink-0 text-[13px] text-muted-foreground">{meta}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="min-w-0 truncate text-[15px]">{title}</span>
+          {row.isLive ? (
+            <Badge variant="success" size="sm">
+              {t(M['forms.live'])}
+            </Badge>
+          ) : null}
+          {row.unsynced ? (
+            <Badge variant="warning" size="sm">
+              {t(M['forms.unsynced'])}
+            </Badge>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-[13px] text-muted-foreground">{meta}</span>
+      </span>
     </>
   );
 
   return (
-    <li className={cn('-mx-2 flex items-center gap-2 rounded-[6px] px-2 py-3 hover:bg-state-hover', busy && 'opacity-60')} aria-busy={busy}>
+    <li className={cn('-mx-2 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-[6px] px-2 py-3 hover:bg-state-hover', busy && 'opacity-60')} aria-busy={busy}>
       {inTrash ? null : (
         <input type="checkbox" className="size-4 shrink-0" checked={selected} aria-label={t(M['forms.select'], { title })} onChange={() => onToggleSelected(row.id)} />
       )}
@@ -88,19 +93,19 @@ export function FormListItem({ row, source, actions, selected, onToggleSelected,
       ) : null}
       {inTrash ? (
         // A trashed form is not opened from here: restoring it comes first.
-        <div className="flex min-w-0 flex-1 items-center gap-3 text-muted-foreground">{content}</div>
+        <div className="flex min-w-[12rem] flex-1 items-center gap-3 text-muted-foreground">{content}</div>
       ) : (
-        <Link to={builderPath(row.id)} className="flex min-w-0 flex-1 items-center gap-3">
+        <Link to={builderPath(row.id)} className="flex min-w-[12rem] flex-1 items-center gap-3">
           {content}
         </Link>
       )}
       {inTrash ? (
-        <Button type="button" variant="outline" size="sm" disabled={busy} aria-label={t(M['forms.restore_label'], { title })} onClick={() => void actions.restore(row)}>
+        <Button type="button" variant="outline" size="sm" className="ml-auto" disabled={busy} aria-label={t(M['forms.restore_label'], { title })} onClick={() => void actions.restore(row)}>
           <RotateCcw />
           {t(M['forms.restore'])}
         </Button>
       ) : (
-        <>
+        <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/forms/${row.id}/responses`}>
               <Inbox />
@@ -148,7 +153,7 @@ export function FormListItem({ row, source, actions, selected, onToggleSelected,
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        </>
+        </div>
       )}
     </li>
   );
