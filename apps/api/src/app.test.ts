@@ -484,13 +484,12 @@ describe('stub route modules (approvals, notifications, webhooks, exports)', () 
     expect(by['webhooks']).not.toHaveProperty('keys');
   });
 
-  it('registers no route yet: the stubs add nothing to the API, and every auth:user route still has an isolation case', async () => {
+  it('every auth:user route has an isolation case, and every case names a route that exists', async () => {
     const routes: CollectedRoute[] = [];
     const { app: a } = await app(config(), { onRoute: (route) => collect(routes, route) });
     await a.ready();
-    // The approvals setup routes (review groups, a form's review settings) are filled in (WP-2.33), and so are the email
-    // senders, the notifications and the email log (WP-1.16) and the webhooks (WP-1.18); the export routes are still stubs.
-    expect(routes.filter((r) => /\/v1\/exports/.test(r.key))).toEqual([]);
+    // Every module is filled in now: the approvals setup routes (WP-2.33), the email senders, notifications and email log
+    // (WP-1.16), the exports (WP-1.17) and the webhooks (WP-1.18), so no stub is left to prove silent.
     const { missing, stale, duplicate } = coverage(routes, ISOLATION_CASES);
     expect({ missing, stale, duplicate }).toEqual({ missing: [], stale: [], duplicate: [] });
   });
@@ -775,9 +774,12 @@ describe('OpenAPI', () => {
       '/v1/email-senders',
       '/v1/email-senders/{id}',
       '/v1/email-senders/{id}/test',
+      '/v1/exports/{id}',
+      '/v1/exports/{id}/download',
       '/v1/forms',
       '/v1/forms/merge',
       '/v1/forms/{formId}/email-log',
+      '/v1/forms/{formId}/exports',
       '/v1/forms/{formId}/files/{id}',
       '/v1/forms/{formId}/notifications',
       '/v1/forms/{formId}/notifications/{id}',
