@@ -107,6 +107,11 @@ describe('BuilderHeader', () => {
     expect(screen.getByLabelText('path')).toHaveTextContent('/builder/f1/preview');
   });
 
+  it('links to the form’s settings: its emails, webhooks and email log (WP-1.16)', () => {
+    renderHeader();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/forms/f1/settings');
+  });
+
   it('shows the save state and links back to the forms list', () => {
     renderHeader();
     act(() => useUiStore.setState({ save: { state: 'saving' } }));

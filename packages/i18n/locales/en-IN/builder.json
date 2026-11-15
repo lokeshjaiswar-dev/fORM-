@@ -501,6 +501,7 @@
   "header.conflict_toast": "This form changed somewhere else. Choose which version to keep, then publish again.",
   "header.plan_mismatch": "This browser and the server disagree about how the form compiles. Reload the page, then publish again.",
   "header.saved_local": "Saved on this device",
+  "header.settings": "Settings",
   "inspector.age_max": "Maximum age",
   "inspector.age_min": "Minimum age",
   "inspector.align": "Align",

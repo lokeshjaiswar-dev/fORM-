@@ -35,6 +35,7 @@ const M = defineMessages('builder', {
   'header.conflict': 'Changed elsewhere',
   'header.plan_mismatch': 'This browser and the server disagree about how the form compiles. Reload the page, then publish again.',
   'header.conflict_toast': 'This form changed somewhere else. Choose which version to keep, then publish again.',
+  'header.settings': 'Settings',
 });
 
 /** What the publish dialog lists: the server's issues, and whether any of them blocks. */
@@ -181,6 +182,12 @@ export function BuilderHeader() {
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>
+        {id ? (
+          <Button variant="ghost" size="sm" asChild>
+            {/* The form's emails, webhooks and email log: what happens after a response is stored. */}
+            <Link to={`/forms/${encodeURIComponent(id)}/settings`}>{t(M['header.settings'])}</Link>
+          </Button>
+        ) : null}
         <Button type="button" size="sm" className="ml-1" disabled={busy || !id} onClick={() => void onPublish()}>
           {busy ? 'Publishing…' : 'Publish'}
         </Button>
