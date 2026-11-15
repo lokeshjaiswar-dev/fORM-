@@ -41,7 +41,9 @@ describe('CopyLink', () => {
     render(<CopyLink link={LINK} label="Share link" onCopied={onCopied} />);
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Press Ctrl+C to copy the link.');
-    expect(screen.getByLabelText('Share link')).toHaveFocus();
+    // The hint renders in the commit, but the focus moves in the effect that runs after it (`useEffect` on `manual`); under
+    // load the status can be found before that effect has run, so wait for the focus rather than read it at once.
+    await waitFor(() => expect(screen.getByLabelText('Share link')).toHaveFocus());
     expect(onCopied).not.toHaveBeenCalled();
   });
 });
