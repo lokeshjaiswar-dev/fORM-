@@ -20,6 +20,8 @@ const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as
 const PASSWORD = 'violet-anchor-teapot-91';
 /** A small budget, so a test can spend it: five tries per address and form. */
 const BUDGET = 5;
+/** And ten per address over every form, so two forms spend it and a third has none left. */
+const IP_BUDGET = 10;
 
 let app: FastifyInstance;
 let config: ApiConfig;
@@ -60,7 +62,7 @@ beforeAll(async () => {
   });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
   config = parsed.config;
-  app = await buildApp(config, { underPressure: false, authLimits: { auth_unlock_form: { max: BUDGET, windowSeconds: 600 } } });
+  app = await buildApp(config, { underPressure: false, authLimits: { auth_unlock_form: { max: BUDGET, windowSeconds: 600 }, auth_unlock_ip: { max: IP_BUDGET, windowSeconds: 600 } } });
   protectedForm = await publish('Protected form');
   openForm = await publish('Open form');
   const set = await member('PUT', `/v1/forms/${protectedForm.id}/access/password`, { password: PASSWORD });
@@ -241,6 +243,38 @@ describe('the throttle', () => {
     // Another address has its own budget, and so does another form of the same address.
     expect((await unlock(protectedForm.slug, { password: PASSWORD }, address())).statusCode).toBe(200);
     expect((await unlock(openForm.slug, { password: 'a guess that is wrong' }, ip)).statusCode).toBe(401);
+  });
+
+  it('also counts every attempt per address over all forms, so a form the address never tried is refused once it has spent its budget elsewhere', async () => {
+    // Each form's own budget is five; the address's is ten. Two forms take all ten and neither is over its own limit.
+    const third = await publish('Third form');
+    expect((await member('PUT', `/v1/forms/${third.id}/access/password`, { password: PASSWORD })).statusCode).toBe(200);
+    const ip = address();
+    const before = (await failures(third.id)).length;
+    for (const form of [protectedForm, openForm]) {
+      for (let i = 0; i < BUDGET; i++) expect((await unlock(form.slug, { password: `guess ${i} at ${form.slug}` }, ip)).statusCode, `${form.slug} attempt ${i}`).toBe(401);
+    }
+    expect(BUDGET * 2).toBe(IP_BUDGET);
+
+    // The third form has had no attempt from this address, and is refused all the same, before any password is checked
+    // (so it writes no refusal of a password): the right password does not get through either.
+    const over = await unlock(third.slug, { password: PASSWORD }, ip);
+    expect(over.statusCode).toBe(429);
+    expect(over.json()).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(Number(over.headers['retry-after'])).toBeGreaterThan(0);
+    expect(over.body).not.toContain('accessToken');
+    expect((await failures(third.id)).length).toBe(before);
+
+    // The refusal is on the record once, under the per-address bucket, with the keyed address hash and not the address.
+    const { rows } = await owner.query<{ event: Record<string, unknown> }>(
+      `select event from audit_pending where org_key = $1 and event->>'action' = 'auth.throttled' and event->>'reason' = 'auth_unlock_ip'`,
+      [PLATFORM_ORG_KEY],
+    );
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify(rows[0]!.event)).not.toContain(ip);
+
+    // Another address is not affected by it.
+    expect((await unlock(third.slug, { password: PASSWORD }, address())).statusCode).toBe(200);
   });
 });
 

@@ -30,8 +30,10 @@ const SLUG = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/;
  * Public, with no session: a respondent has no account, and the password is the credential. What a stranger with `curl`
  * and a form address can do here is guess passwords, so the route is built for that:
  *
- * - Every attempt counts against the address's budget for this form (`auth_unlock_form`, a keyed hash of address and form,
- *   never the address) before any password work is done; past it, 429 with `Retry-After`.
+ * - Every attempt counts against the address's budget over every form (`auth_unlock_ip`, the keyed address hash) and then
+ *   against its budget for this form (`auth_unlock_form`, a keyed hash of address and form, never the address) before any
+ *   password work is done; past either, 429 with `Retry-After`. The per-address budget is what bounds the argon2id work
+ *   one address can ask for: the per-form one alone would give it a fresh budget for every slug it can find or publish.
  * - The hash is read through `form_access_password_hash()`, the one reader the database allows, in a respondent context
  *   of the form's own org (the org comes from the slug, never from the caller).
  * - A wrong password and a form that has no password take the same path, the same argon2id work (`verifyPassword` checks
@@ -45,11 +47,11 @@ const SLUG = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/;
 export function publicUnlockRoutes(app: FastifyInstance, deps: PublicUnlockDeps): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
 
-  /** Per address and form: the address hash joined with the form id, hashed again, so the key holds neither. */
-  const budgetKey = (ipHash: Uint8Array, formId: string): ThrottleKey => ({
-    bucket: 'auth_unlock_form',
-    key: new Uint8Array(createHash('sha256').update(ipHash).update(formId).digest().subarray(0, 16)),
-  });
+  /** Per address over every form (the address hash is already a keyed hash), then per address and form: the address hash joined with the form id, hashed again, so the key holds neither. */
+  const budgetKeys = (ipHash: Uint8Array, formId: string): ThrottleKey[] => [
+    { bucket: 'auth_unlock_ip', key: ipHash },
+    { bucket: 'auth_unlock_form', key: new Uint8Array(createHash('sha256').update(ipHash).update(formId).digest().subarray(0, 16)) },
+  ];
 
   async function refuse(request: FastifyRequest, o: { orgId: string; formId: string; ipHash: Uint8Array; reason: 'wrong_password' | 'no_password' }): Promise<never> {
     try {
@@ -81,7 +83,7 @@ export function publicUnlockRoutes(app: FastifyInstance, deps: PublicUnlockDeps)
         tags: ['runtime'],
         summary: 'Unlock a password-protected form',
         description:
-          'Respondents are anonymous, so this is public. Checks the password against the form\'s argon2id hash and, if it is right, returns an access token for the live version, good for two hours. A wrong password and a form without one both answer 401 `FORM_UNLOCK_FAILED`; attempts are limited per address and form (429 with `Retry-After`) and refusals are audited.',
+          'Respondents are anonymous, so this is public. Checks the password against the form\'s argon2id hash and, if it is right, returns an access token for the live version, good for two hours. A wrong password and a form without one both answer 401 `FORM_UNLOCK_FAILED`; attempts are limited per address and per address and form (429 with `Retry-After`) and refusals are audited.',
         params: z.object({ slug: z.string().regex(SLUG) }),
         // The same bound as when a password is set: the length rule counts characters (at most 128), this only bounds the work.
         body: z.object({ password: z.string().min(1).max(512) }).strict(),
@@ -94,7 +96,7 @@ export function publicUnlockRoutes(app: FastifyInstance, deps: PublicUnlockDeps)
       if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
       const now = deps.now();
       const { ipHash } = clientInfo(request, deps.config.auth.secret, now);
-      await deps.throttle.hit(request, reply, [budgetKey(ipHash, found.formId)], { ipHash }, 'Too many attempts. Try again later.');
+      await deps.throttle.hit(request, reply, budgetKeys(ipHash, found.formId), { ipHash }, 'Too many attempts. Try again later.');
 
       const stored = await withTenant(deps.db, { orgId: found.orgId, actor: 'respondent', requestId: request.id, readOnly: true }, (tx) => formAccessPasswordHash(tx, found.formId));
       const accepted = await verifyPassword(stored, request.body.password);

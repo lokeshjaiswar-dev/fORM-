@@ -195,8 +195,8 @@ export async function authSession(db: Executor, tokenHash: Uint8Array, idleSecon
 /**
  * Buckets of `auth_throttle_hit()` (its names are `auth_` and lower-case letters). The first five are sign-in limits;
  * `auth_files_*` and `auth_submit_*` count the anonymous writes of respondents (uploads and submissions) per IP hash
- * and per IP hash and form, the same keyed-hash counters, so no address is stored. `auth_unlock_form` counts the
- * password attempts of one address on one protected form (WP-1.07).
+ * and per IP hash and form, the same keyed-hash counters, so no address is stored. `auth_unlock_ip` and
+ * `auth_unlock_form` count the password attempts of one address over every form and on one protected form (WP-1.07).
  */
 export const AUTH_THROTTLE_BUCKETS = [
   'auth_any',
@@ -208,6 +208,7 @@ export const AUTH_THROTTLE_BUCKETS = [
   'auth_files_form',
   'auth_submit_ip',
   'auth_submit_form',
+  'auth_unlock_ip',
   'auth_unlock_form',
 ] as const;
 export type AuthThrottleBucket = (typeof AUTH_THROTTLE_BUCKETS)[number];
