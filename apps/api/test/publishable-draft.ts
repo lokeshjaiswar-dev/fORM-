@@ -108,6 +108,30 @@ export function fieldBlock(id: string, type: FieldType, config: Record<string, u
   };
 }
 
+type Ending = FormDefinition['endings'][number];
+
+/** `def` with a redirect ending to `url` (a URL template: literal text, and pipes after it) added after its first ending. */
+export function withRedirectEnding(def: FormDefinition, url: unknown[], id = 'end_redirect'): FormDefinition {
+  const ending = { id, kind: 'redirect', name: 'Go on', url } as unknown as Ending;
+  return { ...def, endings: [...def.endings, ending] };
+}
+
+/** A rule that hides the block its own condition reads: it can never settle, which publish reports as `logic_cycle`. */
+export function withLogicCycle(def: FormDefinition, blockId: string): FormDefinition {
+  const rule = {
+    id: 'rule_self',
+    enabled: true,
+    when: {
+      kind: 'group',
+      id: 'group_self',
+      combinator: 'all',
+      children: [{ kind: 'condition', id: 'cond_self', left: { kind: 'ref', ref: { kind: 'answer', blockId } }, op: 'is_answered' }],
+    },
+    then: [{ type: 'hide', targets: [blockId] }],
+  };
+  return { ...def, logic: { ...def.logic, rules: [...def.logic.rules, rule] } } as unknown as FormDefinition;
+}
+
 /** `publishableDraft` with `blocks` placed on its one page. */
 export function draftWith(formId: string, blocks: Array<ReturnType<typeof fieldBlock>>, title = 'Live form'): FormDefinition {
   const base = publishableDraft(formId, title);
