@@ -30,16 +30,17 @@ test('create an org → invite → accept through sign-up → change the role', 
   await page.getByRole('link', { name: 'Create an organisation' }).click();
   await expect(page.getByLabel('Language')).toHaveValue('en-IN');
   await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Kolkata');
-  await expect(page.getByLabel('Date format')).toHaveValue('DD-MM-YYYY');
+  await expect(page.getByRole('combobox', { name: 'Date format' })).toContainText('DD-MM-YYYY');
   await page.getByLabel('Organisation name').fill('Acme E2E');
   await page.getByRole('button', { name: 'Create organisation' }).click();
   await page.waitForURL('**/org/members');
   await expect(page.getByRole('heading', { name: 'Members of Acme E2E' })).toBeVisible();
-  await expect(page.getByLabel('Organisation', { exact: true })).toHaveValue(/.+/);
+  await expect(page.getByRole('combobox', { name: 'Organisation' })).toContainText('Acme E2E');
 
   const inviteeEmail = newEmail('invitee');
   await page.getByLabel('Email address').fill(inviteeEmail);
-  await page.getByLabel('Role', { exact: true }).selectOption('viewer');
+  await page.getByRole('combobox', { name: 'Role', exact: true }).click();
+  await page.getByRole('option', { name: 'Viewer' }).click();
   await page.getByRole('button', { name: 'Invite' }).click();
   await expect(page.getByText(`Invitation emailed to ${inviteeEmail}`)).toBeVisible();
 
@@ -57,10 +58,11 @@ test('create an org → invite → accept through sign-up → change the role', 
   await expect(invitee.getByRole('button', { name: 'Invite' })).toHaveCount(0);
 
   await page.reload();
-  const role = page.getByLabel(`Role of ${inviteeEmail}`);
-  await expect(role).toHaveValue('viewer');
-  await role.selectOption('editor');
-  await expect(page.getByLabel(`Role of ${inviteeEmail}`)).toHaveValue('editor');
+  const role = page.getByRole('combobox', { name: `Role of ${inviteeEmail}` });
+  await expect(role).toContainText('Viewer');
+  await role.click();
+  await page.getByRole('option', { name: 'Editor' }).click();
+  await expect(role).toContainText('Editor');
   await other.close();
 });
 

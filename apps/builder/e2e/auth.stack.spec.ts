@@ -45,7 +45,8 @@ test('sign-up → verify → 2FA enrol → sign out → TOTP sign-in → recover
 
   // Sign out from the forms list, then sign in with a recovery code.
   await page.getByRole('navigation', { name: 'Account' }).getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  // The forms list is for members (BL-206): signing out leaves it for the sign-in page.
+  await page.waitForURL('**/auth/sign-in');
   await signIn(page, email);
   await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
   await page.getByLabel('Recovery code').fill(codes[0]!);
