@@ -129,19 +129,33 @@ export function RecipientsEditor({ kind, value, onChange, members, facts }: Prop
           })}
         </ul>
       )}
-      <form
-        noValidate
-        className="flex flex-wrap items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          addAddress();
-        }}
-      >
-        <Input type="email" className="min-w-[220px] flex-1" aria-label={t(M['recipients.address'])} placeholder={t(M['recipients.address'])} value={address} maxLength={254} aria-invalid={addressError || undefined} onChange={(e) => { setAddress(e.target.value); setAddressError(false); }} />
-        <Button type="submit" size="sm" variant="outline" disabled={address.trim() === ''}>
+      {/* Not a <form>: this sits inside the email's own form, and a form cannot nest in a form. A nested one lets the
+          inner submit bubble to the outer form, which would save the email as soon as an address was added. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="email"
+          className="min-w-[220px] flex-1"
+          aria-label={t(M['recipients.address'])}
+          placeholder={t(M['recipients.address'])}
+          value={address}
+          maxLength={254}
+          aria-invalid={addressError || undefined}
+          onChange={(e) => {
+            setAddress(e.target.value);
+            setAddressError(false);
+          }}
+          onKeyDown={(e) => {
+            // Enter adds the address, and only that: left alone it would submit the email's form (implicit submission).
+            if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            e.stopPropagation();
+            addAddress();
+          }}
+        />
+        <Button type="button" size="sm" variant="outline" disabled={address.trim() === ''} onClick={addAddress}>
           {t(M['recipients.add_address'])}
         </Button>
-      </form>
+      </div>
       {addressError ? (
         <p role="alert" className="text-[12px] text-destructive">
           {t(M['recipients.bad_address'])}

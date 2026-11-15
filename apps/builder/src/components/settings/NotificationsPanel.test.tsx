@@ -265,6 +265,49 @@ describe('NotificationsPanel', () => {
     expect(screen.queryByRole('button', { name: 'Remove not-an-address' })).not.toBeInTheDocument();
   });
 
+  it('adds an address to the email without saving it: nothing is sent until Save is pressed, by click or by Enter', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const api = fakeApi();
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(await screen.findByRole('button', { name: 'Add an email to your team' }));
+    // A purpose is ticked, so the email could be saved: the only thing that must not save it is adding an address.
+    await user.click(within(purposes()).getByRole('checkbox', { name: 'Handle the enquiry' }));
+    expect(save()).toBeEnabled();
+    const recipients = screen.getByRole('group', { name: 'Recipients' });
+
+    await user.type(screen.getByRole('textbox', { name: 'Email address' }), 'auditor@elsewhere.test');
+    await user.click(screen.getByRole('button', { name: 'Add address' }));
+    expect(within(recipients).getByText('auditor@elsewhere.test')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox', { name: 'Email address' }), 'second@elsewhere.test{Enter}');
+    expect(within(recipients).getByText('second@elsewhere.test')).toBeInTheDocument();
+    // The box is empty again and a mistyped address with Enter is refused in place, still without a save.
+    expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue('');
+    await user.type(screen.getByRole('textbox', { name: 'Email address' }), 'not-an-address{Enter}');
+    expect(screen.getByText('That is not an email address.')).toBeInTheDocument();
+
+    // Neither the click nor Enter saved the email, and the address box is not a form inside the email's form.
+    expect(api.saved()).toEqual([]);
+    expect(screen.getAllByRole('form')).toHaveLength(1);
+    expect(errors.mock.calls.flat().join(' ')).not.toMatch(/cannot be a descendant of <form>|validateDOMNesting/);
+    errors.mockRestore();
+
+    // Save sends the addresses, once, although the box still holds the mistyped one (it is not a recipient, and the browser's own
+    // email check must not stop the save).
+    await user.click(save());
+    expect(await screen.findByText('Email saved.')).toBeInTheDocument();
+    expect(api.saved()).toHaveLength(1);
+    const [sent] = api.saved();
+    expect(sent?.method).toBe('POST');
+    expect((sent?.body as { to: unknown[] } | undefined)?.to).toEqual(
+      expect.arrayContaining([
+        { kind: 'email', address: 'auditor@elsewhere.test' },
+        { kind: 'email', address: 'second@elsewhere.test' },
+      ]),
+    );
+  });
+
   it('offers only fields that hold an answer in the subject’s insert-field menu, and inserts a pipe', async () => {
     const api = fakeApi();
     const user = userEvent.setup();

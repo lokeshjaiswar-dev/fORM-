@@ -169,6 +169,9 @@ export function NotificationEditor({ org, formId, notification, initial, senders
 
   return (
     <form
+      // The server and the editor decide what is valid, not the browser: with the address box inside this form, a half-typed
+      // address (type=email) would otherwise stop Save with the browser's own tooltip.
+      noValidate
       className="space-y-5"
       aria-label={form.name || t(M['notification_editor.name'])}
       onSubmit={(e) => {
