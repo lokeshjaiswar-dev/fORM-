@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { ReviewSettingsSchema, type ReviewSettings } from '@form/schema';
+import { ReviewSettingsSchema, type ReviewGroupId, type ReviewSettings, type ReviewUnitAssignment, type ReviewUnitId } from '@form/schema';
 import type { Executor } from './client.ts';
 import type { ReviewDecision, ReviewReasonCode, ReviewState, ReviewVisibility } from './schema/reviews.ts';
 import type { SubmissionStatus } from './schema/submissions.ts';
@@ -176,22 +176,30 @@ export async function reviewDecide(db: Executor, input: ReviewDecideInput): Prom
   return { outcome: row.outcome, decisionId: row.decision_id, unitState: row.unit_state, submissionStatus: row.submission_status, replayed: row.replayed };
 }
 
-/** What a user is, in respect of one form's review: the live settings, and the groups of theirs that are assigned a unit of it. */
+/** What a user is, in respect of one form's review: the live settings, and the groups of theirs that review a unit of it. */
 export interface ReviewerScope {
   /** The form's review settings, or null when the form was never set up for review. `enabled` can be false while reviews opened earlier are still running. */
   settings: ReviewSettings | null;
   /**
-   * The review groups the user is an active member of that the settings assign a unit of this form to, archived ones
-   * included (a group that was archived may still have reviews in flight). Empty means the user is not acting as a
-   * reviewer on this form; any entry means they are, whatever their role (owners and admins too), and `own_unit`
-   * redaction applies to them (decision of the plan).
-   * Read from the live settings: a review opened earlier keeps the group it was opened with, which is on its review row.
+   * The review groups the user is an active member of that review a unit of this form: the groups the live settings assign
+   * a unit to, and the groups named on review rows of the form that are still pending. Archived groups are included (a
+   * group that was archived may still have reviews in flight). Empty means the user is not acting as a reviewer on this
+   * form; any entry means they are, whatever their role (owners and admins too), and `own_unit` redaction applies to them
+   * (decision of the plan).
    */
   groupIds: string[];
+  /**
+   * What decides what the user may see: the live units, and the units of the pending review rows in the user's groups as
+   * they were opened (group and visibility copied onto the row). A unit given to another group after its reviews were
+   * opened is still decided by the old group (`review_decide()` reads the row's group), so the old group's members must
+   * still be redacted to it: reading the live settings alone would show them every unit's answers as soon as their unit
+   * moved. Give this, not `settings.units`, to `visibleBlocksForReviewer`.
+   */
+  assignments: ReviewUnitAssignment[];
 }
 
 /**
- * The review scope of `userId` on `formId`, inside a tenant transaction (the org is the context's: both tables are read
+ * The review scope of `userId` on `formId`, inside a tenant transaction (the org is the context's: the tables are read
  * under RLS, and a form or user of another org reads as no settings and no groups). It never reads response data. A settings
  * row that no longer parses is an error, not "no review": a reader that treated it as unreviewed would show a checker
  * every unit's answers.
@@ -203,19 +211,37 @@ export async function reviewerScope(tx: Executor, args: { formId: string; userId
     sql`select enabled, settings from form_review_settings where form_id = ${args.formId}::uuid`,
   );
   const row = found.rows[0];
-  if (!row) return { settings: null, groupIds: [] };
+  // No settings row, no review rows: a review is opened from the settings, and the settings row is never deleted.
+  if (!row) return { settings: null, groupIds: [], assignments: [] };
   // A row made with the defaults (`enabled` false, settings '{}') parses as "no units".
   const parsed = ReviewSettingsSchema.safeParse({ distinctCheckers: false, units: [], ...row.settings, enabled: row.enabled });
   if (!parsed.success) throw new Error(`the review settings of form ${args.formId} are not valid: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}`);
   const settings = parsed.data;
   // A group id that is not a uuid cannot name a group; leaving it out keeps the cast below from failing on it.
   const assigned = [...new Set(settings.units.map((u) => u.groupId as string).filter(isUuid))];
-  if (assigned.length === 0) return { settings, groupIds: [] };
-  const groups = await tx.execute<{ group_id: string }>(
-    sql`select g.group_id from review_group_members g
+  const live =
+    assigned.length === 0
+      ? []
+      : (
+          await tx.execute<{ group_id: string }>(
+            sql`select g.group_id from review_group_members g
+                join memberships m on m.org_id = g.org_id and m.user_id = g.user_id
+                where g.user_id = ${args.userId}::uuid and g.group_id = any (${pgArray(assigned)}::uuid[]) and m.status = 'active'`,
+          )
+        ).rows.map((r) => r.group_id);
+  // The pending review rows of this form in the user's groups (the queue's partial index covers state = 'pending').
+  const opened = await tx.execute<{ unit_id: string; group_id: string; review_order: number; required: boolean; visibility: ReviewVisibility }>(
+    sql`select distinct r.unit_id, r.group_id, r.review_order, r.required, r.visibility
+        from submission_reviews r
+        join review_group_members g on g.org_id = r.org_id and g.group_id = r.group_id
         join memberships m on m.org_id = g.org_id and m.user_id = g.user_id
-        where g.user_id = ${args.userId}::uuid and g.group_id = any (${pgArray(assigned)}::uuid[]) and m.status = 'active'
-        order by g.group_id`,
+        where r.form_id = ${args.formId}::uuid and r.state = 'pending' and g.user_id = ${args.userId}::uuid and m.status = 'active'
+        order by r.group_id, r.unit_id`,
   );
-  return { settings, groupIds: groups.rows.map((r) => r.group_id) };
+  const assignments: ReviewUnitAssignment[] = [
+    ...settings.units,
+    ...opened.rows.map((r) => ({ unitId: r.unit_id as ReviewUnitId, groupId: r.group_id as ReviewGroupId, order: r.review_order, required: r.required, visibility: r.visibility })),
+  ];
+  const groupIds = [...new Set([...live, ...opened.rows.map((r) => r.group_id)])].sort();
+  return { settings, groupIds, assignments };
 }

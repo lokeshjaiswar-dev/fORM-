@@ -397,6 +397,63 @@ describe('export.build: reviewers (own_unit redaction)', () => {
     }
   });
 
+  it('keeps a unit B checker redacted after unit B was given to another group: their group still decides it on the responses in flight', async () => {
+    const blocks = [personal('a1'), personal('b1')];
+    const moved = await seedForm(
+      a,
+      definitionOf(blocks, {
+        pages: [
+          { id: 'pa', children: ['a1'] },
+          { id: 'pb', children: ['b1'] },
+        ],
+        review: [
+          { id: 'u_a', name: 'Unit A', target: { kind: 'page', pageId: 'pa' } },
+          { id: 'u_b', name: 'Unit B', target: { kind: 'page', pageId: 'pb' } },
+        ] as never,
+      }),
+    );
+    const [oldB, newB, groupA] = [randomUUID(), randomUUID(), randomUUID()];
+    const checker = randomUUID();
+    await addUser(a, checker, 'editor', 'moved-checker@exports-a.test');
+    for (const [group, name] of [
+      [groupA, 'Moved A'],
+      [oldB, 'Moved B (old)'],
+      [newB, 'Moved B (new)'],
+    ] as const) {
+      await owner.query('insert into review_groups (id, org_id, name, created_by) values ($1, $2, $3, $4)', [group, a.id, name, a.ownerUser]);
+    }
+    await owner.query('insert into review_group_members (org_id, group_id, user_id, added_by) values ($1, $2, $3, $4)', [a.id, oldB, checker, a.ownerUser]);
+    // The live settings now give unit B to the new group; the checker sits only in the old one.
+    const settings = {
+      distinctCheckers: false,
+      units: [
+        { unitId: 'u_a', groupId: groupA, order: 1, required: true, visibility: 'own_unit' },
+        { unitId: 'u_b', groupId: newB, order: 1, required: true, visibility: 'own_unit' },
+      ],
+    };
+    await owner.query('insert into form_review_settings (form_id, org_id, enabled, settings) values ($1, $2, true, $3)', [moved.id, a.id, JSON.stringify(settings)]);
+    // A response opened for review before the move: its unit-B row still names the old group, and is pending.
+    const held = await storeResponse(a, moved, { a1: { type: 'short_text', value: 'A-secret' }, b1: { type: 'short_text', value: 'B-mine' } }, { status: 'pending_review' });
+    for (const [unitId, group] of [
+      ['u_a', groupA],
+      ['u_b', oldB],
+    ] as const) {
+      await owner.query(
+        `insert into submission_reviews (org_id, form_id, submission_id, submission_received_at, unit_id, required, review_order, group_id, visibility, answers_hash)
+         values ($1, $2, $3, $4, $5, true, 1, $6, 'own_unit', $7)`,
+        [a.id, moved.id, held.id, held.receivedAt, unitId, group, Buffer.alloc(32)],
+      );
+    }
+
+    const id = await queueExport(a, moved, { requestedBy: checker });
+    await run(a, id);
+    const table = await csvOf(id);
+    expect(table.header).toEqual(['Response ID', 'Received at', 'Label of b1']);
+    expect(table.rows.flat()).not.toContain('A-secret');
+    expect(table.rows[0]!.slice(2)).toEqual(['B-mine']);
+    expect([...(await disclosuresOf(id))[0]!.field_keys]).toEqual(['b1']);
+  });
+
   it('fails the export, and shows nothing, when the review settings no longer parse', async () => {
     const broken = await seedForm(a, definitionOf([personal('x1')]));
     await owner.query('insert into form_review_settings (form_id, org_id, enabled, settings) values ($1, $2, true, $3)', [broken.id, a.id, JSON.stringify({ units: 'nonsense' })]);

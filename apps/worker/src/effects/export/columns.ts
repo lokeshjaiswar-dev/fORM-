@@ -28,7 +28,7 @@ export interface ExportVersion {
   compiled: CompiledForm;
 }
 
-/** The review scope of the person who asked (`reviewerScope`): the live settings and the groups of theirs assigned a unit of the form. */
+/** The review scope of the person who asked (`reviewerScope`): its `assignments` (live units and pending rows' units) and the groups of theirs that review a unit of the form. */
 export interface ExportReviewer {
   settings: Pick<ReviewSettings, 'units'>;
   groupIds: readonly string[];

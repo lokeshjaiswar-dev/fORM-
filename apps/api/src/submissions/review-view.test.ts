@@ -14,11 +14,17 @@ const V2 = '0190f5a2-7c1e-7a00-8000-0000000000c2';
 const units = (...rows: Array<[unit: string, group: string, visibility: 'own_unit' | 'whole_submission']>) =>
   rows.map(([unitId, groupId, visibility], i) => ({ unitId, groupId, order: i + 1, required: true, visibility }));
 
-/** A transaction whose `execute` answers the two reads of `reviewerScope` in order: the settings row, then the caller's groups. */
-function scopeTx(settings: { enabled: boolean; settings: unknown } | null, groups: string[]): { tx: Tx; execute: ReturnType<typeof vi.fn> } {
+type OpenedRow = { unit_id: string; group_id: string; review_order: number; required: boolean; visibility: 'own_unit' | 'whole_submission' };
+
+/**
+ * A transaction whose `execute` answers the reads of `reviewerScope` in order: the settings row, the caller's groups among
+ * the live assignments, then the pending review rows of the form in the caller's groups (`opened`).
+ */
+function scopeTx(settings: { enabled: boolean; settings: unknown } | null, groups: string[], opened: OpenedRow[] = []): { tx: Tx; execute: ReturnType<typeof vi.fn> } {
   const execute = vi.fn();
   execute.mockResolvedValueOnce({ rows: settings ? [settings] : [] });
   execute.mockResolvedValueOnce({ rows: groups.map((group_id) => ({ group_id })) });
+  execute.mockResolvedValueOnce({ rows: opened });
   return { tx: { execute } as unknown as Tx, execute };
 }
 
@@ -27,7 +33,7 @@ describe('reviewerViewOf', () => {
 
   it('is not redacted, and reads nothing, for a caller with no user id', async () => {
     const { tx, execute } = scopeTx(stored(['u_a', G1, 'own_unit']), [G1]);
-    expect(await reviewerViewOf(tx, {}, FORM)).toEqual({ settings: null, groupIds: [], redacted: false });
+    expect(await reviewerViewOf(tx, {}, FORM)).toEqual({ settings: null, groupIds: [], assignments: [], redacted: false });
     expect(await reviewerViewOf(tx, { userId: null }, FORM)).toMatchObject({ redacted: false });
     expect(await reviewerViewOf(tx, { userId: 'not-a-uuid' }, FORM)).toMatchObject({ redacted: false });
     expect(execute).not.toHaveBeenCalled();
@@ -35,7 +41,7 @@ describe('reviewerViewOf', () => {
 
   it('is not redacted for a form with no review settings, after one read', async () => {
     const { tx, execute } = scopeTx(null, []);
-    expect(await reviewerViewOf(tx, { userId: USER }, FORM)).toEqual({ settings: null, groupIds: [], redacted: false });
+    expect(await reviewerViewOf(tx, { userId: USER }, FORM)).toEqual({ settings: null, groupIds: [], assignments: [], redacted: false });
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -52,6 +58,21 @@ describe('reviewerViewOf', () => {
     // Both kinds: own_unit wins.
     const both = scopeTx(stored(['u_a', G1, 'own_unit'], ['u_b', G2, 'whole_submission']), [G1, G2]);
     expect(await reviewerViewOf(both.tx, { userId: USER }, FORM)).toMatchObject({ redacted: true });
+  });
+
+  it('stays redacted to a unit that moved to another group while reviews opened with the old group are pending', async () => {
+    // Live: u_a to G2, u_b to G2 (u_b was G1's). The caller is in G1 only, which still has pending u_b rows.
+    const moved = scopeTx(stored(['u_a', G2, 'own_unit'], ['u_b', G2, 'own_unit']), [], [{ unit_id: 'u_b', group_id: G1, review_order: 2, required: true, visibility: 'own_unit' }]);
+    const view = await reviewerViewOf(moved.tx, { userId: USER }, FORM);
+    expect(view).toMatchObject({ groupIds: [G1], redacted: true });
+    expect(view.assignments).toContainEqual({ unitId: 'u_b', groupId: G1, order: 2, required: true, visibility: 'own_unit' });
+    // And what they see is u_b's block only, not u_a's.
+    const loader = createRedactionLoader();
+    const tx = { select: () => ({ from: () => ({ where: vi.fn().mockResolvedValue([{ id: V1, scoping: { documentOrder: ['a', 'b'], reviewUnits: { u_a: ['a'], u_b: ['b'] }, plan: [], reads: {} } }]) }) }) } as unknown as Tx;
+    expect([...(await loader.visibility(tx, view, [V1])).of(V1)!]).toEqual(['b']);
+    // Once those rows are decided the old group reviews nothing here: the caller is no reviewer of the form.
+    const done = scopeTx(stored(['u_a', G2, 'own_unit'], ['u_b', G2, 'own_unit']), [], []);
+    expect(await reviewerViewOf(done.tx, { userId: USER }, FORM)).toMatchObject({ groupIds: [], redacted: false });
   });
 
   it('fails closed when the settings do not parse: it throws, it does not show the whole response', async () => {
@@ -81,7 +102,7 @@ describe('reviewOf', () => {
 
 describe('the redaction loader', () => {
   const settings: ReviewSettings = { enabled: true, distinctCheckers: false, units: units(['u_a', G1, 'own_unit'], ['u_b', G2, 'own_unit']) as ReviewSettings['units'] };
-  const redacted: ReviewerView = { settings, groupIds: [G1], redacted: true };
+  const redacted: ReviewerView = { settings, groupIds: [G1], assignments: settings.units, redacted: true };
   const compiled = { documentOrder: ['a', 'b'], reviewUnits: { u_a: ['a'], u_b: ['b'] }, plan: [], reads: {} };
 
   /** A transaction whose version read answers with `rows`, and counts how often it is asked. */
@@ -94,7 +115,7 @@ describe('the redaction loader', () => {
   it('gives a caller who is not redacted everything, without a read', async () => {
     const { tx, where } = versionTx([]);
     const loader = createRedactionLoader();
-    const seen = await loader.visibility(tx, { settings: null, groupIds: [], redacted: false }, [V1]);
+    const seen = await loader.visibility(tx, { settings: null, groupIds: [], assignments: [], redacted: false }, [V1]);
     expect(seen).toBe(SEES_ALL);
     expect(seen.of(V1)).toBeNull();
     expect(where).not.toHaveBeenCalled();

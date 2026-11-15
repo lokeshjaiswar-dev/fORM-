@@ -1,16 +1,18 @@
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { formVersions, isUuid, reviewerScope, submissionReviews, type ReviewState, type TenantCtx, type Tx } from '@form/db';
 import { visibleBlocksForReviewer } from '@form/logic';
-import { plainLabelText, type BlockId, type CompiledForm, type ReviewGroupId, type ReviewSettings } from '@form/schema';
+import { plainLabelText, type BlockId, type CompiledForm, type ReviewGroupId, type ReviewSettings, type ReviewUnitAssignment } from '@form/schema';
 import { storableText } from '../text-safety.ts';
 import { WeightedCache } from '../weighted-cache.ts';
 
 /*
  * What the responses API shows a person who is acting as a reviewer of a form (WP-2.33, decision "own_unit redaction scope"):
  *
- *   - `reviewerViewOf` says whether the caller is redacted: they sit in a review group that the form's live settings assign
- *     a unit of, with `own_unit` visibility, whatever their role (an owner or admin in such a group is redacted too). Anyone
- *     else, a member of no review group included, sees the whole response.
+ *   - `reviewerViewOf` says whether the caller is redacted: they sit in a review group that reviews a unit of the form with
+ *     `own_unit` visibility, whatever their role (an owner or admin in such a group is redacted too). A group reviews a unit
+ *     when the live settings assign it, and also while review rows opened with that group are pending: a unit moved to
+ *     another group is still decided by the old one on in-flight responses. Anyone else, a member of no review group
+ *     included, sees the whole response.
  *   - `redaction.visibility` gives, per form version, the blocks such a caller may see (`visibleBlocksForReviewer`, the same
  *     function the review screens and the export use). Every answer, display row, grid cell and file of another block is
  *     removed before the response is serialised. A block the function does not know is hidden by default.
@@ -24,8 +26,10 @@ import { WeightedCache } from '../weighted-cache.ts';
 export interface ReviewerView {
   /** The form's live review settings, or null when the form was never set up for review (then no response has review rows). */
   settings: ReviewSettings | null;
-  /** The review groups of the caller that the settings assign a unit of this form to. */
+  /** The review groups of the caller that review a unit of this form (`reviewerScope`'s `groupIds`). */
   groupIds: readonly string[];
+  /** The live units and those of the pending review rows in the caller's groups (`reviewerScope`'s `assignments`). */
+  assignments: readonly ReviewUnitAssignment[];
   /** The caller sees only the blocks of their own units. */
   redacted: boolean;
 }
@@ -36,11 +40,11 @@ export interface ReviewerView {
  */
 export async function reviewerViewOf(tx: Tx, tenant: Pick<TenantCtx, 'userId'>, formId: string): Promise<ReviewerView> {
   const userId = tenant.userId;
-  if (!userId || !isUuid(userId)) return { settings: null, groupIds: [], redacted: false };
+  if (!userId || !isUuid(userId)) return { settings: null, groupIds: [], assignments: [], redacted: false };
   const scope = await reviewerScope(tx, { formId, userId });
   const groups = new Set(scope.groupIds);
-  const redacted = scope.settings !== null && scope.settings.units.some((a) => groups.has(a.groupId) && a.visibility === 'own_unit');
-  return { settings: scope.settings, groupIds: scope.groupIds, redacted };
+  const redacted = scope.settings !== null && scope.assignments.some((a) => groups.has(a.groupId) && a.visibility === 'own_unit');
+  return { settings: scope.settings, groupIds: scope.groupIds, assignments: scope.assignments, redacted };
 }
 
 /** The blocks a caller may see in a response filed under one version: a set, or null for all of them. */
@@ -106,14 +110,14 @@ export function createRedactionLoader(o: { maxEntries?: number; maxBytes?: numbe
       if (!view.redacted || view.settings === null) return SEES_ALL;
       const ids = [...new Set(versionIds)];
       const scopings = await scopingOf(tx, ids);
-      const settings = view.settings;
+      const units = { units: [...view.assignments] };
       const sets = new Map<string, ReadonlySet<BlockId> | null>();
       return {
         of(versionId) {
           if (sets.has(versionId)) return sets.get(versionId) ?? null;
           const scoping = scopings.get(versionId);
           // `null` is the function's own "nothing is hidden from this caller", which for a redacted caller it never says; an unscoped version is not that: it shows nothing.
-          const shown = scoping === undefined ? new Set<BlockId>() : visibleBlocksForReviewer(scoping, settings, view.groupIds as ReviewGroupId[]);
+          const shown = scoping === undefined ? new Set<BlockId>() : visibleBlocksForReviewer(scoping, units, view.groupIds as ReviewGroupId[]);
           sets.set(versionId, shown);
           return shown;
         },

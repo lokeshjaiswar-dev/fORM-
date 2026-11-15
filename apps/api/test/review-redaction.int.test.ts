@@ -479,6 +479,37 @@ describe('a checker whose units are whole_submission', () => {
   });
 });
 
+describe('after a unit is given to another group, with responses already in review', () => {
+  it('keeps a unit-B checker redacted on the grid, the detail and the files: their group still decides unit B of the responses in flight', async () => {
+    const form = await publishForm('Reassigned', [unit('u_applicant', groupA), unit('u_notes', groupB, 'own_unit', 2)]);
+    const sub = await submitOne(form);
+    // An ops.manage user gives unit B to group W. The response's review row keeps group B, which `review_decide()` reads.
+    const current = await app.inject({ url: `/v1/forms/${form.id}/review`, headers: as(who.owner) });
+    const moved = await app.inject({
+      method: 'PUT',
+      url: `/v1/forms/${form.id}/review`,
+      headers: { ...as(who.owner), 'if-match': String(current.json<{ rev: number }>().rev) },
+      payload: { enabled: true, distinctCheckers: false, units: [unit('u_applicant', groupA), unit('u_notes', groupW, 'own_unit', 2)] },
+    });
+    expect(moved.statusCode, moved.body).toBe(200);
+    expect((await owner.query('select group_id from submission_reviews where submission_id = $1 and unit_id = $2', [sub.id, 'u_notes'])).rows).toEqual([{ group_id: groupB }]);
+
+    for (const user of [who.checkerB, who.ownerB]) {
+      const one = await detail(form, sub.id, user);
+      expect(one.statusCode, one.body).toBe(200);
+      expect(Object.keys(one.json<Detail>().answers).sort(), user).toEqual(['note', 'rate']);
+      const page = await grid(form, user);
+      expect(page.statusCode, page.body).toBe(200);
+      expect(Object.keys(page.json<GridBody>().items[0]!.cells).sort(), user).toEqual(['note', 'rate']);
+      for (const res of [one, page]) for (const secret of A_TEXTS) expect(res.body, `${user}: ${secret}`).not.toContain(secret);
+      expect((await download(form, sub.fileId, user)).statusCode, user).toBe(404);
+    }
+    // The new group's checker is redacted to unit B as well; unit A's checker is unchanged.
+    expect(Object.keys((await detail(form, sub.id, who.checkerW)).json<Detail>().answers).sort()).toEqual(['note', 'rate']);
+    expect(Object.keys((await detail(form, sub.id, who.checkerA)).json<Detail>().answers).sort()).toEqual(['cv', 'name', 'qty']);
+  });
+});
+
 describe('the review status of a response in the list and the detail', () => {
   let form: Form;
   let held: { id: string; fileId: string };

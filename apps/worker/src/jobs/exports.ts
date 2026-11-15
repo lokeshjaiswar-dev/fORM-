@@ -100,7 +100,9 @@ export function exportBuild(deps: EffectDeps): ManualJobDefinition<'export.build
             if (!(err instanceof Error) || !err.message.startsWith('the review settings of form')) throw err;
             throw new ExportFailure('review_settings_invalid', 'The export was stopped: this form\'s review settings are not valid. Ask a form admin to save them again.');
           });
-          const reviewer: ExportReviewer | null = review.settings && review.groupIds.length > 0 ? { settings: review.settings, groupIds: review.groupIds } : null;
+          // The live units and the pending rows' units: a checker whose unit moved to another group still decides it on the
+          // responses in flight, so they stay redacted to it (see `ReviewerScope.assignments`).
+          const reviewer: ExportReviewer | null = review.settings && review.groupIds.length > 0 ? { settings: { units: review.assignments }, groupIds: review.groupIds } : null;
           const exportVersions: ExportVersion[] = versions.map((v) => ({
             id: v.id,
             number: v.number,

@@ -740,7 +740,7 @@ describe('reviewerScope', () => {
     await t.owner.query(`insert into review_group_members (org_id, group_id, user_id, added_by) values ($1, $2, $3, $4)`, [seed.b.orgId, g3, user.id, seed.b.ownerId]);
     const scope = await as({ actor: 'user', userId: user.id, perms: [] }, (tx) => reviewerScope(tx, { formId: form.id, userId: user.id }));
     // g3 is the user's too, but no unit of this form is assigned to it; g2 is assigned but the user is not in it.
-    expect(scope).toEqual({ settings: { enabled: true, ...settings }, groupIds: [g1] });
+    expect(scope).toEqual({ settings: { enabled: true, ...settings }, groupIds: [g1], assignments: settings.units });
     // Not a reviewer of the form: no groups. A disabled form keeps its units, so a review still running keeps its reviewers.
     const stranger = await person();
     expect((await as({ actor: 'user', userId: stranger.id, perms: [] }, (tx) => reviewerScope(tx, { formId: form.id, userId: stranger.id }))).groupIds).toEqual([]);
@@ -751,18 +751,39 @@ describe('reviewerScope', () => {
     expect((await as({ actor: 'user', userId: seed.b.ownerId, perms: [] }, (tx) => reviewerScope(tx, { formId: form.id, userId: seed.b.ownerId }))).groupIds).toEqual([g1]);
   });
 
+  it('keeps the group a pending review row was opened with after its unit is given to another group, until that row is decided', async () => {
+    const [oldGroup, newGroup_] = [await newGroup(), await newGroup()];
+    const stayed = await person({ group: oldGroup });
+    const other = await person({ group: oldGroup });
+    const h = await held([{ id: 'u1', group: oldGroup }]);
+    // The unit is moved: the live settings name the new group only; the response's row still names the old one.
+    await putSettings(h.form, { distinctCheckers: false, units: [{ unitId: 'u1', groupId: newGroup_, order: 1, required: true, visibility: 'own_unit' }] });
+    const scopeOf = (who: Person) => as(checker(who), (tx) => reviewerScope(tx, { formId: h.form.id, userId: who.id }));
+    const moved = await scopeOf(stayed);
+    expect(moved.groupIds).toEqual([oldGroup]);
+    expect(moved.assignments).toEqual([
+      { unitId: 'u1', groupId: newGroup_, order: 1, required: true, visibility: 'own_unit' },
+      { unitId: 'u1', groupId: oldGroup, order: 1, required: true, visibility: 'own_unit' },
+    ]);
+    // Someone in no group of the form: still nothing.
+    expect(await scopeOf(await person())).toMatchObject({ groupIds: [], assignments: [{ groupId: newGroup_ }] });
+    // Decided, the row is no longer pending, and the old group reviews nothing on this form any more.
+    expect(await decide(other, h, 'u1')).toMatchObject({ outcome: 'decided' });
+    expect(await scopeOf(stayed)).toMatchObject({ groupIds: [], assignments: [{ groupId: newGroup_ }] });
+  });
+
   it('answers no settings and no groups for a form that was never set up, for a form of another org, and for a suspended member', async () => {
     const group = await newGroup();
     const user = await person({ group });
     const plain = randomUUID();
     await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [plain, seed.b.orgId, seed.b.teamId, seed.b.ownerId, 'No review']);
     const scope = (formId: string, userId = user.id, orgId = seed.b.orgId) => as({ actor: 'user', userId, perms: [] }, (tx) => reviewerScope(tx, { formId, userId }), orgId);
-    expect(await scope(plain)).toEqual({ settings: null, groupIds: [] });
-    expect(await scope(randomUUID())).toEqual({ settings: null, groupIds: [] });
+    expect(await scope(plain)).toEqual({ settings: null, groupIds: [], assignments: [] });
+    expect(await scope(randomUUID())).toEqual({ settings: null, groupIds: [], assignments: [] });
     // A form of org B read in org A's context is invisible.
     const form = await newForm();
     await putSettings(form, { distinctCheckers: false, units: [{ unitId: 'u1', groupId: group, order: 1, required: true, visibility: 'own_unit' }] });
-    expect(await scope(form.id, user.id, seed.a.orgId)).toEqual({ settings: null, groupIds: [] });
+    expect(await scope(form.id, user.id, seed.a.orgId)).toEqual({ settings: null, groupIds: [], assignments: [] });
     expect((await scope(form.id)).groupIds).toEqual([group]);
     await t.owner.query(`update memberships set status = 'suspended' where org_id = $1 and user_id = $2`, [seed.b.orgId, user.id]);
     expect((await scope(form.id)).groupIds).toEqual([]);
@@ -774,7 +795,7 @@ describe('reviewerScope', () => {
     const defaults = await newForm();
     await t.owner.query(`update form_review_settings set settings = '{}', enabled = false where form_id = $1`, [defaults.id]);
     const run = (form: FormFixture) => as({ actor: 'user', userId: user.id, perms: [] }, (tx) => reviewerScope(tx, { formId: form.id, userId: user.id }));
-    expect(await run(defaults)).toEqual({ settings: { enabled: false, distinctCheckers: false, units: [] }, groupIds: [] });
+    expect(await run(defaults)).toEqual({ settings: { enabled: false, distinctCheckers: false, units: [] }, groupIds: [], assignments: [] });
     const broken = await newForm();
     await putSettings(broken, { distinctCheckers: false, units: [{ unitId: 'u1', groupId: 'not-a-uuid-but-opaque', order: 0, required: true, visibility: 'own_unit' }] });
     await expect(run(broken)).rejects.toThrow(/not valid/);
