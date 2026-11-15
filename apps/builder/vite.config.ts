@@ -22,6 +22,16 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles()],
     /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
     assetsInclude: ['**/*.formpack'],
+    build: {
+      /*
+       * Fonts are always files. Vite inlines any asset under 4 kB as a `data:` URL, and one small JetBrains Mono subset
+       * (from @dmacq/ui/fonts.css) falls under that, so the built stylesheet asked for `data:font/woff2`. The policy's
+       * `font-src 'self'` refuses that (rightly: it is the production policy, docs/platform/builder-security-headers.md),
+       * and every page that painted with it reported a violation. Keeping fonts out of the inline rule makes the build match
+       * the policy; `undefined` leaves every other asset on Vite's default size rule.
+       */
+      assetsInlineLimit: (file: string) => (/\.(woff2?|ttf|otf|eot)$/i.test(file) ? false : undefined),
+    },
     resolve: {
       alias: {
         '@': path.resolve(root, './src'),
