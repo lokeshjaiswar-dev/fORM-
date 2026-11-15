@@ -124,32 +124,7 @@ export async function seedCore(env: SeedEnv): Promise<Fixture> {
 }
 
 const forms: IsolationCase[] = [
-  {
-    route: 'GET /v1/forms',
-    call: () => ({ url: '/v1/forms?limit=200' }),
-    own: {
-      status: 200,
-      check: (res, f) => {
-        const ids = itemsOf(res).map((i) => i.id);
-        expect(ids).toContain(f.b.formId);
-        expect(ids).not.toContain(f.a.formId);
-        expect(ids).not.toContain(f.a.secondFormId);
-      },
-    },
-    note: 'The query names no org; the list is whatever row-level security lets the caller see.',
-  },
-  {
-    route: 'POST /v1/forms',
-    call: (f) => ({ url: '/v1/forms', body: { id: f.a.formId, title: 'Taken over by org B' } }),
-    own: { status: 200 },
-    note: 'A client-chosen id that exists in org A inserts nothing and changes nothing there; the baseline check proves the row is still org A’s.',
-  },
-  { route: 'GET /v1/forms/:id/draft', call: (f) => ({ url: `/v1/forms/${f.a.formId}/draft` }) },
-  {
-    route: 'PUT /v1/forms/:id/draft',
-    call: (f) => ({ url: `/v1/forms/${f.a.formId}/draft`, body: { draft: { schemaVersion: 2, title: 'Overwritten by org B', blocks: {} } }, headers: { 'if-match': '1' } }),
-  },
-  { route: 'POST /v1/forms/merge', call: (f) => ({ url: '/v1/forms/merge', body: { formIds: [f.a.formId, f.a.secondFormId], title: 'Stolen' } }) },
+  // GET and POST /v1/forms, the draft routes and the merge moved to forms.ts, with the rest of WP-1.06.
   { route: 'GET /v1/forms/:id/live', call: (f) => ({ url: `/v1/forms/${f.a.formId}/live` }) },
   { route: 'POST /v1/forms/:id/publish', call: (f) => ({ url: `/v1/forms/${f.a.formId}/publish`, body: {} }) },
   { route: 'GET /v1/forms/:formId/submissions', call: (f) => ({ url: `/v1/forms/${f.a.formId}/submissions` }) },

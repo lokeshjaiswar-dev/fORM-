@@ -199,7 +199,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     },
     clock: deps.clock ?? cachedClockCheck({ servers: config.ntp.servers, maxOffsetMs: config.ntp.maxOffsetMs, ttlMs: 60_000 }),
   });
-  formRoutes(app, { db: handle.db });
+  formRoutes(app, { db: handle.db, secret: config.auth.secret, now });
   publishRoutes(app, { db: handle.db, secret: config.auth.secret, now });
   accessRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   const files = deps.files ?? createFileStore(path.resolve(config.filesDir ?? path.resolve(process.cwd(), '.data/files')));
