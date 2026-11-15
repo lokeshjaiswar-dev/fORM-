@@ -121,6 +121,7 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'auth_user_credentials',
       'create_org',
       'create_partitions',
+      'form_access_password_hash',
       'form_files_check',
       'form_submission_recorded',
       'invite_accept',

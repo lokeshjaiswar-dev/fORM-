@@ -57,6 +57,23 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     erase: 'delete',
     retainBasis: 'with the form; immutable after publish',
   },
+  form_version_state: { columns: [], erase: 'delete', retainBasis: 'with the version, which is immutable and goes with the form' },
+  form_access: {
+    columns: [],
+    erase: 'delete',
+    retainBasis: 'with the form; the password column holds an argon2id hash of a password the form owner chose, no data of a person',
+  },
+  form_slugs: {
+    columns: [],
+    erase: 'delete',
+    retainBasis: 'with the form; every slug stays reserved for the life of the form so old links keep resolving and no other org can claim them',
+  },
+  form_counters: { columns: [], erase: 'delete', retainBasis: 'with the form: one number per form' },
+  form_favourites: {
+    columns: ['user_id'],
+    erase: 'delete',
+    retainBasis: 'until the member unstars the form; deleted with the account (a trigger on users, migration 0020)',
+  },
   form_submissions: {
     columns: ['answers', 'fields'],
     erase: 'delete',

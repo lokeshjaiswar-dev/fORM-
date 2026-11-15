@@ -63,14 +63,30 @@ export interface ResolvedFormSlug {
   orgId: string;
   formId: string;
   liveVersionId: string;
+  /** The form's current address; differs from the requested slug when that one is an old slug (redirect to this). */
+  primarySlug: string;
 }
 
+/**
+ * The live form behind a public slug, current or old (migration 0020: through `form_slugs`). Null for an unknown slug and
+ * for a form that is archived, trashed or not published.
+ */
 export async function resolveFormSlug(db: Executor, slug: string): Promise<ResolvedFormSlug | null> {
-  const { rows } = await db.execute<{ org_id: string; form_id: string; live_version_id: string }>(
-    sql`select org_id, form_id, live_version_id from resolve_form_slug(${slug})`,
+  const { rows } = await db.execute<{ org_id: string; form_id: string; live_version_id: string; primary_slug: string }>(
+    sql`select org_id, form_id, live_version_id, primary_slug from resolve_form_slug(${slug})`,
   );
   const row = rows[0];
-  return row ? { orgId: row.org_id, formId: row.form_id, liveVersionId: row.live_version_id } : null;
+  return row ? { orgId: row.org_id, formId: row.form_id, liveVersionId: row.live_version_id, primarySlug: row.primary_slug } : null;
+}
+
+/**
+ * The argon2id hash of a form's password, for the unlock route only (migration 0020). `form_access.password_hash` is not
+ * selectable by fr_app. Answers inside a tenant context of a respondent or system actor, for a form of that context's
+ * org; null for a form with no password, a form of another org, no tenant context, or any other actor kind.
+ */
+export async function formAccessPasswordHash(db: Executor, formId: string): Promise<string | null> {
+  const { rows } = await db.execute<{ hash: string | null }>(sql`select form_access_password_hash(${formId}::uuid) as hash`);
+  return rows[0]?.hash ?? null;
 }
 
 export async function createPartitions(db: Executor, parent: PartitionedTable, months: number): Promise<string[]> {

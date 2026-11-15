@@ -8,9 +8,32 @@ import { isolationSuite, publicTables, type TableSpec } from './isolation.ts';
 let t: TestDb;
 let seed: Seed;
 
+/** The password hash seeded for each org's first form (form_access), by org id. */
+const PASSWORD_HASHES: Record<string, string> = {};
+
+/**
+ * Rows of the FormOps tables (migration 0020) for both orgs, so the isolation suite has own rows to see and foreign rows
+ * to be refused. Counters and version states come with the seeded forms and versions (triggers); the slug is set on the
+ * form, which registers it as the primary one (trigger), and an old slug is added beside it.
+ */
+async function seedFormOps(s: Seed): Promise<void> {
+  for (const o of [s.a, s.b]) {
+    const tag = o.orgId.slice(0, 8);
+    PASSWORD_HASHES[o.orgId] = `argon2id$hash-${tag}`;
+    await t.owner.query(
+      `insert into form_access (form_id, org_id, submission_limit, password_hash, password_updated_at) values ($1, $2, 50, $3, now()), ($4, $2, null, null, null)`,
+      [o.formIds[0], o.orgId, PASSWORD_HASHES[o.orgId], o.formIds[1]],
+    );
+    await t.owner.query('update forms set slug = $1 where id = $2', [`form-${tag}`, o.formIds[0]]);
+    await t.owner.query('insert into form_slugs (slug, org_id, form_id) values ($1, $2, $3)', [`old-${tag}`, o.orgId, o.formIds[0]]);
+    await t.owner.query('insert into form_favourites (form_id, user_id, org_id) values ($1, $2, $3), ($1, $4, $3)', [o.formIds[0], o.editorId, o.orgId, o.ownerId]);
+  }
+}
+
 beforeAll(async () => {
   t = await setupTestDb();
   seed = await seedTwoOrgs(t.owner);
+  await seedFormOps(seed);
 });
 afterAll(() => t?.close());
 
@@ -64,16 +87,25 @@ const TABLES: Record<string, TableSpec> = {
   },
   forms: { scope: { by: 'org' }, select: 0, touch: 'title', update: 0, delete: 0 },
   form_drafts: { scope: { by: 'org' }, select: 0, touch: 'draft_rev', update: 0, delete: 0 },
+  // Published versions never change (PUB-01, migration 0020): fr_app has no UPDATE or DELETE privilege at all.
   form_versions: {
     scope: { by: 'org' },
     select: 0,
     touch: 'content_hash',
-    update: 0,
-    delete: 0,
+    update: 'denied',
+    delete: 'denied',
     insertForeign: (s) =>
       sql`insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash)
           values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, 9, 2, ${s.a.ownerId}, '{}', '{}', '0')`,
   },
+  // FormOps (WP-1.07, migration 0020). Respondent contexts read these rows (the access rules, the counter) and write
+  // only what the submit transaction must; the dedicated describes below check that part.
+  form_version_state: { scope: { by: 'org' }, select: 0, touch: 'superseded_at', update: 0, delete: 'denied' },
+  form_access: { scope: { by: 'org' }, select: 0, touch: 'rev', update: 0, delete: 'denied' },
+  form_slugs: { scope: { by: 'org' }, select: 0, touch: 'is_primary', update: 0, delete: 'denied' },
+  form_counters: { scope: { by: 'org' }, select: 0, touch: 'submitted_total', update: 0, delete: 'denied' },
+  // A star is personal: only a user context sees any rows, and only its own (see the favourites describe).
+  form_favourites: { scope: { by: 'org' }, select: 0, update: 'denied', delete: 0, visibleTo: ['user'] },
   form_submissions: {
     scope: { by: 'org' },
     select: 0,
