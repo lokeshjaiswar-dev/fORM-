@@ -25,9 +25,23 @@ export async function readAccess(tx: Tx, formId: string): Promise<AccessView> {
 
 /**
  * Whether the caller's `X-FR-Access` token unlocks this form's password for `versionScope`. A form without a password
- * is never "unlocked" (there is nothing to unlock), and a token that is absent, forged, expired or for another form
- * or version is just not valid, without saying which.
+ * is never "unlocked" (there is nothing to unlock), and a token that is absent, forged, expired, for another form or
+ * version, or older than the form's last password change is just not valid, without saying which.
+ *
+ * The last rule is what makes changing the password take effect: a token is good for two hours, so without it an owner
+ * who rotates a leaked password would leave everyone who had already unlocked the form in (to read it and to submit).
+ * `iat` is whole seconds and `passwordUpdatedAt` an instant, so both are compared in seconds: a token issued in the same
+ * second as the change counts as issued after it. The password routes set and clear `passwordUpdatedAt` together with
+ * the hash, so a form with a password always has one; a form without one has nothing to unlock anyway.
  */
-export function isUnlocked(secret: Uint8Array, access: Pick<AccessSettings, 'hasPassword'>, token: string | undefined, scope: { formId: string; versionScope: string }, now: Date): boolean {
-  return access.hasPassword && token !== undefined && verifyAccessToken(secret, token, scope, now) !== null;
+export function isUnlocked(
+  secret: Uint8Array,
+  access: Pick<AccessSettings, 'hasPassword' | 'passwordUpdatedAt'>,
+  token: string | undefined,
+  scope: { formId: string; versionScope: string },
+  now: Date,
+): boolean {
+  if (!access.hasPassword || access.passwordUpdatedAt === null || token === undefined) return false;
+  const claims = verifyAccessToken(secret, token, scope, now);
+  return claims !== null && claims.iat >= Math.floor(access.passwordUpdatedAt.getTime() / 1000);
 }
