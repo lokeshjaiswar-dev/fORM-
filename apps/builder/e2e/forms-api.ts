@@ -35,7 +35,10 @@ interface FakeForm {
   lifecycle: 'active' | 'trashed';
   draft: Record<string, unknown> | null;
   draftRev: number;
+  createdAt: string;
   updatedAt: string;
+  /** Set once the form is published: the list shows its public link. */
+  isLive: boolean;
 }
 
 /** The API calls the page made, in order. */
@@ -105,12 +108,16 @@ export class FakeFormsApi {
       if (!this.signedIn) return unauthenticated();
       record();
       if (method === 'GET') {
-        const items = [...this.forms.values()].filter((f) => f.lifecycle === 'active').map(({ id, title, lifecycle, updatedAt }) => ({ id, title, lifecycle, updatedAt }));
+        // The real row shape (formsListApi.ts); a row missing a field is refused and the page falls back to its offline cache.
+        const items = [...this.forms.values()]
+          .filter((f) => f.lifecycle === 'active')
+          .map(({ id, title, lifecycle, createdAt, updatedAt, isLive }) => ({ id, title, lifecycle, createdAt, updatedAt, favourite: false, submissionCount: 0, isLive }));
         return route.fulfill({ json: { items, nextCursor: null } });
       }
       if (method === 'POST') {
         const { id = randomUUID(), title = '' } = (body ?? {}) as { id?: string; title?: string };
-        if (!this.forms.has(id)) this.forms.set(id, { id, title, lifecycle: 'active', draft: null, draftRev: 0, updatedAt: new Date().toISOString() });
+        const now = new Date().toISOString();
+        if (!this.forms.has(id)) this.forms.set(id, { id, title, lifecycle: 'active', draft: null, draftRev: 0, createdAt: now, updatedAt: now, isLive: false });
         return route.fulfill({ status: 201, json: { id } });
       }
     }
@@ -153,6 +160,7 @@ export class FakeFormsApi {
       if (issues.some((i) => i.severity === 'error')) {
         return route.fulfill(problem(422, 'PUBLISH_BLOCKED', 'This form cannot be published', { detail: 'Fix the problems listed, then publish again.', issues, issueCount: issues.length }));
       }
+      form.isLive = true;
       return route.fulfill({ json: { slug: `e2e-${id.slice(0, 8)}`, versionId: randomUUID(), number: 1, draftRev: form.draftRev } });
     }
 
