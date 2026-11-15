@@ -10,6 +10,8 @@ const base = {
   PUBLIC_BUILDER_URL: 'https://app.form.example',
   SMTP_URL: 'smtp://relay:25',
   PRIVACY_CONTACT_EMAIL: 'privacy@form.example',
+  // A complete production environment has an object store (exports); the test of the missing store drops it.
+  STORAGE_DRIVER: 's3',
 };
 
 describe('parseConfig', () => {
@@ -114,6 +116,57 @@ describe('parseConfig', () => {
     expect(trust('2')).toBe(2);
     expect(trust('10.0.0.0/8, 192.168.1.4,loopback,fd00::/8')).toEqual(['10.0.0.0/8', '192.168.1.4', 'loopback', 'fd00::/8']);
     for (const bad of ['true', 'yes', '10.0.0.0/33', 'proxy.local', '10.0.0.1/8/1']) expect(trust(bad)).toEqual([expect.stringMatching(/^TRUST_PROXY: expected false, a hop count/)]);
+  });
+});
+
+describe('object store (WP-1.17)', () => {
+  const { STORAGE_DRIVER: _driver, ...noStorage } = base;
+
+  it('parses STORAGE_* with the parser the worker uses, so both read one environment the same way', () => {
+    const s3 = parseConfig({
+      ...base,
+      STORAGE_ENDPOINT: 'https://minio.form.example:9000',
+      STORAGE_ACCESS_KEY_ID: 'fr-api',
+      STORAGE_SECRET_ACCESS_KEY_FILE: '/run/secrets/storage-secret',
+      STORAGE_BUCKET_EXPORTS: 'acme-exports',
+    });
+    expect(s3.ok && s3.config.storage).toMatchObject({
+      driver: 's3',
+      region: 'ap-south-1',
+      endpoint: 'https://minio.form.example:9000',
+      forcePathStyle: true,
+      credentials: { accessKeyId: 'fr-api', secretAccessKeyFile: '/run/secrets/storage-secret' },
+      buckets: { exports: 'acme-exports', uploads: 'fr-uploads' },
+    });
+    const fs = parseConfig({ ...noStorage, NODE_ENV: 'development', STORAGE_DRIVER: 'filesystem', STORAGE_ROOT: '/var/lib/form/store' });
+    expect(fs.ok && fs.config.storage).toEqual({ driver: 'filesystem', root: '/var/lib/form/store' });
+  });
+
+  it('reports a bad store with the other errors, in the words the worker uses', () => {
+    const r = parseConfig({ ...noStorage, STORAGE_DRIVER: 'filesystem', PORT: 'x' });
+    expect(r.ok ? [] : r.errors).toEqual(expect.arrayContaining([expect.stringMatching(/^PORT/), 'STORAGE_ROOT: is required with STORAGE_DRIVER=filesystem']));
+    const half = parseConfig({ ...base, STORAGE_ACCESS_KEY_ID: 'fr-api' });
+    expect(half.ok ? [] : half.errors).toEqual(['STORAGE_SECRET_ACCESS_KEY_FILE: goes together with STORAGE_ACCESS_KEY_ID']);
+    const same = parseConfig({ ...base, STORAGE_BUCKET_EXPORTS: 'fr-uploads' });
+    expect(same.ok ? [] : same.errors).toEqual(['STORAGE_BUCKET_*: every bucket needs its own name']);
+  });
+
+  it('has no store without STORAGE_DRIVER, and production says so in a notice instead of refusing to start', () => {
+    const prod = parseConfig(noStorage);
+    expect(prod.ok && prod.config.storage).toBeUndefined();
+    expect(prod.ok && prod.config.notices).toEqual([expect.stringMatching(/^STORAGE_DRIVER is not set: exports answer 503/)]);
+    // Development is quiet: most developers run without an object store.
+    const dev = parseConfig({ ...noStorage, NODE_ENV: 'development' });
+    expect(dev.ok && dev.config.storage).toBeUndefined();
+    expect(dev.ok && dev.config.notices.some((n) => n.startsWith('STORAGE_DRIVER'))).toBe(false);
+    // With a store there is nothing to say.
+    const withStore = parseConfig(base);
+    expect(withStore.ok && withStore.config.notices.some((n) => n.startsWith('STORAGE_DRIVER'))).toBe(false);
+  });
+
+  it('warns that the filesystem store is for development when production sets it (the worker refuses it there)', () => {
+    const r = parseConfig({ ...noStorage, STORAGE_DRIVER: 'filesystem', STORAGE_ROOT: '/var/lib/form/store' });
+    expect(r.ok && r.config.notices).toEqual([expect.stringMatching(/^STORAGE_DRIVER=filesystem is for development only/)]);
   });
 });
 

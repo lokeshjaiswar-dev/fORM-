@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
-import { KMS_DRIVERS, parseEditionConfig, parseKmsConfig, type EditionConfig, type KmsConfig } from '@form/config';
+import { KMS_DRIVERS, parseEditionConfig, parseKmsConfig, parseStorageConfig, type EditionConfig, type KmsConfig, type StorageConfig } from '@form/config';
 import { LOG_LEVELS, type LogLevel } from '@form/observability';
 import { z } from 'zod';
 
@@ -143,6 +143,11 @@ export interface ApiConfig {
   auth: AuthConfig;
   mailer: { driver: 'smtp' | 'log'; smtpUrl: string | undefined; from: { address: string; name: string } };
   kms: KmsConfig;
+  /**
+   * The object store (`STORAGE_*`, parsed by `@form/config` like the worker does). The API reads finished exports from it
+   * (WP-1.17, streamed after the auth check); undefined without `STORAGE_DRIVER`, and then the export routes answer 503.
+   */
+  storage: StorageConfig | undefined;
   /** The platform's own privacy notice for builder users (CMP-21). */
   privacy: PrivacyConfig;
   edition: EditionConfig;
@@ -206,10 +211,12 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
   const api = apiEnvSchema.safeParse(env);
   const edition = parseEditionConfig(env);
   const kms = parseKmsConfig(env);
+  const storage = parseStorageConfig(env);
   if (!api.success) errors.push(...api.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`));
   if (!edition.ok) errors.push(...edition.errors);
   if (!kms.ok) errors.push(...kms.errors);
-  if (!api.success || !edition.ok || !kms.ok || errors.length > 0) return { ok: false, errors };
+  if (!storage.ok) errors.push(...storage.errors);
+  if (!api.success || !edition.ok || !kms.ok || !storage.ok || errors.length > 0) return { ok: false, errors };
   const e = api.data;
   const ed = edition.config;
   const notices: string[] = [];
@@ -227,6 +234,10 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
   if (e.PASSWORD_BREACH_CHECK === 'hibp' && ed.egressPolicy === 'none') notices.push('PASSWORD_BREACH_CHECK=hibp is ignored when EGRESS_POLICY=none');
   const breachCheck = ed.egressPolicy === 'none' ? 'off' : (e.PASSWORD_BREACH_CHECK ?? (ed.deploymentMode === 'saas' && ed.egressPolicy === 'open' ? 'hibp' : 'off'));
   if (!e.AUTH_SECRET) notices.push('AUTH_SECRET is not set: a random secret is used for this process');
+  // Not an error: the rest of the API works without a store. Production says so at start, so an operator who forgot the
+  // STORAGE_* settings finds out from the log and not from a user whose export answers 503.
+  if (e.NODE_ENV === 'production' && !storage.config) notices.push('STORAGE_DRIVER is not set: exports answer 503 until an object store is configured (the worker needs the same STORAGE_* settings)');
+  if (e.NODE_ENV === 'production' && storage.config?.driver === 'filesystem') notices.push('STORAGE_DRIVER=filesystem is for development only: the worker refuses it in production, so no export is ever built');
   return {
     ok: true,
     config: {
@@ -253,6 +264,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
       },
       mailer: { driver: e.MAILER_DRIVER, smtpUrl: e.SMTP_URL, from: { address: e.MAIL_FROM, name: e.MAIL_FROM_NAME } },
       kms: kms.config,
+      storage: storage.config,
       privacy: { fiduciaryName: e.PRIVACY_FIDUCIARY_NAME, contactEmail: e.PRIVACY_CONTACT_EMAIL ?? 'privacy@form.local', contactName: e.PRIVACY_CONTACT_NAME ?? null },
       edition: ed,
       notices,
