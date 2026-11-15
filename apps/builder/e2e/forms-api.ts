@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Route } from '@playwright/test';
 
 /*
@@ -9,7 +9,8 @@ import type { Route } from '@playwright/test';
  * trash, the two reads the form settings make when the Review tab opens (a form's review settings, the org's review
  * groups; both empty), the reads the Emails and Email log tabs and the Email senders page make (a form's notifications,
  * its email log, the org's senders and members; nothing set up yet) and the one the Webhooks tab makes (a form's
- * webhooks; none). The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks
+ * webhooks; none), and the checker's reads and decisions (the org, the review queue, a held response for review and the decision of a
+ * unit; the queue is empty and no response is held until a spec adds one). The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks
  * are the API's, and run in apps/api/test/publish.int.test.ts. A spec about what the server decides belongs in a
  * `*.stack.spec.ts`.
  *
@@ -25,6 +26,100 @@ export const ME = {
   orgs: [{ id: 'o1', slug: 'acme', name: 'Acme', role: 'owner' }],
   activeOrgId: 'o1',
 };
+
+/** What the owner's role grants (`PERMISSIONS` of apps/api/src/authz/roles.ts, as `GET /v1/org` lists them). */
+const OWNER_PERMISSIONS = [
+  'forms.create',
+  'forms.edit',
+  'forms.publish',
+  'forms.read',
+  'submissions.read',
+  'submissions.edit',
+  'submissions.delete',
+  'submissions.export',
+  'submissions.review',
+  'ops.manage',
+  'data.route',
+  'compliance.approve_notice',
+  'compliance.dsr',
+  'compliance.retention',
+  'compliance.legal_hold',
+  'compliance.statutory_access',
+  'members.manage',
+  'org.settings',
+  'billing.manage',
+  'api_keys.manage',
+  'brand_kits.manage',
+  'org_profile.manage',
+];
+
+/** One row of `GET /v1/reviews/queue` (`queueItem` of apps/api/src/modules/reviews/queue.ts). */
+export interface FakeQueueItem {
+  submissionId: string;
+  formId: string;
+  formTitle: string;
+  unitId: string;
+  unitName: string;
+  round: number;
+  order: number;
+  required: boolean;
+  receivedAt: string;
+  ageSeconds: number;
+}
+
+/** One unit of a held response, as `reviewUnitView` of apps/api/src/modules/reviews/decide.ts has it, plus the answers' version (what `answersHash` is made from). */
+export interface FakeReviewUnit {
+  unitId: string;
+  name: string;
+  state: 'pending' | 'approved' | 'rejected' | 'not_applicable' | 'closed';
+  round: number;
+  required: boolean;
+  order: number;
+  groupId: string;
+  groupName: string | null;
+  visibility: 'own_unit' | 'whole_submission';
+  yours: boolean;
+  canDecide: boolean;
+  blocked: boolean;
+  rev: number;
+  /** Moves on when the unit's answers change; a decision that names an older one is a 409 `REVIEW_STALE`. */
+  answersVersion: number;
+}
+
+/** A held response as `GET /v1/forms/:id/submissions/:sid/review` answers it, kept with the decisions made on it. */
+export interface FakeReview {
+  formId: string;
+  submissionId: string;
+  formTitle: string;
+  receivedAt: string;
+  status: 'pending_review' | 'complete' | 'rejected';
+  redacted: boolean;
+  units: FakeReviewUnit[];
+  decisions: Array<{ id: string; unitId: string; round: number; decision: 'approve' | 'reject'; reasonCode: string | null; decidedAt: string; decidedBy: { userId: string; name: string | null } }>;
+  fields: Array<{ id: string; key: string; label: string; type: string; value: string; masked: boolean }>;
+  /** The keys of the decisions made, with what each answered: a replay returns the first answer. */
+  keys: Map<string, unknown>;
+}
+
+/** The token a unit's `answersHash` carries: 64 hex digits that change with the answers (the real one is keyed; a spec only compares them). */
+const tokenOf = (review: FakeReview, unit: FakeReviewUnit): string =>
+  createHash('sha256').update(`${review.submissionId}:${unit.unitId}:${unit.round}:${unit.answersVersion}`).digest('hex');
+
+/** `reviewDetailResponse` of apps/api/src/modules/reviews/decide.ts. */
+function reviewDetailOf(review: FakeReview): Record<string, unknown> {
+  return {
+    submission: { id: review.submissionId, formId: review.formId, formTitle: review.formTitle, receivedAt: review.receivedAt, status: review.status, versionId: randomUUID(), versionNumber: 1, locale: 'en-IN' },
+    redacted: review.redacted,
+    units: review.units.map((unit) => {
+      const { answersVersion: _version, ...view } = unit;
+      return { ...view, answersHash: unit.yours || !review.redacted ? tokenOf(review, unit) : null };
+    }),
+    decisions: review.decisions,
+    fields: review.fields,
+    answers: {},
+    files: [],
+  };
+}
 
 export interface FakeIssue {
   severity: 'error' | 'warning';
@@ -77,6 +172,10 @@ export class FakeFormsApi {
   readonly calls: FakeCall[] = [];
   /** Whether the browser has a session: `GET /v1/me` and the forms routes answer 401 while it has not. A test may sign in or out midway. */
   signedIn = true;
+  /** The units that wait for the member (`GET /v1/reviews/queue`), newest response first as a spec lists them. Empty: nothing waits. */
+  readonly reviewQueue: FakeQueueItem[] = [];
+  /** The held responses a spec made, by `<formId>/<submissionId>`. A response not in here is a 404, as one of another org is. */
+  readonly reviews = new Map<string, FakeReview>();
 
   /** The calls made to `path` with `method`. */
   called(method: string, path: RegExp): FakeCall[] {
@@ -93,6 +192,35 @@ export class FakeFormsApi {
     form.draft = change(structuredClone(form.draft));
     form.draftRev += 1;
     form.updatedAt = new Date().toISOString();
+  }
+
+  /**
+   * `POST .../review/units/:unitId/decisions`: the key is required and a replay returns the first answer; answers that changed
+   * since the checker read them are a 409 `REVIEW_STALE`; a unit that is no longer open is a 409 `REVIEW_CLOSED`. An approve of
+   * the last required unit completes the response, a reject of a required unit rejects it.
+   */
+  private async decide(route: Route, review: FakeReview, unitId: string, key: string | undefined, body: Record<string, unknown>): Promise<void> {
+    if (!key) return route.fulfill(problem(400, 'VALIDATION', 'Idempotency-Key is required'));
+    const first = review.keys.get(key);
+    if (first !== undefined) return route.fulfill({ json: first, headers: { 'idempotent-replayed': 'true', 'cache-control': 'no-store' } });
+    const unit = review.units.find((u) => u.unitId === unitId);
+    if (!unit) return route.fulfill(problem(404, 'NOT_FOUND', 'That unit is not on a response of this form.'));
+    if (unit.state !== 'pending') return route.fulfill(problem(409, 'REVIEW_CLOSED', 'This unit is not waiting for a decision any more.'));
+    if (body.answersHash !== tokenOf(review, unit)) return route.fulfill(problem(409, 'REVIEW_STALE', 'The answers of this unit changed since you read them. Reload and read them again.'));
+    const decision = body.decision === 'reject' ? 'reject' : 'approve';
+    if (decision === 'reject' && typeof body.reasonCode !== 'string') return route.fulfill(problem(400, 'VALIDATION', 'a reject needs a reason code'));
+    const decidedAt = new Date().toISOString();
+    const decisionId = randomUUID();
+    unit.state = decision === 'approve' ? 'approved' : 'rejected';
+    unit.canDecide = false;
+    review.decisions.push({ id: decisionId, unitId, round: unit.round, decision, reasonCode: decision === 'reject' ? (body.reasonCode as string) : null, decidedAt, decidedBy: { userId: USER.id, name: USER.name } });
+    if (decision === 'reject' && unit.required) {
+      review.status = 'rejected';
+      for (const other of review.units) if (other.state === 'pending') Object.assign(other, { state: 'closed', canDecide: false });
+    } else if (review.units.every((u) => !u.required || u.state === 'approved' || u.state === 'not_applicable')) review.status = 'complete';
+    const answer = { decisionId, unitId, decision, reasonCode: decision === 'reject' ? (body.reasonCode as string) : null, round: unit.round, decidedAt, unitState: unit.state, submissionStatus: review.status };
+    review.keys.set(key, answer);
+    return route.fulfill({ json: answer, headers: { 'cache-control': 'no-store' } });
   }
 
   async handle(route: Route): Promise<void> {
@@ -124,6 +252,36 @@ export class FakeFormsApi {
         if (!this.forms.has(id)) this.forms.set(id, { id, title, lifecycle: 'active', draft: null, draftRev: 0, createdAt: now, updatedAt: now, isLive: false });
         return route.fulfill({ status: 201, json: { id } });
       }
+    }
+
+    // The active org with the caller's role and what it grants (WP-2.33: the Reviews entry shows when `submissions.review` is among them).
+    if (method === 'GET' && path === '/v1/org') {
+      if (!this.signedIn) return unauthenticated();
+      record();
+      const org = { id: 'o1', slug: 'acme', name: 'Acme', plan: 'free', region: 'in-mum-1', locale: 'en-IN', timeZone: 'Asia/Kolkata', dateFormat: 'DD-MM-YYYY', status: 'active', createdAt: '2026-01-01T00:00:00.000Z' };
+      return route.fulfill({ json: { org, role: 'owner', permissions: OWNER_PERMISSIONS } });
+    }
+
+    // The review queue (WP-2.33): the units that wait for the member, filtered by form, unit and age as the real one is.
+    if (method === 'GET' && path === '/v1/reviews/queue') {
+      if (!this.signedIn) return unauthenticated();
+      record();
+      const q = url.searchParams;
+      const days = { '1d': 1, '3d': 3, '7d': 7, '30d': 30 }[q.get('age') ?? ''] ?? 0;
+      const items = this.reviewQueue.filter((i) => (!q.get('formId') || i.formId === q.get('formId')) && (!q.get('unitId') || i.unitId === q.get('unitId')) && i.ageSeconds >= days * 86_400);
+      return route.fulfill({ json: { items, nextCursor: null }, headers: { 'cache-control': 'no-store' } });
+    }
+
+    // A held response for review, and the decision of one of its units (WP-2.33), as apps/api/src/modules/reviews/decide.ts answers them.
+    const reviewOf = /^\/v1\/forms\/([^/]+)\/submissions\/([^/]+)\/review(?:\/units\/([^/]+)\/decisions)?$/.exec(path);
+    if (reviewOf) {
+      if (!this.signedIn) return unauthenticated();
+      record();
+      const [, formId = '', submissionId = '', unitId] = reviewOf.map((part) => (part === undefined ? part : decodeURIComponent(part)));
+      const review = this.reviews.get(`${formId}/${submissionId}`);
+      if (!review) return route.fulfill(problem(404, 'NOT_FOUND', 'That response is not on this form.'));
+      if (method === 'GET' && unitId === undefined) return route.fulfill({ json: reviewDetailOf(review), headers: { 'cache-control': 'no-store' } });
+      if (method === 'POST' && unitId !== undefined) return this.decide(route, review, unitId, request.headers()['idempotency-key'], (body ?? {}) as Record<string, unknown>);
     }
 
     // The org's review groups (WP-2.33): the Members page lists them and a form's Review tab offers them. A fresh org has none.
