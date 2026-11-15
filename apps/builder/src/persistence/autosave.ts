@@ -58,6 +58,13 @@ export interface AutosaveOptions {
   rev: number;
   /** The server draft revision the open document was loaded at; 0 for a form the server has not seen. */
   serverRev?: number | undefined;
+  /**
+   * The document was opened from a copy that holds changes the server has not accepted (an offline edit, a refused
+   * save, a tab closed inside the 2 s window), and the author has no merge to resolve. It is sent as if it had just
+   * been typed; without this nothing would send it until the next keystroke, yet `flush` would report the server as
+   * holding exactly what is on screen. Ignored with a local-only repository.
+   */
+  dirty?: boolean | undefined;
   delayMs?: number;
   apiDelayMs?: number;
   now?: () => string;
@@ -108,7 +115,7 @@ const messageOf = (e: unknown): string => (e instanceof Error ? e.message : Stri
  * moment it runs, so a queue of them sends one document.
  */
 export function startAutosave({
-  repo, id, rev, serverRev = 0, delayMs = AUTOSAVE_MS, apiDelayMs = API_SAVE_MS, now = () => new Date().toISOString(), onState, onSaved,
+  repo, id, rev, serverRev = 0, dirty = false, delayMs = AUTOSAVE_MS, apiDelayMs = API_SAVE_MS, now = () => new Date().toISOString(), onState, onSaved,
 }: AutosaveOptions): Autosave {
   const split = repo.saveLocal !== undefined;
   let localTimer: ReturnType<typeof setTimeout> | null = null;
@@ -332,5 +339,11 @@ export function startAutosave({
     },
   };
   active = autosave;
+  if (split && dirty) {
+    // Opened with changes the server does not have: they go up after the usual idle wait, and until then the screen says so.
+    unsynced = snapshot();
+    report({ state: 'saving' });
+    arm('api');
+  }
   return autosave;
 }

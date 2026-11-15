@@ -348,6 +348,29 @@ describe('autosave with a server behind the cache', () => {
     await autosave.stop();
   });
 
+  it('a document opened dirty is sent 2 s after the start without a keystroke, with If-Match = the server revision it was cached at', async () => {
+    const cache = new MemoryRepository();
+    const states: string[] = [];
+    const autosave = startAutosave({ repo: new CachingApiRepository(cache, ORG), id: 'test', rev: 0, serverRev: 4, dirty: true, now: () => NOW, onState: (s) => states.push(s.state) });
+    expect(states).toEqual(['saving']);
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS - 1);
+    expect(putRemoteDraft).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+    expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.anything(), 4);
+    expect(cache.records.get('test')).toMatchObject({ serverRev: 5, dirty: false });
+    expect(states).toEqual(['saving', 'saved']);
+    await autosave.stop();
+  });
+
+  it('a document opened clean sends nothing until it changes', async () => {
+    const autosave = startAutosave({ repo: new CachingApiRepository(new MemoryRepository(), ORG), id: 'test', rev: 0, serverRev: 4, now: () => NOW });
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS * 3);
+    expect(putRemoteDraft).not.toHaveBeenCalled();
+    expect(await flushAutosave()).toEqual({ serverRev: 4 });
+    await autosave.stop();
+  });
+
   it('a 409 stops sending, keeps saving in this browser and raises the conflict; flush then reports nothing saved', async () => {
     putRemoteDraft.mockRejectedValueOnce(new DraftConflict(serverDraft(7)));
     const cache = new MemoryRepository();
@@ -409,6 +432,130 @@ describe('useFormSession with a server behind the cache', () => {
     expect(putRemoteDraft).not.toHaveBeenCalled();
     discardPending();
     unmount();
+  });
+
+  /** Fake timers and React do not mix with `waitFor`, so these tests move the clock themselves and let the open settle. */
+  async function advance(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  async function opened(result: { current: { status: string } }) {
+    for (let i = 0; i < 20 && result.current.status !== 'ready'; i += 1) await advance(0);
+    expect(result.current.status).toBe('ready');
+  }
+
+  describe('with unsent changes cached at the server revision (fake timers)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const cachedAt = async (serverRev: number, dirty: boolean, title = 'Offline edit') => {
+      const cache = new MemoryRepository();
+      await cache.save({ ...newStoredForm('test', NOW, { ...formWith([]), title }), serverRev, dirty });
+      return cache;
+    };
+
+    it('opens a dirty cached copy at the server revision and sends it after 2 s idle, so a publish runs on what is on screen', async () => {
+      const cache = await cachedAt(5, true);
+      getRemoteDraft.mockResolvedValue(serverDraft(5, 'Older'));
+      const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+      await opened(result);
+      expect(currentDoc().title).toBe('Offline edit');
+      expect(useUiStore.getState().draftConflict).toBeNull();
+      expect(useUiStore.getState().save).toEqual({ state: 'saving' });
+
+      await advance(API_SAVE_MS - 1);
+      expect(putRemoteDraft).not.toHaveBeenCalled();
+      await advance(1);
+      expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+      expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.objectContaining({ title: 'Offline edit' }), 5);
+      expect(cache.records.get('test')).toMatchObject({ serverRev: 6, dirty: false });
+      expect(useUiStore.getState().save).toMatchObject({ state: 'saved' });
+      expect(await flushAutosave()).toEqual({ serverRev: 6 });
+      unmount();
+    });
+
+    it('a flush right after opening it sends the copy at once and answers the revision the server now holds', async () => {
+      const cache = await cachedAt(5, true);
+      getRemoteDraft.mockResolvedValue(serverDraft(5, 'Older'));
+      const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+      await opened(result);
+      let flushed: unknown;
+      await act(async () => {
+        flushed = await flushAutosave();
+      });
+      expect(flushed).toEqual({ serverRev: 6 });
+      expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+      expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.objectContaining({ title: 'Offline edit' }), 5);
+      unmount();
+    });
+
+    it('with the server out of reach it says the change is only on this device, and sends it when the browser is back online', async () => {
+      putRemoteDraft.mockRejectedValueOnce(new ApiUnreachable());
+      const cache = await cachedAt(5, true);
+      getRemoteDraft.mockRejectedValue(new ApiUnreachable());
+      const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+      await opened(result);
+      await advance(API_SAVE_MS);
+      expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+      expect(useUiStore.getState().save).toMatchObject({ state: 'local' });
+      expect(cache.records.get('test')).toMatchObject({ serverRev: 5, dirty: true });
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+      await advance(0);
+      expect(putRemoteDraft).toHaveBeenCalledTimes(2);
+      expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.objectContaining({ title: 'Offline edit' }), 5);
+      expect(useUiStore.getState().save).toMatchObject({ state: 'saved' });
+      unmount();
+    });
+
+    it('a clean cached copy at the server revision sends nothing, and a flush says the server holds it', async () => {
+      const cache = await cachedAt(5, false, 'Same');
+      getRemoteDraft.mockResolvedValue(serverDraft(5, 'Same'));
+      const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+      await opened(result);
+      await advance(API_SAVE_MS * 3);
+      expect(putRemoteDraft).not.toHaveBeenCalled();
+      expect(useUiStore.getState().save).not.toMatchObject({ state: 'saving' });
+      expect(await flushAutosave()).toEqual({ serverRev: 5 });
+      unmount();
+    });
+
+    it('a dirty copy behind the server stays paused behind the merge dialog and is not sent after 2 s', async () => {
+      const cache = await cachedAt(3, true, 'Mine');
+      getRemoteDraft.mockResolvedValue(serverDraft(5));
+      const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+      await opened(result);
+      await advance(API_SAVE_MS * 3);
+      expect(putRemoteDraft).not.toHaveBeenCalled();
+      expect(useUiStore.getState().save).toEqual({ state: 'conflict' });
+      expect(await flushAutosave()).toEqual({ serverRev: null });
+      discardPending();
+      unmount();
+    });
+
+    it('a v1 draft migrated while the server is out of reach is cached dirty and sent once it answers', async () => {
+      const cache = new MemoryRepository();
+      await cache.save({ id: 'test', format: LEGACY_FORMAT, rev: 1, savedAt: NOW, doc: v1Form([{ id: 'name', type: 'text', label: 'Name' }]), serverRev: 2, dirty: false });
+      getRemoteDraft.mockResolvedValue(serverDraft(2, 'Old'));
+      putRemoteDraft.mockRejectedValueOnce(new ApiUnreachable());
+      const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+      await opened(result);
+      expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+      expect(cache.records.get('test')).toMatchObject({ format: DOCUMENT_FORMAT, serverRev: 2, dirty: true });
+      await advance(API_SAVE_MS);
+      expect(putRemoteDraft).toHaveBeenCalledTimes(2);
+      expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.anything(), 2);
+      expect(cache.records.get('test')).toMatchObject({ serverRev: 3, dirty: false });
+      unmount();
+    });
   });
 
   it('opens the server draft over a clean cache that is behind it', async () => {

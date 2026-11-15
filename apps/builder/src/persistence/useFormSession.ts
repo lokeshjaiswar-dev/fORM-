@@ -63,10 +63,16 @@ export function useFormSession(id: string): Session {
       }
       let rev = stored.rev;
       let serverRev = stored.serverRev;
+      // Unsent changes in the cached copy go up once the form is open, unless the author has a merge to resolve first.
+      let dirty = stored.dirty === true && disputed === null;
       if (result.migrated) {
         rev += 1;
         const saved = await repo.save({ id, format: DOCUMENT_FORMAT, rev, savedAt: now, doc: result.doc, ops: result.ops, serverRev });
-        if (saved) serverRev = saved.serverRev;
+        if (saved) {
+          serverRev = saved.serverRev;
+          // The migrated copy is on the server now, or (offline) cached dirty and still to be sent.
+          dirty = !saved.synced && disputed === null;
+        }
         if (!live) return;
       }
       const imported = pendingNotes.get(id) ?? [];
@@ -79,7 +85,7 @@ export function useFormSession(id: string): Session {
       if (first) useUiStore.getState().openInspector(first);
       const watch = watchTabs(id, raise);
       tabs = watch;
-      autosave = startAutosave({ repo, id, rev, serverRev, onState: (save) => useUiStore.setState({ save }), onSaved: watch.saved });
+      autosave = startAutosave({ repo, id, rev, serverRev, dirty, onState: (save) => useUiStore.setState({ save }), onSaved: watch.saved });
       if (disputed) autosave.conflict(disputed.server);
       setSession({ status: 'ready' });
     };
