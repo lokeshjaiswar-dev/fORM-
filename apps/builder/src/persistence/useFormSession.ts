@@ -6,7 +6,7 @@ import { blockOrder } from '@/lib/definition';
 import { resetUi, useUiStore, type LoadNote, type TabConflict } from '@/state/uiStore';
 import { startAutosave, whenSaved, type Autosave } from '@/persistence/autosave';
 import { openStored } from '@/persistence/openForm';
-import { DOCUMENT_FORMAT, type DocumentRepository } from '@/persistence/DocumentRepository';
+import { DOCUMENT_FORMAT, DraftConflict, type DocumentRepository, type StoredForm } from '@/persistence/DocumentRepository';
 import { useRepository } from '@/persistence/repository';
 import { watchTabs, type TabWatch } from '@/persistence/tabChannel';
 
@@ -26,6 +26,9 @@ const raise = (conflict: TabConflict) =>
  * Opens form `id` from the repository into the document store (history starts empty), autosaves every change and
  * watches other tabs on the same form. A v1 draft is migrated once and saved back as v2 before editing starts
  * (BL-143). Leaving the form flushes the last change.
+ *
+ * A form whose cached copy has unsent changes while the server's draft moved on opens with the cached copy and the
+ * merge dialog (WP-1.06): autosave stays paused until the author chooses.
  */
 export function useFormSession(id: string): Session {
   const repo = useRepository();
@@ -38,7 +41,15 @@ export function useFormSession(id: string): Session {
     const setSession = (session: Session) => setOpened({ id, repo, session });
     const open = async () => {
       await whenSaved();
-      const stored = await repo.load(id);
+      let stored: StoredForm | null;
+      let disputed: DraftConflict | null = null;
+      try {
+        stored = await repo.load(id);
+      } catch (e) {
+        if (!(e instanceof DraftConflict) || !e.local) throw e;
+        stored = e.local;
+        disputed = e;
+      }
       if (!live) return;
       if (!stored) {
         setSession({ status: 'missing' });
@@ -51,9 +62,11 @@ export function useFormSession(id: string): Session {
         return;
       }
       let rev = stored.rev;
+      let serverRev = stored.serverRev;
       if (result.migrated) {
         rev += 1;
-        await repo.save({ id, format: DOCUMENT_FORMAT, rev, savedAt: now, doc: result.doc, ops: result.ops });
+        const saved = await repo.save({ id, format: DOCUMENT_FORMAT, rev, savedAt: now, doc: result.doc, ops: result.ops, serverRev });
+        if (saved) serverRev = saved.serverRev;
         if (!live) return;
       }
       const imported = pendingNotes.get(id) ?? [];
@@ -66,7 +79,8 @@ export function useFormSession(id: string): Session {
       if (first) useUiStore.getState().openInspector(first);
       const watch = watchTabs(id, raise);
       tabs = watch;
-      autosave = startAutosave({ repo, id, rev, onState: (save) => useUiStore.setState({ save }), onSaved: watch.saved });
+      autosave = startAutosave({ repo, id, rev, serverRev, onState: (save) => useUiStore.setState({ save }), onSaved: watch.saved });
+      if (disputed) autosave.conflict(disputed.server);
       setSession({ status: 'ready' });
     };
     open().catch((e: unknown) => {

@@ -1,15 +1,25 @@
 import { useState } from 'react';
 import { Alert, AlertActions, AlertButton, AlertDescription, AlertTitle } from '@dmacq/ui';
+import { DraftConflictDialog } from '@/components/builder/DraftConflictDialog';
 import { discardPending } from '@/persistence/autosave';
 import { useUiStore } from '@/state/uiStore';
 
 const CONFLICT = {
-  open_elsewhere: 'This form is also open in another tab. Saves from either tab replace the other’s.',
-  saved_elsewhere: 'This form was changed in another tab. Reload to see those changes; edits here replace them.',
+  open_elsewhere: 'This form is also open in another tab. If both change it, the later save asks which version to keep.',
+  saved_elsewhere: 'This form was changed in another tab. Reload to see those changes, or keep editing: your next save asks which version to keep.',
 } as const;
 
-/** Load and import notes (reader repairs and what the v2 migration changes), and the other-tab warning. */
+/** Load and import notes, the other-tab warning, and the merge dialog for a draft the server has moved on (WP-1.06). */
 export function SessionBanners() {
+  return (
+    <>
+      <Banners />
+      <DraftConflictDialog />
+    </>
+  );
+}
+
+function Banners() {
   const notes = useUiStore((s) => s.notes);
   const conflict = useUiStore((s) => s.conflict);
   const dismissNotes = useUiStore((s) => s.dismissNotes);

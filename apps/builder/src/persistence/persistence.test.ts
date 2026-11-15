@@ -1,19 +1,44 @@
 import 'fake-indexeddb/auto';
+import { createElement, useEffect } from 'react';
 import { createStore, set } from 'idb-keyval';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormDefinitionSchema, type IsoInstant } from '@form/schema';
 import { validateDefinition } from '@form/logic';
 import { REGISTRY } from '@form/registry';
 import { addBlock, setTitle, updateBlock } from '@/state/actions';
+import { currentDoc } from '@/state/documentStore';
 import { undo } from '@/state/history';
 import { updateOps } from '@/state/opsStore';
-import { DOCUMENT_FORMAT, LEGACY_FORMAT, type StoredForm } from '@/persistence/DocumentRepository';
+import { resetUi, useUiStore } from '@/state/uiStore';
+import { ApiUnreachable, useSessionStore, type Me } from '@/auth/client';
+import { DraftConflictDialog } from '@/components/builder/DraftConflictDialog';
+import { CachingApiRepository } from '@/persistence/CachingApiRepository';
+import { DOCUMENT_FORMAT, DraftConflict, LEGACY_FORMAT, type DocumentRepository, type StoredForm } from '@/persistence/DocumentRepository';
 import { IndexedDbRepository } from '@/persistence/IndexedDbRepository';
-import { AUTOSAVE_MS, discardPending, startAutosave } from '@/persistence/autosave';
+import { RepositoryProvider } from '@/persistence/RepositoryContext';
+import { API_SAVE_MS, AUTOSAVE_MS, discardPending, flushAutosave, startAutosave } from '@/persistence/autosave';
 import { importV1, newStoredForm, openStored } from '@/persistence/openForm';
+import { cacheDbName, useRepository } from '@/persistence/repository';
 import { watchTabs } from '@/persistence/tabChannel';
+import { useFormSession } from '@/persistence/useFormSession';
 import { inlineDoc } from '@/lib/definition';
 import { MemoryRepository, block, formWith, resetStore, v1Form } from '@/test/fixtures';
+
+const listRemoteForms = vi.fn();
+const getRemoteDraft = vi.fn();
+const putRemoteDraft = vi.fn();
+const createRemoteForm = vi.fn();
+const trashRemoteForm = vi.fn();
+
+vi.mock('@/persistence/draftsApi', () => ({
+  listRemoteForms: (...args: unknown[]) => listRemoteForms(...args),
+  getRemoteDraft: (...args: unknown[]) => getRemoteDraft(...args),
+  putRemoteDraft: (...args: unknown[]) => putRemoteDraft(...args),
+  createRemoteForm: (...args: unknown[]) => createRemoteForm(...args),
+  trashRemoteForm: (...args: unknown[]) => trashRemoteForm(...args),
+}));
 
 const NOW = '2026-10-19T04:30:00.000Z';
 let dbCount = 0;
@@ -212,5 +237,250 @@ describe('watchTabs', () => {
     a.close();
     b.close();
     c.close();
+  });
+});
+
+/* ---- With a server behind the cache (WP-1.06) ---- */
+
+const ORG = 'org-1';
+const THEIRS_AT = '2026-10-19T05:00:00.000Z';
+
+/** What a server draft of form `test` looks like in an answer: another title, so it differs from the one on screen. */
+const serverDraft = (draftRev: number, title = 'Theirs') => ({ draftRev, draft: { ...formWith([]), formId: 'test', title }, updatedAt: THEIRS_AT, updatedBy: 'u2' });
+
+function resetServer() {
+  listRemoteForms.mockReset().mockResolvedValue(null);
+  getRemoteDraft.mockReset().mockResolvedValue(null);
+  createRemoteForm.mockReset().mockResolvedValue(undefined);
+  trashRemoteForm.mockReset().mockResolvedValue(undefined);
+  putRemoteDraft.mockReset().mockImplementation((_org: string, _id: string, _doc: unknown, expected: number) => Promise.resolve({ draftRev: expected + 1, updatedAt: THEIRS_AT }));
+}
+
+describe('autosave with a server behind the cache', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetStore();
+    resetUi({ started: true });
+    resetServer();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('writes the cache within 400 ms and PUTs once after 2 s idle, with If-Match = the server revision', async () => {
+    const cache = new MemoryRepository();
+    const states: string[] = [];
+    const autosave = startAutosave({ repo: new CachingApiRepository(cache, ORG), id: 'test', rev: 0, serverRev: 4, now: () => NOW, onState: (s) => states.push(s.state) });
+    setTitle('A');
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS - 1);
+    expect(cache.records.size).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(cache.records.get('test')).toMatchObject({ doc: { title: 'A' }, serverRev: 4, dirty: true });
+    expect(putRemoteDraft).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS - AUTOSAVE_MS - 1);
+    expect(putRemoteDraft).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+    expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.objectContaining({ title: 'A' }), 4);
+    expect(cache.records.get('test')).toMatchObject({ serverRev: 5, dirty: false });
+    expect(states).toEqual(['saving', 'saved']);
+
+    // Typing on keeps pushing the API write back: one PUT for the burst, from the revision the last one returned.
+    setTitle('B');
+    await vi.advanceTimersByTimeAsync(1500);
+    setTitle('C');
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(2);
+    expect(putRemoteDraft).toHaveBeenLastCalledWith(ORG, 'test', expect.objectContaining({ title: 'C' }), 5);
+    await autosave.stop();
+  });
+
+  it('flush sends the change now and says which server revision holds the document', async () => {
+    const autosave = startAutosave({ repo: new CachingApiRepository(new MemoryRepository(), ORG), id: 'test', rev: 0, serverRev: 2, now: () => NOW });
+    setTitle('Publish me');
+    expect(await flushAutosave()).toEqual({ serverRev: 3 });
+    expect(putRemoteDraft).toHaveBeenCalledWith(ORG, 'test', expect.objectContaining({ title: 'Publish me' }), 2);
+    await autosave.stop();
+  });
+
+  it('keeps the change in this browser and says so when the server cannot be reached, then sends it on the next flush', async () => {
+    putRemoteDraft.mockRejectedValueOnce(new ApiUnreachable());
+    const cache = new MemoryRepository();
+    const states: string[] = [];
+    const autosave = startAutosave({ repo: new CachingApiRepository(cache, ORG), id: 'test', rev: 0, serverRev: 1, now: () => NOW, onState: (s) => states.push(s.state) });
+    setTitle('Offline edit');
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS);
+    expect(states.at(-1)).toBe('local');
+    expect(cache.records.get('test')).toMatchObject({ dirty: true, serverRev: 1, doc: { title: 'Offline edit' } });
+    expect(await flushAutosave()).toEqual({ serverRev: 2 });
+    expect(putRemoteDraft).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toBe('saved');
+    await autosave.stop();
+  });
+
+  it('sends an unreachable save again as soon as the browser is back online', async () => {
+    putRemoteDraft.mockRejectedValueOnce(new ApiUnreachable());
+    const autosave = startAutosave({ repo: new CachingApiRepository(new MemoryRepository(), ORG), id: 'test', rev: 0, serverRev: 1, now: () => NOW });
+    setTitle('x');
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(2);
+    await autosave.stop();
+  });
+
+  it('a refused save shows its reason and is sent again with the next change', async () => {
+    putRemoteDraft.mockRejectedValueOnce(new Error('The draft is not valid.'));
+    const states: unknown[] = [];
+    const autosave = startAutosave({ repo: new CachingApiRepository(new MemoryRepository(), ORG), id: 'test', rev: 0, serverRev: 1, now: () => NOW, onState: (s) => states.push(s) });
+    setTitle('x');
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS);
+    expect(states.at(-1)).toEqual({ state: 'error', message: 'The draft is not valid.' });
+    setTitle('xy');
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toMatchObject({ state: 'saved' });
+    await autosave.stop();
+  });
+
+  it('a 409 stops sending, keeps saving in this browser and raises the conflict; flush then reports nothing saved', async () => {
+    putRemoteDraft.mockRejectedValueOnce(new DraftConflict(serverDraft(7)));
+    const cache = new MemoryRepository();
+    const states: string[] = [];
+    const autosave = startAutosave({ repo: new CachingApiRepository(cache, ORG), id: 'test', rev: 0, serverRev: 3, now: () => NOW, onState: (s) => states.push(s.state) });
+    setTitle('Mine');
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS);
+    expect(states.at(-1)).toBe('conflict');
+    expect(useUiStore.getState().draftConflict?.server).toMatchObject({ draftRev: 7 });
+    setTitle('Mine, edited');
+    await vi.advanceTimersByTimeAsync(API_SAVE_MS * 3);
+    expect(putRemoteDraft).toHaveBeenCalledTimes(1);
+    expect(cache.records.get('test')).toMatchObject({ dirty: true, doc: { title: 'Mine, edited' } });
+    expect(await flushAutosave()).toEqual({ serverRev: null });
+    await autosave.stop();
+  });
+});
+
+describe('the merge dialog opens on a 409 (real timers)', () => {
+  beforeEach(() => {
+    resetStore();
+    resetUi({ started: true });
+    resetServer();
+  });
+
+  it('a 409 from an autosave opens DraftConflictDialog with what differs', async () => {
+    const theirs = { ...serverDraft(7, 'Theirs'), draft: { ...formWith([block('short_text', 'extra', { label: 'Their question' })]), formId: 'test', title: 'Theirs' } };
+    putRemoteDraft.mockRejectedValueOnce(new DraftConflict(theirs));
+    const repo = new CachingApiRepository(new MemoryRepository(), ORG);
+    render(createElement(MemoryRouter, null, createElement(RepositoryProvider, { repo, children: createElement(DraftConflictDialog) })));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const autosave = startAutosave({ repo, id: 'test', rev: 0, serverRev: 3, delayMs: 5, apiDelayMs: 10 });
+    setTitle('Mine');
+    expect(await screen.findByRole('dialog', { name: 'This form changed somewhere else' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Only in the saved version' })).toHaveTextContent('Their question');
+    discardPending();
+    await autosave.stop();
+  });
+});
+
+describe('useFormSession with a server behind the cache', () => {
+  beforeEach(() => {
+    resetStore();
+    resetUi();
+    resetServer();
+  });
+
+  const wrapper = (repo: DocumentRepository) => ({ children }: { children: React.ReactNode }) => createElement(RepositoryProvider, { repo, children });
+
+  it('opens a dirty cached copy that is behind the server with the merge dialog raised, and sends nothing', async () => {
+    const cache = new MemoryRepository();
+    await cache.save({ ...newStoredForm('test', NOW, { ...formWith([]), title: 'Mine' }), serverRev: 3, dirty: true });
+    getRemoteDraft.mockResolvedValue(serverDraft(5));
+    const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(currentDoc().title).toBe('Mine');
+    expect(useUiStore.getState().draftConflict?.server).toMatchObject({ draftRev: 5, draft: { title: 'Theirs' } });
+    expect(useUiStore.getState().save).toEqual({ state: 'conflict' });
+    expect(putRemoteDraft).not.toHaveBeenCalled();
+    discardPending();
+    unmount();
+  });
+
+  it('opens the server draft over a clean cache that is behind it', async () => {
+    const cache = new MemoryRepository();
+    await cache.save({ ...newStoredForm('test', NOW, { ...formWith([]), title: 'Old' }), serverRev: 3, dirty: false });
+    getRemoteDraft.mockResolvedValue(serverDraft(5, 'Newer'));
+    const { result, unmount } = renderHook(() => useFormSession('test'), { wrapper: wrapper(new CachingApiRepository(cache, ORG)) });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(currentDoc().title).toBe('Newer');
+    expect(useUiStore.getState().draftConflict).toBeNull();
+    unmount();
+  });
+});
+
+describe('org scoping (BL-231)', () => {
+  const me = (activeOrgId: string): Me => ({
+    user: { id: 'u1', email: 'asha@example.test', name: null, emailVerified: true, totpEnabled: false },
+    session: null,
+    orgs: [
+      { id: 'org-a', slug: 'a', name: 'A', role: 'owner' },
+      { id: 'org-b', slug: 'b', name: 'B', role: 'owner' },
+    ],
+    activeOrgId,
+  });
+
+  afterEach(() => {
+    useSessionStore.setState({ status: 'unknown' }, true);
+  });
+
+  /** Renders a provider with no repository of its own and returns the repository a page would get now. */
+  function mountProvider(): () => DocumentRepository {
+    const seen: DocumentRepository[] = [];
+    const Probe = () => {
+      const repo = useRepository();
+      useEffect(() => {
+        seen.push(repo);
+      });
+      return null;
+    };
+    render(createElement(RepositoryProvider, null, createElement(Probe)));
+    return () => {
+      const repo = seen.at(-1);
+      if (!repo) throw new Error('no repository');
+      return repo;
+    };
+  }
+
+  it("switching the active org rebuilds the repository, and the list shows only that org's forms", async () => {
+    useSessionStore.setState({ status: 'signed_in', me: me('org-a') }, true);
+    resetServer();
+    listRemoteForms.mockImplementation((org: string) => Promise.resolve({ items: [{ id: `${org}-remote`, title: `Remote of ${org}`, updatedAt: NOW }], complete: true }));
+    await new IndexedDbRepository(cacheDbName('org-a')).save(newStoredForm('org-a-local', NOW));
+
+    const current = mountProvider();
+    const first = current();
+    expect((await first.list()).map((f) => f.id).sort()).toEqual(['org-a-local', 'org-a-remote']);
+
+    act(() => useSessionStore.setState({ status: 'signed_in', me: me('org-b') }, true));
+    const second = current();
+    expect(second).not.toBe(first);
+    expect((await second.list()).map((f) => f.id)).toEqual(['org-b-remote']);
+    expect(listRemoteForms).toHaveBeenLastCalledWith('org-b');
+
+    act(() => useSessionStore.setState({ status: 'signed_in', me: me('org-a') }, true));
+    expect(current()).toBe(first);
+  });
+
+  it('with nobody signed in there is nothing to read and nothing can be saved', async () => {
+    useSessionStore.setState({ status: 'signed_out' }, true);
+    const none = mountProvider()();
+    expect(await none.list()).toEqual([]);
+    expect(await none.load('x')).toBeNull();
+    await expect(none.save(newStoredForm('x', NOW))).rejects.toThrow('Sign in');
   });
 });
