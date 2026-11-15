@@ -5,7 +5,15 @@
  */
 
 .fr-root {
-  --fr-focus: 0 0 0 3px color-mix(in srgb, var(--fr-accent) 35%, transparent);
+  /* The dmacq focus look for a field: a soft halo outside and a 1px accent line inside the border. */
+  --fr-focus: 0 0 0 3px color-mix(in srgb, var(--fr-accent) 22%, transparent), inset 0 0 0 1px var(--fr-accent);
+  --fr-focus-error: 0 0 0 3px color-mix(in srgb, var(--fr-error) 24%, transparent), inset 0 0 0 1px var(--fr-error);
+  /* A hovered field: one faint step off the field colour, so it never looks read-only while the border darkens. */
+  --fr-field-hover: color-mix(in srgb, var(--fr-text) 4%, var(--fr-inputBg));
+  --fr-border-hover: color-mix(in srgb, var(--fr-inputBorder) 70%, var(--fr-text));
+  --fr-disabled-bg: color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg));
+  --fr-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236c849d' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  --fr-chevron-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236c849d' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 10l4-4 4 4'/%3E%3C/svg%3E");
   /*
    * Narrow layouts follow the form's own width, not the viewport's, so a device frame or an embed gets them too (BL-139).
    * An inline-size container does not size from its content, so the root takes its host's width: a block or a flex
@@ -35,8 +43,10 @@
   box-sizing: inherit;
 }
 
-.fr-root[data-mode] :focus-visible:not(.fr-blank-input) {
-  outline: none;
+/* Keyboard focus is always visible on the form (WCAG 2.4.7). Fields draw their own halo instead (see .fr-input:focus). */
+.fr-root[data-mode] :focus-visible {
+  outline: 2px solid var(--fr-accent);
+  outline-offset: 2px;
 }
 
 :where(.fr-root) .fr-sr-only {
@@ -635,25 +645,6 @@
   font-weight: 800;
 }
 
-/* Block look colours are variables on the field. The design-system box otherwise keeps the theme tokens. */
-:where(.fr-root) .fr-field .ds-field {
-  background-color: var(--fr-input-bg, var(--field-bg));
-  border-color: var(--fr-input-border, var(--border-control));
-  color: var(--fr-input-color, var(--text-normal));
-}
-
-:where(.fr-root) .fr-field .ds-field-input::placeholder,
-:where(.fr-root) .fr-field textarea.ds-field::placeholder,
-:where(.fr-root) .fr-field input.ds-field::placeholder {
-  color: var(--fr-placeholder, var(--text-muted));
-  opacity: 1;
-}
-
-:where(.fr-root) .fr-field [data-slot='input-prefix'],
-:where(.fr-root) .fr-field [data-slot='input-suffix'] {
-  color: var(--fr-input-color, currentColor);
-}
-
 :where(.fr-root) .fr-description {
   margin: -2px 0 8px;
   color: var(--fr-muted);
@@ -688,11 +679,13 @@
   padding: 8px 12px;
   border: 1px solid var(--fr-input-border, var(--fr-inputBorder));
   border-radius: var(--fr-radius);
-  background: var(--fr-input-bg, var(--fr-inputBg));
+  background-color: var(--fr-input-bg, var(--fr-inputBg));
   color: var(--fr-input-color, var(--fr-inputText));
   font: inherit;
   font-size: var(--fr-input-size, 1em);
+  line-height: 1.4;
   text-align: var(--fr-align, start);
+  transition: border-color 100ms ease, box-shadow 100ms ease, background-color 100ms ease;
 }
 
 :where(.fr-root) .fr-input::placeholder {
@@ -700,16 +693,28 @@
   opacity: 1;
 }
 
+:where(.fr-root) .fr-input:hover:not(:focus, :disabled, [readonly]) {
+  border-color: var(--fr-input-border, var(--fr-border-hover));
+  background-color: var(--fr-input-bg, var(--fr-field-hover));
+}
+
+/* A field is its own focus indicator: accent border and halo. The transparent outline is the forced-colors fallback (shadows vanish there). */
 :where(.fr-root) .fr-input:focus {
   border-color: var(--fr-accent);
   box-shadow: var(--fr-focus);
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
 }
 
 :where(.fr-root) .fr-input:disabled,
 :where(.fr-root) .fr-input[readonly],
 :where(.fr-root) .fr-computed {
-  background: color-mix(in srgb, var(--fr-text) 5%, var(--fr-inputBg));
+  background-color: var(--fr-disabled-bg);
+}
+
+:where(.fr-root) .fr-input:disabled {
+  color: var(--fr-muted);
+  cursor: not-allowed;
 }
 
 :where(.fr-root) .fr-computed {
@@ -748,34 +753,163 @@
   color: var(--fr-muted);
 }
 
-:where(.fr-root) .fr-range-input {
-  width: 100%;
-  min-height: 42px;
-  accent-color: var(--fr-accent);
+:where(.fr-root) .fr-slider-value {
+  min-width: 2.5ch;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
 }
 
-:where(.fr-root) .fr-field[data-invalid] .fr-input {
+/* The slider: a rounded track, filled up to the thumb (`--fr-fill`, set by the control), and a round thumb with an accent edge. */
+:where(.fr-root) .fr-range-input {
+  --fr-track: color-mix(in srgb, var(--fr-text) 18%, transparent);
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:where(.fr-root) .fr-range-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:where(.fr-root) .fr-range-input::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--fr-accent) var(--fr-fill, 0%), var(--fr-track) var(--fr-fill, 0%));
+}
+
+:where(.fr-root) .fr-range-input::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fr-track);
+}
+
+:where(.fr-root) .fr-range-input::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fr-accent);
+}
+
+:where(.fr-root) .fr-range-input::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: 2px solid var(--fr-accent);
+  border-radius: 50%;
+  background: var(--fr-inputBg);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 20%, transparent);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:where(.fr-root) .fr-range-input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--fr-accent);
+  border-radius: 50%;
+  background: var(--fr-inputBg);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 20%, transparent);
+}
+
+:where(.fr-root) .fr-range-input:hover:not(:disabled)::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fr-accent) 18%, transparent);
+}
+
+:where(.fr-root) .fr-range-input:hover:not(:disabled)::-moz-range-thumb {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fr-accent) 18%, transparent);
+}
+
+.fr-root[dir='rtl'] .fr-range-input::-webkit-slider-runnable-track {
+  background: linear-gradient(to left, var(--fr-accent) var(--fr-fill, 0%), var(--fr-track) var(--fr-fill, 0%));
+}
+
+:where(.fr-root) .fr-field[data-invalid] .fr-input,
+:where(.fr-root) .fr-input[aria-invalid='true'] {
   border-color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-field[data-invalid] .fr-input:focus {
+  box-shadow: var(--fr-focus-error);
 }
 
 .fr-root[data-input-style='filled'] .fr-input {
   border-color: transparent;
-  background: var(--fr-input-bg, color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg)));
+  background-color: var(--fr-input-bg, color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg)));
+}
+
+.fr-root[data-input-style='filled'] .fr-field[data-invalid] .fr-input {
+  border-color: var(--fr-error);
 }
 
 .fr-root[data-input-style='underlined'] .fr-input {
   border-width: 0 0 1px;
   border-radius: 0;
   padding-inline: 0;
-  background: transparent;
+  background-color: transparent;
 }
 
 :where(.fr-root) .fr-textarea {
   resize: vertical;
 }
 
+/* A dropdown is the platform's <select> (and the multi-select's toggle button) with the chevron drawn as a background. */
 :where(.fr-root) .fr-select {
-  appearance: auto;
+  padding-inline-end: 40px;
+  background-image: var(--fr-chevron);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fr-root[dir='rtl'] .fr-select {
+  background-position: left 12px center;
+}
+
+:where(.fr-root) .fr-select[aria-expanded='true'] {
+  background-image: var(--fr-chevron-up);
+}
+
+:where(.fr-root) .fr-select:disabled {
+  cursor: not-allowed;
+}
+
+:where(.fr-root) .fr-search {
+  margin-bottom: 8px;
+}
+
+:where(.fr-root) .fr-choices > .fr-search {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+/* The browser's own date and time pickers: same height and edge as every other field, calendar and clock icons kept. */
+:where(.fr-root) .fr-date,
+:where(.fr-root) .fr-time {
+  min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:where(.fr-root) .fr-date::-webkit-calendar-picker-indicator,
+:where(.fr-root) .fr-time::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+:where(.fr-root) .fr-date::-webkit-calendar-picker-indicator:hover,
+:where(.fr-root) .fr-time::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 :where(.fr-root) .fr-name {
@@ -996,6 +1130,7 @@
 }
 
 :where(.fr-root) .fr-image-choice {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1003,6 +1138,17 @@
   border: 1px solid var(--fr-inputBorder);
   border-radius: var(--fr-radius);
   cursor: pointer;
+  transition: border-color 100ms ease, box-shadow 100ms ease;
+}
+
+:where(.fr-root) .fr-image-choice:hover {
+  border-color: var(--fr-border-hover);
+}
+
+/* The radio or checkbox inside a tile is invisible, so the tile shows the keyboard focus. */
+:where(.fr-root) .fr-image-choice:has(input:focus-visible) {
+  outline: 2px solid var(--fr-accent);
+  outline-offset: 2px;
 }
 
 :where(.fr-root) .fr-image-choice[data-selected='true'] {
@@ -1010,8 +1156,6 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--fr-accent) 35%, transparent);
 }
 
-:where(.fr-root) .fr-image-choice [role='radio'],
-:where(.fr-root) .fr-image-choice [role='checkbox'],
 :where(.fr-root) .fr-image-choice input {
   position: absolute;
   opacity: 0;
@@ -1027,7 +1171,6 @@
   background: color-mix(in srgb, var(--fr-muted) 18%, var(--fr-inputBg));
 }
 
-:where(.fr-root) .fr-affix,
 :where(.fr-root) .fr-phone,
 :where(.fr-root) .fr-range {
   display: flex;
@@ -1035,7 +1178,72 @@
   align-items: center;
 }
 
+/* A prefix or suffix sits inside the field's border, with the input flush against it. The box takes the hover and focus look. */
+:where(.fr-root) .fr-affix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding-inline: 12px;
+  border: 1px solid var(--fr-input-border, var(--fr-inputBorder));
+  border-radius: var(--fr-radius);
+  background-color: var(--fr-input-bg, var(--fr-inputBg));
+  color: var(--fr-input-color, var(--fr-inputText));
+  transition: border-color 100ms ease, box-shadow 100ms ease, background-color 100ms ease;
+}
+
+:where(.fr-root) .fr-affix:hover:not(:focus-within) {
+  border-color: var(--fr-input-border, var(--fr-border-hover));
+  background-color: var(--fr-input-bg, var(--fr-field-hover));
+}
+
+:where(.fr-root) .fr-affix:focus-within {
+  border-color: var(--fr-accent);
+  box-shadow: var(--fr-focus);
+}
+
+:where(.fr-root) .fr-field[data-invalid] .fr-affix {
+  border-color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-field[data-invalid] .fr-affix:focus-within {
+  box-shadow: var(--fr-focus-error);
+}
+
+.fr-root[data-input-style='filled'] .fr-affix {
+  border-color: transparent;
+  background-color: var(--fr-input-bg, color-mix(in srgb, var(--fr-text) 6%, var(--fr-inputBg)));
+}
+
+.fr-root[data-input-style='filled'] .fr-field[data-invalid] .fr-affix {
+  border-color: var(--fr-error);
+}
+
+.fr-root[data-input-style='underlined'] .fr-affix {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding-inline: 0;
+  background-color: transparent;
+}
+
 :where(.fr-root) .fr-affix > .fr-input,
+.fr-root[data-input-style] .fr-affix > .fr-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+:where(.fr-root) .fr-affix > .fr-input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
 :where(.fr-root) .fr-phone > :not(.fr-phone-country) {
   flex: 1;
   min-width: 0;
@@ -1045,12 +1253,6 @@
   flex: 0 0 7rem;
   width: 7rem;
   max-width: 7rem;
-  min-width: 0;
-}
-
-:where(.fr-root) .fr-phone-country .ds-field,
-:where(.fr-root) .fr-phone-country button {
-  width: 100%;
   min-width: 0;
 }
 
@@ -1094,11 +1296,95 @@
 }
 
 :where(.fr-root) .fr-choice input {
-  width: 18px;
-  height: 18px;
-  margin: 3px 0 0;
-  accent-color: var(--fr-accent);
+  margin-top: 2px;
+}
+
+/*
+ * Radios and checkboxes are the platform's inputs with the native drawing switched off and redrawn from the theme: a
+ * 20px box, a 1.5px edge, the accent as the checked fill and the theme's accent text colour for the tick or dot. They
+ * stay real inputs, so the keyboard, the label, the screen reader and form semantics all work unchanged.
+ */
+:where(.fr-root) input:is([type='checkbox'], [type='radio']) {
+  display: inline-grid;
   flex: none;
+  place-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 1.5px solid var(--fr-input-border, var(--fr-inputBorder));
+  border-radius: 4px;
+  background-color: var(--fr-inputBg);
+  color: var(--fr-accentText);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: border-color 100ms ease, background-color 100ms ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:where(.fr-root) input[type='radio'] {
+  border-radius: 50%;
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio'])::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  transform: scale(0);
+  transition: transform 100ms ease;
+}
+
+:where(.fr-root) input[type='checkbox']::before {
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+:where(.fr-root) input[type='radio']::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio']):checked {
+  border-color: var(--fr-accent);
+  background-color: var(--fr-accent);
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio']):checked::before {
+  transform: scale(1);
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio']):hover:not(:checked, :disabled) {
+  border-color: var(--fr-border-hover);
+  background-color: var(--fr-field-hover);
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio'])[aria-invalid='true'] {
+  border-color: var(--fr-error);
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio'])[aria-invalid='true']:checked {
+  background-color: var(--fr-error);
+}
+
+:where(.fr-root) input:is([type='checkbox'], [type='radio']):disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Forced colours drop backgrounds, so the checked state is drawn with system colours. */
+@media (forced-colors: active) {
+  :where(.fr-root) input:is([type='checkbox'], [type='radio']) {
+    forced-color-adjust: none;
+    border-color: ButtonText;
+    background-color: Canvas;
+    color: HighlightText;
+  }
+
+  :where(.fr-root) input:is([type='checkbox'], [type='radio']):checked {
+    border-color: Highlight;
+    background-color: Highlight;
+  }
 }
 
 :where(.fr-root) .fr-other {
@@ -1288,9 +1574,16 @@
 :where(.fr-root) .fr-sum-row,
 :where(.fr-root) .fr-cardsort-row {
   display: grid;
-  grid-template-columns: 1fr 7rem;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 14rem);
   gap: 0.5rem;
   align-items: center;
+}
+
+@container fr (max-width: 479px) {
+  :where(.fr-root) .fr-sum-row,
+  :where(.fr-root) .fr-cardsort-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 :where(.fr-root) .fr-sum-total {
@@ -1418,10 +1711,18 @@
 }
 
 :where(.fr-root) .fr-rank-position {
-  min-width: 1.5em;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75em;
+  height: 1.75em;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fr-text) 8%, transparent);
   color: var(--fr-muted);
   font-size: 0.8125em;
-  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 :where(.fr-root) .fr-rank-label {
@@ -1431,20 +1732,27 @@
 
 :where(.fr-root) .fr-rank-move {
   display: inline-flex;
+  flex: none;
   width: 32px;
   height: 32px;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid var(--fr-inputBorder);
   border-radius: var(--fr-radius);
-  background: transparent;
+  background: var(--fr-inputBg);
   color: inherit;
   cursor: pointer;
+  transition: background-color 100ms ease, border-color 100ms ease;
+}
+
+:where(.fr-root) .fr-rank-move:hover:not(:disabled) {
+  border-color: var(--fr-border-hover);
+  background: var(--fr-field-hover);
 }
 
 :where(.fr-root) .fr-rank-move:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 :where(.fr-root) .fr-rank-move svg,
@@ -1458,29 +1766,216 @@
   stroke-linejoin: round;
 }
 
-:where(.fr-root) .fr-file-input {
-  max-width: 100%;
-  font: inherit;
+:where(.fr-root) .fr-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/*
+ * The file drop zone is a label-less box around the real <input type="file">, which is stretched over the whole box
+ * and made invisible. A click, a press of Enter or Space on the focused input, and a file dropped on the box are all
+ * handled by the browser itself, so the zone needs no scripts to work and stays reachable by keyboard and screen reader.
+ */
+:where(.fr-root) .fr-dropzone {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px dashed var(--fr-input-border, var(--fr-inputBorder));
+  border-radius: var(--fr-radius);
+  background-color: color-mix(in srgb, var(--fr-text) 3%, var(--fr-inputBg));
+  color: var(--fr-input-color, var(--fr-inputText));
+  transition: border-color 100ms ease, background-color 100ms ease, box-shadow 100ms ease;
+}
+
+:where(.fr-root) .fr-dropzone:hover:not([data-disabled]) {
+  background-color: var(--fr-field-hover);
+  border-color: var(--fr-border-hover);
+}
+
+:where(.fr-root) .fr-dropzone:has(.fr-dropzone-input:focus-visible) {
+  border-color: var(--fr-accent);
+  box-shadow: var(--fr-focus);
+}
+
+:where(.fr-root) .fr-dropzone[data-dragging] {
+  border-color: var(--fr-accent);
+  background-color: color-mix(in srgb, var(--fr-accent) 10%, var(--fr-inputBg));
+}
+
+:where(.fr-root) .fr-dropzone[data-invalid] {
+  border-color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-dropzone[data-disabled] {
+  background-color: var(--fr-disabled-bg);
+  color: var(--fr-muted);
+  cursor: not-allowed;
+}
+
+:where(.fr-root) .fr-dropzone-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  /* The "Choose file" button inside a file input is its own widget; keep it from sizing the zone. */
+  font-size: 0;
+}
+
+:where(.fr-root) .fr-dropzone-input:disabled {
+  cursor: not-allowed;
+}
+
+:where(.fr-root) .fr-dropzone-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fr-text) 8%, transparent);
+  color: var(--fr-muted);
+}
+
+:where(.fr-root) .fr-dropzone[data-dragging] .fr-dropzone-icon {
+  background: color-mix(in srgb, var(--fr-accent) 18%, transparent);
+  color: var(--fr-accent);
+}
+
+:where(.fr-root) .fr-dropzone-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:where(.fr-root) .fr-dropzone-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+:where(.fr-root) .fr-dropzone-title {
+  font-weight: 500;
+}
+
+/* A touch screen has nothing to drag from, so it says what a tap does instead. */
+:where(.fr-root) .fr-dropzone-tap {
+  display: none;
+}
+
+@media (hover: none) {
+  :where(.fr-root) .fr-dropzone-drop {
+    display: none;
+  }
+
+  :where(.fr-root) .fr-dropzone-tap {
+    display: inline;
+  }
+}
+
+:where(.fr-root) .fr-dropzone-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  color: var(--fr-muted);
+  font-size: 0.8125em;
+}
+
+:where(.fr-root) .fr-dropzone-hint > span + span::before {
+  content: '·';
+  margin-inline-end: 8px;
+}
+
+:where(.fr-root) .fr-dropzone-browse {
+  flex: none;
+  padding: 4px 12px;
+  border: 1px solid var(--fr-input-border, var(--fr-inputBorder));
+  border-radius: var(--fr-radius);
+  background: var(--fr-inputBg);
+  font-size: 0.875em;
+  font-weight: 600;
+}
+
+:where(.fr-root) .fr-dropzone[data-disabled] .fr-dropzone-browse {
+  opacity: 0.5;
 }
 
 :where(.fr-root) .fr-file-list {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 8px 0 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* One file: a pill with its name and a remove button, in the form's own colours. */
 :where(.fr-root) .fr-file {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 2px 4px 2px 12px;
+  border: 1px solid var(--fr-input-border, var(--fr-inputBorder));
+  border-radius: 999px;
+  background: var(--fr-inputBg);
   font-size: 0.875em;
 }
 
+:where(.fr-root) .fr-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 :where(.fr-root) .fr-file[data-error] {
+  border-color: var(--fr-error);
+  background: color-mix(in srgb, var(--fr-error) 8%, var(--fr-inputBg));
   color: var(--fr-error);
+}
+
+:where(.fr-root) .fr-file-remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-file-remove:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+:where(.fr-root) .fr-file-remove svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 :where(.fr-root) .fr-signature {
@@ -1655,6 +2150,7 @@
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+  transition: background-color 100ms ease, border-color 100ms ease, filter 100ms ease;
 }
 
 :where(.fr-root) .fr-button:disabled,
@@ -1666,6 +2162,20 @@
 :where(.fr-root) .fr-primary {
   background: var(--fr-accent);
   color: var(--fr-accentText);
+}
+
+/* The next step of the same colour: a fixed darkening, so it reads on any accent (a block's own submit colour is inline and wins). */
+:where(.fr-root) .fr-primary:hover:not(:disabled, [aria-disabled='true']) {
+  background: color-mix(in srgb, var(--fr-accent) 86%, #000);
+}
+
+:where(.fr-root) .fr-primary:active:not(:disabled, [aria-disabled='true']) {
+  background: color-mix(in srgb, var(--fr-accent) 76%, #000);
+}
+
+/* A "full width" submit button; the class name is the contract with submitButtonPresentation, not a utility framework. */
+:where(.fr-root) .fr-primary.w-full {
+  width: 100%;
 }
 
 :where(.fr-root) .fr-primary[data-submit-shape='rounded'] {
@@ -1694,6 +2204,11 @@
   border-color: var(--fr-inputBorder);
   background: var(--fr-surface);
   color: var(--fr-text);
+}
+
+:where(.fr-root) .fr-secondary:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--fr-border-hover);
+  background: color-mix(in srgb, var(--fr-text) 5%, var(--fr-surface));
 }
 
 :where(.fr-root) .fr-screen {
