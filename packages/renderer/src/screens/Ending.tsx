@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { Button } from '@dmacq/ui';
 import { isSafeUrl, type Ending, type PlainTemplate, type RichDoc } from '@form/schema';
 import { Confetti } from '../Confetti.tsx';
 import { useRenderer } from '../context.ts';
@@ -51,9 +50,9 @@ export function EndingScreen({
         ? ending.actions.map((action, i) => {
             if (action.kind === 'fill_again') {
               return (
-                <Button key={i} type="button" variant="outline" onClick={onRestart}>
+                <button key={i} type="button" className="fr-button fr-secondary" onClick={onRestart}>
                   {action.label?.trim() || t(MESSAGES['ending.fill_again'])}
-                </Button>
+                </button>
               );
             }
             if (action.kind === 'visit_url') {

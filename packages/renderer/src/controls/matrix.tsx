@@ -1,6 +1,4 @@
 import type { MatrixColumnId, MatrixRowId, MatrixValue } from '@form/schema';
-import { RadioGroup } from '@dmacq/ui';
-import { DsCheckCell, DsRadioCell } from './ds.tsx';
 import { useAnswer, usePipes, type ControlProps } from './hooks.ts';
 
 /**
@@ -59,76 +57,64 @@ export function Matrix({ block, field }: ControlProps<'matrix'>) {
         <tbody>
           {c.rows.map((row, ri) => {
             const rowLabel = typeof row.label === 'string' ? row.label : text(row.label);
-            const cells = c.columns.map((col, ci) => {
-              const inputId = ri === 0 && ci === 0 ? field.ids.input : undefined;
-              const cellName = `${rowLabel} ${col.label}`.trim();
-              if (mode === 'single') {
-                const checked = value?.mode === 'single' && value.rows[row.id] === col.id;
-                return (
-                  <td key={col.id}>
-                    <DsRadioCell
-                      id={inputId}
-                      value={col.id}
-                      checked={checked}
-                      disabled={locked}
-                      grouped
-                      aria-label={cellName}
-                      onSelect={() => setSingle(row.id, col.id)}
-                      onBlur={answer.onBlur}
-                    />
-                  </td>
-                );
-              }
-              if (mode === 'multi') {
-                const checked = value?.mode === 'multi' && (value.rows[row.id] ?? []).includes(col.id);
-                return (
-                  <td key={col.id}>
-                    <DsCheckCell
-                      id={inputId}
-                      checked={checked}
-                      disabled={locked}
-                      aria-label={cellName}
-                      onChange={(on) => setMulti(row.id, col.id, on)}
-                      onBlur={answer.onBlur}
-                    />
-                  </td>
-                );
-              }
-              const cell = value?.mode === 'grid' ? String(value.rows[row.id]?.[col.id] ?? '') : '';
-              return (
-                <td key={col.id}>
-                  <input
-                    id={inputId}
-                    className="fr-input"
-                    type={col.input === 'number' ? 'text' : 'text'}
-                    inputMode={col.input === 'number' ? 'decimal' : undefined}
-                    aria-label={cellName}
-                    value={cell}
-                    disabled={field.disabled}
-                    readOnly={field.readOnly || undefined}
-                    onChange={(e) => setGrid(row.id, col.id, e.target.value)}
-                    onBlur={answer.onBlur}
-                  />
-                </td>
-              );
-            });
-            const selected = value?.mode === 'single' ? (value.rows[row.id] ?? '') : '';
             return (
               <tr key={row.id}>
                 <th scope="row">{rowLabel}</th>
-                {mode === 'single' ? (
-                  <RadioGroup
-                    className="contents"
-                    value={selected}
-                    disabled={locked}
-                    aria-label={rowLabel}
-                    onValueChange={(colId) => setSingle(row.id, colId as MatrixColumnId)}
-                  >
-                    {cells}
-                  </RadioGroup>
-                ) : (
-                  cells
-                )}
+                {c.columns.map((col, ci) => {
+                  const inputId = ri === 0 && ci === 0 ? field.ids.input : undefined;
+                  const cellName = `${rowLabel} ${col.label}`.trim();
+                  if (mode === 'single') {
+                    const checked = value?.mode === 'single' && value.rows[row.id] === col.id;
+                    return (
+                      <td key={col.id}>
+                        <input
+                          id={inputId}
+                          type="radio"
+                          name={`${field.ids.base}-${row.id}`}
+                          value={col.id}
+                          aria-label={cellName}
+                          checked={checked}
+                          disabled={locked}
+                          onChange={() => setSingle(row.id, col.id)}
+                          onBlur={answer.onBlur}
+                        />
+                      </td>
+                    );
+                  }
+                  if (mode === 'multi') {
+                    const checked = value?.mode === 'multi' && (value.rows[row.id] ?? []).includes(col.id);
+                    return (
+                      <td key={col.id}>
+                        <input
+                          id={inputId}
+                          type="checkbox"
+                          aria-label={cellName}
+                          checked={checked}
+                          disabled={locked}
+                          onChange={(e) => setMulti(row.id, col.id, e.target.checked)}
+                          onBlur={answer.onBlur}
+                        />
+                      </td>
+                    );
+                  }
+                  const cell = value?.mode === 'grid' ? String(value.rows[row.id]?.[col.id] ?? '') : '';
+                  return (
+                    <td key={col.id}>
+                      <input
+                        id={inputId}
+                        className="fr-input"
+                        type="text"
+                        inputMode={col.input === 'number' ? 'decimal' : undefined}
+                        aria-label={cellName}
+                        value={cell}
+                        disabled={field.disabled}
+                        readOnly={field.readOnly || undefined}
+                        onChange={(e) => setGrid(row.id, col.id, e.target.value)}
+                        onBlur={answer.onBlur}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

@@ -1,7 +1,6 @@
 import type { IsoTime, Weekday } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsCheckCell } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 const DAYS = ['schedule.sun', 'schedule.mon', 'schedule.tue', 'schedule.wed', 'schedule.thu', 'schedule.fri', 'schedule.sat'] as const;
@@ -38,14 +37,14 @@ export function ScheduleGridField({ block, field }: ControlProps<'schedule_grid'
                 const name = `${t(MESSAGES[DAYS[day]!])} ${slot}`;
                 return (
                   <td key={day}>
-                    <DsCheckCell
+                    <input
                       id={ri === 0 && ci === 0 ? field.ids.input : undefined}
-                      checked={has(day, slot)}
-                      disabled={attrs.disabled}
-                      aria-invalid={attrs['aria-invalid']}
+                      type="checkbox"
                       aria-label={name}
-                      onChange={(on) => toggle(day, slot, on)}
+                      checked={has(day, slot)}
+                      onChange={(e) => toggle(day, slot, e.target.checked)}
                       onBlur={answer.onBlur}
+                      {...attrs}
                     />
                   </td>
                 );

@@ -1,8 +1,8 @@
 import type { MatchingPromptId, OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsSelect } from './ds.tsx';
 import { inputAttrs, useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
+import { NativeSelect } from './native.tsx';
 
 /** Pair each prompt with one option; exclusive rows hide already chosen options. */
 export function MatchingField({ block, field }: ControlProps<'matching'>) {
@@ -29,7 +29,7 @@ export function MatchingField({ block, field }: ControlProps<'matching'>) {
         return (
           <div key={prompt.id} className="fr-matching-row">
             <label className="fr-label" htmlFor={i === 0 ? field.ids.input : `${field.ids.base}-${prompt.id}`}>{prompt.label}</label>
-            <DsSelect
+            <NativeSelect
               id={i === 0 ? field.ids.input : `${field.ids.base}-${prompt.id}`}
               value={chosen}
               onChange={(value) => setPair(prompt.id, value as OptionId | '')}

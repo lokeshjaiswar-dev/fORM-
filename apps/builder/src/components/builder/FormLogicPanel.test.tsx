@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Condition, OptionId } from '@form/schema';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
@@ -44,8 +44,7 @@ describe('Form settings Logic', () => {
     await user.click(screen.getByRole('button', { name: 'Add a check' }));
     panel.unmount();
     render(<FormPreview />);
-    await user.click(screen.getByRole('combobox', { name: /State/ }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Maharashtra' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: /State/ }), 'Maharashtra');
     const gstin = screen.getByRole('textbox', { name: /GSTIN/ });
     await user.type(gstin, '29AAAAA0000A1Z5');
     await user.click(screen.getByRole('button', { name: 'Submit' }));

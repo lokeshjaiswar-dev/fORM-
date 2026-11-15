@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { CheckboxField } from '@dmacq/ui';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import type { ControlProps } from './hooks.ts';
@@ -11,7 +10,10 @@ export function Captcha({ block }: ControlProps<'captcha'>) {
   const id = `fr-captcha-${block.id}`;
   return (
     <div className="fr-captcha">
-      <CheckboxField id={id} className="fr-captcha-box" checked={ok} onCheckedChange={(on) => setOk(on === true)} label={t(MESSAGES['captcha.not_robot'])} />
+      <label className="fr-captcha-box" htmlFor={id}>
+        <input id={id} type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} />
+        <span>{t(MESSAGES['captcha.not_robot'])}</span>
+      </label>
     </div>
   );
 }

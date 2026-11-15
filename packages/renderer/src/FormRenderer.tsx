@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
-import { Button } from '@dmacq/ui';
 import { FormProvider, useForm, type FieldValues } from 'react-hook-form';
 import { EN_IN, createI18n, type I18n } from '@form/i18n';
 import { isAvailable } from '@form/registry';
@@ -171,15 +170,15 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
       ) : null}
       <div className="fr-nav" data-align={isLast ? def.behavior.submit.align : 'left'}>
         {canGoBack && page?.nav?.showBack !== false ? (
-          <Button type="button" variant="outline" onClick={onBack} disabled={sending}>
+          <button type="button" className="fr-button fr-secondary" onClick={onBack} disabled={sending}>
             {text(page?.nav?.backLabel) || t('system:nav.back')}
-          </Button>
+          </button>
         ) : null}
         {page?.nav?.showNext === false && !isLast ? null : isLast ? (
           (() => {
             const present = submitButtonPresentation(def.behavior.submit, def.behavior.submit.align === 'full');
             return (
-              <Button
+              <button
                 type="submit"
                 disabled={sending}
                 aria-disabled={busy || undefined}
@@ -190,13 +189,13 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
                 data-submit-shape={present['data-submit-shape']}
               >
                 {sending ? t(MESSAGES['submit.sending']) : nextLabel}
-              </Button>
+              </button>
             );
           })()
         ) : (
-          <Button type="submit" disabled={sending} aria-disabled={busy || undefined} aria-busy={busy || undefined} className="fr-button fr-primary">
+          <button type="submit" className="fr-button fr-primary" disabled={sending} aria-disabled={busy || undefined} aria-busy={busy || undefined}>
             {sending ? t(MESSAGES['submit.sending']) : nextLabel}
-          </Button>
+          </button>
         )}
       </div>
       </div>
@@ -455,15 +454,16 @@ function FormSession({ props, meta, base, onRestart }: {
       <div className="fr-screen fr-welcome">
         <CoverArt />
         <div className="fr-rich"><RichTextView doc={def.welcome.content} /></div>
-        <Button
+        <button
           type="button"
+          className="fr-button fr-primary"
           onClick={() => {
             setWelcomed(true);
             emit({ type: 'start' });
           }}
         >
           {def.welcome.startLabel?.trim() || base.t('system:nav.start')}
-        </Button>
+        </button>
       </div>
     );
   } else {

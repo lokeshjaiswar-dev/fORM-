@@ -1,26 +1,27 @@
-import { DatePicker } from '@dmacq/ui';
 import type { DateBound, IsoDate } from '@form/schema';
-import { pickerAttrs, useAnswer, type ControlProps } from './hooks.ts';
+import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 const absolute = (bound: DateBound | undefined): IsoDate | undefined => (bound?.kind === 'absolute' ? bound.date : undefined);
 
 /**
- * FLD-16/17: dmacq-ui date field (typed DD/MM/YYYY plus calendar). Only absolute bounds become min/max hints.
+ * FLD-16/17 with the browser's date input: the value is always ISO, and the browser shows it in the respondent's
+ * locale, with its own calendar, in its own language. Only absolute bounds become min/max hints; validation checks
+ * every bound.
  */
 export function DateInput({ block, field }: ControlProps<'date'>) {
   const answer = useAnswer(block);
   const limits = block.config.limits;
-  const min = absolute(limits?.min);
-  const max = absolute(limits?.max);
   return (
-    <DatePicker
+    <input
       id={field.ids.input}
+      className="fr-input fr-date"
+      type="date"
+      min={absolute(limits?.min)}
+      max={absolute(limits?.max)}
       value={answer.value ?? ''}
-      onValueChange={(value) => answer.set(value ? (value as IsoDate) : undefined)}
+      onChange={(e) => answer.set(e.target.value ? (e.target.value as IsoDate) : undefined)}
       onBlur={answer.onBlur}
-      {...(min ? { min } : {})}
-      {...(max ? { max } : {})}
-      {...pickerAttrs(field)}
+      {...inputAttrs(field)}
     />
   );
 }

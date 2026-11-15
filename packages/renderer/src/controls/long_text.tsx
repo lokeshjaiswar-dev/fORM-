@@ -2,7 +2,6 @@ import { graphemeLength } from '@form/i18n';
 import { wordCount } from '@form/registry';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsTextarea } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 export function LongText({ block, field }: ControlProps<'long_text'>) {
@@ -22,8 +21,9 @@ export function LongText({ block, field }: ControlProps<'long_text'>) {
   const describedBy = [field.ids.describedBy, counter === null ? undefined : counterId].filter(Boolean).join(' ') || undefined;
   return (
     <>
-      <DsTextarea
+      <textarea
         id={field.ids.input}
+        className="fr-input fr-textarea"
         rows={c.rows ?? 4}
         value={text}
         placeholder={c.placeholder}

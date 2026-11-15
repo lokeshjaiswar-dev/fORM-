@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Chip } from '@dmacq/ui';
 import { slotsOf } from './appointmentSlots.ts';
 import type { IsoDate, IsoInstant, TimeZone } from '@form/schema';
 import { useRenderer } from '../context.ts';
@@ -79,20 +78,19 @@ export function AppointmentField({ block, field }: ControlProps<'appointment'>) 
       </label>
       <div className="fr-appointment-slots" role="list">
         {shown.map((slot) => (
-          <Chip
+          <button
             key={slot.start}
-            kind="filter"
-            size="md"
-            color="primary"
-            selected={selected.some((pick) => pick.start === slot.start)}
+            type="button"
             role="listitem"
+            className="fr-appointment-slot"
+            aria-pressed={selected.some((pick) => pick.start === slot.start)}
             aria-label={`${i18n.formatTime(slot.time, 'h12')} ${i18n.formatDate(slot.day, 'D MMM YYYY')}`}
             disabled={attrs.disabled || attrs.readOnly}
             onClick={() => pick(slot.start, slot.end)}
             onBlur={answer.onBlur}
           >
             {i18n.formatTime(slot.time, 'h12')}
-          </Chip>
+          </button>
         ))}
       </div>
     </div>

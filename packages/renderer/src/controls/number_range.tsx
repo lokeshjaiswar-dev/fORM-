@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { DecimalString } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 import { sanitizeDecimal } from './sanitize.ts';
 
@@ -33,8 +32,9 @@ export function NumberRangeField({ block, field }: ControlProps<'number_range'>)
   return (
     <div className="fr-number-range">
       <label className="fr-label" htmlFor={field.ids.input}>{t(MESSAGES['number_range.from'])}</label>
-      <DsText
+      <input
         id={field.ids.input}
+        className="fr-input"
         type="text"
         inputMode={block.config.integerOnly ? 'numeric' : 'decimal'}
         value={from}
@@ -43,8 +43,9 @@ export function NumberRangeField({ block, field }: ControlProps<'number_range'>)
         {...attrs}
       />
       <label className="fr-label" htmlFor={`${field.ids.input}-to`}>{t(MESSAGES['number_range.to'])}</label>
-      <DsText
+      <input
         id={`${field.ids.input}-to`}
+        className="fr-input"
         type="text"
         inputMode={block.config.integerOnly ? 'numeric' : 'decimal'}
         value={to}

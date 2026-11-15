@@ -64,17 +64,17 @@ describe('meta.now is frozen at session start', () => {
     const version = dated();
     const view = render(<FormRenderer {...props(version, { session: { device: 'desktop' }, onSubmit: (p) => void submitted.push(p) })} />);
     const day = screen.getByLabelText(/day/);
-    expect(day).toHaveValue('19/10/2026');
+    expect(day).toHaveValue('2026-10-19');
 
     vi.setSystemTime(new Date('2026-10-20T03:00:00Z'));
     view.rerender(<FormRenderer {...props(version, { session: { device: 'mobile' }, onSubmit: (p) => void submitted.push(p) })} />);
-    fireEvent.change(screen.getByLabelText(/day/), { target: { value: '20/10/2026' } });
+    fireEvent.change(screen.getByLabelText(/day/), { target: { value: '2026-10-20' } });
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     await waitFor(() => expect(screen.getByLabelText(/day/)).toHaveAttribute('aria-invalid', 'true'));
     expect(submitted).toEqual([]);
 
-    fireEvent.change(screen.getByLabelText(/day/), { target: { value: '19/10/2026' } });
+    fireEvent.change(screen.getByLabelText(/day/), { target: { value: '2026-10-19' } });
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     await waitFor(() => expect(submitted).toHaveLength(1));
     expect(submitted[0]?.client).toEqual({ startedAt: '2026-10-19T18:00:00.000Z', device: 'mobile' });

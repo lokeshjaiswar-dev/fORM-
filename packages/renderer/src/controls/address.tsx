@@ -2,8 +2,8 @@ import type { AddressPart } from '@form/schema';
 import { COUNTRY_OPTIONS, IN_STATES } from '@form/registry';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsCombobox, DsSelect, DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
+import { NativeSelect } from './native.tsx';
 
 const AUTO: Partial<Record<AddressPart, string>> = {
   line1: 'address-line1',
@@ -53,10 +53,11 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
           return (
             <label key={part} className="fr-address-part" htmlFor={id}>
               <span>{label}</span>
-              <DsCombobox
+              <NativeSelect
                 id={id}
                 value={country}
                 onChange={(next) => setPart('country', next, { state: '', stateCode: '' })}
+                onBlur={answer.onBlur}
                 options={options.map((o) => ({ value: o.id, label: typeof o.label === 'string' ? o.label : o.id }))}
                 placeholder={label}
                 disabled={attrs.disabled}
@@ -71,7 +72,7 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
           return (
             <label key={part} className="fr-address-part" htmlFor={id}>
               <span>{label}</span>
-              <DsSelect
+              <NativeSelect
                 id={id}
                 value={value.stateCode ?? ''}
                 onChange={(code) => {
@@ -92,8 +93,9 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
         return (
           <label key={part} className="fr-address-part" htmlFor={id} data-part={part}>
             <span>{label}</span>
-            <DsText
+            <input
               id={id}
+              className="fr-input"
               type="text"
               autoComplete={AUTO[part]}
               value={value[part] ?? ''}

@@ -1,7 +1,6 @@
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, usePipes, type ControlProps } from './hooks.ts';
 
 /** Number inputs per option; running total is shown against the target. */
@@ -31,8 +30,9 @@ export function ConstantSumField({ block, field }: ControlProps<'constant_sum'>)
         return (
           <div key={option.id} className="fr-sum-row">
             <label className="fr-label" htmlFor={i === 0 ? field.ids.input : `${field.ids.base}-${option.id}`}>{label}</label>
-            <DsText
+            <input
               id={i === 0 ? field.ids.input : `${field.ids.base}-${option.id}`}
+              className="fr-input"
               type="number"
               inputMode="numeric"
               min={block.config.allowZero ? 0 : 1}

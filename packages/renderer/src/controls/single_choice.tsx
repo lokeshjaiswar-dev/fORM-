@@ -1,15 +1,17 @@
-import { type CSSProperties } from 'react';
-import { RadioField, RadioGroup } from '@dmacq/ui';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { ChoicePicture } from './choicePicture.tsx';
-import { DsCombobox, DsSelect } from './ds.tsx';
 import { inputAttrs, useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
+import { NativeSelect } from './native.tsx';
 
 const OTHER = '__other__';
 
-/** FLD-10/12: radios, a searchable or plain dropdown, or image tiles; Other takes a typed answer. */
+/**
+ * FLD-10/12: radios, a native select (the accessible dropdown) with an optional search box above it, or image tiles;
+ * Other takes a typed answer.
+ */
 export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const { t } = useRenderer();
   const { text } = usePipes();
@@ -20,6 +22,13 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const selected = answer.value ? (answer.value.optionId ?? (answer.value.other !== undefined ? OTHER : '')) : '';
   const locked = field.disabled || field.readOnly;
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!c.searchable || q === '') return options;
+    /* The chosen option stays listed while the search narrows the rest, so the select never shows a blank for it. */
+    return options.filter((o) => o.id === selected || text(o.label).toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
+  }, [c.searchable, options, query, selected, text]);
   const choose = (value: string) => {
     if (value === '') answer.set(undefined);
     else if (value === OTHER) answer.set({ optionId: null, other: answer.value?.other ?? '' });
@@ -46,9 +55,16 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
         <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
           {options.map((o, i) => (
             <label key={o.id} className="fr-image-choice" data-selected={selected === o.id ? 'true' : undefined}>
-              <RadioGroup value={selected === o.id ? o.id : undefined} onValueChange={() => choose(o.id)} disabled={locked}>
-                <RadioField id={i === 0 ? field.ids.input : undefined} value={o.id} label="" onBlur={answer.onBlur} />
-              </RadioGroup>
+              <input
+                type="radio"
+                id={i === 0 ? field.ids.input : undefined}
+                name={field.ids.base}
+                value={o.id}
+                checked={selected === o.id}
+                disabled={locked}
+                onChange={() => choose(o.id)}
+                onBlur={answer.onBlur}
+              />
               <ChoicePicture image={o.image} label={text(o.label)} />
               <span>{text(o.label)}</span>
             </label>
@@ -61,22 +77,34 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
 
   if (c.display === 'dropdown') {
     const { readOnly: _readOnly, ...selectAttrs } = inputAttrs(field);
-    const items = [...options.map((o) => ({ value: o.id as string, label: text(o.label) })), ...(other ? [{ value: OTHER, label: otherLabel }] : [])];
     const placeholder = c.placeholder?.trim() || t('system:select.placeholder');
-    const shared = {
-      id: field.ids.input,
-      value: selected,
-      onChange: choose,
-      options: items,
-      placeholder,
-      disabled: locked,
-      'aria-invalid': selectAttrs['aria-invalid'],
-      'aria-describedby': selectAttrs['aria-describedby'],
-      'aria-required': selectAttrs['aria-required'],
-    };
+    const items = [...filtered.map((o) => ({ value: o.id as string, label: text(o.label) })), ...(other ? [{ value: OTHER, label: otherLabel }] : [])];
     return (
       <>
-        {c.searchable ? <DsCombobox {...shared} searchPlaceholder={placeholder} /> : <DsSelect {...shared} onBlur={answer.onBlur} />}
+        {c.searchable ? (
+          <input
+            className="fr-input fr-search"
+            type="search"
+            value={query}
+            placeholder={placeholder}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={locked}
+            aria-label={placeholder}
+          />
+        ) : null}
+        <NativeSelect
+          id={field.ids.input}
+          value={selected}
+          onChange={choose}
+          onBlur={answer.onBlur}
+          options={items}
+          placeholder={placeholder}
+          disabled={locked}
+          autoFocus={selectAttrs.autoFocus}
+          aria-invalid={selectAttrs['aria-invalid']}
+          aria-describedby={selectAttrs['aria-describedby']}
+          aria-required={selectAttrs['aria-required']}
+        />
         {otherInput}
       </>
     );
@@ -85,19 +113,23 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const items = [...options.map((o) => ({ value: o.id as string, label: text(o.label) })), ...(other ? [{ value: OTHER, label: otherLabel }] : [])];
   return (
     <>
-      <RadioGroup
-        className="fr-choices"
-        style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}
-        value={selected || undefined}
-        onValueChange={choose}
-        disabled={locked}
-        aria-invalid={field.invalid || undefined}
-        aria-required={field.required || undefined}
-      >
+      <div className="fr-choices" style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
         {items.map((item, i) => (
-          <RadioField key={item.value} id={i === 0 ? field.ids.input : undefined} value={item.value} label={item.label} onBlur={answer.onBlur} />
+          <label key={item.value} className="fr-choice">
+            <input
+              type="radio"
+              id={i === 0 ? field.ids.input : undefined}
+              name={field.ids.base}
+              value={item.value}
+              checked={selected === item.value}
+              disabled={locked}
+              onChange={() => choose(item.value)}
+              onBlur={answer.onBlur}
+            />
+            <span>{item.label}</span>
+          </label>
         ))}
-      </RadioGroup>
+      </div>
       {otherInput}
     </>
   );

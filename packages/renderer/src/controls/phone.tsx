@@ -3,7 +3,6 @@ import { CALLING_CODE_REGIONS, callingCodeOf } from '@form/registry';
 import type { CountryCode } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsCombobox, DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 import { sanitizePhoneNational } from './sanitize.ts';
 
@@ -42,22 +41,25 @@ export function Phone({ block, field }: ControlProps<'phone'>) {
   return (
     <div className="fr-phone">
       {c.showCountrySelect ? (
-        <DsCombobox
-          className="fr-phone-country"
+        <select
+          className="fr-input fr-select fr-phone-country"
           aria-label={t(MESSAGES['phone.country'])}
           value={country}
           disabled={attrs.disabled || field.readOnly}
-          onChange={(next) => {
-            const region = next as CountryCode;
+          onChange={(e) => {
+            const region = e.target.value as CountryCode;
             setPicked(region);
             update(typed, region);
           }}
-          options={regions.map((region) => ({ value: region, label: `${flag(region)} +${callingCodeOf(region) ?? ''}` }))}
-          placeholder={t(MESSAGES['phone.country'])}
-        />
+        >
+          {regions.map((region) => (
+            <option key={region} value={region}>{`${flag(region)} +${callingCodeOf(region) ?? ''}`}</option>
+          ))}
+        </select>
       ) : null}
-      <DsText
+      <input
         id={field.ids.input}
+        className="fr-input"
         type="tel"
         inputMode="numeric"
         autoComplete="tel-national"

@@ -207,7 +207,7 @@ describe('paging, logic and submit', () => {
     const submitted: SubmitPayload[] = [];
     render(<FormRenderer {...props(runtime(def), { uploader, onSubmit: (p) => void submitted.push(p) })} />);
     const user = userEvent.setup();
-    await user.upload(document.querySelector('.fr-files input[type="file"]') as HTMLInputElement, new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' }));
+    await user.upload(screen.getByLabelText(/cv/), new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' }));
     const submit = screen.getByRole('button', { name: 'Submit' });
     await user.click(submit);
     expect(submit).toHaveAttribute('aria-busy', 'true');
@@ -342,7 +342,7 @@ describe('paging, logic and submit', () => {
     );
     render(<FormRenderer {...props(runtime(def), { initialAnswers: { greeting: { type: 'short_text', value: 'Hi' } } as never })} />);
     expect(screen.getByRole('textbox', { name: 'name' })).toHaveValue('Asha');
-    expect(screen.getByLabelText('day')).toHaveValue('19/10/2026');
+    expect(screen.getByLabelText('day')).toHaveValue('2026-10-19');
     expect(screen.getByRole('textbox', { name: 'Hello Asha' })).toHaveValue('Hi');
     const user = userEvent.setup();
     await user.clear(screen.getByRole('textbox', { name: 'name' }));

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsRadioCell } from './ds.tsx';
 import { inputAttrs, useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
 
 /** One radio column for best and one for worst; commits when both sides are chosen. */
@@ -45,27 +44,29 @@ export function MaxDiffField({ block, field }: ControlProps<'maxdiff'>) {
             return (
               <tr key={option.id}>
                 <td>
-                  <DsRadioCell
+                  <input
                     id={i === 0 ? field.ids.input : undefined}
+                    type="radio"
+                    name={`${field.ids.base}-best`}
                     value={option.id}
-                    checked={best === option.id}
-                    disabled={attrs.disabled}
-                    aria-invalid={attrs['aria-invalid']}
                     aria-label={`${t(MESSAGES['maxdiff.best'])}: ${label}`}
-                    onSelect={() => write('best', option.id)}
+                    checked={best === option.id}
+                    onChange={() => write('best', option.id)}
                     onBlur={answer.onBlur}
+                    {...attrs}
                   />
                 </td>
                 <th scope="row">{label}</th>
                 <td>
-                  <DsRadioCell
+                  <input
+                    type="radio"
+                    name={`${field.ids.base}-worst`}
                     value={option.id}
-                    checked={worst === option.id}
-                    disabled={attrs.disabled}
-                    aria-invalid={attrs['aria-invalid']}
                     aria-label={`${t(MESSAGES['maxdiff.worst'])}: ${label}`}
-                    onSelect={() => write('worst', option.id)}
+                    checked={worst === option.id}
+                    onChange={() => write('worst', option.id)}
                     onBlur={answer.onBlur}
+                    {...attrs}
                   />
                 </td>
               </tr>

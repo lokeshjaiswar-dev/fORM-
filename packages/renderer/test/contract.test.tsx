@@ -34,12 +34,6 @@ interface Case {
 
 const box = (name: RegExp | string) => screen.getByRole('textbox', { name });
 const group = (name: RegExp) => within(screen.getByRole('radiogroup', { name }));
-async function pick(user: UserEvent, combobox: HTMLElement, option: string | RegExp) {
-  await user.click(combobox);
-  const item = await screen.findByRole('option', { name: option });
-  fireEvent.pointerDown(item);
-  fireEvent.click(item);
-}
 
 const CASES: Case[] = [
   {
@@ -89,7 +83,7 @@ const CASES: Case[] = [
     answer: async (user) => {
       await user.type(screen.getByRole('textbox', { name: 'Address line 1' }), '12 MG Road');
       await user.type(screen.getByRole('textbox', { name: 'City' }), 'Pune');
-      await pick(user, screen.getByRole('combobox', { name: 'State' }), 'Maharashtra');
+      await user.selectOptions(screen.getByRole('combobox', { name: 'State' }), 'Maharashtra');
       await user.type(screen.getByRole('textbox', { name: 'PIN / postal code' }), '411001');
     },
     clear: async (user) => {
@@ -110,15 +104,13 @@ const CASES: Case[] = [
   {
     name: 'datetime',
     block: field('datetime', 'q', { required: true }),
-    answer: async (user) => {
-      await user.type(screen.getByPlaceholderText('DD/MM/YYYY'), '03/06/2026');
-      await user.keyboard('{Tab}');
-      await user.clear(screen.getByLabelText('Time'));
-      await user.type(screen.getByLabelText('Time'), '10:00 AM');
-      await user.keyboard('{Tab}');
+    answer: async () => {
+      fireEvent.change(screen.getByLabelText(/q/), { target: { value: '2026-06-03' } });
+      fireEvent.change(screen.getByLabelText('Time'), { target: { value: '10:00' } });
     },
-    clear: async (user) => {
-      await user.click(screen.getByRole('button', { name: 'Clear date' }));
+    clear: async () => {
+      fireEvent.change(screen.getByLabelText(/q/), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('Time'), { target: { value: '' } });
     },
     expected: (answer) => {
       expect(answer.type).toBe('datetime');
@@ -175,8 +167,8 @@ const CASES: Case[] = [
   {
     name: 'single_choice (dropdown)',
     block: field('single_choice', 'q', { required: true, config: { display: 'dropdown' } }),
-    answer: (user) => pick(user, screen.getByRole('combobox', { name: /q/ }), 'Option 3'),
-    clear: (user) => pick(user, screen.getByRole('combobox', { name: /q/ }), 'Select…'),
+    answer: (user) => user.selectOptions(screen.getByRole('combobox', { name: /q/ }), 'Option 3'),
+    clear: (user) => user.selectOptions(screen.getByRole('combobox', { name: /q/ }), 'Select…'),
     expected: { type: 'single_choice', value: { optionId: 'option_3' } } as AnswerValue,
   },
   {
@@ -205,59 +197,52 @@ const CASES: Case[] = [
   {
     name: 'multi_choice (dropdown)',
     block: field('multi_choice', 'q', { required: true, config: { display: 'dropdown', exclusiveOptionIds: ['option_3' as never] } }),
-    answer: (user) => pick(user, screen.getByRole('combobox', { name: /q/ }), 'Option 3'),
-    clear: async () => {
-      fireEvent.click(document.querySelector('[aria-label="Remove Option 3"]') as HTMLElement);
+    answer: async (user) => {
+      const toggle = screen.getByRole('button', { name: 'Select…' });
+      if (toggle.getAttribute('aria-expanded') === 'false') await user.click(toggle);
+      await user.click(screen.getByRole('checkbox', { name: 'Option 1' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Option 3' }));
     },
+    clear: (user) => user.click(screen.getByRole('checkbox', { name: 'Option 3' })),
     expected: { type: 'multi_choice', value: { optionIds: ['option_3'] } } as AnswerValue,
   },
   {
     name: 'date',
     block: field('date', 'q', { required: true }),
-    answer: async (user) => {
-      await user.type(screen.getByLabelText(/q/), '21/10/2026');
-      await user.keyboard('{Tab}');
-    },
-    clear: async (user) => user.click(screen.getByRole('button', { name: 'Clear date' })),
+    answer: async () => void fireEvent.change(screen.getByLabelText(/q/), { target: { value: '2026-10-21' } }),
+    clear: async () => void fireEvent.change(screen.getByLabelText(/q/), { target: { value: '' } }),
     expected: { type: 'date', value: '2026-10-21' } as AnswerValue,
   },
   {
     name: 'date_range',
     block: field('date_range', 'q', { required: true }),
-    answer: async (user) => {
-      await user.type(screen.getByLabelText('Start date'), '21/10/2026');
-      await user.keyboard('{Tab}');
-      await user.type(screen.getByLabelText('End date'), '24/10/2026');
-      await user.keyboard('{Tab}');
+    answer: async () => {
+      fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-10-21' } });
+      fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-10-24' } });
     },
-    clear: async (user) => {
-      for (const button of screen.getAllByRole('button', { name: 'Clear date' })) await user.click(button);
+    clear: async () => {
+      fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('End date'), { target: { value: '' } });
     },
     expected: { type: 'date_range', value: { start: '2026-10-21', end: '2026-10-24' } } as AnswerValue,
   },
   {
     name: 'time',
     block: field('time', 'q', { required: true }),
-    answer: async (user) => {
-      await user.clear(screen.getByLabelText(/q/));
-      await user.type(screen.getByLabelText(/q/), '9:30 AM');
-      await user.keyboard('{Tab}');
-    },
-    clear: async (user) => user.click(screen.getByRole('button', { name: 'Clear time' })),
+    answer: async () => void fireEvent.change(screen.getByLabelText(/q/), { target: { value: '09:30' } }),
+    clear: async () => void fireEvent.change(screen.getByLabelText(/q/), { target: { value: '' } }),
     expected: { type: 'time', value: { start: '09:30' } } as AnswerValue,
   },
   {
     name: 'time (range)',
     block: field('time', 'q', { required: true, config: { range: { enabled: true } } }),
-    answer: async (user) => {
-      await user.clear(screen.getByLabelText('Start time'));
-      await user.type(screen.getByLabelText('Start time'), '9:30 AM');
-      await user.clear(screen.getByLabelText('End time'));
-      await user.type(screen.getByLabelText('End time'), '11:00 AM');
+    answer: async () => {
+      fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '09:30' } });
+      fireEvent.change(screen.getByLabelText('End time'), { target: { value: '11:00' } });
     },
-    clear: async (user) => {
-      await user.click(screen.getAllByRole('button', { name: 'Clear time' })[0]!);
-      await user.click(screen.getAllByRole('button', { name: 'Clear time' })[0]!);
+    clear: async () => {
+      fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('End time'), { target: { value: '' } });
     },
     expected: { type: 'time', value: { start: '09:30', end: '11:00' } } as AnswerValue,
   },
@@ -296,14 +281,14 @@ const CASES: Case[] = [
     name: 'matching',
     block: field('matching', 'q', { required: true }),
     answer: async (user) => {
-      await pick(user, screen.getByLabelText('Item 1'), 'Option 1');
-      await pick(user, screen.getByLabelText('Item 2'), 'Option 2');
-      await pick(user, screen.getByLabelText('Item 3'), 'Option 3');
+      await user.selectOptions(screen.getByLabelText('Item 1'), 'option_1');
+      await user.selectOptions(screen.getByLabelText('Item 2'), 'option_2');
+      await user.selectOptions(screen.getByLabelText('Item 3'), 'option_3');
     },
     clear: async (user) => {
-      await pick(user, screen.getByLabelText('Item 1'), 'Match…');
-      await pick(user, screen.getByLabelText('Item 2'), 'Match…');
-      await pick(user, screen.getByLabelText('Item 3'), 'Match…');
+      await user.selectOptions(screen.getByLabelText('Item 1'), '');
+      await user.selectOptions(screen.getByLabelText('Item 2'), '');
+      await user.selectOptions(screen.getByLabelText('Item 3'), '');
     },
     expected: { type: 'matching', value: { prompt_1: 'option_1', prompt_2: 'option_2', prompt_3: 'option_3' } } as AnswerValue,
   },
@@ -348,16 +333,16 @@ const CASES: Case[] = [
     name: 'card_sort',
     block: field('card_sort', 'q', { required: true }),
     answer: async (user) => {
-      await pick(user, screen.getByLabelText('Card 1'), 'Group 1');
-      await pick(user, screen.getByLabelText('Card 2'), 'Group 2');
-      await pick(user, screen.getByLabelText('Card 3'), 'Group 3');
-      await pick(user, screen.getByLabelText('Card 4'), 'Group 1');
+      await user.selectOptions(screen.getByLabelText('Card 1'), 'bucket_1');
+      await user.selectOptions(screen.getByLabelText('Card 2'), 'bucket_2');
+      await user.selectOptions(screen.getByLabelText('Card 3'), 'bucket_3');
+      await user.selectOptions(screen.getByLabelText('Card 4'), 'bucket_1');
     },
     clear: async (user) => {
-      await pick(user, screen.getByLabelText('Card 1'), 'Group…');
-      await pick(user, screen.getByLabelText('Card 2'), 'Group…');
-      await pick(user, screen.getByLabelText('Card 3'), 'Group…');
-      await pick(user, screen.getByLabelText('Card 4'), 'Group…');
+      await user.selectOptions(screen.getByLabelText('Card 1'), '');
+      await user.selectOptions(screen.getByLabelText('Card 2'), '');
+      await user.selectOptions(screen.getByLabelText('Card 3'), '');
+      await user.selectOptions(screen.getByLabelText('Card 4'), '');
     },
     expected: { type: 'card_sort', value: { item_1: 'bucket_1', item_2: 'bucket_2', item_3: 'bucket_3', item_4: 'bucket_1' } } as AnswerValue,
   },
@@ -426,8 +411,8 @@ const CASES: Case[] = [
   {
     name: 'file_upload',
     block: field('file_upload', 'q', { required: true }),
-    answer: (user) => user.upload(document.querySelector('.fr-files input[type="file"]') as HTMLInputElement, new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' })),
-    clear: (user) => user.click(screen.getByRole('button', { name: /Remove cv.pdf/ })),
+    answer: (user) => user.upload(screen.getByLabelText(/q/), new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' })),
+    clear: (user) => user.click(screen.getByRole('button', { name: 'Remove cv.pdf' })),
     expected: (answer) => {
       expect(answer.type).toBe('file_upload');
       expect(answer.value).toEqual([expect.objectContaining({ name: 'cv.pdf', mime: 'application/pdf', sizeBytes: 4 })]);
@@ -586,12 +571,7 @@ describe('control contract', () => {
     render(<FormRenderer {...props(runtime(form([block], [page('p1', ['q'])])), { onSubmit: (p) => void submitted.push(p) })} />);
     const user = userEvent.setup();
     const input = box(/q/);
-    const country = screen.getByRole('combobox', { name: 'Country calling code' });
-    country.focus();
-    await user.keyboard('{Enter}');
-    const search = await screen.findByPlaceholderText('Country calling code');
-    await user.type(search, '+44');
-    fireEvent.click(document.querySelector('[data-value="GB"]') as HTMLElement);
+    await user.selectOptions(screen.getByRole('combobox'), 'GB');
     await user.type(input, '+44 20 7946 0958');
     expect(input).toHaveValue('+442079460958');
     await user.click(screen.getByRole('button', { name: 'Submit' }));

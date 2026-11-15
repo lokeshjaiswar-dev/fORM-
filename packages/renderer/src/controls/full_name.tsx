@@ -1,7 +1,6 @@
 import type { NamePart } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
-import { DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 
 const AUTO: Partial<Record<NamePart, string>> = {
@@ -38,8 +37,9 @@ export function FullName({ block, field }: ControlProps<'full_name'>) {
         return (
           <label key={part} className="fr-name-part" htmlFor={id}>
             <span>{label}</span>
-            <DsText
+            <input
               id={id}
+              className="fr-input"
               type="text"
               autoComplete={AUTO[part]}
               value={value[part] ?? ''}

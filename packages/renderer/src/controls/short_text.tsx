@@ -1,4 +1,4 @@
-import { DsText } from './ds.tsx';
+import { Affix } from './Affix.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 import { sanitizePreset } from './sanitize.ts';
 
@@ -11,6 +11,7 @@ export function ShortText({ block, field }: ControlProps<'short_text'>) {
   const c = block.config;
   const attrs = {
     id: field.ids.input,
+    type: 'text' as const,
     value: answer.value ?? '',
     onChange: (e: { target: { value: string } }) => answer.set(sanitizePreset(e.target.value, c.preset, c.maxLength)),
     onBlur: answer.onBlur,
@@ -20,10 +21,14 @@ export function ShortText({ block, field }: ControlProps<'short_text'>) {
     return (
       <span className="fr-blank-line">
         {c.prefix ? <span className="fr-blank-words">{c.prefix}</span> : null}
-        <input className="fr-blank-input" placeholder="" type="text" {...attrs} />
+        <input className="fr-blank-input" placeholder="" {...attrs} />
         {c.suffix ? <span className="fr-blank-words">{c.suffix}</span> : null}
       </span>
     );
   }
-  return <DsText type="text" placeholder={c.placeholder} prefixText={c.prefix} suffixText={c.suffix} {...attrs} />;
+  return (
+    <Affix prefix={c.prefix} suffix={c.suffix}>
+      <input className="fr-input" placeholder={c.placeholder} {...attrs} />
+    </Affix>
+  );
 }
