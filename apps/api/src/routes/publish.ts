@@ -152,6 +152,12 @@ async function versionOfRev(tx: Tx, formId: string, draftRev: number) {
   return row ?? null;
 }
 
+/** The form's public address as committed now, or null while it has none. */
+async function currentSlugOf(tx: Tx, formId: string): Promise<string | null> {
+  const [row] = await tx.select({ slug: forms.slug }).from(forms).where(eq(forms.id, formId)).limit(1);
+  return row?.slug ?? null;
+}
+
 type FormRow = typeof forms.$inferSelect;
 
 /**
@@ -298,9 +304,12 @@ export function publishRoutes(app: FastifyInstance, deps: PublishDeps): void {
           if (input.expectedDraftRev === undefined) return null;
           const version = await versionOfRev(tx, id, input.expectedDraftRev);
           if (!version) return null;
-          // A version only exists once its form has an address (they are set in one transaction).
-          if (!slug) throw new ProblemError('INTERNAL', `form ${id} has version ${version.id} and no slug`);
-          return { kind: 'published', published: { slug, versionId: version.id, number: version.number, draftRev: input.expectedDraftRev } };
+          // A version only exists once its form has an address (they are set in one transaction). `slug` was read before
+          // this statement, so a publish that committed in between shows its version here but not yet its address there:
+          // read the address again, which this statement's snapshot is new enough to see.
+          const address = slug ?? (await currentSlugOf(tx, id));
+          if (!address) throw new ProblemError('INTERNAL', `form ${id} has version ${version.id} and no slug`);
+          return { kind: 'published', published: { slug: address, versionId: version.id, number: version.number, draftRev: input.expectedDraftRev } };
         };
         // A revision that has been published is answered with its version whatever the draft is now (an autosave may have moved it on).
         const early = await replay(seen.slug);
