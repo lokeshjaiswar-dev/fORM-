@@ -6,6 +6,7 @@ import { z } from 'zod';
  * other C0 controls (bell, backspace, escape, ...) are never typed: they are used to corrupt a terminal or a CSV a
  * member opens later. Tab, line feed and carriage return are ordinary text and stay.
  */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 /** A UTF-16 surrogate with no partner: JSON.stringify writes it as an escape that Postgres refuses. */
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;

@@ -208,6 +208,7 @@ export function sniff(bytes: Buffer): Family | null {
 function opensMarkup(bytes: Buffer): boolean {
   let head = bytes.subarray(0, 4096).toString('utf8').replace(/^\ufeff/, '');
   for (;;) {
+    // eslint-disable-next-line no-control-regex -- a NUL is blank to a browser's sniffer
     head = head.replace(/^[\s\u0000]+/, '');
     if (!head.startsWith('<!--')) break;
     const end = head.indexOf('-->', 4);
