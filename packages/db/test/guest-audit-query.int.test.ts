@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
+import { insertSubmission, newSubmission, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
 
 /** `tools/audit/guest-published-versions.sql`: two read-only SELECTs for finding what the anonymous publish route left. */
 const QUERY = readFileSync(fileURLToPath(new URL('../../../tools/audit/guest-published-versions.sql', import.meta.url)), 'utf8');
@@ -127,7 +127,7 @@ describe('tools/audit/guest-published-versions.sql', () => {
 
   it('reports submissions the form already took', async () => {
     const guest = await guestPublish();
-    await t.owner.query(`insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, '{}', '[]')`, [randomUUID(), seed.a.orgId, guest.formId]);
+    await insertSubmission(t.owner, newSubmission({ orgId: seed.a.orgId, formIds: [guest.formId, guest.formId], versionIds: [guest.versionId, guest.versionId] }, 0, { answers: {} }));
     const { versions } = await run();
     expect(versions.find((v) => v.version_id === guest.versionId)).toMatchObject({ has_submissions: true });
   });

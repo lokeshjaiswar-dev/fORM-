@@ -29,7 +29,11 @@ const REDEEM: Record<Purpose, '/v1/auth/verify-email' | '/v1/auth/magic-link/ver
   magic_link: '/v1/auth/magic-link/verify',
 };
 
-/** One lookup per token, also when React runs the effect twice in development. */
+/**
+ * One lookup per token, also when React runs the effect twice in development. Only a lookup that is under way or has
+ * succeeded is kept: a rejected one is dropped, so after a transient `ApiUnreachable` or a 429 the visitor can open the
+ * page again and it asks again (BL-212).
+ */
 const lookups = new Map<string, Promise<LinkInfo>>();
 
 /**
@@ -49,8 +53,12 @@ function LinkPage({ title, purpose }: { title: string; purpose: Purpose }) {
     const key = `${purpose}:${token}`;
     let lookup = lookups.get(key);
     if (!lookup) {
-      lookup = api('POST', '/v1/auth/link', linkInfoSchema, { token, purpose });
-      lookups.set(key, lookup);
+      const fresh = api('POST', '/v1/auth/link', linkInfoSchema, { token, purpose });
+      lookups.set(key, fresh);
+      fresh.catch(() => {
+        if (lookups.get(key) === fresh) lookups.delete(key);
+      });
+      lookup = fresh;
     }
     let live = true;
     lookup.then(

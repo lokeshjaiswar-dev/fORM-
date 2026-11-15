@@ -49,7 +49,7 @@ describe('the job registry', () => {
   it('has one definition per queue, minimal perms, and cron only where a run needs no tenant', () => {
     const names = JOB_DEFINITIONS.map((d) => d.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toEqual(['system.heartbeat', 'partitions.maintain', 'templates.seed', 'audit.chain']);
+    expect(names).toEqual(['system.heartbeat', 'partitions.maintain', 'templates.seed', 'audit.chain', 'submission.fanout']);
     for (const d of [...JOB_DEFINITIONS, ...auditDefs]) {
       expect(d.perms, d.name).toEqual([]);
       if (d.cron) {
@@ -74,7 +74,7 @@ describe('the audit jobs', () => {
 
 describe('selectJobs', () => {
   it('selects by name or prefix and refuses patterns that match nothing', () => {
-    expect(selectJobs(JOB_DEFINITIONS, undefined)).toHaveLength(4);
+    expect(selectJobs(JOB_DEFINITIONS, undefined)).toHaveLength(5);
     expect(selectJobs(JOB_DEFINITIONS, ['templates.*']).map((d) => d.name)).toEqual(['templates.seed']);
     expect(selectJobs(JOB_DEFINITIONS, ['system.heartbeat', 'partitions.maintain']).map((d) => d.name)).toEqual([
       'system.heartbeat',
@@ -89,7 +89,7 @@ describe('startWorker', () => {
   it('works each selected queue, schedules its cron in UTC and enqueues seeding once', async () => {
     const { queue, calls } = fakeQueue();
     const w = await startWorker({ db, log, queue, seedTemplates: true });
-    expect(w.queues).toEqual(['system.heartbeat', 'partitions.maintain', 'templates.seed', 'audit.chain']);
+    expect(w.queues).toEqual(['system.heartbeat', 'partitions.maintain', 'templates.seed', 'audit.chain', 'submission.fanout']);
     const system = (id: string) => ({ orgId: null, resource: { type: 'system', id }, data: {} });
     expect(calls).toEqual([
       ['work', 'system.heartbeat'],
@@ -98,10 +98,11 @@ describe('startWorker', () => {
       ['schedule', 'partitions.maintain', '15 0 * * *', system('partitions.maintain')],
       ['work', 'templates.seed'],
       ['work', 'audit.chain', { pollIntervalMs: 500 }],
+      ['work', 'submission.fanout'],
       ['send', 'templates.seed', system('templates.seed'), { singletonKey: 'templates.seed' }],
     ]);
     await w.stop();
-    expect(calls.slice(-4).map((c) => c[0])).toEqual(['stop', 'stop', 'stop', 'stop']);
+    expect(calls.slice(-5).map((c) => c[0])).toEqual(['stop', 'stop', 'stop', 'stop', 'stop']);
   });
 
   it('does not seed when told not to or when another worker serves templates.seed', async () => {

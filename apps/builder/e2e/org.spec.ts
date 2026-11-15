@@ -41,12 +41,14 @@ test('switches the org and shows its members', async ({ page }) => {
   await page.route('**/v1/org/invites', (route) => route.fulfill({ json: { items: [] } }));
 
   await page.goto('/forms');
-  await expect(page.getByLabel('Organisation', { exact: true })).toHaveValue(ORGS[0]!.id);
+  const switcher = page.getByRole('combobox', { name: 'Organisation' });
+  await expect(switcher).toContainText('Acme');
   await page.getByRole('link', { name: 'Members' }).click();
   await expect(page.getByRole('heading', { name: 'Members of Acme' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invite' })).toBeVisible();
 
-  await page.getByLabel('Organisation', { exact: true }).selectOption({ label: 'Globex' });
+  await switcher.click();
+  await page.getByRole('option', { name: 'Globex' }).click();
   await expect(page.getByRole('heading', { name: 'Members of Globex' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invite' })).toHaveCount(0);
   expect(orgHeaders).toEqual([ORGS[0]!.id, ORGS[1]!.id]);

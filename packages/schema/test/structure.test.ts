@@ -181,6 +181,89 @@ describe('validateStructure', () => {
     });
   });
 
+  describe('S6 redirect and visit_url targets', () => {
+    const redirectTo = (...url: S.PlainTemplate): S.FormDefinition => {
+      const def = definition();
+      def.endings.push({ id: id<S.EndingId>('ending_go'), kind: 'redirect', name: 'Go', url });
+      return def;
+    };
+    const pipe = (): S.PlainTemplate[number] => ({ pipe: { source: { kind: 'answer', blockId: ids.name }, encode: 'url' } });
+    const WHERE = '/endings/1/url';
+
+    it.each([
+      ['a javascript: URL', 'javascript:alert(1)'],
+      ['a javascript: URL in mixed case after a space', ' JaVaScRiPt:alert(1)'],
+      ['a bare scheme with a leading space', ' JaVaScRiPt:'],
+      ['a data: URL', 'data:text/html,<script>alert(1)</script>'],
+      ['a protocol-relative URL', '//evil.example'],
+      ['a scheme with a tab inside', 'java\tscript:alert(1)'],
+      ['an https URL with a leading space', ' https://x.example'],
+      ['a scheme that is only half there', 'https:/x.example'],
+      ['a relative path', '/thanks'],
+      ['ftp', 'ftp://x.example/file'],
+    ])('rejects %s in a redirect ending', (_name, url) => {
+      expect(codes(validateStructure(redirectTo(url)))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+      expect(codes(validateStructure(redirectTo(url), { mode: 'publish' }))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+    });
+
+    it('accepts https and http URLs, in any case, with answers piped after the literal prefix', () => {
+      for (const url of [['https://x.example/thanks'], ['http://x.example'], ['HTTPS://X.EXAMPLE'], ['https://x.example/', pipe()], ['https://x.example/?ref=', pipe(), '&v=1']]) {
+        expect(validateStructure(redirectTo(...(url as S.PlainTemplate)), { mode: 'publish' })).toEqual([]);
+      }
+    });
+
+    it('reads the literal prefix across consecutive strings, and stops it at the first pipe', () => {
+      expect(validateStructure(redirectTo('ht', 'tps://', 'x.example/thanks'), { mode: 'publish' })).toEqual([]);
+      expect(codes(validateStructure(redirectTo(pipe(), 'https://x.example')))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+      expect(codes(validateStructure(redirectTo('java', pipe(), 'script:alert(1)')))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+    });
+
+    it('refuses control characters anywhere in the literal text, even after a valid prefix', () => {
+      for (const bad of ['https://x.example/\nSet-Cookie: a=b', 'https://x.example/\u0000', 'https://x.example/\u007f', 'https://x.example/\u0085']) {
+        expect(codes(validateStructure(redirectTo(bad)))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+      }
+      expect(codes(validateStructure(redirectTo('https://x.example/', pipe(), '\r\n')))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+    });
+
+    it('lets a draft hold an empty URL, and refuses it at publish', () => {
+      expect(codes(validateStructure(redirectTo()))).toEqual([`warning:invalid_url_scheme:${WHERE}`]);
+      expect(codes(validateStructure(redirectTo(''), { mode: 'publish' }))).toEqual([`error:invalid_url_scheme:${WHERE}`]);
+    });
+
+    it('checks visit_url actions of a message ending at their own path', () => {
+      const def = definition();
+      const ending = def.endings[0] as Extract<S.Ending, { kind: 'message' }>;
+      ending.actions = [
+        { kind: 'visit_url', label: 'Ok', url: ['https://x.example'] },
+        { kind: 'visit_url', label: 'Bad', url: ['javascript:alert(1)'] },
+        { kind: 'visit_url', label: 'Piped first', url: [pipe(), 'https://x.example'] },
+      ];
+      expect(codes(validateStructure(def))).toEqual([
+        'error:invalid_url_scheme:/endings/0/actions/1/url',
+        'error:invalid_url_scheme:/endings/0/actions/2/url',
+      ]);
+    });
+
+    it('checks a translated ending URL like the source URL, so a locale cannot swap in a script URL', () => {
+      const def = redirectTo('https://x.example');
+      const entry = (value: S.TranslationEntry['value']): S.TranslationEntry => ({ value, sourceHash: id<S.Sha256Hex>('a'.repeat(64)), origin: 'human' });
+      def.i18n.messages = {
+        [id<S.Locale>('hi-IN')]: {
+          'ending:ending_go:url': entry(['javascript:alert(1)']),
+          'ending:ending_go:content': entry(inline('यहाँ जाएँ')),
+        },
+        [id<S.Locale>('ta-IN')]: { 'ending:ending_go:url': entry('https://x.example/ta') },
+        [id<S.Locale>('bn-IN')]: { 'ending:ending_go:url': entry('data:text/html,x') },
+        [id<S.Locale>('mr-IN')]: { 'ending:ending_go:url': entry(inline('https://x.example')) },
+      };
+      expect(codes(validateStructure(def))).toEqual([
+        'error:invalid_url_scheme:/i18n/messages/hi-IN/ending:ending_go:url/value',
+        'error:invalid_url_scheme:/i18n/messages/bn-IN/ending:ending_go:url/value',
+        'error:invalid_url_scheme:/i18n/messages/mr-IN/ending:ending_go:url/value',
+      ]);
+    });
+  });
+
   it('I7: classified fields need a purpose', () => {
     const def = definition();
     blockOf(def, ids.name, 'short_text').compliance.purposeIds = [];

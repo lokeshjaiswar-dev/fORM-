@@ -1,12 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest, RequestPayload } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
-import { formFiles, formFilesCheck, formSubmissions, formVersions, resolveFormSlug, withTenant, type Db } from '@form/db';
-import { projectForRuntime } from '@form/logic';
+import { formFiles, resolveFormSlug, withTenant, type Db, type ResolvedFormSlug } from '@form/db';
 import { acceptsFile } from '@form/registry';
-import type { BlockId, CompiledForm, FieldError, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
+import type { BlockId } from '@form/schema';
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
 import { clientInfo } from '../auth.ts';
@@ -25,11 +23,12 @@ import {
   uploadBodyLimitFor,
   type FileStore,
 } from '../files.ts';
-import { displayRows } from '../display-rows.ts';
+import { runtimeStatus } from '../runtime/status.ts';
+import { assertOpen, isUnlocked, readAccess } from '../submit/access.ts';
+import type { EffectsDeps } from '../submit/effects.ts';
+import { createVersionLoader, type LoadedVersion } from '../submit/live.ts';
+import { submit } from '../submit/pipeline.ts';
 import { storableJson, storableString } from '../text-safety.ts';
-import { WeightedCache } from '../weighted-cache.ts';
-import { bindFileRefs, fileUses } from '../submission-files.ts';
-import { checkAnswers } from '../validate-submission.ts';
 
 /** What `publicSlug` makes (lower-case letters, digits, hyphens), allowing a little more; never a control character. */
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/;
@@ -45,39 +44,26 @@ const LOCALE_TAG = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/;
  */
 const fieldRow = z.object({ key: storableString(128), label: storableString(1000), value: storableString(10_000) });
 
-type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
-
-/** A published form as the public routes use it: what the page gets, and the stored definition the server checks against. */
-interface LiveForm {
-  orgId: string;
-  formId: string;
-  versionId: string;
-  payload: PublicPayload;
-  definition: FormDefinition;
-  compiled: CompiledForm;
-}
-
-/** A version is immutable, so what is loaded for it is good for as long as it is kept; only the memory is bounded. */
-const LIVE_CACHE_MAX = 200;
-/** The memory the cached versions may hold, as `liveWeight` counts it: the pictures of a version are most of it. */
-const LIVE_CACHE_BYTES = 24 * 1024 * 1024;
-const liveByVersion = new WeightedCache<LiveForm>(LIVE_CACHE_MAX, LIVE_CACHE_BYTES);
-const liveInflight = new Map<string, Promise<LiveForm>>();
+/**
+ * What the page says about the page view (`SubmissionRequest.client`): all of it advisory. The server re-runs the
+ * evaluation with it, and stores the address without its query, the referrer's host and the device (`submit/meta.ts`).
+ * Unknown keys are dropped.
+ */
+const clientDetails = storableJson(
+  z.object({
+    startedAt: z.iso.datetime({ offset: true }).optional(),
+    urlParams: z.record(z.string().max(128), z.string().max(2048)).refine((params) => Object.keys(params).length <= 100, 'at most 100 parameters').optional(),
+    pageUrl: z.string().max(2048).optional(),
+    referrer: z.string().max(2048).optional(),
+    device: z.enum(['desktop', 'tablet', 'mobile']).optional(),
+    embedOrigin: z.string().max(2048).optional(),
+  }),
+);
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
-/**
- * About what keeping a version costs: the pictures (a character of a data URL is a byte), and the definition, its
- * compilation and the page's projection of it, counted as twice the JSON of the first two (JS strings and objects
- * weigh more than their JSON). Heavy enough to bound memory, cheap enough to compute once per load.
- */
-function liveWeight(definition: unknown, compiled: unknown, media: Record<string, string> | null): number {
-  const pictures = media ? Object.values(media).reduce((sum, dataUrl) => sum + dataUrl.length, 0) : 0;
-  return pictures + 2 * (JSON.stringify(definition).length + JSON.stringify(compiled).length);
-}
-
 /** The biggest request body an upload to this form can need: the largest file one of its fields takes, as base64 in JSON. */
-function uploadBodyLimit(live: LiveForm): number {
+function uploadBodyLimit(live: LoadedVersion): number {
   let biggest = 0;
   for (const block of Object.values(live.definition.blocks)) {
     if (block?.type === 'file_upload') biggest = Math.max(biggest, Math.min(block.config.maxFileBytes, MAX_UPLOAD_BYTES));
@@ -86,78 +72,36 @@ function uploadBodyLimit(live: LiveForm): number {
   return uploadBodyLimitFor(biggest);
 }
 
-/** The most files one submission may name (the narrow lookup of 0019 takes at most this many ids). */
-const MAX_FILES_PER_SUBMISSION = 100;
+const UUID = z.uuid();
 
-export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date }): void {
+/** The `Idempotency-Key` header: exactly one uuid, in lower case; null for anything else (absent, repeated, not a uuid). */
+function idempotencyKeyOf(request: FastifyRequest): string | null {
+  const raw = request.headers['idempotency-key'];
+  return typeof raw === 'string' && UUID.safeParse(raw).success ? raw.toLowerCase() : null;
+}
+
+/** The `X-FR-Access` header (the token `POST /v1/p/:slug/unlock` hands out), when it is a single value. */
+const accessTokenOf = (request: FastifyRequest): string | undefined => {
+  const raw = request.headers['x-fr-access'];
+  return typeof raw === 'string' ? raw : undefined;
+};
+
+export function publicFormRoutes(
+  app: FastifyInstance,
+  deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date; effects?: EffectsDeps | undefined },
+): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const edition: RuntimeEdition = runtimeEdition(editionSummary(deps.config.edition));
+  const loader = createVersionLoader({ db: deps.db, edition });
 
   /**
-   * The live version of a slug. The slug is resolved on every request, so a form that was unpublished, archived or
-   * trashed stops answering at once; what is loaded for a version id is cached, because a version never changes.
+   * The live version of a resolved slug. The slug is resolved on every request, so a form that was unpublished,
+   * archived or trashed stops answering at once; what is loaded for a version id is cached, because a version never changes.
    */
-  async function loadLive(slug: string, requestId: string): Promise<LiveForm> {
-    const found = await resolveFormSlug(deps.db, slug);
-    if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-    const cached = liveByVersion.get(found.liveVersionId);
-    if (cached && cached.formId === found.formId) return cached;
-    const pending = liveInflight.get(found.liveVersionId);
-    if (pending) return pending;
-    const load = (async () => {
-      // A respondent reads one version of one org's form: the org comes from the slug, never from the caller.
-      const rows = await withTenant(deps.db, { orgId: found.orgId, actor: 'respondent', requestId, readOnly: true }, (tx) =>
-        tx
-          .select({
-            id: formVersions.id,
-            orgId: formVersions.orgId,
-            formId: formVersions.formId,
-            number: formVersions.number,
-            schemaVersion: formVersions.schemaVersion,
-            publishedAt: formVersions.publishedAt,
-            publishedBy: formVersions.publishedBy,
-            definition: formVersions.definition,
-            compiled: formVersions.compiled,
-            contentHash: formVersions.contentHash,
-            media: formVersions.media,
-          })
-          .from(formVersions)
-          .where(and(eq(formVersions.id, found.liveVersionId), eq(formVersions.formId, found.formId)))
-          .limit(1),
-      );
-      const row = rows[0];
-      if (!row) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      const version: FormVersion = {
-        id: row.id as FormVersionId,
-        orgId: row.orgId as OrgId,
-        formId: row.formId as FormId,
-        number: row.number,
-        schemaVersion: row.schemaVersion,
-        publishedAt: row.publishedAt.toISOString() as IsoInstant,
-        publishedBy: row.publishedBy as UserId,
-        definition: row.definition as unknown as FormDefinition,
-        compiled: row.compiled as unknown as CompiledForm,
-        contentHash: row.contentHash as Sha256Hex,
-        templateLineage: [],
-        variablesSnapshot: { variables: {} },
-      };
-      const payload: PublicPayload = {
-        slug,
-        formId: found.formId,
-        version: projectForRuntime(version, { state: 'open' }, {
-          edition,
-          upload: { presignUrl: '', maxFileBytes: MAX_UPLOAD_BYTES },
-          branding: false,
-          thirdPartyTrackingAllowed: false,
-        }),
-        ...(row.media ? { media: row.media } : {}),
-      };
-      const live: LiveForm = { orgId: found.orgId, formId: found.formId, versionId: found.liveVersionId, payload, definition: version.definition, compiled: version.compiled };
-      liveByVersion.set(found.liveVersionId, live, liveWeight(row.definition, row.compiled, row.media));
-      return live;
-    })().finally(() => liveInflight.delete(found.liveVersionId));
-    liveInflight.set(found.liveVersionId, load);
-    return load;
+  async function liveOf(found: ResolvedFormSlug, requestId: string): Promise<LoadedVersion> {
+    const live = await loader.get(found, found.liveVersionId, requestId);
+    if (!live) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+    return live;
   }
 
   /**
@@ -167,7 +111,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
    * is `429` problem+json with `Retry-After`, audited once per window like the sign-in limits. An unknown form is a 404,
    * whatever the body. Every refusal closes the connection, so a client does not go on sending a body nobody reads.
    */
-  async function admit(request: FastifyRequest, reply: FastifyReply, kind: 'files' | 'submit'): Promise<LiveForm> {
+  async function admit(request: FastifyRequest, reply: FastifyReply, kind: 'files' | 'submit'): Promise<ResolvedFormSlug> {
     try {
       const { ipHash } = clientInfo(request, deps.config.auth.secret, deps.now());
       const [ipBucket, formBucket] = kind === 'files' ? (['auth_files_ip', 'auth_files_form'] as const) : (['auth_submit_ip', 'auth_submit_form'] as const);
@@ -175,14 +119,32 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       await deps.throttle.hit(request, reply, [{ bucket: ipBucket, key: ipHash }], { ipHash }, tooMany);
       const slug = (request.params as { slug?: unknown }).slug;
       if (typeof slug !== 'string' || !SLUG.test(slug)) throw new ProblemError('NOT_FOUND', 'This form is not published.');
-      const live = await loadLive(slug, request.id);
-      const perForm: ThrottleKey = { bucket: formBucket, key: new Uint8Array(createHash('sha256').update(ipHash).update(live.formId).digest().subarray(0, 16)) };
+      const found = await resolveFormSlug(deps.db, slug);
+      if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+      const perForm: ThrottleKey = { bucket: formBucket, key: new Uint8Array(createHash('sha256').update(ipHash).update(found.formId).digest().subarray(0, 16)) };
       await deps.throttle.hit(request, reply, [perForm], { ipHash }, tooMany);
-      return live;
+      return found;
     } catch (err) {
       reply.header('connection', 'close');
       throw err;
     }
+  }
+
+  /**
+   * What the form may do now, asked of an upload exactly as a submission is asked: the same read of the rules and the
+   * counter (`readAccess`), the same check of the password token (`isUnlocked`), the same status (`runtimeStatus`) and
+   * the same refusals (`assertOpen`: 409 `FORM_CLOSED` or `LIMIT_REACHED`, 401 `PASSWORD_REQUIRED`). Without it a form
+   * that is switched off, closed, full or behind its password still took files from anyone who knew its address, which
+   * the page never offers but `curl` does.
+   *
+   * An upload names no version, so a password token has to be the one for the live version, as for `GET /v1/p/:slug`:
+   * after a republish a respondent who unlocked the old page is asked for the password again.
+   */
+  async function requireOpen(found: ResolvedFormSlug, request: FastifyRequest): Promise<void> {
+    const now = deps.now();
+    const { access, submittedTotal } = await withTenant(deps.db, { orgId: found.orgId, actor: 'respondent', requestId: request.id, readOnly: true }, (tx) => readAccess(tx, found.formId));
+    const unlocked = isUnlocked(deps.config.auth.secret, access, accessTokenOf(request), { formId: found.formId, versionScope: found.liveVersionId }, now);
+    assertOpen(runtimeStatus(access, { submittedTotal }, now, { unlocked }));
   }
 
   r.get(
@@ -191,19 +153,47 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       config: { auth: 'none' },
       schema: {
         tags: ['runtime'],
-        summary: 'Public runtime projection of the live version',
+        summary: 'Public runtime projection of the live version, with the form\'s status',
+        description:
+          "What a respondent's page needs to open a form: its status now (open, closed, not yet open, outside hours, limit reached, or password) and, unless the form is behind its password, the live version's runtime projection. " +
+          'A password form answers with its status only (the definition is withheld) until the request carries a valid `X-FR-Access` token from `POST /v1/p/:slug/unlock`. ' +
+          'A slug the form used to have answers `{ redirectTo }` with the form\'s current slug. Never cached: the status depends on the time and the counter.',
         params: slugParam,
         response: {
-          200: z.object({
-            slug: z.string(),
-            formId: z.uuid(),
-            version: z.unknown(),
-            media: z.record(z.string(), z.string()).optional(),
-          }),
+          200: z.union([
+            z.object({
+              slug: z.string(),
+              formId: z.uuid(),
+              status: z.unknown(),
+              version: z.unknown().optional(),
+              media: z.record(z.string(), z.string()).optional(),
+            }),
+            z.object({ redirectTo: z.string() }),
+          ]),
         },
       },
     },
-    async (request) => ({ ...(await loadLive(request.params.slug, request.id)).payload, slug: request.params.slug }),
+    async (request, reply) => {
+      reply.header('cache-control', 'no-store');
+      const { slug } = request.params;
+      const found = await resolveFormSlug(deps.db, slug);
+      if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+      // An address the form used to have: the page moves to the current one before it asks for anything else.
+      if (found.primarySlug !== slug) return { redirectTo: found.primarySlug };
+
+      const now = deps.now();
+      const { access, submittedTotal } = await withTenant(deps.db, { orgId: found.orgId, actor: 'respondent', requestId: request.id, readOnly: true }, (tx) => readAccess(tx, found.formId));
+      // A token is for the version that is live now: a republish after the unlock asks for the password again.
+      const unlocked = isUnlocked(deps.config.auth.secret, access, accessTokenOf(request), { formId: found.formId, versionScope: found.liveVersionId }, now);
+      const status = runtimeStatus(access, { submittedTotal }, now, { unlocked });
+      // The definition does not leave the server until the password has been given, whatever the status says: the status
+      // order puts closed, not yet open, full and outside hours before the password, and a form in any of those states
+      // still holds questions that only people who know the password may read.
+      if (access.hasPassword && !unlocked) return { slug, formId: found.formId, status };
+
+      const live = await liveOf(found, request.id);
+      return { slug, formId: found.formId, status, version: { ...live.runtime, status }, ...(live.media ? { media: live.media } : {}) };
+    },
   );
 
   const uploaded = z.object({
@@ -216,14 +206,23 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
   });
 
   /**
-   * Before the body of an anonymous upload is read: the slug must be a live form (else 404), and a body bigger than the
-   * biggest file this form takes (its largest `maxFileBytes`, a signature's 2 MiB) is refused from its `Content-Length`
-   * (413) without reading a byte; a body that declares no length is counted as it arrives and cut off past the same
-   * limit. Without this, every request read and JSON-parsed up to 14 MB before anything about the form was looked at.
+   * Before the body of an anonymous upload is read: the slug must be a live form (else 404), the form must be taking
+   * responses now (`requireOpen`: closed, not yet open, full, outside its hours or behind its password is refused as a
+   * submission would be), and a body bigger than the biggest file this form takes (its largest `maxFileBytes`, a
+   * signature's 2 MiB) is refused from its `Content-Length` (413) without reading a byte; a body that declares no length
+   * is counted as it arrives and cut off past the same limit. Without this, every request read and JSON-parsed up to
+   * 14 MB before anything about the form was looked at. A refusal because of the form's status closes the connection, as
+   * the throttle's does, so a client does not go on sending a file nobody will read.
    */
   const guardUpload = async (request: FastifyRequest, reply: FastifyReply, payload: RequestPayload): Promise<RequestPayload> => {
-    const live = await admit(request, reply, 'files');
-    const limit = uploadBodyLimit(live);
+    const found = await admit(request, reply, 'files');
+    try {
+      await requireOpen(found, request);
+    } catch (err) {
+      reply.header('connection', 'close');
+      throw err;
+    }
+    const limit = uploadBodyLimit(await liveOf(found, request.id));
     const declared = request.headers['content-length'];
     if (declared !== undefined && Number(declared) > limit) {
       reply.header('connection', 'close');
@@ -242,7 +241,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         tags: ['runtime'],
         summary: 'Upload a file to an upload or signature field of a published form',
         description:
-          "Respondents are anonymous, so this is public, but it only takes files for a field the form's live version has, within that field's type and size rules. The server names the file (a uuid); a client-chosen id is ignored. Downloads are for signed-in members of the owning org only.",
+          "Respondents are anonymous, so this is public, but it only takes files for a field the form's live version has, within that field's type and size rules, and only while the form is taking responses: a form that is switched off, past its close date, before its open date, outside its weekly hours or full is refused with 409 `FORM_CLOSED` or `LIMIT_REACHED`, and a password form without a valid `X-FR-Access` token for its live version with 401 `PASSWORD_REQUIRED`, the same as a submission. The server names the file (a uuid); a client-chosen id is ignored. Downloads are for signed-in members of the owning org only.",
         params: slugParam,
         body: z.object({
           blockId: z.string().min(1).max(64),
@@ -256,7 +255,9 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
     },
     async (request) => {
       const { blockId, purpose, mime: declared, data } = request.body;
-      const live = await loadLive(request.params.slug, request.id);
+      const found = await resolveFormSlug(deps.db, request.params.slug);
+      if (!found) throw new ProblemError('NOT_FOUND', 'This form is not published.');
+      const live = await liveOf(found, request.id);
       const block = live.definition.blocks[blockId as BlockId];
       if (!block || block.type !== (purpose === 'signature' ? 'signature' : 'file_upload')) {
         throw new ProblemError('VALIDATION_FAILED', 'This form has no field that takes a file here.');
@@ -306,6 +307,9 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
   r.post(
     '/v1/p/:slug/submissions',
     {
+      // Public, with no session: a respondent has no account. What a stranger with `curl` and a form address can do here
+      // is write one response at a time to a live form, within its status, its limit and the address's budgets (below);
+      // the org, the id, the moment, the status and every stored column are the server's (`submit/pipeline.ts`).
       config: { auth: 'none' },
       // Limits and the slug are looked at before the body (up to 1 MiB of answers) is read and parsed.
       preParsing: async (request, reply, payload) => {
@@ -316,71 +320,44 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         tags: ['runtime'],
         summary: 'Submit answers on a published form',
         description:
-          'Respondents are anonymous. The answers are for the form\'s live version only (`formVersionId`; an older page gets FORM_OUTDATED), are evaluated and validated on the server, and every file they name must have been uploaded to this form.',
+          "Respondents are anonymous. `Idempotency-Key` (a uuid, the same for every retry of one submission) is required: a retry with the same body gets the first answer back with `Idempotent-Replayed: true` and counts nothing, the same key with other answers is 422 `IDEMPOTENCY_KEY_REUSED`. " +
+          "The answers are for `formVersionId`, which must be the live version or the one it replaced within the form's `acceptPreviousVersionsHours` (else 409 `VERSION_SUPERSEDED`). " +
+          'They are evaluated and validated on the server (422 `SUBMISSION_INVALID` with each field named), every file they name must have been uploaded to this form, and the form must be open: 409 `FORM_CLOSED` or `LIMIT_REACHED`, or 401 `PASSWORD_REQUIRED` without a valid `X-FR-Access` token.',
         params: slugParam,
         body: z.object({
           formVersionId: z.uuid(),
           answers: storableJson(z.record(z.string(), z.unknown())),
           fields: z.array(fieldRow).max(500).default([]),
           locale: z.string().min(2).max(35).regex(LOCALE_TAG).default('en-IN'),
+          client: clientDetails.optional(),
         }),
-        response: { 200: z.object({ id: z.uuid() }) },
+        response: { 200: z.object({ ok: z.literal(true), submissionId: z.uuid(), endingId: z.string() }) },
       },
     },
     async (request, reply) => {
-      // The slug is resolved now, so a form that is no longer live takes no more answers.
-      const live = await loadLive(request.params.slug, request.id);
-      if (request.body.formVersionId !== live.versionId) {
-        throw new ProblemError('FORM_OUTDATED', 'This form was updated while you were filling it. Reload and try again.');
+      reply.header('cache-control', 'no-store');
+      const idempotencyKey = idempotencyKeyOf(request);
+      if (idempotencyKey === null) {
+        return sendProblem(reply, 'VALIDATION_FAILED', 'Send an Idempotency-Key header: a uuid that stays the same whenever this submission is retried.', [
+          { path: 'headers.idempotency-key', message: 'required, one uuid' },
+        ]);
       }
-      // The language is one the form offers: it is stored, and handed to Intl when the answers are checked.
-      if (!live.definition.i18n.locales.some((l) => l.locale === request.body.locale)) {
-        return sendProblem(reply, 'VALIDATION_FAILED', 'This form is not offered in that language.', [{ path: 'locale', message: 'not a language of this form' }]);
-      }
-      // The answers are checked against the stored version, whatever the page claims to have validated.
-      const checked = checkAnswers(live, live.versionId, request.body.answers, request.body.locale, new Date());
-      if (checked.errors.length > 0) return invalid(reply, checked.errors);
-      let values = checked.values;
-      const uses = fileUses(values);
-      const id = randomUUID();
-      const stored = await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
-        if (uses.length > 0) {
-          // Every file the answers name was uploaded to this form, for the very field that holds it, and is the file
-          // they say it is. The references are then rewritten from what the upload route recorded (name, type, size,
-          // hash), and the answers checked once more against the true type and size.
-          const ids = [...new Set(uses.map((use) => String(use.ref['fileId'])))];
-          if (ids.length > MAX_FILES_PER_SUBMISSION) throw new ProblemError('VALIDATION_FAILED', 'Too many files in one submission.');
-          // Through the narrow definer function: a respondent context cannot read form_files (SR-5).
-          const known = ids.every((fileId) => z.uuid().safeParse(fileId).success) ? await formFilesCheck(tx, live.formId, ids) : [];
-          const bound = bindFileRefs(values, new Map(known.map((row) => [row.id, row])));
-          const again = checkAnswers(live, live.versionId, bound, request.body.locale, new Date());
-          if (again.errors.length > 0) return { errors: again.errors };
-          values = again.values;
-        }
-        await tx.insert(formSubmissions).values({
-          id,
-          orgId: live.orgId,
-          formId: live.formId,
-          answers: values,
-          // Built here from the validated answers; what the page sent along as "rows" is ignored (SR-2).
-          fields: displayRows(live.definition, values),
-          locale: request.body.locale,
-        });
-        // The form's counters and the hold on the files are kept by a trigger on this INSERT (0019): a respondent
-        // context may not write `forms` or `form_files`.
-        return { errors: [] };
-      });
-      if (stored.errors.length > 0) return invalid(reply, stored.errors);
-      return { id };
+      const { formVersionId, answers, locale, client } = request.body;
+      const userAgent = request.headers['user-agent'];
+      const outcome = await submit(
+        { db: deps.db, secret: deps.config.auth.secret, loader, now: deps.now, effects: deps.effects },
+        {
+          slug: request.params.slug,
+          requestId: request.id,
+          idempotencyKey,
+          accessToken: accessTokenOf(request),
+          userAgent: typeof userAgent === 'string' ? userAgent : undefined,
+          body: { formVersionId, answers, locale, client },
+        },
+      );
+      if (outcome.kind === 'invalid') return sendProblem(reply, 'SUBMISSION_INVALID', outcome.detail, outcome.errors);
+      if (outcome.replayed) reply.header('idempotent-replayed', 'true');
+      return outcome.result;
     },
-  );
-}
-
-function invalid(reply: FastifyReply, errors: FieldError[]): FastifyReply {
-  return sendProblem(
-    reply,
-    'VALIDATION_FAILED',
-    'Some answers are not valid.',
-    errors.slice(0, 50).map((e) => ({ path: [e.blockId, e.path].filter(Boolean).join('.'), message: e.message })),
   );
 }

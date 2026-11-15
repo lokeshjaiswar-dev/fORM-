@@ -17,7 +17,7 @@ const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as
 const ZERO = '00000000-0000-0000-0000-000000000000';
 
 let owner: pg.Pool;
-let chainer: DbHandle;
+let appDb: DbHandle;
 let app: FastifyInstance;
 let smtpApp: FastifyInstance;
 const sent: MailMessage[] = [];
@@ -42,7 +42,7 @@ beforeAll(async () => {
   const database = await createTestDatabase(adminUrl, 'fr_api_orgs');
   const { urls } = await provision({ adminUrl, database, passwords: TEST_PASSWORDS, roles: false });
   owner = new pg.Pool({ connectionString: urls.fr_migrator, max: 2 });
-  chainer = createDb(urls.fr_app, { max: 2, applicationName: 'fr-api-test-orgs' });
+  appDb = createDb(urls.fr_app, { max: 2, applicationName: 'fr-api-test-orgs' });
   app = await buildApp(config({ DATABASE_URL: urls.fr_app, MAILER_DRIVER: 'log' }), { mailer, underPressure: false });
   // A route that writes a draft and checks forms.edit, as the draft routes of WP-1.06 will; and one that forgets to.
   for (const [path, perm] of [
@@ -51,7 +51,7 @@ beforeAll(async () => {
   ] as const) {
     app.put(path, { config: { auth: 'user', perm } }, async (request) => {
       const { id } = request.params as { id: string };
-      const rows = await withTenant(chainer.db, tenantOf(request), (tx) =>
+      const rows = await withTenant(appDb.db, tenantOf(request), (tx) =>
         tx.update(formDrafts).set({ draft: { blocks: [] }, updatedBy: tenantOf(request).userId! }).where(eq(formDrafts.formId, id)).returning({ id: formDrafts.formId }),
       );
       return { updated: rows.length };
@@ -63,7 +63,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close();
   await smtpApp?.close();
-  await chainer?.close();
+  await appDb?.close();
   await owner?.end();
 });
 

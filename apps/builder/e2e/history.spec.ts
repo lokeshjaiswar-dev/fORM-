@@ -14,9 +14,11 @@ test('selecting blocks adds no undo history', async ({ page }) => {
   await expect(second).toBeVisible();
 
   for (let i = 0; i < 10; i++) await (i % 2 ? first : second).click();
-  await page.evaluate('document.activeElement?.blur()');
-
-  await page.keyboard.press('ControlOrMeta+z');
+  /*
+   * The toolbar's Undo, not Ctrl+Z: the shortcut only reaches the form from outside an editor, and the editor of the
+   * last block clicked takes focus back after a save on a busy machine, so the key then goes to the editor and undoes nothing.
+   */
+  await page.getByRole('button', { name: 'Undo' }).click();
   await expect(first).toBeVisible();
   await expect(second).toBeHidden();
 });

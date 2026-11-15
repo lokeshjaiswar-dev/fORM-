@@ -28,7 +28,6 @@ async function reports(page: Page): Promise<Report[]> {
 
 test.use({ allowCspViolations: true });
 
-
 test('the builder is served with the production policy and Referrer-Policy', async ({ page }) => {
   const res = await page.goto('/forms');
   const headers = res?.headers() ?? {};

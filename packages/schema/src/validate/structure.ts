@@ -2,6 +2,7 @@ import type { PublishIssue, StoredBlock } from '../v2/blocks.ts';
 import type { FieldCompliance } from '../v2/compliance.ts';
 import type { FormDefinition } from '../v2/definition.ts';
 import type { ClientAction, ServerAction } from '../v2/logic.ts';
+import type { PlainTemplate } from '../v2/rich-text.ts';
 import { VALUE_FIELD_TYPES } from '../v2/zod/catalogue.ts';
 import { isSafeHref, isSafeUrl } from '../v2/zod/primitives.ts';
 import { InlineDocSchema, RichDocSchema } from '../v2/zod/rich-text.ts';
@@ -11,7 +12,8 @@ import { InlineDocSchema, RichDocSchema } from '../v2/zod/rich-text.ts';
  * for blocks, pages and endings; unique ids per parent and per logic list), I3 (unique FieldKey),
  * I4 (every id reference resolves), I5/I6 (rich-text AST, link schemes, alt text), I7 (compliance
  * on value blocks), I12 (each block placed once, child lists without repeats) and I14 (a dpdp
- * consent block precedes the fields that rely on consent).
+ * consent block precedes the fields that rely on consent). S6: a redirect or `visit_url` target opens with
+ * `https://` or `http://` (see `urlTemplateProblem`).
  *
  * Duplicates are always errors. Dangling references, missing purposes, missing alt text, unsupported
  * blocks and I14 are warnings while a draft is being edited ('save') and errors at 'publish'.
@@ -43,6 +45,41 @@ function walk(root: unknown, base: string, visit: (node: Rec, path: string) => v
       if (entry) stack.push([entry[1], `${path}/${token(entry[0])}`]);
     }
   }
+}
+
+const URL_PREFIX = /^https?:\/\//i;
+
+/** C0 and C1 controls and DEL: browsers drop tab and newline from a URL, so `java\tscript:` is a script URL. */
+const hasControlCharacter = (text: string): boolean => {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+};
+
+/**
+ * S6: why a URL template (a redirect ending, a `visit_url` action) cannot be used, or null. Piped answers are filled in at
+ * run time and can start with anything, so the scheme is decided by the literal prefix: the text before the first pipe or
+ * variable must open with `https://` or `http://` (any case, no leading space). Control characters are refused in every
+ * literal part. `'empty'` is a template with no text and no pipe yet, which a draft may hold.
+ */
+function urlTemplateProblem(template: PlainTemplate): 'empty' | 'scheme' | 'control' | null {
+  let prefix = '';
+  let inPrefix = true;
+  let empty = true;
+  for (const part of template) {
+    if (typeof part === 'string') {
+      if (part !== '') empty = false;
+      if (hasControlCharacter(part)) return 'control';
+      if (inPrefix) prefix += part;
+    } else {
+      empty = false;
+      inPrefix = false;
+    }
+  }
+  if (empty) return 'empty';
+  return URL_PREFIX.test(prefix) ? null : 'scheme';
 }
 
 function optionIdsOf(block: StoredBlock | undefined): ReadonlySet<string> | null {
@@ -388,6 +425,39 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
       if ('assetId' in image && image.decorative !== true && !image.alt?.trim()) {
         soft('missing_alt_text', jsonPointer('blocks', id, 'config', 'image'), 'content images need alt text unless marked decorative');
       }
+    }
+  }
+
+  /* S6: redirect and visit_url targets, including a translation of an ending's URL (`ending:<id>:url`). */
+  const urlTemplate = (template: PlainTemplate, path: string) => {
+    switch (urlTemplateProblem(template)) {
+      case 'empty':
+        soft('invalid_url_scheme', path, 'the URL is empty');
+        break;
+      case 'scheme':
+        error('invalid_url_scheme', path, 'the URL must start with https:// or http://');
+        break;
+      case 'control':
+        error('invalid_url_scheme', path, 'the URL may not contain control characters');
+        break;
+      default:
+        break;
+    }
+  };
+  def.endings.forEach((e, i) => {
+    if (e.kind === 'redirect') urlTemplate(e.url, jsonPointer('endings', i, 'url'));
+    else e.actions.forEach((action, j) => {
+      if (action.kind === 'visit_url') urlTemplate(action.url, jsonPointer('endings', i, 'actions', j, 'url'));
+    });
+  });
+  for (const [locale, entries] of Object.entries(def.i18n.messages)) {
+    for (const [key, entry] of Object.entries(entries ?? {})) {
+      if (!key.startsWith('ending:') || !key.endsWith(':url') || !entry) continue;
+      const value: unknown = entry.value;
+      const template = typeof value === 'string' ? [value] : Array.isArray(value) ? (value as PlainTemplate) : null;
+      const at = jsonPointer('i18n', 'messages', locale, key, 'value');
+      if (template) urlTemplate(template, at);
+      else error('invalid_url_scheme', at, 'a translated URL must be plain text');
     }
   }
 

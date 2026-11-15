@@ -3,9 +3,19 @@ import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } fro
 import type { Db } from '@form/db';
 import { scrubUrl } from '@form/observability';
 import { auditProblem, type DenialAudit } from './audit.ts';
+import { ACCESS_PROBLEMS } from './problems/access.ts';
+import { FORMS_PROBLEMS } from './problems/forms.ts';
+import { PUBLISH_PROBLEMS } from './problems/publish.ts';
+import type { ProblemSpec } from './problems/spec.ts';
+import { SUBMISSIONS_PROBLEMS } from './problems/submissions.ts';
+import { SUBMIT_PROBLEMS } from './problems/submit.ts';
 
-/** The closed code enum of problem+json errors (architecture §3.2). Later work packages add their codes here. */
-export const PROBLEMS = {
+/**
+ * The problem codes of auth, accounts, orgs, members and the generic HTTP failures, plus the drafts and form-lifecycle
+ * codes that predate the per-domain files. Domains still being built (forms, publish, access, submit, submissions) list
+ * their codes in `problems/*.ts`, so parallel work packages do not edit the same lines of this file.
+ */
+export const CORE_PROBLEMS = {
   BAD_REQUEST: { status: 400, title: 'Bad request' },
   VALIDATION_FAILED: { status: 400, title: 'Validation failed' },
   INVALID_TOKEN: { status: 400, title: 'The link or ticket is invalid or has expired' },
@@ -42,7 +52,21 @@ export const PROBLEMS = {
   RATE_LIMITED: { status: 429, title: 'Too many requests' },
   INTERNAL: { status: 500, title: 'Internal error' },
   SERVICE_UNAVAILABLE: { status: 503, title: 'Service unavailable' },
-} as const satisfies Record<string, { status: number; title: string }>;
+} as const satisfies Record<string, ProblemSpec>;
+
+/**
+ * The closed code enum of problem+json errors (architecture §3.2). Later work packages add their codes to their domain's
+ * file under `problems/`; `problems.test.ts` checks that no code is listed twice, because a spread would let the later
+ * file silently win.
+ */
+export const PROBLEMS = {
+  ...CORE_PROBLEMS,
+  ...FORMS_PROBLEMS,
+  ...PUBLISH_PROBLEMS,
+  ...ACCESS_PROBLEMS,
+  ...SUBMIT_PROBLEMS,
+  ...SUBMISSIONS_PROBLEMS,
+} as const satisfies Record<string, ProblemSpec>;
 
 export type ProblemCode = keyof typeof PROBLEMS;
 

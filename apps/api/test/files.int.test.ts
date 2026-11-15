@@ -39,7 +39,7 @@ const as = (user: string, org: string) => ({ 'x-fr-dev-user': user, 'x-fr-org': 
 async function publish(fields: Array<ReturnType<typeof fieldBlock>>, title: string): Promise<{ id: string; slug: string }> {
   const created = await app.inject({ method: 'POST', url: '/v1/forms', headers: as(ownerA, orgA), payload: { title } });
   const { id } = created.json<{ id: string }>();
-  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(ownerA, orgA), payload: { draft: draftWith(id, fields, title) } });
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(ownerA, orgA), 'if-match': '0' }, payload: { draft: draftWith(id, fields, title) } });
   expect(put.statusCode).toBe(200);
   const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(ownerA, orgA), payload: {} });
   expect(live.statusCode).toBe(200);

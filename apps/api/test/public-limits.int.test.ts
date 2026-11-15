@@ -12,6 +12,7 @@ import { parseConfig } from '../src/config.ts';
 import { createFileStore } from '../src/files.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 import { draftWith, fieldBlock } from './publishable-draft.ts';
+import { throttleWindowSeconds } from './throttle-window.ts';
 
 const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as const;
 const ADDRESS_A = '203.0.113.10';
@@ -29,7 +30,7 @@ const text = (value: string) => ({ type: 'short_text', value });
 async function publish(title: string): Promise<{ id: string; slug: string; versionId: string }> {
   const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title } })).json<{ id: string }>();
   const blocks = [fieldBlock('comment', 'short_text'), fieldBlock('doc', 'file_upload', { accept: { extensions: ['txt'], mimeTypes: ['text/plain'] } })];
-  expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft: draftWith(id, blocks, title) } })).statusCode).toBe(200);
+  expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft: draftWith(id, blocks, title) } })).statusCode).toBe(200);
   const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: {} });
   expect(live.statusCode).toBe(200);
   return { id, ...live.json<{ slug: string; versionId: string }>() };
@@ -39,7 +40,13 @@ const upload = (slug: string, remoteAddress = ADDRESS_A) =>
   app.inject({ method: 'POST', url: `/v1/p/${slug}/files`, remoteAddress, payload: { blockId: 'doc', name: 'n.txt', mime: 'text/plain', data: Buffer.from('notes').toString('base64') } });
 
 const submit = (slug: string, versionId: string, remoteAddress = ADDRESS_A) =>
-  app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, remoteAddress, payload: { formVersionId: versionId, answers: { comment: text('hi') }, fields: [], locale: 'en-IN' } });
+  app.inject({
+    method: 'POST',
+    url: `/v1/p/${slug}/submissions`,
+    remoteAddress,
+    headers: { 'idempotency-key': randomUUID() },
+    payload: { formVersionId: versionId, answers: { comment: text('hi') }, fields: [], locale: 'en-IN' },
+  });
 
 beforeAll(async () => {
   const adminUrl = inject('pgAdminUrl');
@@ -54,15 +61,18 @@ beforeAll(async () => {
   await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [orgId, userId, 'owner']);
   const parsed = parseConfig({ NODE_ENV: 'test', DEPLOYMENT_MODE: 'onprem', DATABASE_URL: urls.fr_app, AUTH_DEV_HEADERS: 'true', LOG_LEVEL: 'silent' });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
+  const windowSeconds = await throttleWindowSeconds(owner);
   app = await buildApp(parsed.config, {
     underPressure: false,
     files: createFileStore(dir),
     // Small budgets, so a test spends them: three uploads or two submissions per address and form, six or five per address.
+    // The window is chosen from the database's clock so that the current one has an hour left: a window that ended
+    // mid-test would restart the count (see throttle-window.ts).
     authLimits: {
-      auth_files_ip: { max: 6, windowSeconds: 600 },
-      auth_files_form: { max: 3, windowSeconds: 600 },
-      auth_submit_ip: { max: 5, windowSeconds: 600 },
-      auth_submit_form: { max: 2, windowSeconds: 600 },
+      auth_files_ip: { max: 6, windowSeconds },
+      auth_files_form: { max: 3, windowSeconds },
+      auth_submit_ip: { max: 5, windowSeconds },
+      auth_submit_form: { max: 2, windowSeconds },
     },
   });
 });
@@ -105,7 +115,7 @@ describe('rate limits on the anonymous writes of respondents', () => {
     expect((await submit(b.slug, b.versionId)).statusCode).toBe(429);
     expect((await submit(a.slug, a.versionId, ADDRESS_B)).statusCode).toBe(200);
     // Nothing refused was stored.
-    const { rows } = await owner.query<{ n: number }>('select count(*)::int as n from form_submissions where form_id = any ($1)', [[a.id, b.id]]);
+    const { rows } = await owner.query<{ n: number }>('select count(*)::int as n from submissions where form_id = any ($1)', [[a.id, b.id]]);
     expect(rows[0]!.n).toBe(5);
   });
 

@@ -29,7 +29,9 @@ export async function startPostgres(options: { image?: string } = {}): Promise<P
     .withUsername('postgres')
     .withPassword('postgres')
     .withDatabase('postgres')
-    .withCommand(['postgres', '-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'full_page_writes=off'])
+    // Every test file of a package shares this one server and opens its own pools (the API's default is 10), and a few
+    // tests race dozens of transactions on purpose; the default of 100 clients ran out once the files ran side by side.
+    .withCommand(['postgres', '-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'full_page_writes=off', '-c', 'max_connections=500'])
     .start();
   const base = container.getConnectionUri();
   return {

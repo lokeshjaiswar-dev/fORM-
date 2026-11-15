@@ -5,7 +5,7 @@ import { roleLabel } from './roles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { useSessionStore } from '@/auth/client';
 import { AccountMenu } from '@/auth/AccountMenu';
-import { pendingInvite } from '@/org/pendingInvite';
+import { pendingInvite, rememberInvite } from '@/org/pendingInvite';
 import { CreateOrgPage } from './CreateOrgPage';
 import { InvitePage } from './InvitePage';
 import { MembersPage } from './MembersPage';
@@ -243,6 +243,26 @@ describe('invite', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in as asha@example.test to accept' }));
     expect(path()).toBe('/auth/sign-in');
     expect(pendingInvite()).toBe('k'.repeat(43));
+  });
+
+  it('forgets the waiting token when the visitor is signed in as another address (BL-235)', async () => {
+    const token = 'p'.repeat(43);
+    rememberInvite(token);
+    answers['POST /v1/invites/lookup'] = () => ({ status: 200, body: { ...INFO, email: 'other@example.test' } });
+    // No fragment: the page picks the token up from storage, as it does when returning from sign-in.
+    at('/invite');
+    expect(await screen.findByText(/The invitation is for other@example.test/)).toBeInTheDocument();
+    expect(sent('POST', '/v1/invites/lookup')[0]?.body).toEqual({ token });
+    await waitFor(() => expect(pendingInvite()).toBeNull());
+  });
+
+  it('keeps the waiting token while the visitor is the invited address and has not accepted yet', async () => {
+    const token = 'q'.repeat(43);
+    rememberInvite(token);
+    answers['POST /v1/invites/lookup'] = () => ({ status: 200, body: INFO });
+    at('/invite');
+    expect(await screen.findByRole('button', { name: 'Join Acme' })).toBeInTheDocument();
+    expect(pendingInvite()).toBe(token);
   });
 
   it('says when an invite expired or is for someone else', async () => {

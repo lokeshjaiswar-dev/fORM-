@@ -9,6 +9,7 @@ import {
   orgsDueFor,
   partitionsOf,
   PLATFORM_ORG_KEY,
+  resolveFormSlug,
   resolveJobOrg,
   withTenant,
   type OrgSpanningJob,
@@ -121,6 +122,7 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'auth_user_credentials',
       'create_org',
       'create_partitions',
+      'form_access_password_hash',
       'form_files_check',
       'form_submission_recorded',
       'invite_accept',
@@ -137,6 +139,111 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'template_rows_guard',
     ]);
     expect(rows.every((r) => !r.public && !r.seeder)).toBe(true);
+  });
+});
+
+describe('resolve_form_slug (migration 0020: through form_slugs)', () => {
+  /** A published form of org A: a form with a version that is its live one. */
+  async function liveForm(): Promise<{ formId: string; versionId: string }> {
+    const formId = randomUUID();
+    const versionId = randomUUID();
+    await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [formId, seed.a.orgId, seed.a.teamId, seed.a.ownerId, 'Live form']);
+    await t.owner.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash) values ($1, $2, $3, 1, 2, $4, '{}', '{}', 'h')`,
+      [versionId, seed.a.orgId, formId, seed.a.ownerId],
+    );
+    await t.owner.query('update forms set live_version_id = $1 where id = $2', [versionId, formId]);
+    return { formId, versionId };
+  }
+  const slugOf = (tag: string) => `${tag}-${randomUUID().slice(0, 8)}`;
+  const setSlug = (formId: string, slug: string | null) => t.owner.query('update forms set slug = $1 where id = $2', [slug, formId]);
+  const slugRows = async (formId: string) =>
+    (await t.owner.query<{ slug: string; is_primary: boolean }>('select slug, is_primary from form_slugs where form_id = $1 order by created_at, slug', [formId])).rows;
+
+  it('returns primary_slug for an old slug, and nothing for a trashed form', async () => {
+    const { formId, versionId } = await liveForm();
+    const first = slugOf('first');
+    const second = slugOf('second');
+    await setSlug(formId, first);
+    const live = { orgId: seed.a.orgId, formId, liveVersionId: versionId };
+    expect(await resolveFormSlug(t.app.db, first)).toEqual({ ...live, primarySlug: first });
+    // The form is renamed: the old address still resolves, and says where the form lives now.
+    await setSlug(formId, second);
+    expect(await resolveFormSlug(t.app.db, first)).toEqual({ ...live, primarySlug: second });
+    expect(await resolveFormSlug(t.app.db, second)).toEqual({ ...live, primarySlug: second });
+    // Trashed or archived: nothing answers, under either slug. Restored: both do again.
+    for (const lifecycle of ['trashed', 'archived'] as const) {
+      await t.owner.query(`update forms set lifecycle = $1, trashed_at = case when $1 = 'trashed' then now() end where id = $2`, [lifecycle, formId]);
+      expect(await resolveFormSlug(t.app.db, first), lifecycle).toBeNull();
+      expect(await resolveFormSlug(t.app.db, second), lifecycle).toBeNull();
+    }
+    await t.owner.query(`update forms set lifecycle = 'active', trashed_at = null where id = $1`, [formId]);
+    expect(await resolveFormSlug(t.app.db, first)).toEqual({ ...live, primarySlug: second });
+  });
+
+  it('resolves nothing for an unknown slug, or a form with no live version', async () => {
+    expect(await resolveFormSlug(t.app.db, slugOf('nobody'))).toBeNull();
+    const { formId } = await liveForm();
+    const slug = slugOf('unpublished');
+    await setSlug(formId, slug);
+    await t.owner.query('update forms set live_version_id = null where id = $1', [formId]);
+    expect(await resolveFormSlug(t.app.db, slug)).toBeNull();
+  });
+
+  it('is told the slug a form is created with, and keeps every slug it has had', async () => {
+    const slug = slugOf('born');
+    const formId = randomUUID();
+    await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title, slug) values ($1, $2, $3, $4, $5, $6)', [formId, seed.a.orgId, seed.a.teamId, seed.a.ownerId, 'Born with a slug', slug]);
+    expect(await slugRows(formId)).toEqual([{ slug, is_primary: true }]);
+    const next = slugOf('next');
+    await setSlug(formId, next);
+    expect(await slugRows(formId)).toEqual([
+      { slug, is_primary: false },
+      { slug: next, is_primary: true },
+    ]);
+    // Going back to an old slug makes it the primary one again, without a second row for it.
+    await setSlug(formId, slug);
+    expect((await slugRows(formId)).sort((a, b) => a.slug.localeCompare(b.slug))).toEqual(
+      [
+        { slug, is_primary: true },
+        { slug: next, is_primary: false },
+      ].sort((a, b) => a.slug.localeCompare(b.slug)),
+    );
+    // Clearing forms.slug leaves the registry as it was: the addresses stay reserved.
+    await setSlug(formId, null);
+    expect((await slugRows(formId)).map((r) => r.slug).sort()).toEqual([slug, next].sort());
+  });
+
+  it('refuses a slug that another form holds, current or old, in this org or another', async () => {
+    const mine = await liveForm();
+    const old = slugOf('old');
+    await setSlug(mine.formId, old);
+    await setSlug(mine.formId, slugOf('current'));
+    const taken = (await slugRows(mine.formId)).map((r) => r.slug);
+    const thief = await liveForm();
+    for (const slug of taken) {
+      expect(pgCode(await failure(setSlug(thief.formId, slug))), slug).toBe('23505');
+    }
+    // From org B's tenant context org A's slugs are invisible, and still cannot be taken (no row-level error either).
+    const bForm = seed.b.formIds[0];
+    for (const slug of taken) {
+      const err = await failure(
+        withTenant(t.app.db, { orgId: seed.b.orgId, actor: 'user', userId: seed.b.editorId, perms: ['forms.edit'], requestId: 'slug' }, (tx) =>
+          tx.execute(sql`update forms set slug = ${slug} where id = ${bForm}`),
+        ),
+      );
+      expect(pgCode(err), slug).toBe('23505');
+    }
+    expect((await t.owner.query('select slug from forms where id = $1', [bForm])).rows).toEqual([{ slug: null }]);
+    expect(await slugRows(thief.formId)).toEqual([]);
+  });
+
+  it('keeps forms.slug and the registry in step: every form with a slug has exactly one primary row, and it is that slug', async () => {
+    const { rows } = await t.owner.query<{ id: string; primaries: number }>(
+      `select f.id, (select count(*)::int from form_slugs s where s.form_id = f.id and s.is_primary and s.slug = f.slug) as primaries from forms f where f.slug is not null`,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.primaries, r.id).toBe(1);
   });
 });
 

@@ -47,7 +47,7 @@ type Block = ReturnType<typeof fieldBlock>;
 
 async function publish(title: string, blocks: Block[], body: Record<string, unknown> = {}): Promise<{ id: string; slug: string; versionId: string }> {
   const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title } })).json<{ id: string }>();
-  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft: draftWith(id, blocks, title) } });
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft: draftWith(id, blocks, title) } });
   expect(put.statusCode, put.body).toBe(200);
   const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: body });
   expect(live.statusCode, live.body).toBe(200);
@@ -61,7 +61,7 @@ async function upload(slug: string, blockId: string, name: string, mime: string,
 }
 
 const submit = (slug: string, body: Record<string, unknown>) =>
-  app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, payload: { locale: 'en-IN', fields: [], ...body } });
+  app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, headers: { 'idempotency-key': randomUUID() }, payload: { locale: 'en-IN', fields: [], ...body } });
 
 beforeAll(async () => {
   const adminUrl = inject('pgAdminUrl');
@@ -107,10 +107,10 @@ describe('SR-1: a file reference in the answers is bound to the stored file only
       formVersionId: form.versionId,
       answers: { doc: { type: 'file_upload', value: [{ ...file, name: 'Invoice-0423.exe', mime: 'application/pdf' }] } },
     });
-    const { rows } = await owner.query('select answers from form_submissions where form_id = $1', [form.id]);
+    const { rows } = await owner.query('select answers from submissions where form_id = $1', [form.id]);
     const storedName = (rows[0]?.answers as { doc?: { value?: Array<{ name?: string }> } } | undefined)?.doc?.value?.[0]?.name;
     // Wanted: refused, or the reference rewritten from the form_files row (name notes.txt).
-    expect(res.statusCode === 400 || storedName === 'notes.txt', `status ${res.statusCode}, stored name ${storedName}`).toBe(true);
+    expect(res.statusCode === 422 || storedName === 'notes.txt', `status ${res.statusCode}, stored name ${storedName}`).toBe(true);
   });
 
   it('lets a file uploaded through one field stand in an answer to another field with stricter type rules', async () => {
@@ -124,7 +124,7 @@ describe('SR-1: a file reference in the answers is bound to the stored file only
       formVersionId: form.versionId,
       answers: { cv: { type: 'file_upload', value: [{ ...png, name: 'cv.pdf', mime: 'application/pdf' }] } },
     });
-    expect(res.statusCode, 'a file uploaded to "photo" accepted as the answer to "cv"').toBe(400);
+    expect(res.statusCode, 'a file uploaded to "photo" accepted as the answer to "cv"').toBe(422);
   });
 });
 
@@ -135,10 +135,13 @@ describe('SR-2: the display rows a respondent sends are stored and shown as the 
     const res = await submit(form.slug, { formVersionId: form.versionId, answers: {}, fields: forged });
     // The Responses page rebuilds rows from the answers, and falls back to these rows when that gives none.
     if (res.statusCode === 200) {
-      const { rows } = await owner.query('select fields from form_submissions where id = $1', [res.json<{ id: string }>().id]);
-      expect(JSON.stringify(rows[0]?.fields), 'forged display row stored').not.toContain('Approved by HR');
+      // No display rows are stored any more: the page shows the ones rebuilt from the answers and the form's own labels.
+      const { submissionId } = res.json<{ submissionId: string }>();
+      const shown = await app.inject({ url: `/v1/forms/${form.id}/submissions/${submissionId}`, headers: as() });
+      expect(shown.statusCode).toBe(200);
+      expect(JSON.stringify(shown.json<{ fields: unknown }>().fields), 'forged display row shown').not.toContain('Approved by HR');
     } else {
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(422);
     }
   });
 });
@@ -193,7 +196,7 @@ describe('SR-5: respondent and no-permission contexts see every submission and f
     expect((await submit(form.slug, { formVersionId: form.versionId, answers: { comment: text('private answer') } })).statusCode).toBe(200);
     // The context POST /v1/p/:slug/* runs in: architecture §2.2 says a bug there "cannot expose the tenant".
     const seen = await withTenant(appDb.db, { orgId, actor: 'respondent', requestId: 'sr5' }, async (tx) => {
-      const subs = await tx.execute<{ n: string }>(sql`select count(*)::text as n from form_submissions`);
+      const subs = await tx.execute<{ n: string }>(sql`select count(*)::text as n from submissions`);
       const files = await tx.execute<{ n: string }>(sql`select count(*)::text as n from form_files`);
       const deleted = await tx.execute(sql`delete from form_files where form_id = ${form.id}`);
       // Thrown to roll the delete back; the counts travel with it.
@@ -204,7 +207,7 @@ describe('SR-5: respondent and no-permission contexts see every submission and f
 
   it('a member context without submissions.read (role creator) cannot read submissions', async () => {
     const seen = await withTenant(appDb.db, { orgId, actor: 'user', userId, perms: ['forms.create', 'forms.edit', 'forms.publish', 'forms.read'], requestId: 'sr5b', readOnly: true }, async (tx) => {
-      const subs = await tx.execute<{ n: string }>(sql`select count(*)::text as n from form_submissions`);
+      const subs = await tx.execute<{ n: string }>(sql`select count(*)::text as n from submissions`);
       return Number(subs.rows[0]!.n);
     });
     expect(seen).toBe(0);
@@ -224,7 +227,7 @@ describe('SR-6: publish media is cached per live version without a byte bound', 
     const draft = draftWith(id, blocks, 'SR6') as unknown as Record<string, unknown>;
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['cover'] = { image: { assetId: 'cover_a' }, heightPx: 200 };
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['background'] = { kind: 'image', image: { assetId: 'bg_a' }, fit: 'cover' };
-    const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft } });
+    const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft } });
     expect(put.statusCode, put.body).toBe(200);
     gc();
     const before = process.memoryUsage().heapUsed;
@@ -248,7 +251,7 @@ describe('SR-6: publish media is cached per live version without a byte bound', 
     const draft = draftWith(id, [fieldBlock('comment', 'short_text')], 'SR6 cap') as unknown as Record<string, unknown>;
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['cover'] = { image: { assetId: 'cover_a' }, heightPx: 200 };
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['background'] = { kind: 'image', image: { assetId: 'bg_a' }, fit: 'cover' };
-    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft } })).statusCode).toBe(200);
     // 1.2 MB and 1.2 MB: each under the per-picture limit, together over the version's.
     const over = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: { media: { cover_a: pic(900_000), bg_a: pic(900_000) } } });
     expect(over.statusCode, over.body.slice(0, 200)).toBe(413);

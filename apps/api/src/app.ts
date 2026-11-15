@@ -5,21 +5,24 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import underPressure from '@fastify/under-pressure';
-import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type RouteOptions } from 'fastify';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { DestinationStream } from 'pino';
 import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
 import { cachedClockCheck, type ClockStatus } from '@form/observability';
-import type { KeyProvider, Mailer } from '@form/ports';
+import type { KeyProvider, Mailer, Queue } from '@form/ports';
 import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
 import { createServiceLogger } from './log.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { createFileStore, type FileStore } from './files.ts';
+import type { SearchIndexFactory } from './submissions/search.ts';
 import { formFileRoutes } from './routes/form-files.ts';
+import { accessRoutes } from './routes/access.ts';
 import { formRoutes } from './routes/forms.ts';
 import { publicFormRoutes } from './routes/public.ts';
+import { publicUnlockRoutes } from './routes/public-unlock.ts';
 import { publishRoutes } from './routes/publish.ts';
 import { submissionRoutes } from './routes/submissions.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -56,7 +59,23 @@ export interface AppDeps {
    * temporary: the StoragePort/S3 adapter with presigned uploads and scanning replaces it in WP-1.14.
    */
   files?: FileStore;
+  /**
+   * Makes the full-text search index (the composition root passes `createPostgresSearchIndex`, the only place an adapter
+   * may be imported); without it, searching responses and deleting them forever answer 503.
+   */
+  searchIndex?: SearchIndexFactory;
+  /**
+   * A producer queue (pg-boss through `createPgBossQueue({ mode: 'producer' })`; the composition root makes it, starts it
+   * and stops it after the app closes). Every stored response sends one `submission.fanout` job through it, inside the
+   * submit transaction, so it must run on the app's own database. Without it no job is sent, which only tests do.
+   */
+  queue?: Queue;
   now?: () => Date;
+  /**
+   * Called with every route as it is registered, including routes a test adds after `buildApp` returns (tests only). The
+   * cross-org isolation suite lists them to find an `auth: 'user'` or `'account'` route that has no isolation case.
+   */
+  onRoute?: (route: RouteOptions) => void;
 }
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -78,6 +97,8 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
       return typeof incoming === 'string' && REQUEST_ID.test(incoming) ? incoming : randomUUID();
     },
   });
+  // Before any plugin or route, so the hook sees them all.
+  if (deps.onRoute) app.addHook('onRoute', deps.onRoute);
 
   const handle =
     deps.db ??
@@ -190,12 +211,14 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
     },
     clock: deps.clock ?? cachedClockCheck({ servers: config.ntp.servers, maxOffsetMs: config.ntp.maxOffsetMs, ttlMs: 60_000 }),
   });
-  formRoutes(app, { db: handle.db });
+  formRoutes(app, { db: handle.db, secret: config.auth.secret, now });
   publishRoutes(app, { db: handle.db, secret: config.auth.secret, now });
+  accessRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   const files = deps.files ?? createFileStore(path.resolve(config.filesDir ?? path.resolve(process.cwd(), '.data/files')));
-  publicFormRoutes(app, { db: handle.db, config, files, throttle, now });
+  publicFormRoutes(app, { db: handle.db, config, files, throttle, now, effects: { searchIndex: deps.searchIndex, queue: deps.queue } });
+  publicUnlockRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
-  submissionRoutes(app, { db: handle.db });
+  submissionRoutes(app, { db: handle.db, files, secret: config.auth.secret, searchIndex: deps.searchIndex, now });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);
   app.get('/v1/openapi.json', { config: { auth: 'none' }, schema: { hide: true } }, async () => app.swagger());

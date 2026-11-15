@@ -82,7 +82,7 @@ async function createForm(title: string, draft: unknown): Promise<string> {
   const put = await app.inject({
     method: 'PUT',
     url: `/v1/forms/${id}/draft`,
-    headers: as(userId),
+    headers: { ...as(userId), 'if-match': '0' },
     payload: { draft: { ...(draft as object), formId: id } },
   });
   expect(put.statusCode).toBe(200);

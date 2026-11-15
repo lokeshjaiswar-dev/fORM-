@@ -6,7 +6,7 @@ import path from 'node:path';
 import pg from 'pg';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDb, provision, type DbHandle } from '@form/db';
+import { createDb, newSubmissionKey, provision, type DbHandle } from '@form/db';
 import { createTestDatabase } from '@form/testkit';
 import { createUploadStore } from '../src/file-store.ts';
 import { createUploadJobs, removeUnattachedUploads, UNATTACHED_AFTER_HOURS } from '../src/jobs/index.ts';
@@ -16,6 +16,8 @@ interface Org {
   id: string;
   form: string;
   other: string;
+  /** The version each form's responses are filed under, by form id. */
+  versions: Record<string, string>;
 }
 
 const log = pino({ level: 'silent' });
@@ -26,12 +28,17 @@ let a: Org;
 let b: Org;
 
 async function seedOrg(slug: string): Promise<Org> {
-  const org = { id: randomUUID(), form: randomUUID(), other: randomUUID() };
+  const org: Org = { id: randomUUID(), form: randomUUID(), other: randomUUID(), versions: {} };
   const user = randomUUID();
   await owner.query('insert into orgs (id, slug, name) values ($1, $2, $2)', [org.id, slug]);
   await owner.query('insert into users (id, email, email_norm) values ($1, $2, $2)', [user, `owner@${slug}.test`]);
   for (const form of [org.form, org.other]) {
     await owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [form, org.id, randomUUID(), user, `${slug} form`]);
+    org.versions[form] = randomUUID();
+    await owner.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash) values ($1, $2, $3, 1, 2, $4, '{}', '{}', $5)`,
+      [org.versions[form], org.id, form, user, '0'.repeat(64)],
+    );
   }
   return org;
 }
@@ -50,8 +57,16 @@ async function upload(org: Org, ageHours: number, form = org.form): Promise<stri
 
 const rowExists = async (id: string) => (await owner.query('select 1 from form_files where id = $1', [id])).rowCount === 1;
 const bytesExist = (id: string) => existsSync(path.join(dir, `${id}.bin`));
-const submit = (org: Org, answers: unknown, form = org.form) =>
-  owner.query(`insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, $4, '[]') returning id`, [randomUUID(), org.id, form, JSON.stringify(answers)]);
+/** A response received now (the current month always has a partition), as the submit route stores one. */
+async function submit(org: Org, answers: unknown, form = org.form): Promise<{ id: string; receivedAt: Date }> {
+  const { id, receivedAt } = newSubmissionKey(new Date());
+  await owner.query(
+    `insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta)
+     values ($1, $2, $3, $4, $5, $6, 0, 'complete', $7, '{}', '{"locale":"en-IN"}')`,
+    [id, receivedAt, org.id, form, org.versions[form], Buffer.alloc(32), JSON.stringify(answers)],
+  );
+  return { id, receivedAt };
+}
 const names = (...ids: string[]) => ({ cv: { type: 'file_upload', value: ids.map((fileId) => ({ fileId, name: 'cv.pdf' })) } });
 
 beforeAll(async () => {
@@ -84,14 +99,20 @@ describe('the upload sweep (drafts.expire)', () => {
 
   it('keeps a file a submission holds, however old, and removes it once that submission is deleted', async () => {
     const held = await upload(a, 100);
-    const { rows } = await submit(a, names(held));
-    // The insert trigger linked the file to the submission.
-    expect((await owner.query('select submission_id from form_files where id = $1', [held])).rows[0].submission_id).toBe(rows[0].id);
+    const stored = await submit(a, names(held));
+    // The insert trigger linked the file to the submission, by both columns of its key.
+    expect((await owner.query('select submission_id, submission_received_at from form_files where id = $1', [held])).rows[0]).toEqual({
+      submission_id: stored.id,
+      submission_received_at: stored.receivedAt,
+    });
     await removeUnattachedUploads(app.db, a.id, { files: files() });
     expect([await rowExists(held), bytesExist(held)]).toEqual([true, true]);
     // Deleting the submission un-holds the file (on delete set null); the next sweep takes its row and bytes.
-    await owner.query('delete from form_submissions where id = $1', [rows[0].id]);
-    expect((await owner.query('select submission_id from form_files where id = $1', [held])).rows[0].submission_id).toBeNull();
+    await owner.query('delete from submissions where id = $1 and received_at = $2', [stored.id, stored.receivedAt]);
+    expect((await owner.query('select submission_id, submission_received_at from form_files where id = $1', [held])).rows[0]).toEqual({
+      submission_id: null,
+      submission_received_at: null,
+    });
     await removeUnattachedUploads(app.db, a.id, { files: files() });
     expect([await rowExists(held), bytesExist(held)]).toEqual([false, false]);
   });

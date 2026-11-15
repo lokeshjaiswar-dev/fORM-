@@ -5,6 +5,7 @@ import { installRegexEngine } from './regex.ts';
 installRegexEngine(RE2JS);
 
 export * from './api.ts';
+export { patternIssues } from './definitionChecks.ts';
 
 /** The engine is already installed; kept so both entries have the same API. */
 export const loadRegexEngine = (): Promise<void> => Promise.resolve();

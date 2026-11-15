@@ -23,8 +23,9 @@ export interface UploadGcOptions {
  * Removes the files of one org that no submission holds and that are older than `afterHours`: the row first, in its
  * own committed transaction, then the bytes. In that order a crash leaves bytes with no row (harmless, and found by a
  * reconciliation of the store) and never a row with no bytes under a submission. A file counts as held when a
- * submission's insert linked it (`form_files.submission_id`, set by the insert trigger) and, for one that was never
- * linked (or lost its link when its submission was deleted), when any submission of the form still names its id.
+ * submission's insert linked it (`form_files.submission_id` and `submission_received_at`, the key of the row in the
+ * partitioned `submissions` table, set by the insert trigger) and, for one that was never linked (or lost its link
+ * when its submission was deleted), when any submission of the form received since the upload still names its id.
  * A submission that lands while the sweep runs wins in all but a few milliseconds: the DELETE re-checks, row by row,
  * that the file is still unheld when it gets to it. (A respondent who held the page open for a day and submits in the
  * very moment the sweep takes their file gets a missing file, and the API says so at download.)
@@ -47,8 +48,8 @@ export async function removeUnattachedUploads(db: Db, orgId: string, o: UploadGc
             and g.submission_id is null
             and g.created_at < now() - make_interval(hours => ${hours}::int)
             and not exists (
-              select 1 from form_submissions s
-              where s.org_id = g.org_id and s.form_id = g.form_id and s.submitted_at >= g.created_at
+              select 1 from submissions s
+              where s.org_id = g.org_id and s.form_id = g.form_id and s.received_at >= g.created_at
                 and s.answers::text like '%' || g.id::text || '%')
           order by g.created_at
           limit ${limit}::int)

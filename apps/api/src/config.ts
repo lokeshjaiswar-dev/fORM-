@@ -69,6 +69,12 @@ export const apiEnvSchema = z
     NTP_MAX_OFFSET_MS: z.coerce.number().int().min(1).default(1000),
     /** Where respondents' uploaded files are kept (default `.data/files` under the working directory). The worker's `drafts.expire` sweep must be given the same directory. */
     FILE_STORE_DIR: z.string().min(1).optional(),
+    /**
+     * `id:base64url` entries, the first signs (ADR-0016), the same key ring the worker verifies with: the API signs the
+     * `submission.fanout` job each stored response sends. Required in production (`main.ts` refuses to start without it);
+     * elsewhere an API without it sends no job.
+     */
+    JOB_SIGNING_KEYS: z.string().min(1).optional(),
     /** Header authentication (`X-FR-Dev-User`) for tests and local development, next to sessions. */
     AUTH_DEV_HEADERS: flag.default(false),
     /** The API's own origin: OAuth redirect URIs (`<url>/v1/auth/oauth/<provider>/callback`). */
@@ -132,6 +138,8 @@ export interface ApiConfig {
   /** The file store's directory (`FILE_STORE_DIR`), when set. The filesystem store is temporary: the S3 adapter replaces it in WP-1.14. */
   filesDir: string | undefined;
   authDevHeaders: boolean;
+  /** `JOB_SIGNING_KEYS`, parsed by the queue adapter in `main.ts`; undefined when unset. */
+  jobSigningKeys: string | undefined;
   auth: AuthConfig;
   mailer: { driver: 'smtp' | 'log'; smtpUrl: string | undefined; from: { address: string; name: string } };
   kms: KmsConfig;
@@ -173,7 +181,7 @@ export type ConfigResult = { ok: true; config: ApiConfig } | { ok: false; errors
 
 type Env = Record<string, string | undefined>;
 
-const FILE_KEYS = ['DATABASE_URL', 'AUTH_SECRET', 'SMTP_URL', 'OIDC_GOOGLE_CLIENT_SECRET', 'OIDC_MICROSOFT_CLIENT_SECRET'];
+const FILE_KEYS = ['DATABASE_URL', 'AUTH_SECRET', 'JOB_SIGNING_KEYS', 'SMTP_URL', 'OIDC_GOOGLE_CLIENT_SECRET', 'OIDC_MICROSOFT_CLIENT_SECRET'];
 
 /** `*_FILE` secrets win over plain variables (architecture §1.5). */
 function resolveFiles(env: Env, read: (path: string) => string): { env: Env; errors: string[] } {
@@ -233,6 +241,7 @@ export function parseConfig(rawEnv: Env, read: (path: string) => string = (p) =>
       ntp: { servers: e.NTP_SERVERS ?? [], maxOffsetMs: e.NTP_MAX_OFFSET_MS },
       filesDir: e.FILE_STORE_DIR,
       authDevHeaders: e.AUTH_DEV_HEADERS,
+      jobSigningKeys: e.JOB_SIGNING_KEYS,
       auth: {
         secret: new Uint8Array(e.AUTH_SECRET ? Buffer.from(e.AUTH_SECRET, 'base64url') : randomBytes(32)),
         builderUrl: (e.PUBLIC_BUILDER_URL ?? 'http://localhost:5173').replace(/\/+$/, ''),

@@ -7,7 +7,7 @@ async function startWithShortAnswer(page: Page) {
   await page.getByRole('option', { name: /Short answer/ }).click();
 }
 
-test('reload restores the form from IndexedDB, and the forms list shows it', async ({ page }) => {
+test('reload restores the form from its saved draft, and the forms list shows it', async ({ page }) => {
   await openNewForm(page);
   await page.getByPlaceholder('Form title').fill('Saved form');
   await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();

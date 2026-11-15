@@ -77,6 +77,15 @@ describe('parseConfig', () => {
     expect(missing.ok ? [] : missing.errors).toEqual(['DATABASE_URL_FILE: cannot read /nope (ENOENT)']);
   });
 
+  it('takes the job signing key ring (the worker verifies with the same one) from JOB_SIGNING_KEYS or its file, and runs without it outside production', () => {
+    const none = parseConfig(base);
+    expect(none.ok && none.config.jobSigningKeys).toBeUndefined();
+    const set = parseConfig({ ...base, JOB_SIGNING_KEYS: 'k1:abc,k0:def' });
+    expect(set.ok && set.config.jobSigningKeys).toBe('k1:abc,k0:def');
+    const file = parseConfig({ ...base, JOB_SIGNING_KEYS: 'ignored:x', JOB_SIGNING_KEYS_FILE: '/run/secrets/job_keys' }, () => 'k1:fromfile\n');
+    expect(file.ok && file.config.jobSigningKeys).toBe('k1:fromfile');
+  });
+
   it('derives the CORS origin, NTP servers and telemetry settings', () => {
     const r = parseConfig({
       ...base,

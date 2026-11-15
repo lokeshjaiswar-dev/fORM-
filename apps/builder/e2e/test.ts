@@ -1,5 +1,6 @@
 import { expect, test as base } from '@playwright/test';
 import { editionSummary, loadEditionConfig, type EditionSummary } from '@form/config';
+import { FakeFormsApi } from './forms-api.ts';
 
 export interface CspViolation {
   directive: string;
@@ -38,6 +39,11 @@ export const TEST_NOTICE = {
  * provokes violations on purpose sets `allowCspViolations` and reads `cspViolations`.
  *
  * `GET /v1/meta/edition` answers with `edition` (SaaS by default); `null` makes the API unreachable.
+ *
+ * The suites without an API (playwright.config.ts) get a browser that is signed in as a member of an org, with a
+ * stand-in forms API to save to (`formsApi`, e2e/forms-api.ts), because /forms and /builder sit behind sign-in
+ * (BL-206). A suite about the signed-out visitor says `test.use({ signedIn: false })`; a test can also sign in midway
+ * with `formsApi.signedIn = true`. The app is never told which it is: it asks `GET /v1/me` and reads the answer.
  */
 export const test = base.extend<{
   allowCspViolations: boolean;
@@ -45,6 +51,8 @@ export const test = base.extend<{
   edition: EditionSummary | null;
   editionRoute: void;
   realApi: boolean;
+  signedIn: boolean;
+  formsApi: FakeFormsApi;
   authRoutes: void;
 }>({
   allowCspViolations: [false, { option: true }],
@@ -60,14 +68,22 @@ export const test = base.extend<{
     },
     { auto: true },
   ],
-  /* The suites without an API see a signed-out visitor; playwright.stack.config.ts sets `realApi` and mocks nothing. */
+  /* The suites without an API mock one; playwright.stack.config.ts sets `realApi` and mocks nothing. */
   realApi: [false, { option: true }],
+  signedIn: [true, { option: true }],
+  formsApi: [
+    async ({ context, realApi, signedIn }, use) => {
+      const api = new FakeFormsApi();
+      api.signedIn = signedIn;
+      /* On the context, so a second tab of the same test talks to the same API. A page's own `page.route` still wins. */
+      if (!realApi) await context.route((url) => url.pathname.startsWith('/v1/'), (route) => api.handle(route));
+      await use(api);
+    },
+    { auto: true },
+  ],
   authRoutes: [
     async ({ context, realApi }, use) => {
       if (!realApi) {
-        await context.route('**/v1/me', (route) =>
-          route.fulfill({ status: 401, contentType: 'application/problem+json', json: { status: 401, code: 'UNAUTHENTICATED', title: 'Authentication required' } }),
-        );
         await context.route('**/v1/auth/methods', (route) => route.fulfill({ json: { password: true, emailLinks: true, oauth: [] } }));
         await context.route('**/v1/privacy/notice', (route) => route.fulfill({ json: TEST_NOTICE }));
       }

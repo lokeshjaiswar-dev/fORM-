@@ -71,5 +71,6 @@ describe('EditionBadge', () => {
     expect(editionLabel(null)).toBe('Edition unknown');
     useEditionStore.setState({ summary: AIR, source: 'cached' });
     rerender(<EditionBadge />);
-    expect(screen.getByRole('note', { name: 'Edition' })).toHaveAttribute('title', expect.stringMatching(/are off on this installation\. Last known/));  });
+    expect(screen.getByRole('note', { name: 'Edition' })).toHaveAttribute('title', expect.stringMatching(/are off on this installation\. Last known/));
+  });
 });

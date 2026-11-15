@@ -2,11 +2,98 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { DEV_CSP_REPORT_PATH, builderSecurityHeaders } from './security/headers.ts';
 import { cspReportCollector, noInjectedStyles } from './security/vite.ts';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+
+const RADIX_VIEWPORT_CSS = 'virtual:fr-radix-viewport-styles.css';
+/** The Radix modules that render their own `<style dangerouslySetInnerHTML>` (Select and ScrollArea), as a bundled path. */
+const RADIX_STYLE_MODULES = /[\\/]node_modules[\\/]@radix-ui[\\/]react-(?:select|scroll-area)[\\/]dist[\\/]index\.mjs$/;
+/** `jsx("style", { dangerouslySetInnerHTML: { __html: `…` }, nonce })`: the whole element, with the rule it injects captured. */
+const RADIX_STYLE_ELEMENT = /\/\* @__PURE__ \*\/ jsx\(\s*"style",\s*\{\s*dangerouslySetInnerHTML: \{\s*__html: `([^`]*)`\s*\},\s*nonce\s*\}\s*\)/g;
+
+/**
+ * Production builds only. Radix Select and ScrollArea hide the native scrollbar of their viewport with a `<style>`
+ * element they write with `innerHTML` when a component mounts. The production policy refuses both halves of that
+ * (`style-src 'self'` has no inline styles, and `require-trusted-types-for 'script'` makes a string `innerHTML` throw),
+ * so any page with a Select, such as the org switcher on the forms list, stopped rendering. This takes the element out
+ * of those two modules and bundles the same rules into the stylesheet instead, so the page looks the same and the
+ * policy stays as written (docs/platform/builder-security-headers.md). A Radix release that changes the element fails
+ * the build here instead of shipping a violation. Same idea as `noInjectedStyles` for sonner (security/vite.ts).
+ */
+function radixViewportStyles(): Plugin {
+  const resolved = `\0${RADIX_VIEWPORT_CSS}`;
+  const rules = new Set<string>();
+  return {
+    name: 'fr-radix-viewport-styles',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId: (source) => (source === RADIX_VIEWPORT_CSS ? resolved : null),
+    load: (id) => (id === resolved ? [...rules].join('\n') : null),
+    transform(code, id) {
+      if (!RADIX_STYLE_MODULES.test(id.split('?')[0] ?? '')) return null;
+      let found = 0;
+      const next = code.replace(RADIX_STYLE_ELEMENT, (_element, css: string) => {
+        found += 1;
+        rules.add(css);
+        return 'null';
+      });
+      if (found !== 1) this.error(`${id}: expected one <style dangerouslySetInnerHTML> element to replace, found ${found}; review radixViewportStyles in vite.config.ts`);
+      return { code: `import ${JSON.stringify(RADIX_VIEWPORT_CSS)};\n${next}`, map: null };
+    },
+  };
+}
+
+const STYLE_SINGLETON_MODULE = /[\\/]node_modules[\\/]react-style-singleton[\\/]dist[\\/]es2015[\\/]singleton\.js$/;
+/** react-style-singleton's `stylesheetSingleton`, kept in a constructable stylesheet that `document` adopts instead of a `<style>` element. */
+const ADOPTED_STYLESHEET_SINGLETON = `export var stylesheetSingleton = function () {
+  var counter = 0;
+  var sheet = null;
+  return {
+    add: function (style) {
+      if (counter == 0) {
+        sheet = new CSSStyleSheet();
+        sheet.replaceSync(style);
+        document.adoptedStyleSheets = document.adoptedStyleSheets.concat(sheet);
+      }
+      counter++;
+    },
+    remove: function () {
+      counter--;
+      if (!counter && sheet) {
+        var gone = sheet;
+        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(function (s) { return s !== gone; });
+        sheet = null;
+      }
+    },
+  };
+};
+`;
+
+/**
+ * Production builds only. Every Radix overlay that locks scrolling (Dialog, the open Select, DropdownMenu) mounts
+ * react-remove-scroll, which writes its `body[data-scroll-locked]` rules into a `<style>` element it appends to the
+ * head. `style-src 'self'` refuses that element, so opening the New form dialog raised a violation. The rules depend on
+ * the scrollbar width, so they cannot be a fixed rule in the stylesheet; this keeps them in a constructable stylesheet
+ * the document adopts, which the policy does not govern (it limits `<style>` elements and `style=""` markup, not the
+ * CSSOM). The module is replaced whole, and the build fails if its shape changes.
+ */
+function adoptedScrollLockStyles(): Plugin {
+  return {
+    name: 'fr-adopted-scroll-lock-styles',
+    apply: 'build',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!STYLE_SINGLETON_MODULE.test(id.split('?')[0] ?? '')) return null;
+      if (!code.includes('export var stylesheetSingleton = function ()') || !code.includes("document.createElement('style')")) {
+        this.error(`${id}: react-style-singleton no longer looks as expected; review adoptedScrollLockStyles in vite.config.ts`);
+      }
+      return { code: ADOPTED_STYLESHEET_SINGLETON, map: null };
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   /* VITE_API_URL: the API origin when it is not the builder's own (SaaS: api.form.example). Unset: same origin. */
@@ -19,9 +106,19 @@ export default defineConfig(({ mode }) => {
   /* Reports go to the local collector, through `report-uri` only (see BuilderHeaderOptions.reportTo). */
   const reports = { reportUri: DEV_CSP_REPORT_PATH, reportTo: false };
   return {
-    plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles()],
+    plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles(), radixViewportStyles(), adoptedScrollLockStyles()],
     /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
     assetsInclude: ['**/*.formpack'],
+    build: {
+      /*
+       * Fonts are always files. Vite inlines any asset under 4 kB as a `data:` URL, and one small JetBrains Mono subset
+       * (from @dmacq/ui/fonts.css) falls under that, so the built stylesheet asked for `data:font/woff2`. The policy's
+       * `font-src 'self'` refuses that (rightly: it is the production policy, docs/platform/builder-security-headers.md),
+       * and every page that painted with it reported a violation. Keeping fonts out of the inline rule makes the build match
+       * the policy; `undefined` leaves every other asset on Vite's default size rule.
+       */
+      assetsInlineLimit: (file: string) => (/\.(woff2?|ttf|otf|eot)$/i.test(file) ? false : undefined),
+    },
     resolve: {
       alias: {
         '@': path.resolve(root, './src'),

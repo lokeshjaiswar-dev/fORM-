@@ -30,6 +30,17 @@ export const DEFAULT_AUTH_LIMITS: Record<AuthThrottleBucket, Limit> = {
   auth_files_form: { max: 120, windowSeconds: 600 },
   auth_submit_ip: { max: 120, windowSeconds: 600 },
   auth_submit_form: { max: 60, windowSeconds: 600 },
+  // Password attempts on a protected form (`POST /v1/p/:slug/unlock`). Every attempt counts, the right password too (a
+  // refund after the fact would let parallel guesses through), and each one costs an argon2id check (64 MiB, in the
+  // libuv threadpool) whether or not the form has a password. Two budgets, both counted before any hashing:
+  // `auth_unlock_ip` per IP hash over every form, so one address cannot aim at many published slugs (its own org can
+  // publish as many as it likes, each with a fresh per-form budget) and starve the threadpool that sign-in hashing,
+  // file and crypto work share; and `auth_unlock_form` per IP hash and form, the sign-in limit (`auth_login`): ten tries
+  // in fifteen minutes at one form. The per-address cap is three of those budgets, enough for a person with a few
+  // protected forms to open. The per-visit-token budget that spares a shared address arrives with the runtime host
+  // (WP-1.09, architecture §3.5 `runtime_unlock`).
+  auth_unlock_ip: { max: 30, windowSeconds: 900 },
+  auth_unlock_form: { max: 10, windowSeconds: 900 },
 };
 
 export interface ThrottleKey {

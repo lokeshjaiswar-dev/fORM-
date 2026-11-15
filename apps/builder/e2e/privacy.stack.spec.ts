@@ -26,7 +26,8 @@ test('a user exports their data, sends a privacy request and deletes their accou
   expect(data.user.email).toBe(email);
   expect(data.notices.map((n) => n.context)).toEqual(['signup']);
 
-  await page.getByLabel('Kind of request').selectOption('information');
+  await page.getByRole('combobox', { name: 'Kind of request' }).click();
+  await page.getByRole('option', { name: 'What do you hold about me?' }).click();
   await page.getByLabel('Your request').fill('Which of my data do you keep after I delete my account?');
   await page.getByRole('button', { name: 'Send request' }).click();
   await expect(page.getByRole('status')).toContainText(/Sent\. Your reference is GRV-[A-Z2-7]{8}/);
@@ -39,7 +40,8 @@ test('a user exports their data, sends a privacy request and deletes their accou
 
   // Signed out, and the account no longer signs in.
   await page.goto('/forms');
-  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  // The forms list is for members (BL-206): a visitor without an account is sent to sign in.
+  await expect(page).toHaveURL(/\/auth\/sign-in$/);
   await page.goto('/auth/sign-in');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);

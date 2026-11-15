@@ -1,34 +1,38 @@
 import { Suspense, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Inbox, Plus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import type { FormDefinition, MergeConflict, MergeResolution } from '@form/schema';
-import { BUILDER_LOCALE, t } from '@/i18n';
+import { t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { AccountMenu } from '@/auth/AccountMenu';
+import { useActiveOrg } from '@/auth/client';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
 import { mergeFromRepository } from '@/lib/mergeSelected';
 import { uid } from '@/lib/utils';
-import type { FormSummary, StoredForm } from '@/persistence/DocumentRepository';
-import { whenSaved } from '@/persistence/autosave';
+import type { StoredForm } from '@/persistence/DocumentRepository';
 import { mergeRemoteForms } from '@/persistence/draftsApi';
 import { newStoredForm } from '@/persistence/openForm';
-import { deleteSubmissionFiles, fileIdsFromAnswers } from '@/persistence/blobStore';
-import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
 import { useRepository } from '@/persistence/repository';
+import { FormsListPanel } from '@/pages/forms/FormsListPanel';
+import { FormsNotice } from '@/pages/forms/FormsNotice';
+import { FormsTabs } from '@/pages/forms/FormsTabs';
+import { FormsToolbar } from '@/pages/forms/FormsToolbar';
+import { rowTitle } from '@/pages/forms/rowTitle';
+import { useFormActions } from '@/pages/forms/useFormActions';
+import { useFormsList, type ListRow } from '@/pages/forms/useFormsList';
 import { builderPath } from '@/pages/useBuilderMode';
 
 const M = defineMessages('builder', {
   'forms.title': 'Forms',
   'forms.new': 'New form',
-  'forms.empty': 'No forms yet. Start a new one.',
   'forms.untitled': 'Untitled form',
-  'forms.responses': 'Responses',
-  'forms.responses_n': '{n, plural, one {# response} other {# responses}}',
-  'forms.blocks': '{n, plural, one {# block} other {# blocks}}',
-  'forms.unreadable': 'Saved forms could not be read.',
   'forms.not_saved': 'The form could not be saved in this browser.',
+  'forms.cancel': 'Cancel',
+  'forms.delete_title': 'Delete this form?',
+  'forms.delete_body': '“{title}” was never saved to the server, so it cannot be restored. This cannot be undone.',
+  'forms.delete_confirm': 'Delete form',
   'new.title': 'New form',
   'new.description': 'Start from a blank form or from a template. Templates work offline.',
   'new.blank': 'Blank form',
@@ -43,55 +47,35 @@ const M = defineMessages('builder', {
   'forms.merge_continue': 'Merge with these choices',
 });
 
-const dateTime = new Intl.DateTimeFormat(BUILDER_LOCALE, { dateStyle: 'medium', timeStyle: 'short' });
+const NONE_SELECTED: ReadonlySet<string> = new Set();
 
-function savedWhen(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? '' : ` · ${dateTime.format(at)}`;
-}
-
-/** The forms saved in this browser: open one, or start a new one (blank or from a template). */
+/**
+ * The forms of the active org (BL-267): search, sort, stars, the Active, Archived and Trash folders, and clone, archive,
+ * restore and trash on each row. The list itself is the server's (`useFormsList`); this page adds creating a form and
+ * merging the selected ones.
+ */
 export function FormsPage() {
   const repo = useRepository();
-  const submissions = useOptionalSubmissions();
+  const org = useActiveOrg()?.id ?? null;
   const navigate = useNavigate();
-  const [forms, setForms] = useState<FormSummary[] | null>(null);
+  const list = useFormsList(repo, org);
   const [error, setError] = useState<string | null>(null);
+  const actions = useFormActions(repo, org, list, setError);
   const [creating, setCreating] = useState(false);
-  const [removing, setRemoving] = useState<FormSummary | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** A form only this browser has, asked to be deleted: it cannot be restored, so the member confirms first. */
+  const [removing, setRemoving] = useState<ListRow | null>(null);
+  const { lifecycle, sort, favourite } = list;
+  // The forms ticked for a merge belong to the list they were ticked in: in another folder, search or order they may not
+  // be on screen, and merging forms nobody can see would be a surprise. So the selection names its list, and a list
+  // that is loaded again starts with nothing ticked.
+  const [selection, setSelection] = useState<{ view: object; ids: ReadonlySet<string> }>({ view: list.view, ids: new Set() });
+  const selected = selection.view === list.view ? selection.ids : NONE_SELECTED;
   const [conflicts, setConflicts] = useState<MergeConflict[] | null>(null);
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [merging, setMerging] = useState(false);
+  const loaded = list.state.status === 'ready' ? list.state : null;
 
   useEffect(preloadGallery, []);
-
-  useEffect(() => {
-    let live = true;
-    whenSaved().then(() => repo.list()).then(
-      (list) => live && setForms(list),
-      () => live && setError(t(M['forms.unreadable'])),
-    );
-    return () => {
-      live = false;
-    };
-  }, [repo]);
-
-  useEffect(() => {
-    if (!submissions || !forms) return;
-    let live = true;
-    Promise.all(forms.map(async (form) => [form.id, (await submissions.listByForm(form.id)).length] as const)).then(
-      (pairs) => {
-        if (!live) return;
-        setCounts(Object.fromEntries(pairs));
-      },
-      () => undefined,
-    );
-    return () => {
-      live = false;
-    };
-  }, [forms, submissions]);
 
   async function saveThenOpen(form: StoredForm): Promise<void> {
     try {
@@ -112,11 +96,11 @@ export function FormsPage() {
   }
 
   function toggleSelected(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
+    setSelection((prev) => {
+      const next = new Set(prev.view === list.view ? prev.ids : []);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      return next;
+      return { view: list.view, ids: next };
     });
   }
 
@@ -138,7 +122,7 @@ export function FormsPage() {
       }
       if (remote?.ok) {
         setConflicts(null);
-        setSelected(new Set());
+        setSelection({ view: list.view, ids: new Set() });
         const stored = await repo.load(remote.id);
         if (stored) await saveThenOpen(stored);
         else navigate(builderPath(remote.id));
@@ -151,7 +135,7 @@ export function FormsPage() {
       const local = await mergeFromRepository(repo, ids, resolutions);
       if (local.ok) {
         setConflicts(null);
-        setSelected(new Set());
+        setSelection({ view: list.view, ids: new Set() });
         await saveThenOpen(local.form);
         return;
       }
@@ -166,23 +150,13 @@ export function FormsPage() {
   }
 
   async function confirmDelete() {
-    if (!removing) return;
-    const id = removing.id;
+    const row = removing;
     setRemoving(null);
-    try {
-      if (submissions) {
-        const gone = await submissions.removeByForm(id);
-        await deleteSubmissionFiles(gone.flatMap((row) => fileIdsFromAnswers(row.answers)));
-      }
-      await repo.remove(id);
-      setForms((list) => list?.filter((form) => form.id !== id) ?? null);
-    } catch {
-      setError(t(M['forms.unreadable']));
-    }
+    if (row) await actions.trash(row);
   }
 
   return (
-    <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
+    <main className="mx-auto w-full max-w-[800px] px-8 pb-24 pt-[72px] text-foreground">
       <div className="-mt-12 mb-6 flex justify-end">
         <AccountMenu />
       </div>
@@ -191,7 +165,7 @@ export function FormsPage() {
         <Button onClick={() => setCreating(true)}>
           <Plus /> {t(M['forms.new'])}
         </Button>
-        {forms && forms.length >= 2 ? (
+        {loaded && lifecycle !== 'trashed' && loaded.items.length >= 2 ? (
           <Button
             type="button"
             variant="outline"
@@ -207,47 +181,20 @@ export function FormsPage() {
           {error}
         </p>
       ) : null}
-      {forms === null ? null : forms.length === 0 ? (
-        <p className="mt-10 text-[15px] text-muted-foreground">{t(M['forms.empty'])}</p>
-      ) : (
-        <ul className="mt-8 divide-y divide-border">
-          {forms.map((form) => (
-            <li key={form.id} className="-mx-2 flex items-center gap-2 rounded-[6px] px-2 py-3 hover:bg-state-hover">
-              <input
-                type="checkbox"
-                className="size-4 shrink-0"
-                checked={selected.has(form.id)}
-                aria-label={`Select ${form.title || t(M['forms.untitled'])}`}
-                onChange={() => toggleSelected(form.id)}
-              />
-              <Link to={builderPath(form.id)} className="flex min-w-0 flex-1 items-center gap-3">
-                <FileText className="size-4 shrink-0 text-text-subtle" />
-                <span className="min-w-0 flex-1 truncate text-[15px]">{form.title || t(M['forms.untitled'])}</span>
-                <span className="shrink-0 text-[13px] text-muted-foreground">
-                  {t(M['forms.blocks'], { n: form.blocks })}
-                  {savedWhen(form.savedAt)}
-                </span>
-              </Link>
-              <Button variant="outline" size="sm" asChild>
-                <Link to={`/forms/${form.id}/responses`} onClick={(e) => e.stopPropagation()}>
-                  <Inbox />
-                  {t(M['forms.responses'])}
-                  {counts[form.id] ? ` · ${t(M['forms.responses_n'], { n: counts[form.id] ?? 0 })}` : ''}
-                </Link>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Delete"
-                onClick={() => setRemoving(form)}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <FormsNotice notice={actions.notice} onDismiss={actions.dismissNotice} />
+      <div className="mt-8 flex flex-col gap-3">
+        <FormsTabs value={lifecycle} onChange={list.setLifecycle} />
+        <FormsToolbar
+          search={list.search}
+          onSearch={list.setSearch}
+          sort={sort}
+          onSort={list.setSort}
+          favourite={favourite}
+          onFavourite={list.setFavourite}
+          serverControls={loaded?.source !== 'local'}
+        />
+      </div>
+      <FormsListPanel list={list} actions={actions} selected={selected} onToggleSelected={toggleSelected} onConfirmDelete={setRemoving} />
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -306,7 +253,7 @@ export function FormsPage() {
           </ul>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setConflicts(null)}>
-              Cancel
+              {t(M['forms.cancel'])}
             </Button>
             <Button
               type="button"
@@ -329,17 +276,15 @@ export function FormsPage() {
       <Dialog open={removing !== null} onOpenChange={(next) => !next && setRemoving(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete this form?</DialogTitle>
-            <DialogDescription>
-              "{removing?.title || t(M['forms.untitled'])}" will be removed from this browser. This cannot be undone.
-            </DialogDescription>
+            <DialogTitle>{t(M['forms.delete_title'])}</DialogTitle>
+            <DialogDescription>{t(M['forms.delete_body'], { title: removing ? rowTitle(removing) : '' })}</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setRemoving(null)}>
-              Cancel
+              {t(M['forms.cancel'])}
             </Button>
             <Button type="button" variant="destructive" onClick={() => void confirmDelete()}>
-              Delete form
+              {t(M['forms.delete_confirm'])}
             </Button>
           </div>
         </DialogContent>

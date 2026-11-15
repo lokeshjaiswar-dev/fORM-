@@ -52,7 +52,7 @@ describe('FormDesignPanel', () => {
     expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
   });
 
-  it('closes when clicking outside and keeps the password empty by default', async () => {
+  it('closes when clicking outside, and its Submit tab has the Access section (the password lives on the server, WP-1.07)', async () => {
     const user = userEvent.setup();
     render(
       <div>
@@ -65,7 +65,8 @@ describe('FormDesignPanel', () => {
     await user.click(screen.getByRole('tab', { name: 'Logic' }));
     expect(screen.getByText(/When answers match/)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Submit' }));
-    expect(screen.getByLabelText('Password (optional)')).toHaveValue('');
+    expect(screen.getByRole('region', { name: 'Access' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password (optional)')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Outside' }));
     expect(screen.queryByRole('dialog', { name: 'Form settings' })).not.toBeInTheDocument();
   });

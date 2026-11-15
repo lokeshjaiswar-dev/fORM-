@@ -7,7 +7,7 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
@@ -48,6 +48,14 @@ async function app(cfg = config(), deps: AppDeps = {}) {
   apps.push(a);
   return { app: a, lines };
 }
+
+/*
+ * The first buildApp() of a run loads Fastify and its plugins, which takes seconds when every package's tests run at once.
+ * It is paid here, in a hook with the longer `hookTimeout` of vitest.config.ts, so the tests below keep the default timeout.
+ */
+beforeAll(async () => {
+  await (await app()).app.ready();
+});
 
 afterEach(async () => {
   for (const a of apps.splice(0)) await a.close();
@@ -438,7 +446,8 @@ describe('OpenAPI', () => {
     // modules/auth/oidc.ts (2): the OAuth start and callback. modules/account/routes.ts: the privacy notice shown
     // before sign-up. modules/orgs/members.ts: the invite lookup by its secret token. routes/public.ts (3): a published
     // form by slug, its file uploads, its answers: a respondent has no account (the anonymous writes are bound to the
-    // live version of one form and validated there).
+    // live version of one form and validated there). routes/public-unlock.ts (1): the respondent's password check for a
+    // protected form: the password is the credential, the route is limited per address and form, and every refusal is audited.
     expect(open).toEqual({
       'app.ts': 1,
       'modules/account/routes.ts': 1,
@@ -448,6 +457,7 @@ describe('OpenAPI', () => {
       'routes/csp-reports.ts': 1,
       'routes/health.ts': 2,
       'routes/meta.ts': 1,
+      'routes/public-unlock.ts': 1,
       'routes/public.ts': 3,
     });
   });
@@ -482,10 +492,21 @@ describe('OpenAPI', () => {
       '/v1/forms/merge',
       '/v1/forms/{formId}/files/{id}',
       '/v1/forms/{formId}/submissions',
+      '/v1/forms/{formId}/submissions/bulk',
       '/v1/forms/{formId}/submissions/{id}',
+      '/v1/forms/{id}',
+      '/v1/forms/{id}/access',
+      '/v1/forms/{id}/access/password',
+      '/v1/forms/{id}/archive',
+      '/v1/forms/{id}/clone',
       '/v1/forms/{id}/draft',
+      '/v1/forms/{id}/favourite',
       '/v1/forms/{id}/live',
       '/v1/forms/{id}/publish',
+      '/v1/forms/{id}/restore',
+      '/v1/forms/{id}/slug',
+      '/v1/forms/{id}/trash',
+      '/v1/forms/{id}/validate',
       '/v1/invites/accept',
       '/v1/invites/lookup',
       '/v1/me',
@@ -509,6 +530,7 @@ describe('OpenAPI', () => {
       '/v1/p/{slug}',
       '/v1/p/{slug}/files',
       '/v1/p/{slug}/submissions',
+      '/v1/p/{slug}/unlock',
       '/v1/privacy/notice',
     ]);
     expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);

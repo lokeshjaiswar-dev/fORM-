@@ -36,7 +36,7 @@ test('three pages: logic hides a required field, the form submits, and the hidde
   await page.getByRole('switch', { name: 'Required' }).click();
   await page.getByRole('tab', { name: 'Logic' }).click();
   await page.getByRole('button', { name: 'Add a rule' }).click();
-  await expect(page.getByRole('button', { name: 'Attending' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'When' })).toContainText('Attending');
   await page.getByRole('textbox', { name: 'Value' }).fill('yes');
   await expect(page.getByText('Hidden until a rule shows it').first()).toBeVisible();
   await openSettings(page, 2);
@@ -72,6 +72,8 @@ test('the preview has no serious or critical axe violations, before and after va
   /* About 13 s alone and close to the default 30 s under six workers (BL-146). */
   test.slow();
   await openNewForm(page);
+  /* The preview dims a placeholder where an untitled form's title goes; a published form never shows it, so the form is titled. */
+  await page.getByPlaceholder('Form title').fill('Contact us');
   await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   const fields: Array<[string, RegExp, string]> = [
     ['/short', /Short answer/, 'Full name'],

@@ -11,17 +11,16 @@ import { Alert, AlertDescription, Button, TextLink } from '@dmacq/ui';
 import { Tooltip } from '@/components/Tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
 import { useEdition } from '@/edition/edition';
-import { previewStatus, previewUploader, previewVersion } from '@/lib/preview';
+import { useAccessPreviewStatus } from '@/components/builder/access/accessPreview';
+import { previewUploader, previewVersion } from '@/lib/preview';
 import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
 import { recordSubmission } from '@/persistence/recordSubmission';
 import { useDoc } from '@/state/documentStore';
-import { useOpsStore } from '@/state/opsStore';
 
 const M = defineMessages('builder', {
   'preview.desktop': 'Desktop',
   'preview.tablet': 'Tablet',
   'preview.mobile': 'Mobile',
-  'preview.wrong_password': 'Incorrect password',
   'preview.refused': 'This form cannot be previewed yet.',
   'preview.redirect': 'After submit, respondents go to {url}',
   'preview.open_redirect': 'Open in a new tab',
@@ -35,20 +34,22 @@ const DEVICES = [
   ['mobile', M['preview.mobile'], PhoneGlyph],
 ] as const;
 
-/** The preview of the open form: the store's v2 definition and the status its local FormOps give. */
+/** The preview of the open form: the store's v2 definition and the status the form's access settings on the server give. */
 export function FormPreview() {
   const definition = useDoc((d) => d);
-  const ops = useOpsStore();
-  const status = useMemo(() => previewStatus(ops), [ops]);
-  return <PreviewPane definition={definition} status={status} password={ops.password} />;
+  const status = useAccessPreviewStatus(definition.formId);
+  return <PreviewPane definition={definition} status={status} />;
 }
 
 /**
  * The builder preview: a v2 draft compiled locally (compile + projectForRuntime, as publish would) and shown through
  * @form/renderer in a device frame. Submissions and files stay in the page; each submission is dispatched on window as
  * a `form-preview-submit` event so tooling and e2e tests can read the payload.
+ *
+ * A form with a password shows the password screen, but the preview never checks what is typed: the password lives on
+ * the server as a hash the builder cannot read, and the author is previewing the form, not guessing their own password.
  */
-export function PreviewPane({ definition, status = OPEN, password }: { definition: FormDefinition; status?: RuntimeStatus; password?: string | undefined }) {
+export function PreviewPane({ definition, status = OPEN }: { definition: FormDefinition; status?: RuntimeStatus }) {
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [unlocked, setUnlocked] = useState(false);
   const [redirect, setRedirect] = useState<string | null>(null);
@@ -75,10 +76,7 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
           () => undefined,
         );
       }}
-      onUnlock={(attempt) => {
-        if (attempt === password) setUnlocked(true);
-        else toast.error(t(M['preview.wrong_password']));
-      }}
+      onUnlock={() => setUnlocked(true)}
       onEvent={(event) => {
         /* The preview never leaves the builder: it shows where a respondent would go (BL-134). */
         if (event.type === 'redirect') setRedirect(event.url);

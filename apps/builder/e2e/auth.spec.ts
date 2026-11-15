@@ -28,12 +28,17 @@ test.describe('air-gapped', () => {
   });
 });
 
-test('the forms list offers sign-in to a signed-out visitor', async ({ page }) => {
-  await page.goto('/forms');
-  await page.getByRole('link', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-  await page.getByRole('link', { name: 'Create one' }).click();
-  await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+test.describe('signed out', () => {
+  test.use({ signedIn: false });
+
+  /* BL-206: the forms list is for members, so a visitor lands on sign-in, which offers the way to an account. */
+  test('the forms list sends a signed-out visitor to sign in, which offers sign-up', async ({ page }) => {
+    await page.goto('/forms');
+    await expect(page).toHaveURL(/\/auth\/sign-in$/);
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await page.getByRole('link', { name: 'Create one' }).click();
+    await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+  });
 });
 
 test('sends a verification link back to the second factor when the account has TOTP on', async ({ page }) => {

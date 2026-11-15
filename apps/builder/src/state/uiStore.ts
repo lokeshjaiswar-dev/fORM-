@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Block, BlockId } from '@form/schema';
+import type { ServerDraft } from '@/persistence/DocumentRepository';
 
 /*
  * Builder UI state: selection, panels, dialogs and session banners. None of it is part of the document, so none of
@@ -16,7 +17,22 @@ export interface LoadNote {
 /** Another tab has this form open, or saved it after this tab loaded it. */
 export type TabConflict = 'open_elsewhere' | 'saved_elsewhere';
 
-export type SaveState = { state: 'idle' } | { state: 'saving' } | { state: 'saved'; at: string } | { state: 'error'; message: string };
+/**
+ * `saved`: the server has it. `local`: it is safe in this browser and the server could not be reached; it goes up on a
+ * retry. `conflict`: the server holds a newer draft and the author has to choose (`draftConflict`).
+ */
+export type SaveState =
+  | { state: 'idle' }
+  | { state: 'saving' }
+  | { state: 'saved'; at: string }
+  | { state: 'local'; at: string }
+  | { state: 'conflict' }
+  | { state: 'error'; message: string };
+
+/** The server's draft that the open form's unsent changes clash with; the merge dialog shows while this is set. */
+export interface DraftConflictState {
+  server: ServerDraft;
+}
 
 export interface UiState {
   activeBlockId: BlockId | null;
@@ -31,6 +47,8 @@ export interface UiState {
   clipboard: Block | null;
   notes: LoadNote[];
   conflict: TabConflict | null;
+  /** A 409 from the server waiting for the author's choice (WP-1.06). Autosave raises it; the merge dialog clears it. */
+  draftConflict: DraftConflictState | null;
   save: SaveState;
   setActiveBlock: (id: BlockId | null) => void;
   openInspector: (id: BlockId) => void;
@@ -42,9 +60,11 @@ export interface UiState {
   setPendingDelete: (id: BlockId | null) => void;
   dismissNotes: () => void;
   dismissConflict: () => void;
+  raiseDraftConflict: (server: ServerDraft) => void;
+  clearDraftConflict: () => void;
 }
 
-export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save'> = {
+export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'draftConflict' | 'save'> = {
   activeBlockId: null,
   inspectorOpen: false,
   inspectorWidth: 400,
@@ -55,6 +75,7 @@ export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'insp
   clipboard: null,
   notes: [],
   conflict: null,
+  draftConflict: null,
   save: { state: 'idle' },
 };
 
@@ -70,6 +91,8 @@ export const useUiStore = create<UiState>()((set) => ({
   setPendingDelete: (pendingDelete) => set({ pendingDelete }),
   dismissNotes: () => set({ notes: [] }),
   dismissConflict: () => set({ conflict: null }),
+  raiseDraftConflict: (server) => set({ draftConflict: { server } }),
+  clearDraftConflict: () => set({ draftConflict: null }),
 }));
 
 /** A fresh UI for a newly opened form; the inspector width and the copied block are kept. The field sidebar opens with the canvas. */

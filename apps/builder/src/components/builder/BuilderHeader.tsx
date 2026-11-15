@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { runtimeEdition } from '@form/config';
-import type { IsoInstant } from '@form/schema';
+import { defineMessages } from '@form/i18n';
+import type { BlockId } from '@form/schema';
+import { t } from '@/i18n';
 import { useDoc, currentDoc } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
@@ -11,13 +12,36 @@ import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/Tooltip';
-import { useEdition } from '@/edition/edition';
-import { previewVersion } from '@/lib/preview';
 import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
 import { CopyLink } from '@/components/CopyLink';
+import { PublishIssuesDialog } from '@/components/builder/PublishIssuesDialog';
 import { rememberAfterSignIn } from '@/auth/returnTo';
-import { OrgRequired, SignInRequired, fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
+import {
+  DraftNotSaved,
+  OrgRequired,
+  PublishBlocked,
+  PublishConflict,
+  SignInRequired,
+  checkPublishable,
+  fillUrl,
+  publishLive,
+  rememberedSlug,
+  type PublishIssueView,
+} from '@/persistence/publishApi';
+
+const M = defineMessages('builder', {
+  'header.saved_local': 'Saved on this device',
+  'header.conflict': 'Changed elsewhere',
+  'header.plan_mismatch': 'This browser and the server disagree about how the form compiles. Reload the page, then publish again.',
+  'header.conflict_toast': 'This form changed somewhere else. Choose which version to keep, then publish again.',
+});
+
+/** What the publish dialog lists: the server's issues, and whether any of them blocks. */
+interface PublishIssues {
+  issues: PublishIssueView[];
+  count: number;
+}
 
 export function BuilderHeader() {
   const { id = '' } = useParams();
@@ -38,30 +62,39 @@ export function BuilderHeader() {
     return slug ? fillUrl(slug) : null;
   });
   const [error, setError] = useState<string | null>(null);
-  const edition = useEdition();
+  const [listed, setListed] = useState<PublishIssues | null>(null);
 
   useEffect(() => {
     const slug = rememberedSlug(id);
     setLink(slug ? fillUrl(slug) : null);
   }, [id]);
 
-  async function onPublish() {
+  /** Freezes the saved draft as the live version and shows the share link. */
+  async function publish() {
+    const live = await publishLive(id, currentDoc());
+    setListed(null);
+    setLink(fillUrl(live.slug));
+    setShareOpen(true);
+  }
+
+  /**
+   * Publish: the draft is saved, the server checks it (`/validate`), and only a draft with no error goes on to
+   * publish. Warnings are listed first and published on confirmation (`confirmed`).
+   */
+  async function onPublish(confirmed = false) {
     setBusy(true);
     setError(null);
     try {
       await flushAutosave();
-      const doc = currentDoc();
-      const built = previewVersion(doc, { state: 'open' }, new Date().toISOString() as IsoInstant, runtimeEdition(edition));
-      if (!built.ok) {
-        const first = built.issues.find((i) => i.severity === 'error') ?? built.issues[0];
-        setError(first?.message ?? 'This form cannot be published yet.');
-        setShareOpen(true);
-        return;
+      if (!confirmed) {
+        const check = await checkPublishable(id);
+        const blocking = check.issues.some((i) => i.severity === 'error');
+        if (blocking || check.issues.length) {
+          setListed({ issues: check.issues, count: check.issueCount });
+          return;
+        }
       }
-      const live = await publishLive(id, doc, doc.title);
-      const url = fillUrl(live.slug);
-      setLink(url);
-      setShareOpen(true);
+      await publish();
     } catch (err) {
       // Not signed in (or the session ended): the draft is already saved in this browser, so sign in and come back.
       if (err instanceof SignInRequired || (err instanceof ApiProblem && err.status === 401)) {
@@ -76,8 +109,19 @@ export function BuilderHeader() {
         navigate('/orgs/new');
         return;
       }
+      if (err instanceof PublishBlocked && err.code === 'PUBLISH_BLOCKED') {
+        setListed({ issues: err.issues, count: err.issueCount });
+        return;
+      }
+      // The merge dialog is open already; it is what the author needs to answer.
+      if (err instanceof PublishConflict) {
+        toast(t(M['header.conflict_toast']));
+        return;
+      }
+      if (err instanceof DraftNotSaved && err.conflict) return;
       setShareOpen(true);
-      if (err instanceof ApiUnreachable) setError('The API is not running, so this form cannot be shared yet.');
+      if (err instanceof PublishBlocked) setError(t(M['header.plan_mismatch']));
+      else if (err instanceof ApiUnreachable) setError('The API is not running, so this form cannot be shared yet.');
       else if (err instanceof ApiProblem) {
         setError(
           err.code === 'SERVICE_UNAVAILABLE' || err.code === 'INTERNAL'
@@ -89,6 +133,14 @@ export function BuilderHeader() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Opens the inspector of the block an issue is about (in Edit, where the inspector is). */
+  function goToField(blockId: BlockId) {
+    if (!currentDoc().blocks[blockId]) return;
+    setListed(null);
+    if (mode === 'preview') setMode('edit');
+    useUiStore.getState().openInspector(blockId);
   }
 
   return (
@@ -139,6 +191,15 @@ export function BuilderHeader() {
         ) : null}
       </header>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
+      <PublishIssuesDialog
+        issues={listed?.issues ?? null}
+        issueCount={listed?.count ?? 0}
+        blocked={listed?.issues.some((i) => i.severity === 'error') ?? false}
+        busy={busy}
+        onClose={() => setListed(null)}
+        onPublishAnyway={() => void onPublish(true)}
+        onGoToField={goToField}
+      />
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent>
           <DialogHeader>
@@ -176,6 +237,10 @@ function saveLabel(save: SaveState): string {
       return 'Saving…';
     case 'saved':
       return 'Saved';
+    case 'local':
+      return t(M['header.saved_local']);
+    case 'conflict':
+      return t(M['header.conflict']);
     case 'error':
       return 'Not saved';
     default:
