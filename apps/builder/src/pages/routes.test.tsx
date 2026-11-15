@@ -202,15 +202,17 @@ describe('routes', () => {
     expect(await screen.findByText('Hello')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Question' })).toBeInTheDocument();
     expect(screen.queryByText('Rehearsal answer')).not.toBeInTheDocument();
-    expect(answer.mock.calls[0]?.[0]).toContain('/v1/forms/f1/submissions?');
+    // The forms list asks the API first (it answers nothing the list can read here, so the browser's copy is shown); the responses come from the form's own route.
+    expect(answer.mock.calls.some(([url]) => String(url).includes('/v1/forms/f1/submissions?'))).toBe(true);
   });
 
-  it('deletes a form from the list', async () => {
+  it('moves a form to the trash from its actions menu, and it leaves the list and this browser', async () => {
     const repo = new MemoryRepository();
     await repo.save(stored('f1', 'Feedback'));
     renderApp(repo, '/forms');
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete form' }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Actions for Feedback' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Move to trash' }));
     expect(await screen.findByText(/No forms yet/)).toBeInTheDocument();
     expect(repo.records.has('f1')).toBe(false);
   });

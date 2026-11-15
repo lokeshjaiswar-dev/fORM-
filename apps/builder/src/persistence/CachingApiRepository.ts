@@ -86,6 +86,10 @@ export class CachingApiRepository implements DocumentRepository {
     return [...map.values()].sort(newestFirst);
   }
 
+  listCached(): Promise<FormSummary[]> {
+    return this.cache.list();
+  }
+
   async load(id: string): Promise<StoredForm | null> {
     const local = await this.cache.load(id);
     let remote: Awaited<ReturnType<typeof getRemoteDraft>> = null;

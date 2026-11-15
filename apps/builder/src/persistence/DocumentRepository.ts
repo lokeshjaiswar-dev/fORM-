@@ -78,6 +78,12 @@ export interface FormSummary {
 export interface DocumentRepository {
   /** Every stored form, most recently saved first. */
   list(): Promise<FormSummary[]>;
+  /**
+   * The forms in this browser's cache only, with no call to the server. The forms list uses it for what the server's
+   * pages cannot show: forms that never reached the server, and the whole list while the server is out of reach.
+   * A repository with no server behind it leaves it out (its `list` is already local).
+   */
+  listCached?(): Promise<FormSummary[]>;
   /** Throws `DraftConflict` when this browser has unsent changes and the server's draft moved on. */
   load(id: string): Promise<StoredForm | null>;
   /**
