@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Page, Route } from '@playwright/test';
+import type { Route } from '@playwright/test';
 
 /*
  * A small stand-in for the forms API, for the e2e suites that run without the real stack (playwright.config.ts). The
@@ -8,6 +8,10 @@ import type { Page, Route } from '@playwright/test';
  * draft with `If-Match` (a stale write is a 409 with the server draft, as the real API sends it), validate, publish and
  * trash. The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks are the
  * API's, and run in apps/api/test/publish.int.test.ts. A spec about what the server decides belongs in a `*.stack.spec.ts`.
+ *
+ * e2e/test.ts gives every test one of these as the `formsApi` fixture, routed for the whole browser context (a second
+ * tab shares it), and signed in as `ME` unless the suite says `test.use({ signedIn: false })`. The app is not told
+ * anything: it asks `GET /v1/me` as it would of the real API and gets a member of an org, or a 401.
  */
 
 export const USER = { id: 'u1', email: 'asha@example.test', name: 'Asha', emailVerified: true, totpEnabled: false };
@@ -64,6 +68,8 @@ function issuesOf(draft: Record<string, unknown>): FakeIssue[] {
 export class FakeFormsApi {
   readonly forms = new Map<string, FakeForm>();
   readonly calls: FakeCall[] = [];
+  /** Whether the browser has a session: `GET /v1/me` and the forms routes answer 401 while it has not. A test may sign in or out midway. */
+  signedIn = true;
 
   /** The calls made to `path` with `method`. */
   called(method: string, path: RegExp): FakeCall[] {
@@ -91,9 +97,12 @@ export class FakeFormsApi {
     const body: unknown = request.postData() ? JSON.parse(request.postData() ?? 'null') : undefined;
     const record = () => this.calls.push({ method, path, body });
 
-    if (method === 'GET' && path === '/v1/me') return route.fulfill({ json: ME });
+    const unauthenticated = () => route.fulfill(problem(401, 'UNAUTHENTICATED', 'Authentication required'));
+
+    if (method === 'GET' && path === '/v1/me') return this.signedIn ? route.fulfill({ json: ME }) : unauthenticated();
 
     if (path === '/v1/forms') {
+      if (!this.signedIn) return unauthenticated();
       record();
       if (method === 'GET') {
         const items = [...this.forms.values()].filter((f) => f.lifecycle === 'active').map(({ id, title, lifecycle, updatedAt }) => ({ id, title, lifecycle, updatedAt }));
@@ -108,6 +117,7 @@ export class FakeFormsApi {
 
     const match = /^\/v1\/forms\/([^/]+)\/(draft|validate|publish|trash)$/.exec(path);
     if (!match) return route.fallback();
+    if (!this.signedIn) return unauthenticated();
     record();
     const [, id = '', action] = match;
     const form = this.forms.get(id);
@@ -152,11 +162,4 @@ export class FakeFormsApi {
     }
     return route.fallback();
   }
-}
-
-/** Signs the page's browser in as `ME` and gives it a forms API to save to. Returns the API, to read what the page sent. */
-export async function signInWithFormsApi(page: Page): Promise<FakeFormsApi> {
-  const api = new FakeFormsApi();
-  await page.route((url) => url.pathname.startsWith('/v1/'), (route) => api.handle(route));
-  return api;
 }

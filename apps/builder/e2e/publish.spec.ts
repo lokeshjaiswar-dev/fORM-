@@ -1,36 +1,42 @@
 import { expect, test } from './test.ts';
 import { openNewForm } from './helpers.ts';
-import { ME, USER, signInWithFormsApi } from './forms-api.ts';
+import { ME, USER } from './forms-api.ts';
 
 /*
  * Publish is for signed-in members of an org, and so is the builder (BL-206): a visitor who is not signed in is sent to
- * sign in from /forms and /builder, and comes back to the page they asked for. The API is a stand-in here (the suites
- * without a stack see a signed-out visitor, e2e/forms-api.ts for the signed-in one); the real checks are the API's,
- * proved in apps/api/test/publish.int.test.ts, and the two-browser merge is drafts.stack.spec.ts.
+ * sign in from /forms and /builder, and comes back to the page they asked for. The API is a stand-in here: every test
+ * starts signed in as a member of an org with a forms API to save to, and the two about the signed-out visitor say
+ * otherwise (e2e/test.ts, e2e/forms-api.ts). The real checks are the API's, proved in apps/api/test/publish.int.test.ts,
+ * and the two-browser merge is drafts.stack.spec.ts.
  */
 
-test('a signed-out visitor is sent to sign in from the forms list, and returns to it after signing in', async ({ page }) => {
-  await page.goto('/forms');
-  await expect(page).toHaveURL(/\/auth\/sign-in$/);
-  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+test.describe('signed out', () => {
+  test.use({ signedIn: false });
 
-  await page.route('**/v1/auth/login', (route) => route.fulfill({ json: { status: 'signed_in', user: USER } }));
-  await signInWithFormsApi(page);
-  await page.getByLabel('Email').fill(ME.user.email);
-  await page.getByLabel('Password').fill('violet-anchor-teapot-91');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/forms$/);
-  await expect(page.getByRole('button', { name: 'New form' })).toBeVisible();
+  test('a signed-out visitor is sent to sign in from the forms list, and returns to it after signing in', async ({ page, formsApi }) => {
+    await page.goto('/forms');
+    await expect(page).toHaveURL(/\/auth\/sign-in$/);
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+
+    await page.route('**/v1/auth/login', async (route) => {
+      formsApi.signedIn = true;
+      await route.fulfill({ json: { status: 'signed_in', user: USER } });
+    });
+    await page.getByLabel('Email').fill(ME.user.email);
+    await page.getByLabel('Password').fill('violet-anchor-teapot-91');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(/\/forms$/);
+    await expect(page.getByRole('button', { name: 'New form' })).toBeVisible();
+  });
+
+  test('the builder is behind sign-in too: a signed-out visitor never sees the form', async ({ page }) => {
+    await page.goto('/builder/00000000-0000-4000-8000-000000000001');
+    await expect(page).toHaveURL(/\/auth\/sign-in$/);
+    await expect(page.getByPlaceholder('Form title')).toHaveCount(0);
+  });
 });
 
-test('the builder is behind sign-in too: a signed-out visitor never sees the form', async ({ page }) => {
-  await page.goto('/builder/00000000-0000-4000-8000-000000000001');
-  await expect(page).toHaveURL(/\/auth\/sign-in$/);
-  await expect(page.getByPlaceholder('Form title')).toHaveCount(0);
-});
-
-test('a javascript: redirect blocks publish, and the issue is shown with nothing published', async ({ page }) => {
-  const api = await signInWithFormsApi(page);
+test('a javascript: redirect blocks publish, and the issue is shown with nothing published', async ({ page, formsApi: api }) => {
   const id = await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await page.getByPlaceholder('Type ‘/’ to insert blocks').fill('/short');
@@ -57,8 +63,7 @@ test('a javascript: redirect blocks publish, and the issue is shown with nothing
   await expect(page.getByRole('dialog', { name: 'Share form' })).toHaveCount(0);
 });
 
-test('a form that passes the checks publishes with the draft revision and gets its share link', async ({ page }) => {
-  const api = await signInWithFormsApi(page);
+test('a form that passes the checks publishes with the draft revision and gets its share link', async ({ page, formsApi: api }) => {
   await openNewForm(page);
   await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await page.getByPlaceholder('Type ‘/’ to insert blocks').fill('/short');
