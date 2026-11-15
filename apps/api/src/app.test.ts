@@ -833,6 +833,7 @@ describe('OpenAPI', () => {
       '/v1/p/{slug}/submissions',
       '/v1/p/{slug}/unlock',
       '/v1/privacy/notice',
+      '/v1/reviews/queue',
     ]);
     expect(Object.keys(doc.components.securitySchemes).sort()).toEqual(['devUser', 'org', 'session']);
     expect(JSON.stringify(doc.paths['/v1/forms'])).toContain('"maximum":200');
