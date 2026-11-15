@@ -7,7 +7,8 @@ import { clearSessionCookie, SESSION_COOKIE, SESSION_IDLE_SECONDS, type ClientIn
 
 /**
  * `none`: public; `account`: a signed-in user, no org; `user`: a signed-in member of the org named in `X-FR-Org`
- * (or, when the request names none, the org the session's switcher chose).
+ * (or, when the request names none, the org the session's switcher chose). A route that sets none of these is `user`:
+ * public is a decision written on the route (and counted by a test), never what a forgotten setting gives.
  */
 export type RouteAuth = 'none' | 'account' | 'user';
 
@@ -143,8 +144,11 @@ export function registerAuth(app: FastifyInstance, options: AuthOptions): void {
   }
 
   app.addHook('preHandler', async (request, reply) => {
-    const { auth, perm } = request.routeOptions.config;
-    if (auth !== 'user' && auth !== 'account') return;
+    // Default deny: a route with no `auth` setting needs a session and a membership, like `user`. (An address that matches
+    // no route is answered 404 by the not-found handler, which has no route to protect.)
+    if (request.is404) return;
+    const { auth = 'user', perm } = request.routeOptions.config;
+    if (auth === 'none') return;
     const account = await identify(request, reply);
     request.account = account;
     request.log = request.log.child({ userId: account.userId });

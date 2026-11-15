@@ -239,6 +239,24 @@ describe('problem+json', () => {
   });
 });
 
+describe('default deny', () => {
+  it('treats a route with no auth setting as a user route: no session, no answer', async () => {
+    const { app: a } = await app();
+    a.get('/forgotten', async () => ({ secret: 'patient list' }));
+    a.get('/forgotten-perm', { config: { perm: 'forms.read' } }, async () => ({ secret: 'patient list' }));
+    a.get('/announced', { config: { auth: 'none' } }, async () => ({ ok: true }));
+    for (const url of ['/forgotten', '/forgotten-perm']) {
+      const res = await a.inject({ url });
+      expect(res.statusCode, url).toBe(401);
+      expect(res.json()).toMatchObject({ code: 'UNAUTHENTICATED' });
+      expect(res.body).not.toContain('patient list');
+    }
+    // A route that says it is public is, and an address that matches no route is still a plain 404.
+    expect((await a.inject({ url: '/announced' })).statusCode).toBe(200);
+    expect((await a.inject({ url: '/v1/nothing-here' })).statusCode).toBe(404);
+  });
+});
+
 describe('authentication stub', () => {
   it('answers 401 on user routes when dev headers are off', async () => {
     const { app: a } = await app();
