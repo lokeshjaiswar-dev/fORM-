@@ -5,7 +5,7 @@ import { defineMessages } from '@form/i18n';
 import { FormRenderer, browserSession, type RendererSession, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
 import type { Answers, BlockId, EndingId, FieldError, IsoInstant, PublicFormDefinition, RuntimeFormVersion, RuntimeStatus, SubmissionId, SubmitResult } from '@form/schema';
-import { Alert, AlertDescription, Button } from '@dmacq/ui';
+import { Alert, AlertDescription, AlertTitle, Button } from '@dmacq/ui';
 import { hydrateThemeImages } from '@/components/builder/design/uploads';
 import { useEdition } from '@/edition/edition';
 import { BUILDER_LOCALE, t } from '@/i18n';
@@ -38,6 +38,8 @@ const M = defineMessages('builder', {
   'fill.superseded_hint': 'Load the new version. Your answers to the questions that are still there are kept.',
   'fill.superseded_reload': 'Reload with my answers',
   'fill.reload_failed': 'The new version could not be loaded just now. Try again.',
+  'fill.under_review': 'Your submission is under review',
+  'fill.under_review_hint': 'It has been received. A reviewer has to check it before it is final, so it may take a while to be confirmed.',
 });
 
 /** What the page shows once the API has answered. `version` is null for a form behind its password (the definition is withheld) or a status the server would not open. */
@@ -94,6 +96,8 @@ export function PublicFillPage() {
   const [unlockError, setUnlockError] = useState<UnlockError | null>(null);
   const [superseded, setSuperseded] = useState<{ answers: Answers; from: PublicFormDefinition } | null>(null);
   const [reloadFailed, setReloadFailed] = useState(false);
+  /** The last submission was received but is kept until a reviewer has checked it (the API answered `held: 'pending_review'`). */
+  const [underReview, setUnderReview] = useState(false);
   const [session] = useState(sessionOfPage);
   const uploader = useMemo(() => publicUploader(slug), [slug]);
   /** The access token of an unlock. In memory only: a reload asks for the password again, and nothing is stored. */
@@ -249,9 +253,13 @@ export function PublicFillPage() {
     if (attempt.current?.request !== request) attempt.current = { request, key: uuidv7() };
     const outcome = await submitPublicForm(page.slug, body, attempt.current.key, token.current);
     switch (outcome.kind) {
-      case 'ok':
+      case 'ok': {
         attempt.current = null;
-        return { ok: true, submissionId: outcome.submissionId as SubmissionId, endingId: outcome.endingId as EndingId };
+        // Only the held status this page can say is acted on; the renderer's own ending (thanks, redirect) still shows.
+        const held = outcome.held === 'pending_review';
+        setUnderReview(held);
+        return { ok: true, submissionId: outcome.submissionId as SubmissionId, endingId: outcome.endingId as EndingId, ...(held ? { held: 'pending_review' as const } : {}) };
+      }
       case 'invalid':
         // The server re-checks every answer against the live version: show what it refused next to the fields.
         return { ok: false, kind: 'invalid', status: 422, errors: fieldErrors(outcome.errors, version.definition) };
@@ -295,6 +303,14 @@ export function PublicFillPage() {
           </Alert>
         </div>
       ) : null}
+      {underReview ? (
+        <div className="mx-auto max-w-[640px] px-6 pt-6">
+          <Alert variant="info" icon role="status">
+            <AlertTitle>{t(M['fill.under_review'])}</AlertTitle>
+            <AlertDescription>{t(M['fill.under_review_hint'])}</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
       {unlockError ? (
         <p role="alert" className="mx-auto max-w-[640px] px-6 pt-6 text-[14px] text-destructive">
           {t(unlockError === 'wrong' ? M['fill.password_wrong'] : unlockError === 'rate_limited' ? M['fill.password_rate_limited'] : M['fill.password_failed'])}
@@ -310,6 +326,10 @@ export function PublicFillPage() {
         session={session}
         {...(page.answers ? { initialAnswers: page.answers } : {})}
         onSubmit={submit}
+        onEvent={(event) => {
+          // "Submit another response" starts a new form: the notice was about the one before.
+          if (event.type === 'restart') setUnderReview(false);
+        }}
         onUnlock={(password) => void unlock(password)}
       />
     </main>

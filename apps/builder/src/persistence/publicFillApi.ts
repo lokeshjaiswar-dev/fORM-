@@ -81,7 +81,8 @@ export interface SubmissionBody {
 }
 
 export type Submitted =
-  | { kind: 'ok'; submissionId: string; endingId: string }
+  /** `held` is set when the form keeps the response until it is checked (`pending_review`, WP-2.33); a value this page does not know is passed on as it came. */
+  | { kind: 'ok'; submissionId: string; endingId: string; held?: string }
   /** 422 `SUBMISSION_INVALID`: each entry is a dotted path from the block and what is wrong with it. */
   | { kind: 'invalid'; errors: Array<{ path: string; message: string }> }
   /** 409 `VERSION_SUPERSEDED`: the form was republished after the page was built. */
@@ -121,7 +122,7 @@ export async function submitPublicForm(slug: string, body: SubmissionBody, idemp
     body: JSON.stringify(body),
   });
   if (res.ok) {
-    const parsed = z.object({ submissionId: z.string(), endingId: z.string() }).safeParse(await res.json().catch(() => null));
+    const parsed = z.object({ submissionId: z.string(), endingId: z.string(), held: z.string().exactOptional() }).safeParse(await res.json().catch(() => null));
     if (!parsed.success) throw new PublicUnavailable();
     return { kind: 'ok', ...parsed.data };
   }

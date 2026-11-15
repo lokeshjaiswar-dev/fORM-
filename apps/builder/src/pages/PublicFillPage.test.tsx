@@ -355,3 +355,50 @@ describe('PublicFillPage: submit', () => {
     expect(await screen.findByLabelText('Password')).toBeInTheDocument();
   });
 });
+
+describe('PublicFillPage: a submission held for review', () => {
+  const answered = { ok: true, submissionId: '0198a2c0-0000-7000-8000-0000000000b1', endingId: 'ending' };
+  const held = json(200, { ...answered, held: 'pending_review' });
+
+  async function fill(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(await screen.findByRole('textbox', { name: /Name/ }), 'Asha');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+  }
+
+  it('says the submission is under review when the API answers held: pending_review, beside the form’s own ending', async () => {
+    fakeApi({ 'GET /v1/p/feedback': open(versionOf([nameField()], V1)), 'POST /v1/p/feedback/submissions': held });
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.queryByText('Your submission is under review')).not.toBeInTheDocument();
+    await fill(user);
+    // The ending the author wrote still shows; the notice says it is not final yet.
+    expect(await screen.findByText('Thanks for your response!')).toBeInTheDocument();
+    // A polite live region, so a screen reader says it (the renderer has a status region of its own, so the notice is found by its words).
+    const notice = screen.getByText('Your submission is under review').closest('[role="status"]') as HTMLElement;
+    expect(notice).not.toBeNull();
+    expect(within(notice).getByText(/reviewer has to check it before it is final/)).toBeInTheDocument();
+  });
+
+  it('says nothing about review for a submission that is final, or whose held status it does not know', async () => {
+    for (const reply of [json(200, answered), json(200, { ...answered, held: 'pending_scan' })]) {
+      fakeApi({ 'GET /v1/p/feedback': open(versionOf([nameField()], V1)), 'POST /v1/p/feedback/submissions': reply });
+      const user = userEvent.setup();
+      const { unmount } = renderPage();
+      await fill(user);
+      expect(await screen.findByText('Thanks for your response!')).toBeInTheDocument();
+      expect(screen.queryByText('Your submission is under review')).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('takes the notice away when the respondent starts another response', async () => {
+    fakeApi({ 'GET /v1/p/feedback': open(versionOf([nameField()], V1)), 'POST /v1/p/feedback/submissions': held });
+    const user = userEvent.setup();
+    renderPage();
+    await fill(user);
+    expect(await screen.findByText('Your submission is under review')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Submit another response' }));
+    expect(await screen.findByRole('textbox', { name: /Name/ })).toBeInTheDocument();
+    expect(screen.queryByText('Your submission is under review')).not.toBeInTheDocument();
+  });
+});

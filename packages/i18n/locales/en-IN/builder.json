@@ -346,6 +346,8 @@
   "fill.superseded": "This form was updated while you were filling it.",
   "fill.superseded_hint": "Load the new version. Your answers to the questions that are still there are kept.",
   "fill.superseded_reload": "Reload with my answers",
+  "fill.under_review": "Your submission is under review",
+  "fill.under_review_hint": "It has been received. A reviewer has to check it before it is final, so it may take a while to be confirmed.",
   "forgot.description": "We will email you a link to choose a new password.",
   "forgot.email": "Email",
   "forgot.sent": "If an account uses {email}, a reset link is on its way. It works once, for 1 hour.",
