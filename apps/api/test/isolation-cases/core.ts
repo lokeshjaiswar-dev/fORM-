@@ -127,8 +127,7 @@ export async function seedCore(env: SeedEnv): Promise<Fixture> {
 const forms: IsolationCase[] = [
   // GET and POST /v1/forms, the draft routes and the merge moved to forms.ts, with the rest of WP-1.06.
   // The live, publish and validate cases moved to publish.ts, with the rest of WP-1.07.
-  { route: 'GET /v1/forms/:formId/submissions', call: (f) => ({ url: `/v1/forms/${f.a.formId}/submissions` }) },
-  { route: 'GET /v1/forms/:formId/submissions/:id', call: (f) => ({ url: `/v1/forms/${f.a.formId}/submissions/${f.a.submissionId}` }) },
+  // The responses list and detail moved to submissions.ts, with the rest of WP-1.15.
   { route: 'GET /v1/forms/:formId/files/:id', call: (f) => ({ url: `/v1/forms/${f.a.formId}/files/${f.a.fileId}` }) },
 ];
 

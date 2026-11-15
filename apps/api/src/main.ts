@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { createInfrastructureEgressGuard, infrastructureHosts } from '@form/adapters/egress';
 import { createKeyfileKeyProvider, openKeyProvider } from '@form/adapters/kms';
 import { createSmtpMailer, MAILPIT_SMTP_URL } from '@form/adapters/mailer';
+import { createPostgresSearchIndex } from '@form/adapters/search';
 import { checkClock, startTelemetry } from '@form/observability';
 import type { KeyProvider } from '@form/ports';
 import { parseConfig } from './config.ts';
@@ -44,7 +45,7 @@ try {
 const mailer = config.mailer.driver === 'smtp' ? createSmtpMailer({ url: smtpUrl, egress }) : undefined;
 
 const { buildApp } = await import('./app.ts');
-const app = await buildApp(config, { keys, ...(mailer ? { mailer } : {}) });
+const app = await buildApp(config, { keys, searchIndex: createPostgresSearchIndex, ...(mailer ? { mailer } : {}) });
 for (const notice of config.edition.notices) app.log.warn({ notice }, 'edition notice');
 for (const notice of config.notices) app.log.warn({ notice }, 'config notice');
 if (devKeys) app.log.warn('KMS_KEYFILE_PATH is not set: TOTP secrets use a key that ends with this process (development only)');

@@ -1,55 +1,51 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { formVersions, forms, submissionKey, submissions, withTenant, type Db, type Tx } from '@form/db';
-import type { Answers, FormDefinition } from '@form/schema';
+import type { Db, ReadClient } from '@form/db';
 import { z } from 'zod';
-import { tenantOf } from '../auth.ts';
-import { displayRows, type DisplayRow } from '../display-rows.ts';
+import { accountOf, clientInfo, memberOf, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
+import type { FileStore } from '../files.ts';
+import { hex } from '../modules/auth/crypto.ts';
+import { bulkAct } from '../submissions/bulk.ts';
+import { readDetail, setFlags } from '../submissions/detail.ts';
+import { listGrid, type GridFilters } from '../submissions/grid.ts';
+import { createPlanLoader } from '../submissions/plans.ts';
+import type { SearchIndexFactory } from '../submissions/search.ts';
+import { bulkBody, bulkResponse, detailResponse, gridQuery, gridResponse, patchBody, patchResponse } from '../submissions/schemas.ts';
 
-const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string() });
+const SECURITY = [{ session: [], org: [] }, { devUser: [], org: [] }];
+const formParams = z.object({ formId: z.uuid() });
+const submissionParams = z.object({ formId: z.uuid(), id: z.uuid() });
 
-export const submissionSummary = z.object({
-  id: z.uuid(),
-  formId: z.uuid(),
-  submittedAt: z.iso.datetime({ offset: true }),
-  fieldCount: z.number().int(),
-});
-
-export const submissionDetail = submissionSummary.extend({
-  locale: z.string(),
-  answers: z.record(z.string(), z.unknown()),
-  fields: z.array(fieldRow),
-});
-
-/** The language a response was given in: `meta.locale`, which the submit route always writes. */
-const localeOf = (meta: Record<string, unknown>): string => (typeof meta['locale'] === 'string' ? meta['locale'] : 'en-IN');
-
-/**
- * The definition of each version the given submissions were received on, read once per version. A response stores its
- * answers and the id of the version they were validated against, not display rows: the rows (a field's own label and its
- * answer as readable text) are rebuilt from the two on every read, with the same builder the submit route validated
- * against, so a page cannot show a line the form never asked.
- */
-async function definitionsOf(tx: Tx, versionIds: readonly string[]): Promise<Map<string, FormDefinition>> {
-  if (versionIds.length === 0) return new Map();
-  const rows = await tx.select({ id: formVersions.id, definition: formVersions.definition }).from(formVersions).where(inArray(formVersions.id, [...new Set(versionIds)]));
-  return new Map(rows.map((row) => [row.id, row.definition as unknown as FormDefinition]));
-}
-
-function rowsOf(definitions: Map<string, FormDefinition>, row: { formVersionId: string; answers: Record<string, unknown> }): DisplayRow[] {
-  const definition = definitions.get(row.formVersionId);
-  return definition ? displayRows(definition, row.answers as unknown as Answers) : [];
+export interface SubmissionRouteDeps {
+  db: Db;
+  /** The respondent files' byte store: delete forever removes the bytes of the files a deleted response held. */
+  files: FileStore;
+  /** Signs the grid's cursors and keys the IP hash of audit records (`config.auth.secret`). */
+  secret: Uint8Array;
+  /** The deployment's search index (the composition root passes the Postgres adapter); without it `q` and `delete` answer 503. */
+  searchIndex?: SearchIndexFactory | undefined;
+  now: () => Date;
 }
 
 /**
- * List and read the submissions of a form in the active org. There is no route to create one: a response comes from
- * the published page (`POST /v1/p/:slug/submissions`), which validates it against the live version and binds its files;
- * the builder's preview keeps its rehearsal responses in the browser and sends nothing here.
+ * The builder's responses API for a form of the active org (WP-1.15): the grid with the columns of every version of the
+ * form, one response in full, the inbox flags, and bulk actions up to deleting forever. There is no route to create a
+ * response: it comes from the published page (`POST /v1/p/:slug/submissions`), which validates it against the live version
+ * and binds its files; the builder's preview keeps its rehearsal responses in the browser and sends nothing here.
+ *
+ * Every read is audited in the transaction that makes it (the grid page and the detail), so the reads are read-write
+ * transactions; a write leaves its own record. Values of encrypted and sensitive fields never leave: they are masked.
  */
-export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
+export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
+  const plans = createPlanLoader();
+
+  /** Where the request came from, for the audit records: the session and a keyed hash of the address, never the address. */
+  const clientOf = (request: FastifyRequest): ReadClient => {
+    const client = clientInfo(request, deps.secret, deps.now());
+    return { sessionId: accountOf(request).session?.id ?? null, actorIpHash: hex(client.ipHash), actorUa: client.ua };
+  };
 
   r.get(
     '/v1/forms/:formId/submissions',
@@ -57,33 +53,32 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
       config: { auth: 'user', perm: 'submissions.read' },
       schema: {
         tags: ['submissions'],
-        summary: 'List submissions for a form',
-        security: [{ session: [], org: [] }, { devUser: [], org: [] }],
-        params: z.object({ formId: z.uuid() }),
-        response: { 200: z.object({ items: z.array(submissionSummary) }) },
+        summary: 'The responses grid of a form: columns of every version, filters, search, pages by cursor',
+        description:
+          'Columns are the union of the fields of every published version of the form, one per block id, labelled by the newest version. ' +
+          'Cells are built on the server from the answers (the field type\'s own text); encrypted and sensitive fields are masked. ' +
+          '`view` picks the inbox, the archive or the trash. `q` searches the non-sensitive answers of this form and orders by relevance. ' +
+          '`nextCursor` is signed and bound to this exact query: pass it back unchanged for the next page, and stop when it is null; a page can hold fewer than `limit` rows while `nextCursor` is set (a search whose filters dropped hits). ' +
+          'The read is audited: one `submission.page_viewed` record per page with the ids shown.',
+        security: SECURITY,
+        params: formParams,
+        querystring: gridQuery,
+        response: { 200: gridResponse },
       },
     },
     async (request) => {
       const { formId } = request.params;
-      const items = await withTenant(deps.db, { ...tenantOf(request), readOnly: true }, async (tx) => {
-        // RLS hides another org's form, so a foreign or made-up id is a 404 rather than an empty inbox.
-        const found = await tx.select({ id: forms.id }).from(forms).where(eq(forms.id, formId)).limit(1);
-        if (!found[0]) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
-        // Newest first by the moment received: the order of the grid index, which leaves trashed responses out.
-        const rows = await tx
-          .select({ id: submissions.id, formId: submissions.formId, receivedAt: submissions.receivedAt, formVersionId: submissions.formVersionId, answers: submissions.answers })
-          .from(submissions)
-          .where(and(eq(submissions.formId, formId), isNull(submissions.trashedAt)))
-          .orderBy(desc(submissions.receivedAt), desc(submissions.id));
-        const definitions = await definitionsOf(tx, rows.map((row) => row.formVersionId));
-        return rows.map((row) => ({
-          id: row.id,
-          formId: row.formId,
-          submittedAt: row.receivedAt.toISOString(),
-          fieldCount: rowsOf(definitions, row).length,
-        }));
-      });
-      return { items };
+      const { limit, cursor, from, to, status, read, starred, view, q } = request.query;
+      const filters: GridFilters = {
+        view,
+        status,
+        read: read === undefined ? undefined : read === 'true',
+        starred: starred === undefined ? undefined : starred === 'true',
+        from: from === undefined ? undefined : new Date(from),
+        to: to === undefined ? undefined : new Date(to),
+        q: q || undefined,
+      };
+      return listGrid({ db: deps.db, secret: deps.secret, plans, searchIndex: deps.searchIndex }, tenantOf(request), clientOf(request), formId, filters, limit, cursor);
     },
   );
 
@@ -93,34 +88,65 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
       config: { auth: 'user', perm: 'submissions.read' },
       schema: {
         tags: ['submissions'],
-        summary: 'Read one submission',
-        security: [{ session: [], org: [] }, { devUser: [], org: [] }],
-        params: z.object({ formId: z.uuid(), id: z.uuid() }),
-        response: { 200: submissionDetail },
+        summary: 'Read one response: its fields, answers, files and what the server recorded',
+        description:
+          'The fields are rebuilt from the answers and the version the response was received on. Encrypted and sensitive answers are masked. The read is audited (`submission.viewed`).',
+        security: SECURITY,
+        params: submissionParams,
+        response: { 200: detailResponse },
       },
     },
     async (request) => {
       const { formId, id } = request.params;
-      return withTenant(deps.db, { ...tenantOf(request), readOnly: true }, async (tx) => {
-        // By id and the partition key it implies, so one partition is read; an id that is not a UUIDv7 matches nothing.
-        const rows = await tx
-          .select()
-          .from(submissions)
-          .where(and(eq(submissions.formId, formId), submissionKey(id)))
-          .limit(1);
-        const row = rows[0];
-        if (!row) throw new ProblemError('NOT_FOUND', 'That submission is not on this form.');
-        const fields = rowsOf(await definitionsOf(tx, [row.formVersionId]), row);
-        return {
-          id: row.id,
-          formId: row.formId,
-          submittedAt: row.receivedAt.toISOString(),
-          fieldCount: fields.length,
-          locale: localeOf(row.meta),
-          answers: row.answers,
-          fields,
-        };
-      });
+      return readDetail({ db: deps.db, plans, now: deps.now }, tenantOf(request), clientOf(request), formId, id);
+    },
+  );
+
+  r.patch(
+    '/v1/forms/:formId/submissions/:id',
+    {
+      config: { auth: 'user', perm: 'submissions.edit' },
+      schema: {
+        tags: ['submissions'],
+        summary: 'Mark a response read or unread, starred or not',
+        description: 'A flag already at the asked value changes nothing and leaves no audit record.',
+        security: SECURITY,
+        params: submissionParams,
+        body: patchBody,
+        response: { 200: patchResponse },
+      },
+    },
+    async (request) => {
+      const { formId, id } = request.params;
+      return setFlags({ db: deps.db, plans, now: deps.now }, tenantOf(request), clientOf(request), formId, id, request.body);
+    },
+  );
+
+  r.post(
+    '/v1/forms/:formId/submissions/bulk',
+    {
+      config: { auth: 'user', perm: 'submissions.edit' },
+      schema: {
+        tags: ['submissions'],
+        summary: 'Act on up to 500 responses at once: read, star, archive, trash, restore, or delete forever',
+        description:
+          'All in one transaction. An id that is not a response of this form is counted as `missing` and touched by nothing; a response already in the asked state is `unchanged`. ' +
+          '`delete` needs `submissions.delete` and refuses the whole call (409, nothing deleted) unless every response named is in the trash and free of holds; it removes the rows, their search documents, the records of the files they held and the file bytes.',
+        security: SECURITY,
+        params: formParams,
+        body: bulkBody,
+        response: { 200: bulkResponse },
+      },
+    },
+    async (request) => {
+      const { formId } = request.params;
+      const tenant = tenantOf(request);
+      const { action } = request.body;
+      if (action === 'delete' && !memberOf(request).perms.includes('submissions.delete')) {
+        // The route's own check covers `submissions.edit`; deleting forever is its own permission, and the refusal is audited like any other.
+        throw new ProblemError('FORBIDDEN', 'Requires submissions.delete.', { orgId: tenant.orgId, actorId: tenant.userId ?? null, reason: 'missing_permission:submissions.delete' });
+      }
+      return bulkAct({ db: deps.db, files: deps.files, searchIndex: deps.searchIndex, now: deps.now }, tenant, clientOf(request), formId, request.body);
     },
   );
 }

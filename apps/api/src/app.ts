@@ -17,6 +17,7 @@ import { createServiceLogger } from './log.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { createFileStore, type FileStore } from './files.ts';
+import type { SearchIndexFactory } from './submissions/search.ts';
 import { formFileRoutes } from './routes/form-files.ts';
 import { accessRoutes } from './routes/access.ts';
 import { formRoutes } from './routes/forms.ts';
@@ -58,6 +59,11 @@ export interface AppDeps {
    * temporary: the StoragePort/S3 adapter with presigned uploads and scanning replaces it in WP-1.14.
    */
   files?: FileStore;
+  /**
+   * Makes the full-text search index (the composition root passes `createPostgresSearchIndex`, the only place an adapter
+   * may be imported); without it, searching responses and deleting them forever answer 503.
+   */
+  searchIndex?: SearchIndexFactory;
   now?: () => Date;
   /**
    * Called with every route as it is registered, including routes a test adds after `buildApp` returns (tests only). The
@@ -206,7 +212,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   publicFormRoutes(app, { db: handle.db, config, files, throttle, now });
   publicUnlockRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
-  submissionRoutes(app, { db: handle.db });
+  submissionRoutes(app, { db: handle.db, files, secret: config.auth.secret, searchIndex: deps.searchIndex, now });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);
   app.get('/v1/openapi.json', { config: { auth: 'none' }, schema: { hide: true } }, async () => app.swagger());
