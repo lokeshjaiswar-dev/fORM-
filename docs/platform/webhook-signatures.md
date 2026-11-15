@@ -31,7 +31,7 @@ fORM-Event: submission.created
 2. The signed text is `t`, a dot, and the **raw request body**: `<t>.<body>`.
 3. The signature is `HMAC-SHA256(secret, signed text)` as lower-case hex, sent as `v1`.
 
-The **secret** is the signing secret fORM- showed you once, when you made the webhook or rotated its secret. Use it exactly as shown, as text: it is the HMAC key itself, so do not base64-decode it. fORM- never shows it again; if you lost it, rotate it.
+The **secret** is the signing secret fORM- showed you once, when you made the webhook or rotated its secret. It looks like `whsec_` followed by 43 letters, digits, `-` and `_`. Use it exactly as shown, as text, **with the `whsec_` start**: the whole text is the HMAC key, so do not cut the `whsec_` off and do not base64-decode what follows. fORM- never shows it again; if you lost it, rotate it.
 
 ## How to check it
 
@@ -55,8 +55,8 @@ const TOLERANCE_SECONDS = 5 * 60;
  * request is no more than five minutes old.
  *
  * `rawBody` must be the bytes exactly as they arrived, before any JSON parsing: parsing and printing again changes
- * spaces and key order, and the signature no longer matches. `secret` is the signing secret as it was shown to you
- * (do not decode it).
+ * spaces and key order, and the signature no longer matches. `secret` is the signing secret as it was shown to you, with its
+ * `whsec_` start (do not decode it, do not cut anything off it).
  */
 export function verifyWebhook(rawBody: string | Uint8Array, signatureHeader: string | undefined, secret: string, nowSeconds = Math.floor(Date.now() / 1000)): boolean {
   if (!signatureHeader) return false;
@@ -112,7 +112,7 @@ def verify_webhook(raw_body: bytes, signature_header: Optional[str], secret: str
     """True when the fORM-Signature header is valid for raw_body and the request is at most five minutes old.
 
     raw_body is the request body exactly as it arrived (bytes, before any JSON parsing).
-    secret is the signing secret as it was shown to you (do not decode it).
+    secret is the signing secret as it was shown to you, with its whsec_ start (do not decode it, do not cut anything off it).
     """
     if not signature_header:
         return False

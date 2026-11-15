@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DELIVERY_ID_HEADER, EVENT_HEADER, SIGNATURE_HEADER, signWebhook } from './sign.ts';
+import { DELIVERY_ID_HEADER, EVENT_HEADER, SECRET_PREFIX, SIGNATURE_HEADER, signWebhook, webhookSigningSecret } from './sign.ts';
 import { verifyWebhook } from './verify-recipe.ts';
 
 /*
@@ -36,12 +37,9 @@ describe('signWebhook and the published recipe', () => {
     expect(verifyWebhook(BODY, header, SECRET.toUpperCase(), T)).toBe(false);
   });
 
-  it('signs the timestamp and the body with a dot between them, and nothing else', async () => {
-    const { createHmac } = await import('node:crypto');
+  it('signs the timestamp and the body with a dot between them, and nothing else', () => {
     const expected = createHmac('sha256', SECRET).update(`${T}.${BODY}`).digest('hex');
     expect(signWebhook(SECRET, BODY, T)).toBe(`t=${T},v1=${expected}`);
-    // Bytes of the secret are the key: the opened secret (Uint8Array) and its text sign the same.
-    expect(signWebhook(new TextEncoder().encode(SECRET), BODY, T)).toBe(signWebhook(SECRET, BODY, T));
   });
 
   it('refuses a request more than five minutes from the receiver’s clock, in either direction, and accepts one at the edge', () => {
@@ -78,6 +76,38 @@ describe('signWebhook and the published recipe', () => {
   });
 });
 
+// The contract between the API and the worker (WP-1.18). The API seals 32 random bytes and shows the owner
+// `whsec_<base64url of the bytes>` once; the worker opens the BYTES. The receiver is told to key the HMAC with the text it was
+// shown, so the worker must rebuild that text, not sign with the bytes. These tests pin the text so neither end can drift.
+describe('webhookSigningSecret: the key the receiver was shown', () => {
+  /** What the API shows the owner for these bytes: the same expression as `newSecret()` in apps/api/src/routes/webhooks.ts. */
+  const shownToOwner = (bytes: Buffer): string => `whsec_${bytes.toString('base64url')}`;
+  const KEY = Buffer.from(Array.from({ length: 32 }, (_, i) => (i * 37 + 11) % 256));
+
+  it('is `whsec_` and the 32 bytes in base64url, exactly the text the API shows', () => {
+    expect(SECRET_PREFIX).toBe('whsec_');
+    expect(webhookSigningSecret(KEY)).toBe(shownToOwner(KEY));
+    expect(webhookSigningSecret(KEY)).toBe('whsec_CzBVep_E6Q4zWH2ix-wRNluApcrvFDleg6jN8hc8YYY');
+    expect(webhookSigningSecret(new Uint8Array(KEY))).toBe(shownToOwner(KEY));
+    for (const bytes of [Buffer.alloc(32), Buffer.alloc(32, 0xff), Buffer.from(Array.from({ length: 32 }, (_, i) => 251 - i))]) {
+      // 43 characters of the url-safe alphabet and no padding: nothing a header, a shell or an env file would change.
+      expect(webhookSigningSecret(bytes)).toMatch(/^whsec_[A-Za-z0-9_-]{43}$/);
+      expect(webhookSigningSecret(bytes)).toBe(shownToOwner(bytes));
+    }
+  });
+
+  it('signs with the text, so a receiver that uses the secret as shown verifies it, and one that decodes it does not', () => {
+    const shown = shownToOwner(KEY);
+    const header = signWebhook(webhookSigningSecret(KEY), BODY, T);
+    expect(verifyWebhook(BODY, header, shown, T)).toBe(true);
+    // The wrong readings of the doc: the raw bytes, the text without its prefix, and the decoded rest. None can verify.
+    expect(header).not.toBe(`t=${T},v1=${createHmac('sha256', KEY).update(`${T}.${BODY}`).digest('hex')}`);
+    expect(verifyWebhook(BODY, header, shown.slice(SECRET_PREFIX.length), T)).toBe(false);
+    expect(verifyWebhook(BODY, header, KEY.toString('latin1'), T)).toBe(false);
+    expect(verifyWebhook(BODY, header, KEY.toString('hex'), T)).toBe(false);
+  });
+});
+
 describe('docs/platform/webhook-signatures.md', () => {
   const doc = fileText('../../../../../docs/platform/webhook-signatures.md');
 
@@ -92,6 +122,11 @@ describe('docs/platform/webhook-signatures.md', () => {
     expect(doc).toMatch(/constant time/i);
     expect(doc).toContain('timingSafeEqual');
     expect(doc).toContain('hmac.compare_digest');
+  });
+
+  it('tells the receiver to use the secret as shown, with its whsec_ start, and not to decode it', () => {
+    expect(doc).toContain('with the `whsec_` start');
+    expect(doc).toMatch(/do not base64-decode/);
   });
 
   const python = /```python\n([\s\S]*?)```/.exec(doc)?.[1];

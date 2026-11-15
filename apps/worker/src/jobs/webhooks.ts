@@ -7,7 +7,7 @@ import type { EffectDeps } from '../effects/deps.ts';
 import { recordDisclosure } from '../effects/disclosure.ts';
 import { loadSubmission } from '../effects/submission.ts';
 import { buildWebhookPayload } from '../effects/webhook/payload.ts';
-import { DELIVERY_ID_HEADER, EVENT_HEADER, SIGNATURE_HEADER, signWebhook } from '../effects/webhook/sign.ts';
+import { DELIVERY_ID_HEADER, EVENT_HEADER, SIGNATURE_HEADER, signWebhook, webhookSigningSecret } from '../effects/webhook/sign.ts';
 import { scrubSnippet } from '../effects/webhook/snippet.ts';
 import { defineJob, type AnyJobDefinition } from './define.ts';
 import type { FanoutConsumer } from './submission-fanout.ts';
@@ -335,7 +335,8 @@ async function send(
       headers: {
         'content-type': 'application/json',
         'user-agent': deps.config.webhookUserAgent,
-        [SIGNATURE_HEADER]: signWebhook(secret, o.body, seconds),
+        // The key is the text the owner was shown (`whsec_...`), not the sealed bytes; see `webhookSigningSecret`.
+        [SIGNATURE_HEADER]: signWebhook(webhookSigningSecret(secret), o.body, seconds),
         [DELIVERY_ID_HEADER]: o.deliveryId,
         [EVENT_HEADER]: o.event,
       },

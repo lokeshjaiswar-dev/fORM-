@@ -28,7 +28,15 @@ import { TEST_PASSWORDS } from './global-setup.ts';
  * worker builds trusts none.
  */
 
-const SECRET = 'whsec_integration-test-secret_0123456789';
+/**
+ * The signing secret as the API makes and shows it (apps/api/src/routes/webhooks.ts `newSecret()`): 32 random bytes, which are
+ * what is SEALED, and `whsec_<base64url of the bytes>`, which is what the owner is shown once and a receiver keys the HMAC with.
+ * Written out here on purpose and not imported from the worker, so a change in the worker's rebuilding of the text fails a test.
+ */
+function issueSecret(): { key: Buffer; shown: string } {
+  const key = randomBytes(32);
+  return { key, shown: `whsec_${key.toString('base64url')}` };
+}
 const RECEIVER_HOST = 'hooks.example.test';
 /** What the fake DNS answers. A name that is not here does not resolve. */
 const DNS: Record<string, string> = { [RECEIVER_HOST]: '127.0.0.1', 'metadata.example.test': '169.254.169.254', 'internal.example.test': '10.0.0.1' };
@@ -134,9 +142,12 @@ interface HookOptions {
   sealedFor?: { secretId: string };
 }
 
-async function seedWebhook(org: Org, o: HookOptions = {}): Promise<{ id: string; secretId: string }> {
+/** `secret` is the text the owner was shown for this webhook: what a receiver verifies with. */
+async function seedWebhook(org: Org, o: HookOptions = {}): Promise<{ id: string; secretId: string; secret: string }> {
   const secretId = randomUUID();
-  const enc = await orgSecrets.seal({ orgId: org.id, secretId: o.sealedFor?.secretId ?? secretId, kind: 'webhook_hmac' }, SECRET);
+  // What the API seals: the 32 raw bytes, not the text shown to the owner.
+  const { key, shown } = issueSecret();
+  const enc = await orgSecrets.seal({ orgId: org.id, secretId: o.sealedFor?.secretId ?? secretId, kind: 'webhook_hmac' }, new Uint8Array(key));
   await owner.query(`insert into secrets (id, org_id, kind, enc, meta) values ($1, $2, 'webhook_hmac', $3, '{}')`, [secretId, org.id, JSON.stringify(enc)]);
   const id = randomUUID();
   await owner.query(
@@ -156,7 +167,7 @@ async function seedWebhook(org: Org, o: HookOptions = {}): Promise<{ id: string;
       o.failures ?? 0,
     ],
   );
-  return { id, secretId };
+  return { id, secretId, secret: shown };
 }
 
 async function seedDelivery(org: Org, webhookId: string, s: { id: string; receivedAt: Date }, o: { replayOf?: string; event?: string } = {}): Promise<string> {
@@ -321,8 +332,8 @@ describe('webhook.deliver', () => {
     expect(hit!.path).toBe('/ok');
     expect(hit!.headers).toMatchObject({ 'content-type': 'application/json', 'user-agent': 'fORM-Webhooks/1', 'form-delivery-id': delivery, 'form-event': 'submission.created' });
     // The receiver does what docs/platform/webhook-signatures.md says: the raw body, the header, its own copy of the secret.
-    expect(verifyWebhook(hit!.body, String(hit!.headers['form-signature']), SECRET, Math.floor(clock.getTime() / 1000))).toBe(true);
-    expect(verifyWebhook(`${hit!.body} `, String(hit!.headers['form-signature']), SECRET, Math.floor(clock.getTime() / 1000))).toBe(false);
+    expect(verifyWebhook(hit!.body, String(hit!.headers['form-signature']), hook.secret, Math.floor(clock.getTime() / 1000))).toBe(true);
+    expect(verifyWebhook(`${hit!.body} `, String(hit!.headers['form-signature']), hook.secret, Math.floor(clock.getTime() / 1000))).toBe(false);
 
     const body = JSON.parse(hit!.body);
     expect(body).toEqual({
@@ -346,6 +357,27 @@ describe('webhook.deliver', () => {
     // The ledger names the host and the keys that were sent: not the masked field, not the out-of-purpose one, never a value.
     expect(await disclosuresOf(hook.id)).toEqual([{ submission_id: s.id, recipient_kind: 'webhook', display_name: `${RECEIVER_HOST}:${port}`, field_keys: ['full_name', 'note'] }]);
     expect(await hookRow(hook.id)).toMatchObject({ enabled: true, consecutive_failures: 0 });
+  });
+
+  it('signs with the secret the API shows the owner (`whsec_` and the base64url of the sealed bytes), so a receiver that follows the doc verifies it', async () => {
+    const hook = await seedWebhook(a);
+    const delivery = await seedDelivery(a, hook.id, await store(a));
+    clock = new Date();
+    expect(await attempt(a, delivery)).toBeNull();
+    const [hit] = hitsOf(delivery);
+    const header = String(hit!.headers['form-signature']);
+    const now = Math.floor(clock.getTime() / 1000);
+
+    // The sealed value is the 32 raw bytes; the owner was shown their text. The doc says: key the HMAC with the text as shown.
+    expect(hook.secret).toMatch(/^whsec_[A-Za-z0-9_-]{43}$/);
+    expect(verifyWebhook(hit!.body, header, hook.secret, now)).toBe(true);
+    // The readings of the doc that are wrong must not verify: the prefix cut off, the rest decoded to bytes, or another webhook's secret.
+    const bytes = Buffer.from(hook.secret.slice('whsec_'.length), 'base64url');
+    expect(bytes).toHaveLength(32);
+    expect(verifyWebhook(hit!.body, header, hook.secret.slice('whsec_'.length), now)).toBe(false);
+    expect(verifyWebhook(hit!.body, header, bytes.toString('latin1'), now)).toBe(false);
+    expect(verifyWebhook(hit!.body, header, bytes.toString('hex'), now)).toBe(false);
+    expect(verifyWebhook(hit!.body, header, issueSecret().shown, now)).toBe(false);
   });
 
   it('names the answers by block id when the webhook says keyBy id, and narrows to the listed keys, never past the purposes', async () => {
@@ -479,7 +511,7 @@ describe('webhook.deliver', () => {
     const [again] = hitsOf(replay);
     expect(secondsOf(again!)).toBe(Math.floor(clock.getTime() / 1000));
     expect(secondsOf(again!)).toBeGreaterThan(secondsOf(first!));
-    expect(verifyWebhook(again!.body, String(again!.headers['form-signature']), SECRET, Math.floor(clock.getTime() / 1000))).toBe(true);
+    expect(verifyWebhook(again!.body, String(again!.headers['form-signature']), hook.secret, Math.floor(clock.getTime() / 1000))).toBe(true);
     expect(again!.headers['form-delivery-id']).toBe(replay);
     // The same event: the same id, creation time and answers, so the same bytes and the same hash.
     expect(JSON.parse(again!.body).submission.answers).toEqual(JSON.parse(first!.body).submission.answers);
@@ -517,7 +549,7 @@ describe('webhook.deliver', () => {
     });
     // The record holds no address, no secret and no answer.
     expect(JSON.stringify(records[0])).not.toContain('metadata.example.test');
-    expect(JSON.stringify(records[0])).not.toContain(SECRET);
+    expect(JSON.stringify(records[0])).not.toContain(hook.secret);
 
     // A later delivery of the same webhook is not sent: it is off.
     const before = hits.length;
@@ -612,7 +644,7 @@ describe('webhook.deliver', () => {
     const delivery = await seedDelivery(a, hook.id, await store(a));
     const err = await attempt(a, delivery);
     const text = `${err?.message} ${err?.stack}`;
-    for (const secret of [SECRET, 'hunter2', '/fail', 'Asha']) expect(text).not.toContain(secret);
+    for (const secret of [hook.secret, hook.secret.slice('whsec_'.length), 'hunter2', '/fail', 'Asha']) expect(text).not.toContain(secret);
   });
 });
 
@@ -732,7 +764,7 @@ describe('through the queue', () => {
     );
     const [hit, ...rest] = hitsOf(delivery);
     expect(rest).toEqual([]);
-    expect(verifyWebhook(hit!.body, String(hit!.headers['form-signature']), SECRET)).toBe(true);
+    expect(verifyWebhook(hit!.body, String(hit!.headers['form-signature']), hook.secret)).toBe(true);
     expect(JSON.parse(hit!.body).submission).toMatchObject({ id: s.id, answers: { full_name: 'Asha', pan: MASK, note: 'plain' } });
     expect((await disclosuresOf(hook.id)).map((d) => d.field_keys)).toEqual([['full_name', 'note']]);
     expect(errors).toEqual([]);

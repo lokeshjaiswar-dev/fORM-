@@ -8,8 +8,8 @@ const TOLERANCE_SECONDS = 5 * 60;
  * request is no more than five minutes old.
  *
  * `rawBody` must be the bytes exactly as they arrived, before any JSON parsing: parsing and printing again changes
- * spaces and key order, and the signature no longer matches. `secret` is the signing secret as it was shown to you
- * (do not decode it).
+ * spaces and key order, and the signature no longer matches. `secret` is the signing secret as it was shown to you, with its
+ * `whsec_` start (do not decode it, do not cut anything off it).
  */
 export function verifyWebhook(rawBody: string | Uint8Array, signatureHeader: string | undefined, secret: string, nowSeconds = Math.floor(Date.now() / 1000)): boolean {
   if (!signatureHeader) return false;
