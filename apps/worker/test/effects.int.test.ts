@@ -103,6 +103,7 @@ describe('loadSubmission', () => {
       formId: a.form,
       formVersionId: a.version,
       status: 'complete',
+      trashedAt: null,
       answerCodecVersion: 0,
       answers: { name: { type: 'short_text', value: 'Asha' } },
       computed: { v: 1 },
@@ -112,10 +113,14 @@ describe('loadSubmission', () => {
     expect(loaded!.compiled.taint).toEqual({ 'value:copy': { classification: 'sensitive', purposeIds: [] } });
   });
 
-  it('reads the columns an effect needs and no retention, hold or inbox column', async () => {
+  it('reads the columns an effect needs and no retention, hold or inbox column but the trash, which every effect must refuse on', async () => {
     const s = await store(a);
     const loaded = await asSystem(a, (tx) => loadSubmission(tx, { formId: a.form, submissionId: s.id }));
-    expect(Object.keys(loaded!.row).sort()).toEqual(['answerCodecVersion', 'answers', 'computed', 'formId', 'formVersionId', 'id', 'meta', 'orgId', 'receivedAt', 'status']);
+    expect(Object.keys(loaded!.row).sort()).toEqual(['answerCodecVersion', 'answers', 'computed', 'formId', 'formVersionId', 'id', 'meta', 'orgId', 'receivedAt', 'status', 'trashedAt']);
+    // The grid trashes by setting `trashed_at` and leaves the status alone: the effect sees it.
+    const at = new Date('2026-11-16T03:00:00.000Z');
+    await owner.query('update submissions set trashed_at = $2 where id = $1', [s.id, at]);
+    expect((await asSystem(a, (tx) => loadSubmission(tx, { formId: a.form, submissionId: s.id })))!.row).toMatchObject({ status: 'complete', trashedAt: at });
   });
 
   it('hands a held response back with its status, so the caller decides', async () => {
