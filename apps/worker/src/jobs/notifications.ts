@@ -205,8 +205,8 @@ function notificationDispatch(deps: EffectDeps) {
         log.info({ submissionId: data.submissionId }, 'notification.dispatch: no such response; nothing to send');
         return;
       }
-      if (loaded.row.status !== 'complete') {
-        log.info({ submissionId: loaded.row.id, status: loaded.row.status }, 'notification.dispatch: the response is not complete; nothing to send');
+      if (loaded.row.status !== 'complete' || loaded.row.trashedAt !== null) {
+        log.info({ submissionId: loaded.row.id, status: loaded.row.status, trashed: loaded.row.trashedAt !== null }, 'notification.dispatch: the response is not complete or is trashed; nothing to send');
         return;
       }
       // One message per response and notification: a fan-out delivered twice must not mail the respondent twice. The lock
@@ -333,6 +333,8 @@ async function prepareSend(deps: EffectDeps, tx: Tx, orgId: string, id: string):
   const loaded = await loadSubmission(tx, { formId: msg.formId, submissionId: msg.submissionId });
   if (!loaded) return fail('The response was deleted before this message was sent.');
   if (loaded.row.status === 'trashed' || loaded.row.status === 'spam') return fail(`The response was moved to ${loaded.row.status} before this message was sent.`);
+  // The grid trashes by setting `trashed_at` and leaves the status alone (see SubmissionRow.trashedAt).
+  if (loaded.row.trashedAt !== null) return fail('The response was moved to trashed before this message was sent.');
 
   let composed: Composed;
   try {

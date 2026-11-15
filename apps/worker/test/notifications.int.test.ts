@@ -384,6 +384,14 @@ describe('notificationsConsumer: submission.fanout of a complete response', () =
 // ─── notification.dispatch ────────────────────────────────────────────────────────────────────────────────────
 
 describe('notification.dispatch', () => {
+  it('queues nothing for a response the grid trashed (trashed_at set, status still complete)', async () => {
+    const n = await seedNotification(a);
+    const s = await store(a);
+    await owner.query('update submissions set trashed_at = now() where id = $1', [s.id]);
+    await dispatch(a, s, n);
+    expect(await messagesOf(s.id)).toEqual([]);
+  });
+
   it('inserts one email_messages row and one disclosures row, without the out-of-purpose, omitted or masked fields, and enqueues email.send', async () => {
     const n = await seedNotification(a, { config: { to: [{ kind: 'member', userId: a.adminUser }, { kind: 'field', blockId: 'mail' }] } });
     const s = await store(a);
@@ -753,6 +761,12 @@ describe('email.send', () => {
     await owner.query(`update submissions set status = 'trashed' where id = $1`, [trashed.s.id]);
     await send(a, trashed.id);
     expect((await messageById(trashed.id)).last_error).toBe('The response was moved to trashed before this message was sent.');
+
+    // The grid's trash: `trashed_at` set and the status left `complete`.
+    const binned = await queued();
+    await owner.query('update submissions set trashed_at = now() where id = $1', [binned.s.id]);
+    await send(a, binned.id);
+    expect(await messageById(binned.id)).toMatchObject({ status: 'failed', last_error: 'The response was moved to trashed before this message was sent.' });
 
     const nobody = await queued({ kind: 'autoresponder', config: { to: [{ kind: 'field', blockId: 'mail' }] } });
     await owner.query(`update submissions set answers = jsonb_set(answers, '{mail,value,address}', '""') where id = $1`, [nobody.s.id]);

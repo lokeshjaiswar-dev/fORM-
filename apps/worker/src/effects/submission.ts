@@ -13,6 +13,11 @@ export interface SubmissionRow {
   formId: string;
   formVersionId: string;
   status: SubmissionStatus;
+  /**
+   * When the response was put in the trash, or null. Core trashes by setting this column (the grid's bulk action) and
+   * leaves `status` as it was, so a check of `status` alone never sees a trash: every effect must refuse on this too.
+   */
+  trashedAt: Date | null;
   /** 0 for plain jsonb answers; a later codec (WP-1.11) stores sensitive answers sealed, which `disclosableFields` masks. */
   answerCodecVersion: number;
   /** `StoredAnswer` per block id. Typed as `Answers` for the registry; a sealed answer is not readable and is masked on the way out. */
@@ -46,6 +51,7 @@ export async function loadSubmission(tx: Tx, key: { formId: string; submissionId
       formId: submissions.formId,
       formVersionId: submissions.formVersionId,
       status: submissions.status,
+      trashedAt: submissions.trashedAt,
       answerCodecVersion: submissions.answerCodecVersion,
       answers: submissions.answers,
       computed: submissions.computed,

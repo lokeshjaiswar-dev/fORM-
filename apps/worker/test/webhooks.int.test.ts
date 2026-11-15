@@ -630,6 +630,26 @@ describe('webhook.deliver', () => {
     expect(await deliveryRow(archived)).toMatchObject({ attempt: 1, status: 'succeeded' });
   });
 
+  it('sends nothing for a response the grid trashed (trashed_at set, status still complete): a retry, a replay or a late fan-out', async () => {
+    const on = await seedWebhook(a);
+    const s = await store(a);
+    const first = await seedDelivery(a, on.id, s);
+    await owner.query('update submissions set trashed_at = now() where id = $1', [s.id]);
+    const replay = await seedDelivery(a, on.id, s, { replayOf: first });
+    const before = hits.length;
+    for (const d of [first, replay]) expect(await attempt(a, d)).toBeNull();
+    expect(hits.length).toBe(before);
+    for (const d of [first, replay]) expect(await deliveryRow(d)).toMatchObject({ status: 'failed', response_snippet: 'not sent: the response is trashed' });
+    expect(await disclosuresOf(on.id)).toEqual([]);
+
+    // submission.fanout of the trashed response: no webhook.fanout at all.
+    sent.length = 0;
+    const fanout = createSubmissionFanout([webhooksConsumer(deps)]) as unknown as Parameters<typeof runJob>[0];
+    const job = { id: randomUUID(), name: 'submission.fanout', attempt: 1, signal: new AbortController().signal, envelope: { v: 1, orgId: a.id, resource: { type: 'form', id: a.form }, data: { submissionId: s.id, receivedAt: toIsoInstant(s.receivedAt), event: 'released' }, sig: 'k.x' } };
+    await runJob(fanout, job as never, { db: app.db, log });
+    expect(sent).toEqual([]);
+  });
+
   it('finds nothing of another org: a job of org B naming org A’s delivery sends nothing and changes nothing', async () => {
     const hook = await seedWebhook(a);
     const delivery = await seedDelivery(a, hook.id, await store(a));

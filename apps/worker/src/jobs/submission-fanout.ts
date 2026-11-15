@@ -43,7 +43,7 @@ export function createSubmissionFanout(consumers: readonly FanoutConsumer[] = []
     async run({ tx, orgId, log, job }) {
       const { resource, data } = job.envelope;
       const [row] = await tx
-        .select({ id: submissions.id, formId: submissions.formId, formVersionId: submissions.formVersionId, status: submissions.status })
+        .select({ id: submissions.id, formId: submissions.formId, formVersionId: submissions.formVersionId, status: submissions.status, trashedAt: submissions.trashedAt })
         .from(submissions)
         .where(and(eq(submissions.formId, resource.id), submissionKey(data.submissionId)))
         .limit(1);
@@ -57,6 +57,12 @@ export function createSubmissionFanout(consumers: readonly FanoutConsumer[] = []
       // clean) sends this job again with the event `released`, and by then its status is `complete`.
       if (row.status !== 'complete') {
         log.info({ submissionId: row.id, status: row.status, event: data.event }, 'submission.fanout: the response is not complete; no side effects');
+        return;
+      }
+      // The grid trashes by setting `trashed_at` and leaves the status `complete`: a response trashed before its fan-out ran
+      // (or before a released fan-out) sends nothing either.
+      if (row.trashedAt !== null) {
+        log.info({ submissionId: row.id, event: data.event }, 'submission.fanout: the response is trashed; no side effects');
         return;
       }
       const target: FanoutTarget = { orgId, formId: row.formId, formVersionId: row.formVersionId, submissionId: row.id, status: row.status, event: data.event };

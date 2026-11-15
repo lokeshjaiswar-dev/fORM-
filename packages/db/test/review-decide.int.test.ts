@@ -466,6 +466,19 @@ describe('when a response is final', () => {
     await refused(h, () => decide(a, h, 'optional'), 'review_closed');
   });
 
+  it('decides nothing on a response the grid trashed (trashed_at set, the status still pending_review): an approval must not release it', async () => {
+    const group = await newGroup();
+    const a = await person({ group });
+    const h = await held([{ id: 'u1', group }]);
+    await t.owner.query('update submissions set trashed_at = now() where id = $1 and received_at = $2', [h.sub.id, h.sub.receivedAt]);
+    await refused(h, () => decide(a, h, 'u1'), 'review_closed');
+    await refused(h, () => decide(a, h, 'u1', { decision: 'reject', reasonCode: 'other' }), 'review_closed');
+    expect((await stored(h)).status).toBe('pending_review');
+    // Restored, it is decided as usual.
+    await t.owner.query('update submissions set trashed_at = null where id = $1 and received_at = $2', [h.sub.id, h.sub.receivedAt]);
+    expect(await decide(a, h, 'u1')).toMatchObject({ outcome: 'decided', submissionStatus: 'complete' });
+  });
+
   it('completes without the optional unit being decided, and an optional unit that was rejected does not reject the response', async () => {
     const group = await newGroup();
     const [a, b] = [await person({ group }), await person({ group })];

@@ -21,4 +21,6 @@ export const WEBHOOKS_PROBLEMS = {
   // A replay sends to the webhook, so it needs a webhook that is switched on (a webhook the worker switched off after
   // repeated failures is switched on again by saving it).
   WEBHOOK_DISABLED: { status: 409, title: 'The webhook is switched off' },
+  // A replay of a delivery whose response is in the trash: a trashed response is not sent to anyone. Restore it first.
+  WEBHOOK_RESPONSE_TRASHED: { status: 409, title: 'The response is in the trash' },
 } as const satisfies Record<string, ProblemSpec>;

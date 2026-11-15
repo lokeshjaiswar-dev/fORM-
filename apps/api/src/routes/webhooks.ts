@@ -12,6 +12,7 @@ import {
   forms,
   isUuid,
   secrets,
+  submissions,
   txExecutor,
   WEBHOOK_EVENTS,
   webhookDeliveries,
@@ -725,7 +726,7 @@ export function webhookRoutes(app: FastifyInstance, deps: WebhookRouteDeps): voi
         tags: TAGS,
         summary: 'Send a delivery again',
         description:
-          'Inserts a new delivery for the same event and response (`replayOf` names the original; a replay of a replay names the first) and sends `webhook.deliver` for it in the same transaction, so the row and the job exist together or not at all. The worker signs it afresh and applies the webhook’s purposes to the answers as they are now. A webhook that is switched off is 409 `WEBHOOK_DISABLED`. Needs `data.route`. Audited as `webhook.replayed`.',
+          'Inserts a new delivery for the same event and response (`replayOf` names the original; a replay of a replay names the first) and sends `webhook.deliver` for it in the same transaction, so the row and the job exist together or not at all. The worker signs it afresh and applies the webhook’s purposes to the answers as they are now. A webhook that is switched off is 409 `WEBHOOK_DISABLED`; a response in the trash is 409 `WEBHOOK_RESPONSE_TRASHED`. Needs `data.route`. Audited as `webhook.replayed`.',
         security: SECURITY,
         params: deliveryParams,
         response: { 201: deliveryView },
@@ -752,6 +753,17 @@ export function webhookRoutes(app: FastifyInstance, deps: WebhookRouteDeps): voi
           .limit(1);
         if (!original) throw new ProblemError('NOT_FOUND', 'That delivery is not in this webhook’s log.');
         if (!webhook.enabled) throw new ProblemError('WEBHOOK_DISABLED', 'Switch the webhook on before sending a delivery again.');
+        // A trashed response is not sent (the grid trashes by setting `trashed_at`, not the status). Read only when the
+        // caller may read responses; without `submissions.read` row-level security hides the row, and the worker's own
+        // check at delivery is what stops it then.
+        if (original.submissionId !== null && original.submissionReceivedAt !== null) {
+          const [response] = await tx
+            .select({ trashedAt: submissions.trashedAt })
+            .from(submissions)
+            .where(and(eq(submissions.formId, formId), eq(submissions.id, original.submissionId), eq(submissions.receivedAt, original.submissionReceivedAt)))
+            .limit(1);
+          if (response?.trashedAt) throw new ProblemError('WEBHOOK_RESPONSE_TRASHED', 'The response is in the trash. Restore it before sending its delivery again.');
+        }
         // A row without its job would stay pending for ever, so without a queue nothing is written.
         const queue = deps.queue;
         if (!queue) throw new ProblemError('SERVICE_UNAVAILABLE', 'Deliveries cannot be queued on this server yet.');

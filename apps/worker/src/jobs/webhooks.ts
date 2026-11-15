@@ -314,6 +314,8 @@ async function prepare(tx: Tx, deliveryId: string, attempt: number, log: Logger)
   const loaded = await loadSubmission(tx, { formId: hook.formId, submissionId: delivery.submissionId });
   if (!loaded) return settle('the response no longer exists');
   if (!DELIVERABLE_STATUSES.includes(loaded.row.status)) return settle(`the response is ${loaded.row.status}`);
+  // The trash is a column, not a status (see SubmissionRow.trashedAt): a retry or a replay after the owner trashed it sends nothing.
+  if (loaded.row.trashedAt !== null) return settle('the response is trashed');
 
   // A replay is the same event again: it carries the id and the time of the first delivery, so the receiver can tell it is a repeat.
   let event = { id: delivery.id, createdAt: delivery.createdAt };

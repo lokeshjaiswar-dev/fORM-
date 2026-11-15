@@ -151,7 +151,7 @@ grant execute on function review_open(uuid, timestamptz, uuid, jsonb, text[]) to
 --   mfa_required             the org requires two-factor sign-in for checkers (org_settings.review_checkers_mfa, on by
 --                            default) and this user has not enrolled it (users.totp_enabled_at);
 --   review_closed            the unit is not pending, or the response is not 'pending_review' any more (someone decided
---                            first, or the response was finalised);
+--                            first, or the response was finalised), or the response is in the trash (trashed_at set);
 --   order_blocked            a required unit of a lower order is not yet approved or not_applicable;
 --   review_stale             p_answers_hash is not the unit's current answers_hash;
 --   four_eyes_violation      the user is the unit's maker or last editor, is a member whose verified address matched the
@@ -186,6 +186,7 @@ declare
   v_form uuid;
   v_version uuid;
   v_status text;
+  v_trashed timestamptz;
   r submission_reviews%rowtype;
   d review_decisions%rowtype;
   v_distinct boolean;
@@ -217,7 +218,7 @@ begin
   end if;
 
   -- The response, of this org only, locked: decisions of one response run one after the other.
-  select s.form_id, s.form_version_id, s.status into v_form, v_version, v_status
+  select s.form_id, s.form_version_id, s.status, s.trashed_at into v_form, v_version, v_status, v_trashed
   from submissions s where s.id = p_submission_id and s.received_at = p_received_at and s.org_id = v_org
   for no key update;
   if not found then
@@ -267,7 +268,9 @@ begin
     return;
   end if;
 
-  if r.state <> 'pending' or v_status <> 'pending_review' then
+  -- A trashed response is out of circulation (the grid trashes by setting trashed_at and leaves the status alone): an
+  -- approval must not release it to the fan-out, even through a direct call that the queue's filter never sees.
+  if r.state <> 'pending' or v_status <> 'pending_review' or v_trashed is not null then
     return query select 'review_closed'::text, null::uuid, r.state, v_status, false;
     return;
   end if;

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, inject, it } from 'v
 import { createTenantEgressGuard, type EgressResolver } from '@form/adapters/egress';
 import { createKeyfileKeyProvider, createOrgSecrets } from '@form/adapters/kms';
 import { parseEditionConfig } from '@form/config';
-import { provision } from '@form/db';
+import { newSubmissionKey, provision } from '@form/db';
 import type { JobName, JobRequest, OrgSecrets, Queue, SendOptions } from '@form/ports';
 import type { FormDefinition } from '@form/schema';
 import { createTestDatabase } from '@form/testkit';
@@ -920,6 +920,36 @@ describe('replay', () => {
     expect((await call('POST', `${base(formId)}/${made.id}/deliveries/not-a-uuid/replay`)).statusCode).toBe(400);
     expect(await countOf('select count(*)::int as n from webhook_deliveries', [])).toBe(before);
     expect(sent).toEqual([]);
+  });
+
+  it('refuses a delivery whose response the grid trashed with 409 WEBHOOK_RESPONSE_TRASHED, and writes and queues nothing', async () => {
+    const formId = await newForm();
+    const made = await create(formId);
+    // A stored response of the form (its version written as the owner, as publish would) that the grid then trashed:
+    // `trashed_at` set, the status left `complete`.
+    const versionId = randomUUID();
+    await owner.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash) values ($1, $2, $3, 1, 2, $4, '{}', '{"taint":{}}', $5)`,
+      [versionId, orgId, formId, user.owner, '0'.repeat(64)],
+    );
+    const { id: submissionId, receivedAt } = newSubmissionKey(new Date());
+    await owner.query(
+      `insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta, trashed_at)
+       values ($1, $2, $3, $4, $5, $6, 0, 'complete', '{}', '{}', '{"locale":"en-IN"}', now())`,
+      [submissionId, receivedAt, orgId, formId, versionId, Buffer.alloc(32)],
+    );
+    const delivery = await seedDelivery(made.id);
+    await owner.query('update webhook_deliveries set submission_id = $2, submission_received_at = $3 where id = $1', [delivery, submissionId, receivedAt]);
+
+    const res = await call('POST', `${base(formId)}/${made.id}/deliveries/${delivery}/replay`);
+    expect(res.statusCode, res.body).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'WEBHOOK_RESPONSE_TRASHED' });
+    expect(await countOf('select count(*)::int as n from webhook_deliveries where webhook_id = $1', [made.id])).toBe(1);
+    expect(sent).toEqual([]);
+
+    // Restored from the trash, it is sent again.
+    await owner.query('update submissions set trashed_at = null where id = $1', [submissionId]);
+    expect((await call('POST', `${base(formId)}/${made.id}/deliveries/${delivery}/replay`)).statusCode).toBe(201);
   });
 
   it('refuses a switched-off webhook with 409 WEBHOOK_DISABLED, and writes and queues nothing', async () => {
