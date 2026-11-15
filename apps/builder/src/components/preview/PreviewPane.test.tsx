@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { REGISTRY } from '@form/registry';
-import { fromHtml, fromHtmlInline, type StoredBlock } from '@form/schema';
+import { fromHtml, fromHtmlInline, type RuntimeStatus, type StoredBlock } from '@form/schema';
 import { XSS_PAYLOADS } from '@form/schema/test-fixtures';
 import { FormPreview, PreviewPane } from '@/components/preview/PreviewPane';
-import { updateOps } from '@/state/opsStore';
 import { richDoc } from '@/lib/definition';
 import { block, formWith, resetStore, rule, text } from '@/test/fixtures';
 
@@ -31,23 +30,21 @@ describe('PreviewPane', () => {
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
   });
 
-  it('unlocks a password-protected form only with its password (local FormOps, S5)', async () => {
+  it('WP-1.07: a password form shows the password screen, and the preview lets any entry through without checking it', async () => {
     const error = vi.spyOn(toast, 'error').mockImplementation(() => 0);
-    const user = renderPreview([block('short_text', 'name', { label: 'Name' })]);
-    act(() => updateOps({ password: 'hunter2' }));
-    await user.type(screen.getByLabelText('Password'), 'nope');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(error).toHaveBeenCalledWith('Incorrect password');
+    const password: RuntimeStatus = { state: 'password', screen: { type: 'doc', content: [] } };
+    render(<PreviewPane definition={formWith([block('short_text', 'name', { label: 'Name' })])} status={password} />);
+    const user = userEvent.setup();
     expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument();
-    await user.clear(screen.getByLabelText('Password'));
-    await user.type(screen.getByLabelText('Password'), 'hunter2');
+    await user.type(screen.getByLabelText('Password'), 'anything at all');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('textbox', { name: 'Name' })).toBeInTheDocument();
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('shows the closed screen of a closed form', () => {
-    renderPreview([block('short_text', 'name', { label: 'Name' })]);
-    act(() => updateOps({ open: false, closedMessage: richDoc('Registrations are closed.') }));
+    const closed: RuntimeStatus = { state: 'closed', screen: richDoc('Registrations are closed.') };
+    render(<PreviewPane definition={formWith([block('short_text', 'name', { label: 'Name' })])} status={closed} />);
     expect(screen.getByRole('heading', { name: 'Registrations are closed.' })).toBeInTheDocument();
   });
 

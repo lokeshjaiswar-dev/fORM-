@@ -4,11 +4,11 @@ import { isSafeUrl, type Ending, type EndingId, type FormDefinition, type RichDo
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { labelString } from '@/fields/style';
-import { APP_IDS, blankDefinition, richDoc } from '@/lib/definition';
+import { APP_IDS, blankDefinition } from '@/lib/definition';
 import { setBehavior, setEndings } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { updateOps, useOpsStore } from '@/state/opsStore';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Switch } from '@dmacq/ui';
+import { AccessPanel } from '@/components/builder/access/AccessPanel';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { cn } from '@/lib/utils';
 
@@ -22,10 +22,6 @@ const M = defineMessages('builder', {
   'settings.redirect_hint': 'An https address; leave empty to show the thank-you message',
   'settings.redirect_invalid': 'Use an https address',
   'settings.confetti': 'Confetti on submit',
-  'settings.closed': 'Close form',
-  'settings.closed_message': 'Closed message',
-  'settings.password': 'Password (optional)',
-  'settings.password_hint': 'Kept in this browser for the preview; the server hashes it when forms are saved there.',
   'form.submit_label': 'Submit',
 });
 
@@ -73,10 +69,12 @@ export function ThemeSettings({ open, onOpenChange }: { open: boolean; onOpenCha
   );
 }
 
-/** Submit, ending, close and optional password. Empty password means none. */
+/**
+ * Submit button, thank-you message, redirect and confetti (the form's definition), then the Access section: who may open
+ * the form and when, its password and its address (FormOps on the server, WP-1.07).
+ */
 export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
   const def = useDoc((d) => d);
-  const ops = useOpsStore();
   const message = messageEnding(def);
   const [redirect, setRedirect] = useDraft(redirectOf(def));
   const redirectValid = redirect === '' || (isSafeUrl(redirect) && /^https:/i.test(redirect));
@@ -143,20 +141,7 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
         <p className={hintCls}>{t(redirectValid ? M['settings.redirect_hint'] : M['settings.redirect_invalid'])}</p>
       </div>
       <Toggle dark={dark} id="successAnimation" label={t(M['settings.confetti'])} checked={def.behavior.successAnimation} onChange={setConfetti} />
-      <Toggle dark={dark} id="closed" label={t(M['settings.closed'])} checked={!ops.open} onChange={(closed) => updateOps({ open: !closed })} />
-      {!ops.open ? (
-        <div className="space-y-1.5">
-          <Label className={labelCls}>{t(M['settings.closed_message'])}</Label>
-          <div className={cn('rounded-md border px-2', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border')}>
-            <RichEditor value={ops.closedMessage.content.length ? ops.closedMessage : richDoc('')} onChange={(closedMessage) => updateOps({ closedMessage })} className="text-sm leading-6" />
-          </div>
-        </div>
-      ) : null}
-      <div className="space-y-1.5">
-        <Label htmlFor="password" className={labelCls}>{t(M['settings.password'])}</Label>
-        <Input id="password" type="password" autoComplete="new-password" className={field} value={ops.password} placeholder="" onChange={(e) => updateOps({ password: e.target.value.slice(0, 200) })} />
-        <p className="text-[12px] text-muted-foreground">{t(M['settings.password_hint'])}</p>
-      </div>
+      <AccessPanel dark={dark} />
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { ThemeSettings } from '@/components/builder/ThemeSettings';
 import type { Ending, EndingId } from '@form/schema';
 import { useDocumentStore } from '@/state/documentStore';
 import { undo } from '@/state/history';
-import { useOpsStore } from '@/state/opsStore';
 import { block, doc, resetStore } from '@/test/fixtures';
 
 beforeEach(() => resetStore([block('short_text', 'name')]));
@@ -60,12 +59,10 @@ describe('ThemeSettings', () => {
     expect(doc().defaultEndingId).toBe(doc().endings[0]?.id);
   });
 
-  it('closing the form and its password are local FormOps, never in the definition (S5)', async () => {
-    const user = open();
-    await user.click(screen.getByRole('switch', { name: 'Close form' }));
-    expect(useOpsStore.getState().open).toBe(false);
-    await user.type(screen.getByLabelText('Password (optional)'), 'hunter2');
-    expect(useOpsStore.getState().password).toBe('hunter2');
-    expect(JSON.stringify(doc())).not.toContain('hunter2');
+  it('WP-1.07: closing the form and its password are not local settings any more; the Access section takes their place', () => {
+    open();
+    expect(screen.getByRole('region', { name: 'Access' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Close form' })).not.toBeInTheDocument();
   });
 });

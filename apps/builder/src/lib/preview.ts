@@ -2,25 +2,16 @@ import type { RuntimeEdition } from '@form/config';
 import { compile, projectForRuntime } from '@form/logic';
 import { REGISTRY } from '@form/registry';
 import type {
-  FileId, FileRef, FormDefinition, FormVersion, FormVersionId, IsoInstant, OrgId, PublishIssue, RichDoc, RuntimeFormVersion, RuntimeStatus, Sha256Hex, UserId,
+  FileId, FileRef, FormDefinition, FormVersion, FormVersionId, IsoInstant, OrgId, PublishIssue, RuntimeFormVersion, RuntimeStatus, Sha256Hex, UserId,
 } from '@form/schema';
 import type { UploadRequest } from '@form/renderer';
 import { uid } from '@/lib/utils';
 import { putSubmissionFile } from '@/persistence/blobStore';
-import type { LocalOps } from '@/state/opsStore';
 
 /*
  * The builder preview runs the published path locally (WP-0.10): the v2 draft goes through compile() and
  * projectForRuntime() as a publish does, and @form/renderer shows the result. Nothing here touches the network.
  */
-
-const EMPTY: RichDoc = { type: 'doc', content: [] };
-
-/** What the runtime would answer `/session` with for the form's local FormOps: closed, password-protected or open. */
-export function previewStatus(ops: LocalOps): RuntimeStatus {
-  if (!ops.open) return { state: 'closed', screen: ops.closedMessage };
-  return ops.password ? { state: 'password', screen: EMPTY } : { state: 'open' };
-}
 
 export type PreviewBuild = { ok: true; version: RuntimeFormVersion } | { ok: false; issues: PublishIssue[] };
 
