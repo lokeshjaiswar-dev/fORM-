@@ -1,8 +1,9 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ANSWER_CODEC_PLAIN, formCounters, formAccess, formFilesCheck, formVersionState, newSubmissionKey, recordSubmission, resolveFormSlug, withTenant, type Db, type Tx } from '@form/db';
-import type { Answers, FieldError } from '@form/schema';
+import type { Answers, EvalState, FieldError } from '@form/schema';
 import { ProblemError, type FieldIssue } from '../errors.ts';
+import { openReview, planReviewFrom, readReviewSettings } from '../modules/reviews/open.ts';
 import { runtimeStatus } from '../runtime/status.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
 import { checkAnswers, type ClientMeta } from '../validate-submission.ts';
@@ -22,12 +23,13 @@ import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } 
  *   evaluate and validate the answers (server scope, with the page-view details), drop what the server owns
  *   check the files the answers name against the upload rows
  *
- *   then one transaction: claim the key, number the unique-ID blocks, run the effects (the search document and the one
- *   fan-out job), then the guarded counter update that can still say LIMIT_REACHED (which rolls the rest back), and last
- *   of all the INSERT of the submission, so that the form's hot rows are held for two statements and the commit.
+ *   then one transaction: whether the form's review holds the response, claim the key, number the unique-ID blocks, run
+ *   the effects (the search document and the one fan-out job, none while held), then the guarded counter update that can
+ *   still say LIMIT_REACHED (which rolls the rest back), and last of all the INSERT of the submission, so that the form's
+ *   hot rows are held for two statements and the commit (a form with review adds the two that open its review).
  *
  * Still to come, in the order the architecture lists them: encryption and blind indexes (WP-1.11), consent records
- * (WP-1.21), the held statuses (WP-1.14, WP-1.30), captcha and honeypot (WP-1.13), edit and receipt tokens (WP-1.11).
+ * (WP-1.21), the other held statuses (WP-1.14, WP-1.30), captcha and honeypot (WP-1.13), edit and receipt tokens (WP-1.11).
  */
 
 /** The most files one submission may name (the narrow lookup of 0019 takes at most this many ids). */
@@ -229,7 +231,7 @@ export async function submit(deps: SubmitDeps, input: SubmitInput): Promise<Subm
     receivedAt,
     versionNumber: version.number,
   });
-  return store(deps, tenant, { found, version, submissionId, receivedAt, idempotencyKey: input.idempotencyKey, requestHash, answers, endingId, meta, locale: body.locale, pathTaken: checked.state.path });
+  return store(deps, tenant, { found, version, submissionId, receivedAt, idempotencyKey: input.idempotencyKey, requestHash, answers, endingId, meta, locale: body.locale, pathTaken: checked.state.path, evalState: checked.state });
 }
 
 interface Stage {
@@ -244,6 +246,8 @@ interface Stage {
   meta: Record<string, unknown>;
   locale: string;
   pathTaken: readonly string[];
+  /** The server's evaluation of the answers: which blocks the respondent was shown, which decides the units a review asks for. */
+  evalState: Pick<EvalState, 'visible'>;
 }
 
 /**
@@ -257,10 +261,21 @@ interface Stage {
  * 50-field form: about 75 submits a second against about 130 now, on one loaded laptop). A limit that is reached at the counter throws, and
  * everything above it rolls back with it (the key, the numbers, the document and the job too, so the next try is a new
  * request); nothing was inserted yet.
+ *
+ * A form with review (WP-2.33) holds the response as `pending_review` when a unit that is required is also applicable to
+ * what the respondent saw. That is known before the key is claimed, because the key's stored result says `held` (a
+ * respondent cannot read the review rows, and the row is never edited): the settings are read first (a read, no lock, and
+ * none at all for a version without review units), and the units, with the hash of each one's numbered answers, are
+ * planned right after the numbering. The response is stored `pending_review`, which the effects take as a status that
+ * is searchable but sends no fan-out job, and `review_open()` writes its unit rows right after the INSERT, in the same
+ * transaction, so a held response with no review rows cannot exist. The counter counts it, like any held response.
  */
 async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'respondent'; requestId: string }, s: Stage): Promise<SubmitOutcome> {
-  const result: StoredResult = { submissionId: s.submissionId, endingId: s.endingId };
   return withTenant(deps.db, tenant, async (tx): Promise<SubmitOutcome> => {
+    const review = await readReviewSettings(tx, s.found.formId, s.version.compiled);
+    const planInput = { compiled: s.version.compiled, evalState: s.evalState };
+    const held = planReviewFrom(review, { ...planInput, answers: s.answers }) !== null;
+    const result: StoredResult = { submissionId: s.submissionId, endingId: s.endingId, ...(held ? { held: 'pending_review' as const } : {}) };
     const claim = await claimIdempotency(tx, {
       orgId: s.found.orgId,
       formId: s.found.formId,
@@ -275,6 +290,10 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       return { kind: 'taken', replayed: true, result: { ok: true, ...claim.stored.result } };
     }
     const answers = await takeUniqueIds(tx, { orgId: s.found.orgId, formId: s.found.formId, receivedAt: s.receivedAt, answers: s.answers, definition: s.version.definition });
+    // The hash of each unit is of the answers as stored, so the plan is made once the unique IDs are numbered.
+    const plan = held ? planReviewFrom(review, { ...planInput, answers }) : null;
+    if (held && plan === null) throw new Error('the review plan of a held response vanished when its answers were numbered');
+    const status = plan ? 'pending_review' : 'complete';
     const effects: EffectsContext = {
       orgId: s.found.orgId,
       formId: s.found.formId,
@@ -282,7 +301,7 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       versionNumber: s.version.number,
       submissionId: s.submissionId,
       receivedAt: s.receivedAt,
-      status: 'complete',
+      status,
       locale: s.locale,
       answers,
       definition: s.version.definition,
@@ -302,12 +321,23 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       formVersionId: s.version.versionId,
       definitionHash: s.version.definitionHash,
       answerCodecVersion: ANSWER_CODEC_PLAIN,
-      status: 'complete',
+      status,
       answers,
       // The page path and the ending the answers reached; the variables (which can be tainted or sensitive) wait for WP-1.11.
       computed: { path: [...s.pathTaken], endingId: s.endingId },
       meta: s.meta,
     });
+    if (plan) {
+      await openReview(tx, {
+        orgId: s.found.orgId,
+        formId: s.found.formId,
+        formVersionId: s.version.versionId,
+        submissionId: s.submissionId,
+        receivedAt: s.receivedAt,
+        requestId: tenant.requestId,
+        plan,
+      });
+    }
     return { kind: 'taken', replayed: false, result: { ok: true, ...result } };
   });
 }

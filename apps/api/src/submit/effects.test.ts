@@ -114,6 +114,14 @@ describe('recordEffects: the search document', () => {
     await recordEffects(fakeTx().tx, context(def, values, { status: 'pending_payment' }), { searchIndex: search.factory });
     expect(search.docs).toHaveLength(1);
   });
+
+  it('indexes a response held for review too: the search document is written, only the fan-out job waits', async () => {
+    const search = fakeSearch();
+    const { queue, sent } = fakeQueue();
+    await recordEffects(fakeTx().tx, context(def, values, { status: 'pending_review' }), { searchIndex: search.factory, queue });
+    expect(search.docs).toHaveLength(1);
+    expect(sent).toEqual([]);
+  });
 });
 
 describe('recordEffects: the one submission.fanout job', () => {
@@ -138,7 +146,7 @@ describe('recordEffects: the one submission.fanout job', () => {
     expect(statements[0]!.sql).toMatch(/select \$1::int as n/);
   });
 
-  it.each(['pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'spam', 'archived', 'trashed'] as const)(
+  it.each(['pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'pending_review', 'rejected', 'spam', 'archived', 'trashed'] as const)(
     'sends nothing for a %s response: a held one is fanned out when it is released',
     async (status) => {
       const { queue, sent } = fakeQueue();

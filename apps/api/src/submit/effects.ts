@@ -20,7 +20,7 @@ export interface EffectsContext {
   submissionId: string;
   /** The moment the server took the answers (the one inside `submissionId`, and `submissions.received_at`). */
   receivedAt: Date;
-  /** `complete` today; a held status (payment, scan, guardian consent) is searchable at once but enqueues no fan-out until it is released. */
+  /** `complete`, or `pending_review` when the form's review holds the response; a held status (payment, scan, guardian consent, review) is searchable at once but enqueues no fan-out until it is released. */
   status: SubmissionStatus;
   locale: string;
   /** The validated answers as they are stored (plain, until WP-1.11 encrypts the sensitive ones), with file references rewritten from the upload rows and the unique IDs numbered. */
@@ -42,7 +42,11 @@ export interface EffectsDeps {
   queue?: Queue | undefined;
 }
 
-/** The statuses a response is released to its side effects in: held ones (payment, scan, guardian consent) wait for their release. */
+/**
+ * The statuses a response is released to its side effects in: held ones (payment, scan, guardian consent, review) wait for
+ * their release. A response held for review is released by the decision that approves its last required unit, which
+ * sends the job itself (`finaliseOnDecision`, event `released`); a rejected one is never released.
+ */
 const FANS_OUT: readonly SubmissionStatus[] = ['complete'];
 
 /** The year or month of `at` as the form's own calendar names it (`YYYY`, `YYYY-MM`), which is when a numbering that restarts restarts. */

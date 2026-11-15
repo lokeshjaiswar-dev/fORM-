@@ -14,10 +14,15 @@ import { canonicalJson } from '@form/schema';
 /** How long a key is remembered (the row's `expires_at`; a sweep deletes it after). */
 export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** What the first request returned: ids only, never an answer (the column is `response jsonb`). */
+/**
+ * What the first request returned: ids only, never an answer (the column is `response jsonb`). `held` is there when the
+ * response was kept for a checker (`pending_review`): a replay must tell the respondent the same thing, and a respondent
+ * cannot read the review rows to find out later. Rows are never edited, so it is known when the key is claimed.
+ */
 export interface StoredResult {
   submissionId: string;
   endingId: string;
+  held?: 'pending_review';
 }
 
 export interface StoredIdempotency {
@@ -36,9 +41,10 @@ export function hashRequest(request: { formVersionId: string; locale: string; an
 
 function parseResult(response: Record<string, unknown>): StoredResult {
   // Written by `claimIdempotency` below and by nothing else; a row that does not parse is a defect to see, not to hide.
-  const { submissionId, endingId } = response;
+  const { submissionId, endingId, held } = response;
   if (typeof submissionId !== 'string' || typeof endingId !== 'string') throw new Error('submission_idempotency.response is not a stored result');
-  return { submissionId, endingId };
+  if (held !== undefined && held !== 'pending_review') throw new Error('submission_idempotency.response is not a stored result');
+  return { submissionId, endingId, ...(held === undefined ? {} : { held }) };
 }
 
 /** The row of a key, or null. The org is the transaction's (RLS); the form is the one the slug resolved to. */
@@ -78,7 +84,7 @@ export async function claimIdempotency(tx: Tx, claim: Claim): Promise<{ owned: t
       submissionId: claim.result.submissionId,
       receivedAt: claim.receivedAt,
       requestHash: claim.requestHash,
-      response: { submissionId: claim.result.submissionId, endingId: claim.result.endingId },
+      response: { submissionId: claim.result.submissionId, endingId: claim.result.endingId, ...(claim.result.held === undefined ? {} : { held: claim.result.held }) },
       expiresAt: new Date(claim.receivedAt.getTime() + IDEMPOTENCY_TTL_MS),
     })
     .onConflictDoNothing()
