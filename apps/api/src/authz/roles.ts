@@ -10,6 +10,8 @@ export const PERMISSIONS = [
   'submissions.edit',
   'submissions.delete',
   'submissions.export',
+  /** Decide the review units of held responses that are assigned to the caller's review groups (WP-2.33). */
+  'submissions.review',
   'ops.manage',
   'data.route',
   'compliance.approve_notice',
@@ -29,12 +31,17 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 const FORMS_AUTHOR: Permission[] = ['forms.create', 'forms.edit', 'forms.publish', 'forms.read', 'ops.manage'];
 const DATA_WRITE: Permission[] = ['submissions.read', 'submissions.edit', 'submissions.delete', 'submissions.export', 'data.route'];
+/**
+ * Who may check a response (WP-2.33): owner, admin and editor, not creator (no data access) and not the data roles.
+ * Data collaborators get it in P2 with the role grants of WP-2.29; until then a member who must review is an editor.
+ */
+const REVIEW: Permission[] = ['submissions.review'];
 
 /** `compliance.approve_notice` is grantable to editors per org (CMP-24, `org_settings.editors_approve_notice`); it is not a default. */
 export const ROLE_PERMISSIONS: Record<MembershipRole, readonly Permission[]> = {
   owner: PERMISSIONS,
   admin: PERMISSIONS.filter((p) => p !== 'billing.manage'),
-  editor: [...FORMS_AUTHOR, ...DATA_WRITE],
+  editor: [...FORMS_AUTHOR, ...DATA_WRITE, ...REVIEW],
   creator: FORMS_AUTHOR,
   data_collaborator: ['forms.read', ...DATA_WRITE],
   data_viewer: ['forms.read', 'submissions.read'],
