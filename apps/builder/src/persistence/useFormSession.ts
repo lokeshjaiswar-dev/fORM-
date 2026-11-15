@@ -6,7 +6,7 @@ import { loadOps } from '@/state/opsStore';
 import { blockOrder } from '@/lib/definition';
 import { resetUi, useUiStore, type LoadNote, type TabConflict } from '@/state/uiStore';
 import { startAutosave, whenSaved, type Autosave } from '@/persistence/autosave';
-import { openStored, settleLegacyAccess } from '@/persistence/openForm';
+import { holdLegacyAccess, openStored, settleLegacyAccess } from '@/persistence/openForm';
 import { DOCUMENT_FORMAT, DraftConflict, type DocumentRepository, type StoredForm } from '@/persistence/DocumentRepository';
 import { useRepository } from '@/persistence/repository';
 import { watchTabs, type TabWatch } from '@/persistence/tabChannel';
@@ -62,11 +62,20 @@ export function useFormSession(id: string): Session {
         setSession({ status: 'error', message: result.error });
         return;
       }
-      // A password or closed state an older build kept in this browser goes to the API now, before a v1 file is replaced by its conversion (BL-145).
-      if (result.legacy && disputed === null) {
-        const session = useSessionStore.getState();
-        const org = session.status === 'signed_in' ? (activeOrgOf(session.me)?.id ?? null) : null;
-        result.notes.push(...(await settleLegacyAccess(stored, result, { org, repo })));
+      // The FormOps this session works with and autosave writes over the cached copy on every save. Legacy access the server has not taken is part of them (`pendingAccess`); without it the first save would drop it.
+      let ops = result.ops;
+      if (result.legacy) {
+        if (disputed === null) {
+          // A password or closed state an older build kept in this browser goes to the API now, before a v1 file is replaced by its conversion (BL-145).
+          const session = useSessionStore.getState();
+          const org = session.status === 'signed_in' ? (activeOrgOf(session.me)?.id ?? null) : null;
+          const settled = await settleLegacyAccess(stored, result, { org, repo });
+          result.notes.push(...settled.notes);
+          ops = settled.ops;
+        } else {
+          // The author has a merge to resolve first, so nothing is sent yet. "Keep mine" and "take theirs" must not drop it either.
+          ops = await holdLegacyAccess(stored, result, repo);
+        }
         if (!live) return;
       }
       let rev = stored.rev;
@@ -75,7 +84,7 @@ export function useFormSession(id: string): Session {
       let dirty = stored.dirty === true && disputed === null;
       if (result.migrated) {
         rev += 1;
-        const saved = await repo.save({ id, format: DOCUMENT_FORMAT, rev, savedAt: now, doc: result.doc, ops: result.ops, serverRev });
+        const saved = await repo.save({ id, format: DOCUMENT_FORMAT, rev, savedAt: now, doc: result.doc, ops, serverRev });
         if (saved) {
           serverRev = saved.serverRev;
           // The migrated copy is on the server now, or (offline) cached dirty and still to be sent.
@@ -86,7 +95,7 @@ export function useFormSession(id: string): Session {
       const imported = pendingNotes.get(id) ?? [];
       pendingNotes.delete(id);
       loadDocument(result.doc);
-      loadOps(result.ops);
+      loadOps(ops);
       const started = result.doc.pages.some((p) => p.children.length > 0);
       resetUi({ started, notes: [...imported, ...result.notes] });
       const first = blockOrder(result.doc)[0];

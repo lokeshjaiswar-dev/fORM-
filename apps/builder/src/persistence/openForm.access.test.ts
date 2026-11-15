@@ -4,7 +4,8 @@ import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { richDoc } from '@/lib/definition';
 import type { AccessSettings } from '@/persistence/accessApi';
 import { LEGACY_FORMAT, type StoredForm } from '@/persistence/DocumentRepository';
-import { newStoredForm, openStored, settleLegacyAccess, type OpenedForm } from '@/persistence/openForm';
+import { holdLegacyAccess, newStoredForm, openStored, settleLegacyAccess, type OpenedForm } from '@/persistence/openForm';
+import { legacyAccessOf } from '@/state/opsStore';
 import { MemoryRepository, v1Form } from '@/test/fixtures';
 
 /*
@@ -69,6 +70,15 @@ describe('openStored reads the legacy FormOps without loading them', () => {
     expect(opened(storedWith(legacyOps({ password: '' }))).legacy).toBeUndefined();
   });
 
+  it('access an earlier open could not send is read from the pending slot, and is not loaded either', () => {
+    const pending = { password: 'hunter2', closed: true, closedMessage: richDoc('This form is closed.') };
+    const result = opened(storedWith({ pendingAccess: pending }));
+    expect(result.legacy).toEqual(pending);
+    expect(result.ops).toEqual({});
+    // A slot that holds nothing to send is not worth a call.
+    expect(opened(storedWith({ pendingAccess: { password: '', closed: false } })).legacy).toBeUndefined();
+  });
+
   it('ops that hold nothing, or are not ops at all, leave nothing to move', () => {
     expect(opened(storedWith({})).legacy).toBeUndefined();
     expect(opened(storedWith(undefined)).legacy).toBeUndefined();
@@ -83,8 +93,9 @@ describe('settleLegacyAccess (BL-145)', () => {
     const stored = storedWith(legacyOps(), { serverRev: 3 });
     await repo.save(stored);
 
-    const notes = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
+    const { notes, ops } = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
 
+    expect(ops).toEqual({});
     expect(setFormPassword).toHaveBeenCalledExactlyOnceWith('o1', 'abc', 'hunter2');
     expect(createRemoteForm).not.toHaveBeenCalled();
     expect(saveAccess).not.toHaveBeenCalled();
@@ -113,7 +124,7 @@ describe('settleLegacyAccess (BL-145)', () => {
     const stored = storedWith(legacyOps({ open: false }), { serverRev: 2 });
     await repo.save(stored);
 
-    const notes = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
+    const { notes } = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
 
     expect(saveAccess).not.toHaveBeenCalled();
     expect(setFormPassword).not.toHaveBeenCalled();
@@ -121,16 +132,41 @@ describe('settleLegacyAccess (BL-145)', () => {
     expect(notes[0]?.code).toBe('access_moved');
   });
 
-  it('a server that cannot be reached leaves the copy as it is, to try again at the next open', async () => {
+  it('a server that cannot be reached keeps the access in the copy and in the ops the session carries on with, to try again at the next open', async () => {
     getAccess.mockRejectedValue(new ApiUnreachable());
     const repo = new MemoryRepository();
     const stored = storedWith(legacyOps(), { serverRev: 3 });
     await repo.save(stored);
 
-    const notes = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
+    const { notes, ops } = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
 
     expect(notes).toEqual([expect.objectContaining({ code: 'access_kept' })]);
-    expect((await repo.load('abc'))?.ops).toEqual(legacyOps());
+    // The session saves its ops over the copy on every change, so what is still to be sent must be among them.
+    const pending = { password: 'hunter2', closed: false, closedMessage: undefined };
+    expect(ops).toEqual({ pendingAccess: pending });
+    expect((await repo.load('abc'))?.ops).toEqual({ pendingAccess: pending });
+    expect(legacyAccessOf((await repo.load('abc'))?.ops)).toEqual(pending);
+  });
+
+  it('what a copy kept is read again at the next open and sent then, and the copy is cleared', async () => {
+    getAccess.mockRejectedValueOnce(new ApiUnreachable());
+    const repo = new MemoryRepository();
+    const first = storedWith(legacyOps({ open: false }), { serverRev: 3 });
+    await repo.save(first);
+    await settleLegacyAccess(first, opened(first), { org: 'o1', repo });
+    expect(setFormPassword).not.toHaveBeenCalled();
+
+    const second = (await repo.load('abc')) as StoredForm;
+    const reopened = opened(second);
+    expect(reopened.ops).toEqual({});
+    expect(reopened.legacy).toEqual({ password: 'hunter2', closed: true, closedMessage: richDoc('This form is closed.') });
+    const { notes, ops } = await settleLegacyAccess(second, reopened, { org: 'o1', repo });
+
+    expect(notes[0]?.code).toBe('access_moved');
+    expect(ops).toEqual({});
+    expect(saveAccess).toHaveBeenCalledExactlyOnceWith('o1', 'abc', expect.objectContaining({ enabled: false }), 0);
+    expect(setFormPassword).toHaveBeenCalledExactlyOnceWith('o1', 'abc', 'hunter2');
+    expect((await repo.load('abc'))?.ops).toEqual({});
   });
 
   it('a refusal that retrying cannot fix (a password the server’s rules reject) clears the copy and says why', async () => {
@@ -139,20 +175,22 @@ describe('settleLegacyAccess (BL-145)', () => {
     const stored = storedWith(legacyOps(), { serverRev: 3 });
     await repo.save(stored);
 
-    const notes = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
+    const { notes } = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
 
     expect(notes).toEqual([expect.objectContaining({ code: 'access_refused', detail: expect.stringContaining('Choose a longer password.') })]);
     expect(JSON.stringify(await repo.load('abc'))).not.toContain('hunter2');
   });
 
-  it('a 403 or a 5xx is not final: the copy stays, so a member who gains the permission later still has it moved', async () => {
-    for (const status of [403, 429, 503]) {
+  it('a 401, a 403 or a 5xx is not final: the access stays, so a member who gains the permission later still has it moved', async () => {
+    for (const status of [401, 403, 408, 429, 503]) {
       setFormPassword.mockRejectedValue(new ApiProblem(status, 'FORBIDDEN', ''));
       const repo = new MemoryRepository();
       const stored = storedWith(legacyOps(), { serverRev: 3 });
       await repo.save(stored);
-      expect((await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo }))[0]?.code).toBe('access_kept');
-      expect((await repo.load('abc'))?.ops).toEqual(legacyOps());
+      const { notes, ops } = await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo });
+      expect(notes[0]?.code).toBe('access_kept');
+      expect(ops.pendingAccess?.password).toBe('hunter2');
+      expect(legacyAccessOf((await repo.load('abc'))?.ops)).toEqual({ password: 'hunter2', closed: false, closedMessage: undefined });
     }
   });
 
@@ -162,6 +200,16 @@ describe('settleLegacyAccess (BL-145)', () => {
     const stored = storedWith(legacyOps(), { serverRev: 3, dirty: true });
     await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo: { save, saveLocal } });
     expect(saveLocal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'abc', dirty: true, ops: {} }));
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('access the server could not take stays in a draft with unsent changes too, and the draft stays unsent', async () => {
+    getAccess.mockRejectedValue(new ApiUnreachable());
+    const saveLocal = vi.fn().mockResolvedValue(undefined);
+    const save = vi.fn().mockResolvedValue(undefined);
+    const stored = storedWith(legacyOps(), { serverRev: 3, dirty: true });
+    await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo: { save, saveLocal } });
+    expect(saveLocal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ dirty: true, ops: { pendingAccess: expect.objectContaining({ password: 'hunter2' }) } }));
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -180,24 +228,49 @@ describe('settleLegacyAccess (BL-145)', () => {
     expect(result.migrated).toBe(true);
     expect(result.legacy?.password).toBe('hunter2');
 
-    const notes = await settleLegacyAccess(v1, result, { org: 'o1', repo });
+    const { notes, ops } = await settleLegacyAccess(v1, result, { org: 'o1', repo });
     expect(notes).toEqual([expect.objectContaining({ code: 'access_lost', detail: expect.stringContaining('Set them again under Access') })]);
+    // The note says it is lost, so the converted draft does not carry it.
+    expect(ops).toEqual({});
     // The caller saves the conversion; nothing of this function writes a copy for a migrated form.
     expect(repo.records.size).toBe(0);
   });
 
   it('a form with nothing to move makes no call', async () => {
     const stored = storedWith({});
-    expect(await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo: new MemoryRepository() })).toEqual([]);
+    expect(await settleLegacyAccess(stored, opened(stored), { org: 'o1', repo: new MemoryRepository() })).toEqual({ notes: [], ops: {} });
     expect(getAccess).not.toHaveBeenCalled();
   });
 
-  it('nobody signed in: nothing can be sent, and the copy is left alone', async () => {
+  it('nobody signed in: nothing can be sent, and the access stays in the copy', async () => {
     const repo = new MemoryRepository();
     const stored = storedWith(legacyOps());
     await repo.save(stored);
-    expect((await settleLegacyAccess(stored, opened(stored), { org: null, repo }))[0]?.code).toBe('access_kept');
+    const { notes, ops } = await settleLegacyAccess(stored, opened(stored), { org: null, repo });
+    expect(notes[0]?.code).toBe('access_kept');
     expect(getAccess).not.toHaveBeenCalled();
-    expect((await repo.load('abc'))?.ops).toEqual(legacyOps());
+    expect(ops.pendingAccess).toMatchObject({ password: 'hunter2' });
+    expect(legacyAccessOf((await repo.load('abc'))?.ops)).toMatchObject({ password: 'hunter2' });
+  });
+});
+
+describe('holdLegacyAccess', () => {
+  it('keeps a copy’s access in the session ops and the copy, without asking the server (a form behind the merge dialog)', async () => {
+    const repo = new MemoryRepository();
+    const stored = storedWith(legacyOps({ open: false }), { serverRev: 3, dirty: true });
+    await repo.save(stored);
+
+    const ops = await holdLegacyAccess(stored, opened(stored), repo);
+
+    expect(getAccess).not.toHaveBeenCalled();
+    expect(ops.pendingAccess).toMatchObject({ password: 'hunter2', closed: true });
+    expect(legacyAccessOf((await repo.load('abc'))?.ops)).toEqual(ops.pendingAccess);
+  });
+
+  it('does nothing for a form with no legacy access', async () => {
+    const repo = new MemoryRepository();
+    const stored = storedWith({});
+    expect(await holdLegacyAccess(stored, opened(stored), repo)).toEqual({});
+    expect(repo.records.size).toBe(0);
   });
 });

@@ -196,6 +196,18 @@ describe('CachingApiRepository', () => {
       expect(JSON.stringify(await cache.load('f1'))).not.toContain('hunter2');
       expect((await cache.load('f1'))?.ops).toMatchObject({ open: true, password: '' });
     });
+
+    it('a password the server has not taken yet waits in ops.pendingAccess, which every write keeps (the first edit must not drop it)', async () => {
+      const cache = new MemoryRepository();
+      const repo = new CachingApiRepository(cache, ORG);
+      const ops = { pendingAccess: { password: 'hunter2', closed: true } };
+      await repo.saveLocal(cached({ ops }));
+      expect((await cache.load('f1'))?.ops).toEqual(ops);
+      await repo.save(cached({ ops }));
+      expect((await cache.load('f1'))?.ops).toEqual(ops);
+      await repo.adopt('f1', { draftRev: 9, draft: { ...formWith([]), title: 'Theirs' }, updatedAt: LATER });
+      expect((await cache.load('f1'))?.ops).toEqual(ops);
+    });
   });
 
   describe('adopt', () => {

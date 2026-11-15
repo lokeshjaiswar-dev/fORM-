@@ -14,8 +14,10 @@ import {
 import { createRemoteForm, getRemoteDraft, listRemoteForms, putRemoteDraft, trashRemoteForm } from '@/persistence/draftsApi';
 
 /**
- * A form's local FormOps for the cache: the plaintext password never goes to IndexedDB while signed in (BL-145). The
- * password stays in the open tab's memory for the preview; the server will hash it when access settings move there.
+ * A form's local FormOps for the cache: no live `password` key goes to IndexedDB while signed in (BL-145). This build
+ * has none; a copy an older build saved may, and any write through here blanks it. The password of such a copy that the
+ * server has not taken yet is kept as `ops.pendingAccess` instead (`holdLegacyAccess`), the one place it may wait for the
+ * next open, because blanking it there would drop the author's setting without a word.
  */
 function scrubbed(form: StoredForm): StoredForm {
   const ops = form.ops;

@@ -12,7 +12,7 @@ import { newStoredForm } from '@/persistence/openForm';
 import { useRepository } from '@/persistence/repository';
 import { builderPath } from '@/pages/useBuilderMode';
 import { currentDoc, useDoc } from '@/state/documentStore';
-import { currentOps } from '@/state/opsStore';
+import { currentOps, withPendingAccess } from '@/state/opsStore';
 import { useUiStore } from '@/state/uiStore';
 
 const M = defineMessages('builder', {
@@ -119,7 +119,8 @@ export function DraftConflictDialog() {
     const id = uid();
     const doc = currentDoc();
     const title = t(M['conflict.copy_title'], { title: doc.title.trim() || t(M['conflict.untitled']) });
-    await repo.save({ ...newStoredForm(id, new Date().toISOString(), { ...doc, title }), ops: currentOps() });
+    // Access an older build kept for this form and the server has not taken yet belongs to this form, not to its copy.
+    await repo.save({ ...newStoredForm(id, new Date().toISOString(), { ...doc, title }), ops: withPendingAccess(currentOps(), null) });
     await takeTheirs();
     toast(t(M['conflict.copied']), { action: { label: t(M['conflict.open_copy']), onClick: () => navigate(builderPath(id)) } });
   }
