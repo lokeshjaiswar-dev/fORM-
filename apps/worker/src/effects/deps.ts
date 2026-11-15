@@ -40,9 +40,33 @@ export interface EffectDeps {
   mailerFor(orgId: string, senderId?: string | null): Mailer;
   /** SSRF and air-gap guard for destinations a tenant chose (webhook URLs, org SMTP servers): `EGRESS_POLICY` and its allowlist, no trusted hosts. */
   tenantEgress: EgressGuard;
+  /**
+   * One HTTP request to an address a tenant chose (a webhook URL): checked by `tenantEgress`, then sent to the address it
+   * vetted (a DNS answer that changes in between cannot redirect it), with no redirect followed. `main.ts` builds it as
+   * `(url, r) => egressHttp(tenantEgress, url, r)`, so this file and the jobs import no adapter. A refused target is
+   * `PortError('egress_denied')`; a network failure, a timeout or a response over `maxResponseBytes` is `PortError('unavailable')`.
+   */
+  tenantHttp: TenantHttp;
   config: EffectConfig;
   now(): Date;
 }
+
+/** What a job asks `tenantHttp` for: a POST with a body, a time limit and a cap on how much of the answer is read. */
+export interface TenantHttpRequest {
+  method: 'POST';
+  headers: Record<string, string>;
+  body: string;
+  timeoutMs: number;
+  maxResponseBytes: number;
+}
+
+/** What comes back: the status line and the body as text. Headers are not needed (a redirect is an answer, never followed). */
+export interface TenantHttpResponse {
+  status: number;
+  text(): string;
+}
+
+export type TenantHttp = (url: URL, request: TenantHttpRequest) => Promise<TenantHttpResponse>;
 
 /** What an `OrgMailerFactory` calls to read an org's SMTP URL by the secret's id; undefined for a secret that is not the org's or not an SMTP one. */
 export interface SmtpSecretReader {

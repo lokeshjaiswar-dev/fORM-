@@ -31,7 +31,7 @@ const [
   { createSmtpMailer, MAILPIT_SMTP_URL },
   { openStorage },
   { createOtlpAuditSink, createSyslogAuditSink, createWormBucketAuditSink },
-  { createInfrastructureEgressGuard, createTenantEgressGuard, infrastructureHosts },
+  { createInfrastructureEgressGuard, createTenantEgressGuard, egressHttp, infrastructureHosts },
   { jobGuard },
   { startWorker },
   { onShutdownSignal },
@@ -155,6 +155,8 @@ const effectDeps: EffectDeps = {
     makeOrgMailer: (senders) => createSmtpMailer({ url: smtpUrl, egress, senders: { resolve: senders.resolve, egress: tenantEgress }, messageIdDomain: config.mailer.messageIdDomain }),
   }),
   tenantEgress,
+  // A webhook delivery: the tenant guard vets the URL and pins the connection to the address it vetted; no redirect is followed.
+  tenantHttp: (url, request) => egressHttp(tenantEgress, url, request),
   config: {
     publicBuilderUrl: config.publicBuilderUrl,
     mailFrom: config.mailer.from,
