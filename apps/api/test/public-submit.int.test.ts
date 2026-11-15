@@ -23,6 +23,8 @@ let appDb: DbHandle;
 let dir: string;
 let orgId: string;
 let userId: string;
+/** Moves the app's clock forward (milliseconds) so a test can put a second between two events without sleeping. */
+let skewMs = 0;
 
 const as = () => ({ 'x-fr-dev-user': userId, 'x-fr-org': orgId, ...BROWSER });
 const name = (value: string) => ({ type: 'short_text', value });
@@ -72,7 +74,7 @@ beforeAll(async () => {
   await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [orgId, userId, 'owner']);
   const parsed = parseConfig({ NODE_ENV: 'test', DEPLOYMENT_MODE: 'onprem', DATABASE_URL: urls.fr_app, AUTH_DEV_HEADERS: 'true', LOG_LEVEL: 'silent' });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
-  app = await buildApp(parsed.config, { underPressure: false, files: createFileStore(dir) });
+  app = await buildApp(parsed.config, { underPressure: false, files: createFileStore(dir), now: () => new Date(Date.now() + skewMs) });
 });
 
 afterAll(async () => {
@@ -645,8 +647,8 @@ describe('what a form may do now (WP-1.07 status, enforced at receivedAt)', () =
       expect(set.statusCode, set.body).toBe(200);
       return f;
     }
-    const unlock = async (slug: string): Promise<string> => {
-      const res = await app.inject({ method: 'POST', url: `/v1/p/${slug}/unlock`, remoteAddress: '198.51.100.21', payload: { password: PASSWORD } });
+    const unlock = async (slug: string, password = PASSWORD, remoteAddress = '198.51.100.21'): Promise<string> => {
+      const res = await app.inject({ method: 'POST', url: `/v1/p/${slug}/unlock`, remoteAddress, payload: { password } });
       expect(res.statusCode, res.body).toBe(200);
       return res.json<{ accessToken: string }>().accessToken;
     };
@@ -675,6 +677,72 @@ describe('what a form may do now (WP-1.07 status, enforced at receivedAt)', () =
       const taken = await submit(f.slug, body, { 'x-fr-access': token });
       expect(taken.statusCode, taken.body).toBe(200);
       expect(await rows(f.id)).toHaveLength(1);
+    });
+
+    it('withholds the definition whatever the status: a password form that is off, closed, not yet open or full still hides its questions', async () => {
+      const f = await protectedForm('Protected, not open');
+      const token = await unlock(f.slug, PASSWORD, '198.51.100.22');
+      const body = { formVersionId: f.versionId, answers: { name: name('A') } };
+      const hidden = async (state: string) => {
+        const page = await view(f.slug);
+        expect(page.statusCode, page.body).toBe(200);
+        expect(page.json(), state).toMatchObject({ slug: f.slug, formId: f.id, status: { state } });
+        expect(page.json(), state).not.toHaveProperty('version');
+        expect(page.json(), state).not.toHaveProperty('media');
+        expect(page.body, state).not.toMatch(/"blocks"|"definition"|"compiled"|"pages"|"rules"/);
+        // A wrong token is no better than none.
+        expect((await view(f.slug, { 'x-fr-access': 'fr1.AAAA.BBBB' })).json(), state).not.toHaveProperty('version');
+      };
+
+      await setAccess(f.id, { enabled: false });
+      await hidden('closed');
+      await setAccess(f.id, { openAt: new Date(Date.now() - 3_600_000).toISOString(), closeAt: new Date(Date.now() - 60_000).toISOString() });
+      await hidden('closed');
+      await setAccess(f.id, { openAt: new Date(Date.now() + 3_600_000).toISOString() });
+      await hidden('not_yet_open');
+
+      // Whoever holds the password sees the questions with the status, as for any other form.
+      const unlocked = await view(f.slug, { 'x-fr-access': token });
+      expect(unlocked.json()).toMatchObject({ status: { state: 'not_yet_open' }, version: { versionId: f.versionId, status: { state: 'not_yet_open' }, definition: { formId: f.id } } });
+
+      await setAccess(f.id, { submissionLimit: 1 });
+      expect((await submit(f.slug, body, { 'x-fr-access': token })).statusCode).toBe(200);
+      await hidden('limit_reached');
+      expect(await rows(f.id)).toHaveLength(1);
+    });
+
+    it('stops honouring a token once the password is changed, for the definition and for answers', async () => {
+      const f = await protectedForm('Protected, rotated');
+      const body = { formVersionId: f.versionId, answers: { name: name('A') } };
+      const old = await unlock(f.slug, PASSWORD, '198.51.100.23');
+      expect((await view(f.slug, { 'x-fr-access': old })).json()).toHaveProperty('version');
+
+      // A second later (the token says when it was issued in whole seconds) the owner rotates the leaked password.
+      skewMs += 3_000;
+      try {
+        const next = 'copper-lantern-orbit-47';
+        const set = await app.inject({ method: 'PUT', url: `/v1/forms/${f.id}/access/password`, headers: as(), payload: { password: next } });
+        expect(set.statusCode, set.body).toBe(200);
+
+        const page = await view(f.slug, { 'x-fr-access': old });
+        expect(page.json()).toMatchObject({ status: { state: 'password' } });
+        expect(page.json()).not.toHaveProperty('version');
+        expect(page.body).not.toMatch(/"blocks"|"definition"|"compiled"|"pages"/);
+        const refused = await submit(f.slug, body, { 'x-fr-access': old });
+        expect(refused.statusCode).toBe(401);
+        expect(refused.json()).toMatchObject({ code: 'PASSWORD_REQUIRED' });
+        expect(await rows(f.id)).toEqual([]);
+
+        // The old password no longer unlocks, the new one does, and its token works.
+        const stale = await app.inject({ method: 'POST', url: `/v1/p/${f.slug}/unlock`, remoteAddress: '198.51.100.23', payload: { password: PASSWORD } });
+        expect(stale.statusCode).toBe(401);
+        const fresh = await unlock(f.slug, next, '198.51.100.23');
+        expect((await view(f.slug, { 'x-fr-access': fresh })).json()).toHaveProperty('version');
+        expect((await submit(f.slug, body, { 'x-fr-access': fresh })).statusCode).toBe(200);
+        expect(await rows(f.id)).toHaveLength(1);
+      } finally {
+        skewMs = 0;
+      }
     });
 
     it('does not take a token made for another form, and asks again after a republish for the page of the new version', async () => {

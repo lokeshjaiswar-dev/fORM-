@@ -165,8 +165,10 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       // A token is for the version that is live now: a republish after the unlock asks for the password again.
       const unlocked = isUnlocked(deps.config.auth.secret, access, accessTokenOf(request), { formId: found.formId, versionScope: found.liveVersionId }, now);
       const status = runtimeStatus(access, { submittedTotal }, now, { unlocked });
-      // The definition does not leave the server until the password has been given.
-      if (status.state === 'password') return { slug, formId: found.formId, status };
+      // The definition does not leave the server until the password has been given, whatever the status says: the status
+      // order puts closed, not yet open, full and outside hours before the password, and a form in any of those states
+      // still holds questions that only people who know the password may read.
+      if (access.hasPassword && !unlocked) return { slug, formId: found.formId, status };
 
       const live = await liveOf(found, request.id);
       return { slug, formId: found.formId, status, version: { ...live.runtime, status }, ...(live.media ? { media: live.media } : {}) };
