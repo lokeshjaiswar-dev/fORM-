@@ -275,6 +275,34 @@ describe('sign-up and email links', () => {
     expect(calls.find((c) => c.url === '/v1/auth/verify-email')?.body).toEqual({ token, password: 'violet-anchor-teapot-91' });
   });
 
+  it('looks the link up again when the page is opened after the API was unreachable (BL-212)', async () => {
+    const token = 'u'.repeat(43);
+    let lookups = 0;
+    answers['POST /v1/auth/link'] = () => {
+      lookups += 1;
+      // A thrown fetch is how the browser reports a network failure: the client turns it into ApiUnreachable.
+      if (lookups === 1) throw new TypeError('network down');
+      return { status: 200, body: { email: 'asha@example.test', passwordRequired: false } };
+    };
+    const first = at(`/auth/verify#token=${token}`);
+    expect(await screen.findByRole('alert')).toHaveTextContent('The server cannot be reached.');
+    first.unmount();
+    at(`/auth/verify#token=${token}`);
+    expect(await screen.findByRole('button', { name: 'Continue as asha@example.test' })).toBeInTheDocument();
+    expect(lookups).toBe(2);
+  });
+
+  it('asks once per token while a lookup is under way or has succeeded', async () => {
+    const token = 's'.repeat(43);
+    answers['POST /v1/auth/link'] = () => ({ status: 200, body: { email: 'asha@example.test', passwordRequired: false } });
+    const first = at(`/auth/verify#token=${token}`);
+    await screen.findByRole('button', { name: 'Continue as asha@example.test' });
+    first.unmount();
+    at(`/auth/verify#token=${token}`);
+    await screen.findByRole('button', { name: 'Continue as asha@example.test' });
+    expect(calls.filter((c) => c.url === '/v1/auth/link')).toHaveLength(1);
+  });
+
   it('says so when a magic link has expired, and when the page has no token', async () => {
     answers['POST /v1/auth/link'] = () => ({ status: 400, body: { code: 'INVALID_TOKEN', detail: 'This sign-in link is invalid or has expired.' } });
     const { unmount } = at(`/auth/magic#token=${'m'.repeat(43)}`);
