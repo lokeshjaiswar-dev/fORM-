@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { audit, auditActor, auditReads, formFiles, submissionKey, submissions, withTenant, type Db, type ReadClient, type SubmissionStatus, type TenantCtx } from '@form/db';
 import { ProblemError } from '../errors.ts';
 import { detailFieldsOf, maskedAnswersOf, MASK, type DetailField, type PlanLoader } from './plans.ts';
-import { mayShow, reviewerViewOf, SEES_ALL, type RedactionLoader } from './review-view.ts';
+import { mayShow, reviewerViewOf, reviewOf, reviewSummaries, SEES_ALL, type RedactionLoader, type ReviewUnitSummary } from './review-view.ts';
 
 export interface DetailDeps {
   db: Db;
@@ -28,6 +28,8 @@ export interface Detail {
   fields: DetailField[];
   answers: Record<string, unknown>;
   files: Array<{ id: string | null; blockId: string; name: string; mime: string; sizeBytes: number | null; purpose: 'file' | 'signature'; masked: boolean }>;
+  /** Each review unit of a response that was held for review: its name and state, nothing else. Absent for any other response. */
+  review?: ReviewUnitSummary[];
 }
 
 const NOT_ON_FORM = 'That submission is not on this form.';
@@ -67,6 +69,7 @@ export async function readDetail(deps: DetailDeps, tenant: TenantCtx, client: Re
       .orderBy(formFiles.createdAt, formFiles.id);
     const reviewer = await reviewerViewOf(tx, tenant, formId);
     const visible = (reviewer.redacted ? await deps.redaction.visibility(tx, reviewer, [row.formVersionId]) : SEES_ALL).of(row.formVersionId);
+    const summaries = await reviewSummaries(tx, reviewer, tenant.orgId, formId, [row]);
     await auditReads.detail(tx, tenant, { formId, submissionId: row.id, client });
     const answers = maskedAnswersOf(plan, row.answers);
     return {
@@ -91,6 +94,7 @@ export async function readDetail(deps: DetailDeps, tenant: TenantCtx, client: Re
           ? { id: null, blockId: file.blockId, name: MASK, mime: '', sizeBytes: null, purpose: file.purpose, masked: true }
           : { id: file.id, blockId: file.blockId, name: file.name, mime: file.mime, sizeBytes: file.sizeBytes, purpose: file.purpose, masked: false };
       }),
+      ...reviewOf(summaries, row.id),
     };
   });
 }

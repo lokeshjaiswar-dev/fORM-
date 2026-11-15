@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Tx } from '@form/db';
 import type { BlockId, ReviewSettings } from '@form/schema';
-import { createRedactionLoader, mayShow, reviewerViewOf, SEES_ALL, type ReviewerView } from './review-view.ts';
+import { createRedactionLoader, mayShow, reviewerViewOf, reviewOf, reviewSummaries, SEES_ALL, type ReviewerView } from './review-view.ts';
 
 const FORM = '0190f5a2-7c1e-7a00-8000-000000000001';
 const USER = '0190f5a2-7c1e-7a00-8000-000000000002';
 const G1 = '0190f5a2-7c1e-7a00-8000-0000000000a1';
 const G2 = '0190f5a2-7c1e-7a00-8000-0000000000a2';
+const ORG = '0190f5a2-7c1e-7a00-8000-0000000000b1';
 const V1 = '0190f5a2-7c1e-7a00-8000-0000000000c1';
 const V2 = '0190f5a2-7c1e-7a00-8000-0000000000c2';
 
@@ -69,6 +70,15 @@ describe('mayShow', () => {
   });
 });
 
+describe('reviewOf', () => {
+  it('is the review key for a response that was held and no key at all for any other', () => {
+    const summaries = new Map([['held', [{ name: 'Applicant', state: 'pending' as const }]]]);
+    expect(reviewOf(summaries, 'held')).toEqual({ review: [{ name: 'Applicant', state: 'pending' }] });
+    expect(reviewOf(summaries, 'other')).toEqual({});
+    expect(Object.keys({ id: 'x', ...reviewOf(summaries, 'other') })).toEqual(['id']);
+  });
+});
+
 describe('the redaction loader', () => {
   const settings: ReviewSettings = { enabled: true, distinctCheckers: false, units: units(['u_a', G1, 'own_unit'], ['u_b', G2, 'own_unit']) as ReviewSettings['units'] };
   const redacted: ReviewerView = { settings, groupIds: [G1], redacted: true };
@@ -123,5 +133,75 @@ describe('the redaction loader', () => {
     const { tx } = versionTx([{ id: V1, scoping: derived }]);
     const seen = await createRedactionLoader().visibility(tx, redacted, [V1]);
     expect([...seen.of(V1)!]).toEqual(['a']);
+  });
+});
+
+describe('reviewSummaries', () => {
+  const at = new Date('2026-11-10T08:00:00.000Z');
+  const rows = [
+    { id: 'sub-1', receivedAt: at, formVersionId: V1 },
+    { id: 'sub-2', receivedAt: at, formVersionId: V1 },
+  ];
+
+  /** A transaction whose first read answers the review rows and its second the versions' units. */
+  function summaryTx(reviews: unknown[], versions: unknown[]): { tx: Tx; select: ReturnType<typeof vi.fn> } {
+    const where = vi.fn().mockResolvedValueOnce(reviews).mockResolvedValueOnce(versions);
+    const select = vi.fn(() => ({ from: () => ({ where }) }));
+    return { tx: { select } as unknown as Tx, select };
+  }
+
+  it('reads nothing for a form with no review settings, and for a page with no rows', async () => {
+    const none = summaryTx([], []);
+    expect((await reviewSummaries(none.tx, { settings: null }, ORG, FORM, rows)).size).toBe(0);
+    const settings: ReviewSettings = { enabled: true, distinctCheckers: false, units: [] };
+    expect((await reviewSummaries(none.tx, { settings }, ORG, FORM, [])).size).toBe(0);
+    expect(none.select).not.toHaveBeenCalled();
+  });
+
+  it('leaves out a response that was never held, and reads the names only when something was', async () => {
+    const settings: ReviewSettings = { enabled: true, distinctCheckers: false, units: [] };
+    const { tx, select } = summaryTx([], []);
+    expect((await reviewSummaries(tx, { settings }, ORG, FORM, rows)).size).toBe(0);
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives each unit its name from the response version, in the order of that version, with the state and nothing else', async () => {
+    const settings: ReviewSettings = { enabled: true, distinctCheckers: false, units: [] };
+    const { tx } = summaryTx(
+      [
+        { submissionId: 'sub-1', unitId: 'u_notes', state: 'approved', order: 2 },
+        { submissionId: 'sub-1', unitId: 'u_applicant', state: 'pending', order: 1 },
+        { submissionId: 'sub-2', unitId: 'u_notes', state: 'closed', order: 2 },
+        { submissionId: 'sub-2', unitId: 'u_gone', state: 'rejected', order: 1 },
+      ],
+      [
+        {
+          id: V1,
+          units: [
+            { id: 'u_applicant', name: 'Applicant' },
+            // A name is plain text: whatever is not text in a template is left out, and a control character is made safe.
+            { id: 'u_notes', name: ['Notes ', { var: { name: 'org.name' } }, 'for\u0007 staff'] },
+          ],
+        },
+      ],
+    );
+    const out = await reviewSummaries(tx, { settings }, ORG, FORM, rows);
+    expect(out.get('sub-1')).toEqual([
+      { name: 'Applicant', state: 'pending' },
+      { name: 'Notes for  staff', state: 'approved' },
+    ]);
+    // A unit the version does not name goes last, shown by its id; the two keys are all there is.
+    expect(out.get('sub-2')).toEqual([
+      { name: 'Notes for  staff', state: 'closed' },
+      { name: 'u_gone', state: 'rejected' },
+    ]);
+    for (const list of out.values()) for (const u of list) expect(Object.keys(u).sort()).toEqual(['name', 'state']);
+  });
+
+  it('clips a very long unit name', async () => {
+    const settings: ReviewSettings = { enabled: true, distinctCheckers: false, units: [] };
+    const { tx } = summaryTx([{ submissionId: 'sub-1', unitId: 'u_a', state: 'pending', order: 1 }], [{ id: V1, units: [{ id: 'u_a', name: 'x'.repeat(500) }] }]);
+    const out = await reviewSummaries(tx, { settings }, ORG, FORM, rows.slice(0, 1));
+    expect(out.get('sub-1')![0]!.name).toHaveLength(200);
   });
 });

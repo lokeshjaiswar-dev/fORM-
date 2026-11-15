@@ -61,6 +61,7 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
           'Cells are built on the server from the answers (the field type\'s own text); encrypted and sensitive fields are masked. ' +
           '`view` picks the inbox, the archive or the trash. `q` searches the non-sensitive answers of this form and orders by relevance. ' +
           '`nextCursor` is signed and bound to this exact query: pass it back unchanged for the next page, and stop when it is null; a page can hold fewer than `limit` rows while `nextCursor` is set (a search whose filters dropped hits). ' +
+          '`status=pending_review` lists the responses held for review and `status=rejected` the ones a checker rejected; an item held for review carries its review units (name and state). ' +
           'A caller who reviews this form with `own_unit` visibility gets only the cells and columns of their own units, and `q` answers 403 `SEARCH_NOT_ALLOWED_FOR_REVIEWER`. ' +
           'The read is audited: one `submission.page_viewed` record per page with the ids shown.',
         security: SECURITY,
@@ -94,7 +95,7 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
         summary: 'Read one response: its fields, answers, files and what the server recorded',
         description:
           'The fields are rebuilt from the answers and the version the response was received on. Encrypted and sensitive answers are masked. ' +
-          'A caller who reviews this form with `own_unit` visibility gets the answers, fields and files of their own units only. The read is audited (`submission.viewed`).',
+          'A caller who reviews this form with `own_unit` visibility gets the answers, fields and files of their own units only. `review`, present only on a response that was held for review, lists its review units (name and state). The read is audited (`submission.viewed`).',
         security: SECURITY,
         params: submissionParams,
         response: { 200: detailResponse },

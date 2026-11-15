@@ -1,4 +1,4 @@
-import { SUBMISSION_STATUSES } from '@form/db';
+import { REVIEW_STATES, SUBMISSION_STATUSES } from '@form/db';
 import { z } from 'zod';
 import { MAX_CURSOR_LENGTH } from '../cursor.ts';
 
@@ -23,7 +23,10 @@ export const gridQuery = z
     from: isoInstant.optional(),
     /** Received at or before this moment. */
     to: isoInstant.optional(),
-    /** The processing state: `complete`, `spam`, or a held one such as `pending_payment`. */
+    /**
+     * The processing state: `complete`, `spam`, a held one such as `pending_payment` or `pending_review` (waiting for its
+     * review units to be approved), or `rejected` (a required review unit was rejected).
+     */
     status: z.enum(SUBMISSION_STATUSES).optional(),
     read: z.enum(['true', 'false']).optional(),
     starred: z.enum(['true', 'false']).optional(),
@@ -44,6 +47,14 @@ export const gridColumn = z.object({
   type: z.string(),
 });
 
+/** One review unit of a response: what it is called and where it stands. No group, checker, round or answer. */
+export const reviewUnitSummary = z.object({
+  /** The unit's name in the version the response was filed under. */
+  name: z.string(),
+  /** `pending` (waiting for a checker), `approved`, `rejected`, `not_applicable` (every block of it was hidden for this respondent) or `closed` (another required unit was rejected). */
+  state: z.enum(REVIEW_STATES),
+});
+
 export const gridItem = z.object({
   id: z.uuid(),
   receivedAt: isoInstant,
@@ -58,6 +69,8 @@ export const gridItem = z.object({
   cells: z.record(z.string(), z.string()),
   /** The column ids whose cell is the mask because the field is encrypted or sensitive. */
   masked: z.array(z.string()),
+  /** The review units of a response that was held for review, in the form's order; absent for any other response. */
+  review: z.array(reviewUnitSummary).optional(),
 });
 
 export const gridResponse = z.object({
@@ -105,6 +118,8 @@ export const detailResponse = z.object({
   /** The stored answers by block id; a protected one is `{ type, masked: true }`. */
   answers: z.record(z.string(), z.unknown()),
   files: z.array(detailFile),
+  /** The review units of a response that was held for review, in the form's order; absent for any other response. */
+  review: z.array(reviewUnitSummary).optional(),
 });
 
 export const patchBody = z

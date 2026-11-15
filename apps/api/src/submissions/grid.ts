@@ -3,7 +3,7 @@ import { auditReads, forms, isUuid, submissions, withTenant, type Db, type ReadC
 import { ProblemError } from '../errors.ts';
 import { readCursor, signCursor } from '../cursor.ts';
 import { cellsOf, gridColumns, type GridColumn, type PlanLoader } from './plans.ts';
-import { mayShow, reviewerViewOf, SEES_ALL, type RedactionLoader } from './review-view.ts';
+import { mayShow, reviewerViewOf, reviewOf, reviewSummaries, SEES_ALL, type RedactionLoader, type ReviewUnitSummary } from './review-view.ts';
 import { searchIndexOn, type SearchIndexFactory } from './search.ts';
 import type { View } from './schemas.ts';
 
@@ -191,6 +191,8 @@ export interface GridPage {
     versionNumber: number | null;
     cells: Record<string, string>;
     masked: string[];
+    /** Each review unit of a response that was held for review: its name and state, nothing else. Absent for any other response. */
+    review?: ReviewUnitSummary[];
   }>;
   nextCursor: string | null;
 }
@@ -203,7 +205,7 @@ export interface GridPage {
  *
  * A caller who is acting as a reviewer of the form with `own_unit` visibility (WP-2.33) gets the cells of the blocks of their
  * own units and of no other, in a column list cut the same way; their `q` is refused, because the search document of a
- * response holds the text of every unit.
+ * response holds the text of every unit. A row that was held for review carries the name and state of its review units.
  */
 export async function listGrid(
   deps: GridDeps,
@@ -261,6 +263,7 @@ export async function listGrid(
     const planOf = new Map(plans.map((p) => [p.id, p]));
     // The blocks of each version a redacted reviewer may see; every version of the form, so the columns can be cut too.
     const visibility = reviewer.redacted ? await deps.redaction.visibility(tx, reviewer, plans.map((p) => p.id)) : SEES_ALL;
+    const summaries = await reviewSummaries(tx, reviewer, tenant.orgId, formId, rows);
     const last = rows.at(-1);
     let nextCursor: string | null = null;
     if (searching) nextCursor = more && next !== null ? signCursor(deps.secret, scope, [next, page + 1]) : null;
@@ -288,6 +291,7 @@ export async function listGrid(
           versionNumber: plan?.number ?? null,
           cells,
           masked,
+          ...reviewOf(summaries, row.id),
         };
       }),
       nextCursor,

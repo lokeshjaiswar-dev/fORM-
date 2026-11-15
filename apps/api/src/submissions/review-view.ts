@@ -1,7 +1,8 @@
-import { inArray, sql } from 'drizzle-orm';
-import { formVersions, isUuid, reviewerScope, type TenantCtx, type Tx } from '@form/db';
+import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { formVersions, isUuid, reviewerScope, submissionReviews, type ReviewState, type TenantCtx, type Tx } from '@form/db';
 import { visibleBlocksForReviewer } from '@form/logic';
-import type { BlockId, CompiledForm, ReviewGroupId, ReviewSettings } from '@form/schema';
+import { plainLabelText, type BlockId, type CompiledForm, type ReviewGroupId, type ReviewSettings } from '@form/schema';
+import { storableText } from '../text-safety.ts';
 import { WeightedCache } from '../weighted-cache.ts';
 
 /*
@@ -13,6 +14,8 @@ import { WeightedCache } from '../weighted-cache.ts';
  *   - `redaction.visibility` gives, per form version, the blocks such a caller may see (`visibleBlocksForReviewer`, the same
  *     function the review screens and the export use). Every answer, display row, grid cell and file of another block is
  *     removed before the response is serialised. A block the function does not know is hidden by default.
+ *   - `reviewSummaries` gives each response its review state, unit by unit: the unit's name and its state, and nothing else
+ *     (no group, no checker, no round, no answer).
  *
  * Everything reads through the caller's tenant transaction, so row-level security limits it to their org.
  */
@@ -120,3 +123,87 @@ export function createRedactionLoader(o: { maxEntries?: number; maxBytes?: numbe
 }
 
 export type RedactionLoader = ReturnType<typeof createRedactionLoader>;
+
+/** One review unit of a response, as the list and the detail show it: its name and where it stands. */
+export interface ReviewUnitSummary {
+  name: string;
+  state: ReviewState;
+}
+
+/** `{ review }` for a response that was held for review, and nothing for any other: its key is absent, as it was before review existed. */
+export const reviewOf = (summaries: ReadonlyMap<string, ReviewUnitSummary[]>, id: string): { review?: ReviewUnitSummary[] } => {
+  const review = summaries.get(id);
+  return review ? { review } : {};
+};
+
+const MAX_UNIT_NAME = 200;
+
+/** The name of a unit from the definition: plain text, with whatever is not text left out (a unit name pipes nothing, the zod twin refuses it). */
+function unitNameOf(name: unknown): string {
+  const text = plainLabelText(name as Parameters<typeof plainLabelText>[0]).trim();
+  return storableText(text.length > MAX_UNIT_NAME ? `${text.slice(0, MAX_UNIT_NAME - 1)}…` : text);
+}
+
+/**
+ * The review of each of these responses of one form, unit by unit, in the order of the units in the version the response
+ * was filed under (a unit the version does not name goes last, by its review order). Responses that were never held for
+ * review are absent from the result. The names come from the response's own version, which is what the checker was shown.
+ *
+ * Nothing is read for a form with no review settings row: a review is opened from those settings, the table has no delete,
+ * and the grid of a form that never had review (the common case) pays for no extra query.
+ */
+export async function reviewSummaries(
+  tx: Tx,
+  view: Pick<ReviewerView, 'settings'>,
+  orgId: string,
+  formId: string,
+  rows: ReadonlyArray<{ id: string; receivedAt: Date; formVersionId: string }>,
+): Promise<Map<string, ReviewUnitSummary[]>> {
+  const out = new Map<string, ReviewUnitSummary[]>();
+  if (view.settings === null || rows.length === 0) return out;
+  const times = rows.map((r) => r.receivedAt.getTime());
+  const reviews = await tx
+    .select({ submissionId: submissionReviews.submissionId, unitId: submissionReviews.unitId, state: submissionReviews.state, order: submissionReviews.reviewOrder })
+    .from(submissionReviews)
+    .where(
+      and(
+        eq(submissionReviews.orgId, orgId),
+        eq(submissionReviews.formId, formId),
+        inArray(submissionReviews.submissionId, rows.map((r) => r.id)),
+        // The partition key: lets the planner skip the months with no row of this page.
+        gte(submissionReviews.submissionReceivedAt, new Date(Math.min(...times))),
+        lte(submissionReviews.submissionReceivedAt, new Date(Math.max(...times))),
+      ),
+    );
+  if (reviews.length === 0) return out;
+
+  const versionOf = new Map(rows.map((r) => [r.id, r.formVersionId]));
+  const versionIds = [...new Set(reviews.flatMap((r) => versionOf.get(r.submissionId) ?? []))];
+  const defined = await tx
+    .select({ id: formVersions.id, units: sql<unknown>`${formVersions.definition} #> '{review,units}'` })
+    .from(formVersions)
+    .where(inArray(formVersions.id, versionIds));
+  const names = new Map<string, Map<string, { name: string; index: number }>>();
+  for (const v of defined) {
+    const units = Array.isArray(v.units) ? (v.units as Array<{ id?: unknown; name?: unknown }>) : [];
+    names.set(
+      v.id,
+      new Map(units.flatMap((u, index) => (typeof u.id === 'string' ? [[u.id, { name: unitNameOf(u.name), index }] as const] : []))),
+    );
+  }
+
+  const grouped = new Map<string, Array<{ unitId: string; state: ReviewState; order: number }>>();
+  for (const r of reviews) {
+    const list = grouped.get(r.submissionId);
+    if (list) list.push(r);
+    else grouped.set(r.submissionId, [r]);
+  }
+  for (const [submissionId, units] of grouped) {
+    const defs = names.get(versionOf.get(submissionId) ?? '');
+    const rank = (unitId: string) => defs?.get(unitId)?.index ?? Number.MAX_SAFE_INTEGER;
+    units.sort((a, b) => rank(a.unitId) - rank(b.unitId) || a.order - b.order || (a.unitId < b.unitId ? -1 : 1));
+    // A unit the version no longer names is shown by its id: a state without a name would say nothing.
+    out.set(submissionId, units.map((u) => ({ name: defs?.get(u.unitId)?.name ?? storableText(u.unitId), state: u.state })));
+  }
+  return out;
+}
