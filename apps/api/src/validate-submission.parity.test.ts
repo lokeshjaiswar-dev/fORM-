@@ -7,7 +7,7 @@ import { COMPUTED_FIELD_TYPES } from '@form/schema';
 import type { Answers, AnswerValue, BlockId, EvalMeta, EvalState, FieldError, FormVersion, Locale, PlanStep, RuntimeFormVersion, ServerAction } from '@form/schema';
 import { normalizeAnswers, validateAnswers, type RawAnswers } from '@form/validation';
 import { describe, expect, it } from 'vitest';
-import { checkAnswers, todayIn } from './validate-submission.ts';
+import { checkAnswers, todayIn, type ClientMeta } from './validate-submission.ts';
 
 /*
  * WP-1.12 parity: "client/server EvalState parity on the corpus". The respondent's browser evaluates the form it was sent
@@ -19,10 +19,9 @@ import { checkAnswers, todayIn } from './validate-submission.ts';
  * a server-scoped step is `serverEffects` (route_email, tag_submission, ...): no server action writes a visibility, required,
  * enabled, value, page or ending cell. So the comparison below is exact, and the server-only output is checked on its own.
  *
- * The submission pipeline (WP-1.12) moves `checkAnswers`; this test must stay green when it does. The `serverEvaluation`
- * helper below mirrors the evaluation `checkAnswers` runs (its `values` are asserted equal to the real function's) because
- * `Checked` does not return the state: when the pipeline exposes it, use that and drop the mirror. When it starts passing
- * the client's meta (pageUrl, device, urlParams) to the evaluator, give the client side below the same meta.
+ * The submit pipeline (`submit/pipeline.ts`, WP-1.12) calls `checkAnswers`, which returns the server's `EvalState`, and
+ * passes it the page view's details (urlParams, pageUrl, referrer, device) as the browser evaluated with them; the cases
+ * below run the corpus once without those details and once with them, giving the client side the same ones.
  */
 
 const ANSWER_SETS = 200;
@@ -77,9 +76,17 @@ function differences(client: Observed, server: Observed): string[] {
  * The renderer's side (packages/renderer EvalSession + rhfResolver): the runtime projection, evaluated incrementally in client
  * scope as the respondent's answers change, then validated for Submit. One session per form, answer set after answer set.
  */
-function clientSession(version: FormVersion) {
+function clientSession(version: FormVersion, details: ClientMeta = {}) {
   const runtime = projectForRuntime(version, { state: 'open' }, PUBLIC_CONFIG);
-  const meta: EvalMeta = { ...META, shuffleSeed: 'a-different-session-seed' };
+  /* What `browserSession()` hands the renderer, which `sessionMeta` puts in the meta: the URL parameters, address, referrer and device. */
+  const meta: EvalMeta = {
+    ...META,
+    shuffleSeed: 'a-different-session-seed',
+    ...(details.urlParams !== undefined ? { urlParams: details.urlParams } : {}),
+    ...(details.pageUrl !== undefined ? { pageUrl: details.pageUrl } : {}),
+    ...(details.referrer !== undefined ? { referrer: details.referrer } : {}),
+    ...(details.device !== undefined ? { device: details.device } : {}),
+  };
   const evaluator: Evaluator = createEvaluator(runtime, meta, 'client');
   evaluator.evaluate({});
   let previous: Answers = {};
@@ -101,18 +108,13 @@ function clientSession(version: FormVersion) {
   };
 }
 
-/** The evaluation `checkAnswers` runs on the wire answers (see the header): normalizeAnswers, then server scope with the server's clock. */
-function serverEvaluation(version: FormVersion, versionId: string, wire: Record<string, unknown>): EvalState {
-  const meta: EvalMeta = {
-    now: NOW.toISOString() as EvalMeta['now'],
-    timeZone: version.definition.behavior.timeZone,
-    locale: LOCALE,
-    urlParams: {},
-    isPreview: false,
-    shuffleSeed: `${versionId}:server`,
-  };
-  return createEvaluator(version, meta, 'server').evaluate(normalizeAnswers(wire as RawAnswers));
-}
+/** The page view of a respondent who came from a campaign on a phone: details a hidden or context field, or a rule, can read. */
+const SESSION: ClientMeta = {
+  urlParams: { utm_source: 'newsletter', utm_campaign: 'autumn', ref: 'abc' },
+  pageUrl: 'https://forms.example/f/intake?utm_source=newsletter&utm_campaign=autumn&ref=abc',
+  referrer: 'https://news.example/post/1',
+  device: 'mobile',
+};
 
 interface Fixture { name: string; version: FormVersion; sets: Answers[] }
 
@@ -131,17 +133,17 @@ const randomFixtures = (): Fixture[] =>
 const VERSION_ID = 'version_1';
 
 /** Runs every answer set of `fixture` through both sides; returns the differences and what the sets exercised. */
-function replay(fixture: Fixture) {
-  const client = clientSession(fixture.version);
+function replay(fixture: Fixture, details: ClientMeta = {}) {
+  const client = clientSession(fixture.version, details);
   const mismatches: string[] = [];
   const seen = { hidden: 0, required: 0, errors: 0, multiPage: 0, answered: 0, serverEffects: 0 };
   fixture.sets.forEach((answers, n) => {
     const wire = JSON.parse(JSON.stringify(answers)) as Record<string, unknown>;
     const theirs = client(answers);
-    const checked = checkAnswers(fixture.version, VERSION_ID, wire, LOCALE, NOW);
-    const state = serverEvaluation(fixture.version, VERSION_ID, wire);
-    /* The mirror is the real evaluation: `checkAnswers` returns the same values. */
-    if (JSON.stringify(checked.values) !== JSON.stringify(state.values)) mismatches.push(`set ${n}: checkAnswers values differ from the server evaluation`);
+    const checked = checkAnswers(fixture.version, VERSION_ID, wire, LOCALE, NOW, details);
+    const state = checked.state;
+    /* The values `checkAnswers` stores are the ones of the state it returns. */
+    if (JSON.stringify(checked.values) !== JSON.stringify(state.values)) mismatches.push(`set ${n}: checkAnswers values differ from its state`);
     const diff = differences(observe(fixture.version, theirs.state, theirs.errors), observe(fixture.version, state, checked.errors));
     if (diff.length) mismatches.push(`set ${n} (${JSON.stringify(wire)}): ${diff.join('; ')}`);
     if (theirs.state.serverEffects.length || state.serverEffects.length) seen.serverEffects += 1;
@@ -176,6 +178,13 @@ describe('client/server EvalState parity (WP-1.12)', () => {
     expect(mismatches.slice(0, 3)).toEqual([]);
     expect(seen.serverEffects).toBe(0);
     tally(fixture, seen);
+  });
+
+  /* The pipeline hands `checkAnswers` what the browser reported about the page view; both sides must still agree when it is there. */
+  it.each([...v1, ...random].map((fixture) => ({ name: fixture.name, fixture })))('$name with the page view details: 200 answer sets', ({ fixture }) => {
+    const { mismatches, seen } = replay(fixture, SESSION);
+    expect(mismatches.slice(0, 3)).toEqual([]);
+    expect(seen.serverEffects).toBe(0);
   });
 
   it('covers the whole corpus: 35 v1 forms and the random forms, 200 answer sets each', () => {
@@ -245,7 +254,7 @@ describe('server-scoped steps differ in serverEffects only', () => {
     const wire = JSON.parse(JSON.stringify(answers)) as Record<string, unknown>;
     const client = clientSession(version)(answers as Answers);
     const checked = checkAnswers(version, VERSION_ID, wire, LOCALE, NOW);
-    const state = serverEvaluation(version, VERSION_ID, wire);
+    const state = checked.state;
     expect(JSON.stringify(checked.values)).toBe(JSON.stringify(state.values));
     expect(differences(observe(version, client.state, client.errors), observe(version, state, checked.errors))).toEqual([]);
     expect(client.state.serverEffects).toEqual([]);
