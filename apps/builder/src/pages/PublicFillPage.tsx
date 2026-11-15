@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { z } from 'zod';
-import { FormRenderer, type SubmitPayload } from '@form/renderer';
+import { FormRenderer, browserSession, type RendererSession, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
-import { RuntimeFormVersionSchema, type BlockId, type RuntimeFormVersion } from '@form/schema';
+import { RuntimeFormVersionSchema, type BlockId, type IsoInstant, type RuntimeFormVersion } from '@form/schema';
 import { API_BASE } from '@/edition/edition';
 import { hydrateThemeImages } from '@/components/builder/design/uploads';
 import { BUILDER_LOCALE } from '@/i18n';
@@ -27,7 +27,9 @@ type Load = { status: 'loading' } | { status: 'missing' } | { status: 'error'; m
 export function PublicFillPage() {
   const { slug = '' } = useParams();
   const [load, setLoad] = useState<Load>({ status: 'loading' });
-  const startedAt = useMemo(() => new Date().toISOString(), []);
+  // One session per page view: the clock, plus what the browser knows (URL/UTM parameters, referrer, user agent) for
+  // context fields. The renderer never reads `window` itself, so the host passes it in.
+  const session = useMemo<RendererSession>(() => ({ startedAt: new Date().toISOString() as IsoInstant, ...browserSession() }), []);
   const uploader = useMemo(() => publicUploader(slug), [slug]);
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export function PublicFillPage() {
         status={load.version.status}
         locale={BUILDER_LOCALE}
         uploader={uploader}
-        session={{ startedAt, pageUrl: window.location.href }}
+        session={session}
         onSubmit={async (payload: SubmitPayload) => {
           const res = await fetch(`${API_BASE}/v1/p/${encodeURIComponent(load.slug)}/submissions`, {
             method: 'POST',
