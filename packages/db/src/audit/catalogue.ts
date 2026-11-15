@@ -1,15 +1,21 @@
 import { ACCESS_EVENTS } from './events/access.ts';
+import { EXPORTS_EVENTS } from './events/exports.ts';
 import { FORMS_EVENTS } from './events/forms.ts';
+import { NOTIFICATIONS_EVENTS } from './events/notifications.ts';
 import { PUBLISH_EVENTS } from './events/publish.ts';
+import { REVIEWS_EVENTS } from './events/reviews.ts';
 import type { AuditEventSpec } from './events/spec.ts';
 import { SUBMISSIONS_EVENTS } from './events/submissions.ts';
+import { WEBHOOK_DELIVERY_EVENTS } from './events/webhook-delivery.ts';
+import { WEBHOOKS_EVENTS } from './events/webhooks.ts';
 
 export type { AuditEventSpec } from './events/spec.ts';
 
 /**
  * The audit actions of auth, accounts, orgs, members, the worker, the audit chain itself and the reads that predate the
- * per-domain files. Domains that are still being built (forms, publish, access, submissions) list their codes in
- * `events/*.ts` instead, so parallel work packages do not edit the same lines of this file.
+ * per-domain files. Domains that are still being built (forms, publish, access, submissions, reviews, notifications,
+ * webhooks, webhook delivery, exports) list their codes in `events/*.ts` instead, so parallel work packages do not edit
+ * the same lines of this file.
  */
 export const CORE_AUDIT_EVENTS = {
   'request.authorize': {
@@ -261,6 +267,11 @@ export const AUDIT_EVENTS = {
   ...PUBLISH_EVENTS,
   ...ACCESS_EVENTS,
   ...SUBMISSIONS_EVENTS,
+  ...REVIEWS_EVENTS,
+  ...NOTIFICATIONS_EVENTS,
+  ...WEBHOOKS_EVENTS,
+  ...WEBHOOK_DELIVERY_EVENTS,
+  ...EXPORTS_EVENTS,
 } as const satisfies Record<string, AuditEventSpec>;
 
 export type AuditAction = keyof typeof AUDIT_EVENTS;
