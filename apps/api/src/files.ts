@@ -99,18 +99,71 @@ export const DEFAULT_ACCEPT = {
   ],
 } as const;
 
-/** Never stored, whatever a form's field says it accepts: markup and programs a person might open or run. */
-const NEVER = new Set([
-  'html', 'htm', 'xhtml', 'shtml', 'svg', 'svgz', 'xml', 'xsl', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'php', 'phtml', 'asp', 'aspx', 'jsp',
-  'exe', 'dll', 'msi', 'com', 'scr', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'wsf', 'sh', 'bash', 'jar', 'apk', 'app', 'dmg', 'lnk', 'hta', 'swf',
-]);
-const NEVER_MIME = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml|text\/javascript|application\/javascript|application\/x-msdownload)/;
+type Family = 'pdf' | 'png' | 'jpeg' | 'gif' | 'webp' | 'zip' | 'ole';
 
-export function isNeverStored(name: string, mime: string): boolean {
-  return NEVER.has(extensionOf(name)) || NEVER_MIME.test(mime.toLowerCase());
+/** What the bytes of an allowed type must look like: a format whose first bytes `sniff` knows, or plain text. */
+type Content = Family | 'text';
+
+interface AllowedType {
+  /** Lower-case file name extensions, without the dot. */
+  extensions: readonly string[];
+  /** The MIME types a browser sends for them (parameters such as `; charset` are removed first). */
+  mimeTypes: readonly string[];
+  content: Content;
 }
 
-type Family = 'pdf' | 'png' | 'jpeg' | 'gif' | 'webp' | 'zip' | 'ole';
+const OOXML = 'application/vnd.openxmlformats-officedocument';
+const ODF = 'application/vnd.oasis.opendocument';
+
+/**
+ * The only (extension, MIME type, content) triples that are ever stored, whatever a form's own field says it accepts:
+ * a field narrows this list, never widens it. It is an allowlist because a list of bad types is never complete (a
+ * browser opens `.xht`, `.mht` and `.chm`, and Windows opens `.pif`, `.cpl` and `.iso`, as readily as `.html` and
+ * `.exe`), and because every entry names the bytes that must be inside, so a program cannot ride in under a
+ * document's name. The download headers (attachment, octet-stream, nosniff, a sandbox CSP) remain the guarantee that
+ * a stored file never runs; this list keeps the store clean.
+ */
+const ALLOWED: readonly AllowedType[] = [
+  { extensions: ['pdf'], mimeTypes: ['application/pdf'], content: 'pdf' },
+  { extensions: ['png'], mimeTypes: ['image/png'], content: 'png' },
+  { extensions: ['jpg', 'jpeg'], mimeTypes: ['image/jpeg'], content: 'jpeg' },
+  { extensions: ['gif'], mimeTypes: ['image/gif'], content: 'gif' },
+  { extensions: ['webp'], mimeTypes: ['image/webp'], content: 'webp' },
+  { extensions: ['doc'], mimeTypes: ['application/msword'], content: 'ole' },
+  { extensions: ['xls'], mimeTypes: ['application/vnd.ms-excel'], content: 'ole' },
+  { extensions: ['ppt'], mimeTypes: ['application/vnd.ms-powerpoint'], content: 'ole' },
+  { extensions: ['docx'], mimeTypes: [`${OOXML}.wordprocessingml.document`], content: 'zip' },
+  { extensions: ['xlsx'], mimeTypes: [`${OOXML}.spreadsheetml.sheet`], content: 'zip' },
+  { extensions: ['pptx'], mimeTypes: [`${OOXML}.presentationml.presentation`], content: 'zip' },
+  { extensions: ['odt'], mimeTypes: [`${ODF}.text`], content: 'zip' },
+  { extensions: ['ods'], mimeTypes: [`${ODF}.spreadsheet`], content: 'zip' },
+  { extensions: ['odp'], mimeTypes: [`${ODF}.presentation`], content: 'zip' },
+  { extensions: ['zip'], mimeTypes: ['application/zip', 'application/x-zip-compressed'], content: 'zip' },
+  { extensions: ['txt'], mimeTypes: ['text/plain'], content: 'text' },
+  // Windows with Excel installed reports a .csv as application/vnd.ms-excel.
+  { extensions: ['csv'], mimeTypes: ['text/csv', 'application/csv', 'application/vnd.ms-excel'], content: 'text' },
+];
+
+const BY_EXTENSION = new Map(ALLOWED.flatMap((type) => type.extensions.map((ext) => [ext, type] as const)));
+
+/** A MIME type without its parameters, lower case: `Text/Plain; charset=UTF-8` is `text/plain`. */
+export function baseMime(mime: string): string {
+  return (mime.split(';')[0] ?? '').trim().toLowerCase();
+}
+
+function allowedType(name: string, mime: string): AllowedType | null {
+  const type = BY_EXTENSION.get(extensionOf(name));
+  return type && type.mimeTypes.includes(baseMime(mime)) ? type : null;
+}
+
+/**
+ * True for every (name, MIME type) pair that is not on the allowlist: markup, scripts, programs, installers, disk
+ * images, macro documents, shortcuts, and every type nobody has vouched for. Named for what the upload route does
+ * with it: it never stores it.
+ */
+export function isNeverStored(name: string, mime: string): boolean {
+  return allowedType(name, mime) === null;
+}
 
 /** The format the first bytes announce, for the formats whose type a browser-supplied name or MIME could fake. */
 export function sniff(bytes: Buffer): Family | null {
@@ -125,30 +178,49 @@ export function sniff(bytes: Buffer): Family | null {
   return null;
 }
 
-/** The family a declared name and MIME claim, when it is one `sniff` can check. */
-function claimedFamily(ext: string, mime: string): Family | null {
-  const m = mime.toLowerCase();
-  if (ext === 'pdf' || m === 'application/pdf') return 'pdf';
-  if (ext === 'png' || m === 'image/png') return 'png';
-  if (ext === 'jpg' || ext === 'jpeg' || m === 'image/jpeg') return 'jpeg';
-  if (ext === 'gif' || m === 'image/gif') return 'gif';
-  if (ext === 'webp' || m === 'image/webp') return 'webp';
-  if (['docx', 'xlsx', 'pptx', 'odt', 'ods', 'zip'].includes(ext) || m.includes('openxmlformats') || m === 'application/zip') return 'zip';
-  if (['doc', 'xls', 'ppt'].includes(ext) || m === 'application/msword' || m === 'application/vnd.ms-excel') return 'ole';
-  return null;
+/**
+ * True when the first bytes, after a byte-order mark, blanks and any run of `<!-- -->` comments, open a tag, a
+ * declaration or a processing instruction: a page or an SVG that a browser would run if it were ever served as one.
+ * A comment that never closes counts as markup. Only the head is read, as a browser's sniffer reads only the head.
+ */
+function opensMarkup(bytes: Buffer): boolean {
+  let head = bytes.subarray(0, 4096).toString('utf8').replace(/^\ufeff/, '');
+  for (;;) {
+    head = head.replace(/^[\s\u0000]+/, '');
+    if (!head.startsWith('<!--')) break;
+    const end = head.indexOf('-->', 4);
+    if (end < 0) return true;
+    head = head.slice(end + 3);
+  }
+  return /^<[a-z!?/]/i.test(head);
 }
 
-const MARKUP_START = /^\s*(<!doctype\s+html|<html|<head|<body|<script|<svg|<\?xml|<iframe|<object|<embed|<meta)/i;
+const UTF8 = new TextDecoder('utf-8', { fatal: true });
 
-/** Why these bytes cannot be what the name and MIME say (or are markup that could run if ever served), else null. */
+/** Text is valid UTF-8 and holds no control character but tab, line feed and carriage return (so no NUL, no escape codes). */
+function isPlainText(bytes: Buffer): boolean {
+  for (const byte of bytes) {
+    if (byte < 0x20 ? byte !== 0x09 && byte !== 0x0a && byte !== 0x0d : byte === 0x7f) return false;
+  }
+  try {
+    UTF8.decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Why these bytes cannot be what the name and MIME say, or are markup that could run if ever served, else null:
+ * `markup`; `type_not_allowed` (not an allowlisted extension and MIME pair); or `content_mismatch` (the bytes are not
+ * the format the pair names: a program or a zip named .txt, a PNG named .pdf).
+ */
 export function contentProblem(bytes: Buffer, name: string, mime: string): string | null {
-  if (MARKUP_START.test(bytes.subarray(0, 1024).toString('utf8').replace(/^\ufeff/, ''))) return 'markup';
-  const claimed = claimedFamily(extensionOf(name), mime);
-  const actual = sniff(bytes);
-  if (claimed && actual !== claimed) return 'content_mismatch';
-  // A format we recognise under a name that claims something else (a PNG named .pdf, or .txt).
-  if (!claimed && actual && actual !== 'zip' && actual !== 'ole') return 'content_mismatch';
-  return null;
+  if (opensMarkup(bytes)) return 'markup';
+  const type = allowedType(name, mime);
+  if (!type) return 'type_not_allowed';
+  if (type.content === 'text') return isPlainText(bytes) ? null : 'content_mismatch';
+  return sniff(bytes) === type.content ? null : 'content_mismatch';
 }
 
 /** The only types served back as themselves; everything else is `application/octet-stream`. */

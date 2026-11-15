@@ -52,6 +52,36 @@ describe('what may be stored and how it is served', () => {
     expect(isNeverStored('a.pdf', 'application/pdf')).toBe(false);
   });
 
+  it('stores only extension and MIME pairs on the allowlist, and ignores MIME parameters', () => {
+    const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    expect(isNeverStored('cv.docx', docx)).toBe(false);
+    expect(isNeverStored('cv.DOCX', docx)).toBe(false);
+    expect(isNeverStored('notes.txt', 'Text/Plain; charset=UTF-8')).toBe(false);
+    expect(isNeverStored('table.csv', 'application/vnd.ms-excel')).toBe(false);
+    // Right extension, wrong MIME type; right MIME type, wrong extension; an extension nobody vouched for.
+    expect(isNeverStored('cv.docx', 'application/octet-stream')).toBe(true);
+    expect(isNeverStored('cv.pdf', 'text/plain')).toBe(true);
+    expect(isNeverStored('cv', 'application/pdf')).toBe(true);
+    expect(isNeverStored('movie.mp4', 'video/mp4')).toBe(true);
+    expect(isNeverStored('macro.docm', docx)).toBe(true);
+  });
+
+  it('wants bytes that are the format the pair names: a document starts as one, text is clean UTF-8', () => {
+    const zip = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(16, 0)]);
+    const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    expect(contentProblem(zip, 'cv.docx', docx)).toBeNull();
+    expect(contentProblem(PDF, 'cv.docx', docx)).toBe('content_mismatch');
+    expect(contentProblem(Buffer.from('café, naïve 日本語\r\n'), 'a.txt', 'text/plain')).toBeNull();
+    expect(contentProblem(Buffer.from('a\u0000b'), 'a.txt', 'text/plain')).toBe('content_mismatch');
+    expect(contentProblem(Buffer.from([0x61, 0xff, 0x62]), 'a.csv', 'text/csv')).toBe('content_mismatch');
+    expect(contentProblem(Buffer.from('a \u001b[31m red'), 'a.txt', 'text/plain')).toBe('content_mismatch');
+    expect(contentProblem(Buffer.from('hello'), 'a.xht', 'application/octet-stream')).toBe('type_not_allowed');
+    // Text that merely contains angle brackets is fine; text that opens a tag is not, even after comments and blanks.
+    expect(contentProblem(Buffer.from('1 < 2 and 3 > 2'), 'a.txt', 'text/plain')).toBeNull();
+    expect(contentProblem(Buffer.from('  \n<!-- a --> <!-- b -->\n<p>hi</p>'), 'a.txt', 'text/plain')).toBe('markup');
+    expect(contentProblem(Buffer.from('<!-- never closed <script>'), 'a.txt', 'text/plain')).toBe('markup');
+  });
+
   it('recognises formats by their first bytes', () => {
     expect(sniff(PNG)).toBe('png');
     expect(sniff(PDF)).toBe('pdf');

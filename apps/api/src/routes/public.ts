@@ -11,6 +11,7 @@ import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
 import { ProblemError, sendProblem } from '../errors.ts';
 import {
+  baseMime,
   contentProblem,
   DEFAULT_ACCEPT,
   isNeverStored,
@@ -178,7 +179,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       }
 
       const name = purpose === 'signature' ? 'signature.png' : normaliseFileName(request.body.name);
-      const mime = declared.trim().toLowerCase();
+      const mime = baseMime(declared);
       let max: number;
       if (block.type === 'file_upload') {
         const configured = block.config.accept;
