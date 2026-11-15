@@ -50,10 +50,26 @@ function assetIdsOf(value: unknown, into: Set<string> = new Set()): Set<string> 
   return into;
 }
 
+/**
+ * The pictures one published version may carry, all together (their data URLs, about one byte a character). Every open
+ * link to the version serves them and the public routes keep them in memory, so the total is bounded here, at publish,
+ * not left to the 8 MiB the request may weigh. The builder shrinks every picture to a JPEG of at most 1600 px, which
+ * is a few hundred kilobytes; two megabytes holds a cover, a background and a good handful of image choices.
+ */
+export const MAX_MEDIA_BYTES = 2 * 1024 * 1024;
+
 function usedMedia(definition: FormDefinition, media: Record<string, string> | undefined): Record<string, string> | null {
   if (!media) return null;
   const used = assetIdsOf(definition);
   const kept = Object.entries(media).filter(([id]) => used.has(id)).slice(0, MAX_MEDIA);
+  const total = kept.reduce((sum, [, dataUrl]) => sum + dataUrl.length, 0);
+  if (total > MAX_MEDIA_BYTES) {
+    const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+    throw new ProblemError(
+      'PAYLOAD_TOO_LARGE',
+      `The pictures this form uses add up to ${mb(total)} MB; a published form can carry ${mb(MAX_MEDIA_BYTES)} MB of pictures. Use fewer or smaller pictures.`,
+    );
+  }
   return kept.length ? Object.fromEntries(kept) : null;
 }
 
@@ -69,6 +85,8 @@ async function freeze(
   tx: Tx,
   o: { orgId: string; formId: string; userId: string; definition: FormDefinition; media?: Record<string, string> | undefined },
 ): Promise<Published> {
+  // Checked first: a form that cannot be published for its pictures should not touch the database.
+  const media = usedMedia(o.definition, o.media);
   const compiled = compile(o.definition, REGISTRY);
   if (!compiled.ok) {
     const first = compiled.issues.find((i) => i.severity === 'error') ?? compiled.issues[0];
@@ -91,7 +109,7 @@ async function freeze(
     definition: o.definition as unknown as Record<string, unknown>,
     compiled: compiled.compiled as unknown as Record<string, unknown>,
     contentHash: compiled.compiled.definitionHash,
-    media: usedMedia(o.definition, o.media),
+    media,
   });
   const slug = form.slug ?? publicSlug(o.definition.title || form.title, o.formId);
   await tx
@@ -140,7 +158,7 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
         tags: ['forms'],
         summary: 'Freeze the saved draft as the live version and assign a public slug',
         description:
-          'The only way to publish: a session, a membership of the active org and `forms.publish`. The body may carry the pictures the form uses (`media`).',
+          'The only way to publish: a session, a membership of the active org and `forms.publish`. The body may carry the pictures the form uses (`media`, at most 2 MB together, else 413).',
         security: [{ session: [], org: [] }, { devUser: [], org: [] }],
         params: z.object({ id: z.uuid() }),
         body: publishBody,

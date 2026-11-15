@@ -25,6 +25,7 @@ import {
 } from '../files.ts';
 import { displayRows } from '../display-rows.ts';
 import { storableJson, storableString } from '../text-safety.ts';
+import { WeightedCache } from '../weighted-cache.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
 import { checkAnswers } from '../validate-submission.ts';
 
@@ -56,10 +57,22 @@ interface LiveForm {
 
 /** A version is immutable, so what is loaded for it is good for as long as it is kept; only the memory is bounded. */
 const LIVE_CACHE_MAX = 200;
-const liveByVersion = new Map<string, LiveForm>();
+/** The memory the cached versions may hold, as `liveWeight` counts it: the pictures of a version are most of it. */
+const LIVE_CACHE_BYTES = 24 * 1024 * 1024;
+const liveByVersion = new WeightedCache<LiveForm>(LIVE_CACHE_MAX, LIVE_CACHE_BYTES);
 const liveInflight = new Map<string, Promise<LiveForm>>();
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * About what keeping a version costs: the pictures (a character of a data URL is a byte), and the definition, its
+ * compilation and the page's projection of it, counted as twice the JSON of the first two (JS strings and objects
+ * weigh more than their JSON). Heavy enough to bound memory, cheap enough to compute once per load.
+ */
+function liveWeight(definition: unknown, compiled: unknown, media: Record<string, string> | null): number {
+  const pictures = media ? Object.values(media).reduce((sum, dataUrl) => sum + dataUrl.length, 0) : 0;
+  return pictures + 2 * (JSON.stringify(definition).length + JSON.stringify(compiled).length);
+}
 
 /** The biggest request body an upload to this form can need: the largest file one of its fields takes, as base64 in JSON. */
 function uploadBodyLimit(live: LiveForm): number {
@@ -138,8 +151,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         ...(row.media ? { media: row.media } : {}),
       };
       const live: LiveForm = { orgId: found.orgId, formId: found.formId, versionId: found.liveVersionId, payload, definition: version.definition, compiled: version.compiled };
-      if (liveByVersion.size >= LIVE_CACHE_MAX) liveByVersion.delete(liveByVersion.keys().next().value!);
-      liveByVersion.set(found.liveVersionId, live);
+      liveByVersion.set(found.liveVersionId, live, liveWeight(row.definition, row.compiled, row.media));
       return live;
     })().finally(() => liveInflight.delete(found.liveVersionId));
     liveInflight.set(found.liveVersionId, load);

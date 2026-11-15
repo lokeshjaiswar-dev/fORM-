@@ -215,8 +215,10 @@ describe('SR-6: publish media is cached per live version without a byte bound', 
   it('keeps the API heap bounded when one account publishes and opens many picture-heavy versions', async () => {
     v8.setFlagsFromString('--expose-gc');
     const gc = vm.runInNewContext('gc') as () => void;
-    // Two pictures of ~3.5 MB each (the publish route takes 3M characters per picture, 64 pictures, 8 MB per request).
-    const pic = (seed: string) => `data:image/jpeg;base64,${Buffer.alloc(2_200_000, seed).toString('base64')}`;
+    // Two pictures of ~0.93 MB (700 kB decoded) each: together just under the 2 MB a version may carry. (The proof used two
+    // pictures of ~2.9 MB, which the cap now refuses at publish; the claim, a bounded heap, is unchanged, and 40 versions
+    // of 1.9 MB are 75 MB when nothing bounds the cache.)
+    const pic = (seed: string) => `data:image/jpeg;base64,${Buffer.alloc(700_000, seed).toString('base64')}`;
     const blocks = [fieldBlock('comment', 'short_text')];
     const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title: 'SR6' } })).json<{ id: string }>();
     const draft = draftWith(id, blocks, 'SR6') as unknown as Record<string, unknown>;
@@ -226,17 +228,41 @@ describe('SR-6: publish media is cached per live version without a byte bound', 
     expect(put.statusCode, put.body).toBe(200);
     gc();
     const before = process.memoryUsage().heapUsed;
-    const versions = 20;
+    const versions = 40;
     for (let i = 0; i < versions; i++) {
       const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: { media: { cover_a: pic(`c${i}`), bg_a: pic(`b${i}`) } } });
       expect(live.statusCode, live.body.slice(0, 200)).toBe(200);
-      // Anyone opening the link loads the new version into the 200-entry cache; earlier versions stay there.
+      // Anyone opening the link loads the new version into the cache; earlier versions stay there unless it is bounded.
       const opened = await app.inject({ url: `/v1/p/${live.json<{ slug: string }>().slug}` });
       expect(opened.statusCode).toBe(200);
     }
     gc();
     const grownMiB = (process.memoryUsage().heapUsed - before) / 2 ** 20;
-    // ~6 MB of media per version stays referenced from liveByVersion; at LIVE_CACHE_MAX (200) that is over 1 GB.
+    // ~1.9 MB of media per version stays referenced from the cache; at its 200 entries that is almost 400 MB.
     expect(Math.round(grownMiB), `heap grew ${grownMiB.toFixed(0)} MiB for ${versions} versions`).toBeLessThan(64);
+  });
+
+  it('refuses a publish whose pictures add up to more than 2 MB (413), stores no version, and counts only the pictures the form uses', async () => {
+    const pic = (bytes: number) => `data:image/jpeg;base64,${Buffer.alloc(bytes, 7).toString('base64')}`;
+    const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title: 'SR6 cap' } })).json<{ id: string }>();
+    const draft = draftWith(id, [fieldBlock('comment', 'short_text')], 'SR6 cap') as unknown as Record<string, unknown>;
+    (draft['theme'] as { tokens: Record<string, unknown> }).tokens['cover'] = { image: { assetId: 'cover_a' }, heightPx: 200 };
+    (draft['theme'] as { tokens: Record<string, unknown> }).tokens['background'] = { kind: 'image', image: { assetId: 'bg_a' }, fit: 'cover' };
+    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft } })).statusCode).toBe(200);
+    // 1.2 MB and 1.2 MB: each under the per-picture limit, together over the version's.
+    const over = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: { media: { cover_a: pic(900_000), bg_a: pic(900_000) } } });
+    expect(over.statusCode, over.body.slice(0, 200)).toBe(413);
+    expect(over.json()).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+    expect((await owner.query('select count(*)::int as n from form_versions where form_id = $1', [id])).rows[0].n).toBe(0);
+    // Pictures the form does not use are not kept, so they do not count; the two it uses fit.
+    const fits = await app.inject({
+      method: 'POST',
+      url: `/v1/forms/${id}/publish`,
+      headers: as(),
+      payload: { media: { cover_a: pic(300_000), bg_a: pic(300_000), unused_a: pic(1_500_000) } },
+    });
+    expect(fits.statusCode, fits.body.slice(0, 200)).toBe(200);
+    const { rows } = await owner.query<{ keys: string[] }>(`select array(select jsonb_object_keys(media) order by 1) as keys from form_versions where form_id = $1`, [id]);
+    expect(rows[0]!.keys).toEqual(['bg_a', 'cover_a']);
   });
 });
