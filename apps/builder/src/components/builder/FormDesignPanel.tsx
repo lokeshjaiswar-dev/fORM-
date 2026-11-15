@@ -13,6 +13,7 @@ import { Tooltip } from '@/components/Tooltip';
 import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
 import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
+import { ReviewSettings } from '@/components/builder/review/ReviewSettings';
 import { SectionBreakSettings } from '@/components/builder/SectionBreakSettings';
 import { ImagesSection } from '@/components/builder/design/ImagesSection';
 import { applyImageTemplate, applyPreset, applyScheme, COLOR_SCHEMES, IMAGE_TEMPLATES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
@@ -28,6 +29,7 @@ const M = defineMessages('builder', {
   'design.submit': 'Submit',
   'design.logic': 'Logic',
   'design.sections': 'Sections',
+  'design.review': 'Review',
   'design.schemes': 'Color palette',
   'design.page': 'Page background',
   'design.form': 'Form surface',
@@ -47,7 +49,7 @@ const M = defineMessages('builder', {
   'design.image_themes': 'Image templates',
 });
 
-const TABS = ['colors', 'styles', 'themes', 'logic', 'sections', 'submit'] as const;
+const TABS = ['colors', 'styles', 'themes', 'logic', 'sections', 'review', 'submit'] as const;
 type Tab = (typeof TABS)[number];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -135,6 +137,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   : id === 'themes' ? t(M['design.themes'])
                   : id === 'logic' ? t(M['design.logic'])
                   : id === 'sections' ? t(M['design.sections'])
+                  : id === 'review' ? t(M['design.review'])
                   : t(M['design.submit']);
                 return (
                   <TabsTrigger key={id} value={id} className="text-[10px] uppercase tracking-wide">
@@ -281,6 +284,8 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
               {tab === 'logic' ? <FormLogicChecks /> : null}
 
               {tab === 'sections' ? <SectionBreakSettings /> : null}
+
+              {tab === 'review' ? <ReviewSettings /> : null}
 
               {tab === 'submit' ? <SubmissionSettings dark /> : null}
               </TabsContent>

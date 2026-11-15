@@ -71,6 +71,23 @@ describe('FormDesignPanel', () => {
     expect(screen.queryByRole('dialog', { name: 'Form settings' })).not.toBeInTheDocument();
   });
 
+  it('has a Review tab before Submit where review units are made from the pages, even while nobody is signed in', async () => {
+    const user = userEvent.setup();
+    render(<FormDesignPanel />);
+    await user.click(screen.getByRole('button', { name: 'Form settings' }));
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Colors', 'Styles', 'Themes', 'Logic', 'Sections', 'Review', 'Submit']);
+    await user.click(screen.getByRole('tab', { name: 'Review' }));
+    expect(screen.getByRole('region', { name: 'Review' })).toBeInTheDocument();
+    // The assignments are the server's; without a session they are off and the reason is given, but the units are the draft's.
+    expect(screen.getByText('Sign in to choose who reviews this form.')).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: 'Part of the form to check' }));
+    await user.click(await screen.findByRole('option', { name: 'Page 1' }));
+    await user.click(screen.getByRole('button', { name: 'Add review unit' }));
+    expect(doc().review?.units).toEqual([{ id: expect.any(String), name: 'Page 1', target: { kind: 'page', pageId: 'page_1' } }]);
+    expect(screen.getByLabelText('Name of the review unit for Page 1')).toHaveValue('Page 1');
+    expect(screen.getByRole('combobox', { name: 'Group that checks Page 1' })).toBeDisabled();
+  });
+
   it('enables section breaks from the tab after Logic and stores colour', async () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);

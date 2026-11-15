@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { orgApi } from '@/auth/client';
 
 /** The org endpoints' answers (WP-1.02), as the builder reads them. */
 
@@ -51,3 +52,50 @@ export function canManage(actor: string, target: string, to?: string): boolean {
 
 /** The roles `actor` may give. */
 export const assignable = (actor: string): OrgRole[] => ORG_ROLES.filter((r) => canManage(actor, 'viewer', r));
+
+/*
+ * Review groups (WP-2.33): named sets of checkers that a form's review units are given to. Managing them needs
+ * `members.manage`; the same list is read by a form's Review tab to offer a group per unit.
+ */
+
+export const reviewGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.string(),
+  /** Null for a group in use. An archived group keeps its members and its past decisions, and takes no new units or members. */
+  archivedAt: z.string().nullable(),
+  members: z.array(
+    z.object({
+      userId: z.string(),
+      email: z.string(),
+      name: z.string().nullable(),
+      role: z.string(),
+      /** False when the member's role no longer carries `submissions.review`, or they are suspended: still listed, and decide nothing. */
+      canReview: z.boolean(),
+      addedAt: z.string(),
+    }),
+  ),
+});
+export type ReviewGroup = z.infer<typeof reviewGroupSchema>;
+export const reviewGroupsSchema = z.object({ items: z.array(reviewGroupSchema) });
+
+/** The roles that carry `submissions.review` (owner, admin, editor): the API refuses anyone else as a checker (422 `NOT_A_REVIEWER`). Used only to offer the likely choices. */
+export const REVIEWER_ROLES: readonly string[] = ['owner', 'admin', 'editor'];
+
+const groupUrl = (id: string) => `/v1/org/review-groups/${encodeURIComponent(id)}`;
+
+/** The org's review groups; `includeArchived` adds the archived ones (the Members page lists them so they can be brought back). */
+export async function listReviewGroups(o: { includeArchived?: boolean } = {}): Promise<ReviewGroup[]> {
+  return (await orgApi('GET', `/v1/org/review-groups${o.includeArchived ? '?includeArchived=true' : ''}`, reviewGroupsSchema)).items;
+}
+
+export const createReviewGroup = (name: string): Promise<ReviewGroup> => orgApi('POST', '/v1/org/review-groups', reviewGroupSchema, { name });
+
+export const updateReviewGroup = (id: string, change: { name?: string; archived?: boolean }): Promise<ReviewGroup> =>
+  orgApi('PATCH', groupUrl(id), reviewGroupSchema, change);
+
+export const addReviewGroupMember = (id: string, userId: string): Promise<ReviewGroup> =>
+  orgApi('PUT', `${groupUrl(id)}/members/${encodeURIComponent(userId)}`, reviewGroupSchema);
+
+export const removeReviewGroupMember = (id: string, userId: string): Promise<void> =>
+  orgApi('DELETE', `${groupUrl(id)}/members/${encodeURIComponent(userId)}`, null);
