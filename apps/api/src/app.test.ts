@@ -489,8 +489,8 @@ describe('stub route modules (approvals, notifications, webhooks, exports)', () 
     const { app: a } = await app(config(), { onRoute: (route) => collect(routes, route) });
     await a.ready();
     // The approvals setup routes (review groups, a form's review settings) are filled in (WP-2.33), and so are the email
-    // senders, the notifications and the email log (WP-1.16); the webhook and export routes are still stubs.
-    expect(routes.filter((r) => /\/v1\/(forms\/[^/]+\/webhooks|exports)/.test(r.key))).toEqual([]);
+    // senders, the notifications and the email log (WP-1.16) and the webhooks (WP-1.18); the export routes are still stubs.
+    expect(routes.filter((r) => /\/v1\/exports/.test(r.key))).toEqual([]);
     const { missing, stale, duplicate } = coverage(routes, ISOLATION_CASES);
     expect({ missing, stale, duplicate }).toEqual({ missing: [], stale: [], duplicate: [] });
   });
@@ -784,6 +784,11 @@ describe('OpenAPI', () => {
       '/v1/forms/{formId}/submissions',
       '/v1/forms/{formId}/submissions/bulk',
       '/v1/forms/{formId}/submissions/{id}',
+      '/v1/forms/{formId}/webhooks',
+      '/v1/forms/{formId}/webhooks/{id}',
+      '/v1/forms/{formId}/webhooks/{id}/deliveries',
+      '/v1/forms/{formId}/webhooks/{id}/deliveries/{deliveryId}/replay',
+      '/v1/forms/{formId}/webhooks/{id}/rotate-secret',
       '/v1/forms/{id}',
       '/v1/forms/{id}/access',
       '/v1/forms/{id}/access/password',
