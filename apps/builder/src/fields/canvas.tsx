@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { Trash2 } from 'lucide-react';
 import { defineMessages, formatDate, formatTime, type MessageId } from '@form/i18n';
 import { callingCodeOf, formatUniqueId, isAvailable, isRepeatableChildType, type AvailableType } from '@form/registry';
-import { slotsOf } from '@form/renderer';
+import { slotsOf } from '@form/renderer/author';
 import type { AddressPart, BlockOf, NamePart, StoredBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';

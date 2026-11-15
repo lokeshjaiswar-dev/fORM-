@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { fromHtml, type AssetId, type BlockId, type HexColor, type InlineDoc, type RichDoc, type SafeHref, type SafeUrl } from '@form/schema';
-import { RichTextView, type RichTextViewProps } from '../src/index.ts';
+import { RichTextView, type RichTextViewProps } from '../src/author.ts';
 import { XSS_PAYLOADS } from '@form/schema/test-fixtures';
 
 const html = (props: RichTextViewProps) => renderToStaticMarkup(<RichTextView {...props} />);

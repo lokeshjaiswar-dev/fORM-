@@ -1,4 +1,4 @@
-import { rememberThemeImage } from '@form/renderer';
+import { rememberThemeImage } from '@form/renderer/author';
 
 const KEY = 'formplus.themeMedia.v1';
 const MAX = 64;

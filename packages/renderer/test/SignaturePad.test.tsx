@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { SignaturePad } from '../src/index.ts';
+import { SignaturePad } from '../src/author.ts';
 
 const png = new Blob(['png'], { type: 'image/png' });
 

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { THEME_SCENES } from '@form/renderer';
+import { THEME_SCENES } from '@form/renderer/author';
 import type { AssetId, HexColor, Theme, ThemeTokens } from '@form/schema';
 import { Button, Label } from '@dmacq/ui';
 import { t } from '@/i18n';

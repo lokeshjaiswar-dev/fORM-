@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { themeImageUrl } from '@form/renderer';
+import { themeImageUrl } from '@form/renderer/author';
 import type { AssetId, BlockOf, ChoiceOption, OptionId } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';

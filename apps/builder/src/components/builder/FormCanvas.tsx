@@ -3,7 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ArrowRight, GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { coverPhoto, formTitlePresentation, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, submitButtonPresentation, themeCssVars, type FormSection } from '@form/renderer';
+import { coverPhoto, formTitlePresentation, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, submitButtonPresentation, themeCssVars, type FormSection } from '@form/renderer/author';
 import type { BlockId, BlockLayout, FormDefinition, PageId, SectionNav as SectionNavConfig } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';

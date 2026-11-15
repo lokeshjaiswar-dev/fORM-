@@ -124,10 +124,10 @@ module.exports = {
     },
     {
       name: 'no-deep-import',
-      comment: 'Import @form/* packages through their exports, never their src/ files. A package stylesheet export (@form/renderer/styles.css) the lazy validation entry (@form/validation/lazy) and the per-family adapter entries (@form/adapters/<family>) are entry points too.',
+      comment: 'Import @form/* packages through their exports, never their src/ files. A package stylesheet export (@form/renderer/styles.css), the renderer authoring entry (@form/renderer/author), the lazy validation entry (@form/validation/lazy) and the per-family adapter entries (@form/adapters/<family>) are entry points too.',
       severity: 'error',
       from: { path: '^(?:apps|packages)/([^/]+)/' },
-      to: { path: '^packages/[^/]+/src/', pathNot: ['^packages/$1/', '^packages/[^/]+/src/index\\.ts$', '^packages/[^/]+/src/styles\\.css$', '^packages/validation/src/lazy\\.ts$', '^packages/adapters/src/[^/]+/index\\.ts$'] },
+      to: { path: '^packages/[^/]+/src/', pathNot: ['^packages/$1/', '^packages/[^/]+/src/index\\.ts$', '^packages/[^/]+/src/styles\\.css$', '^packages/renderer/src/author\\.ts$', '^packages/validation/src/lazy\\.ts$', '^packages/adapters/src/[^/]+/index\\.ts$'] },
     },
     {
       name: 'no-deep-import-unresolved',

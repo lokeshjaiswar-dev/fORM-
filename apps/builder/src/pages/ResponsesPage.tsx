@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Inbox } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { rememberThemeImage, themeImageUrl } from '@form/renderer';
+import { rememberThemeImage, themeImageUrl } from '@form/renderer/author';
 import type { FormDefinition, IsoInstant } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';

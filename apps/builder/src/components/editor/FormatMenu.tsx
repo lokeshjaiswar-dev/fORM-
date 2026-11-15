@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { isSafeHref, type ColorValue } from '@form/schema';
 import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@dmacq/ui';
-import { themeCssVars } from '@form/renderer';
+import { themeCssVars } from '@form/renderer/author';
 import { useDoc } from '@/state/documentStore';
 import { colorCss } from '@/components/editor/extensions';
 

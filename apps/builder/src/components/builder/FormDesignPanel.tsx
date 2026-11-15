@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Paintbrush, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { DEFAULT_COLORS } from '@form/renderer';
+import { DEFAULT_COLORS } from '@form/renderer/author';
 import type { FontId, HexColor, Theme, ThemeColorToken, ThemeTokens } from '@form/schema';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
@@ -16,7 +16,7 @@ import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
 import { SectionBreakSettings } from '@/components/builder/SectionBreakSettings';
 import { ImagesSection } from '@/components/builder/design/ImagesSection';
 import { applyImageTemplate, applyPreset, applyScheme, COLOR_SCHEMES, IMAGE_TEMPLATES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
-import { themeImageUrl } from '@form/renderer';
+import { themeImageUrl } from '@form/renderer/author';
 
 const M = defineMessages('builder', {
   'design.open': 'Form settings',

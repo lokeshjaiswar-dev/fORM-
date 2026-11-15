@@ -4,7 +4,8 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AVAILABLE_TYPES } from '@form/registry';
 import { ANSWER_VALUE_SCHEMAS, AnswersSchema, type AnswerValue, type ConsentItemId, type FieldBlock, type ValueFieldType } from '@form/schema';
-import { CONTROLS, FormRenderer, type SubmitPayload } from '../src/index.ts';
+import { CONTROLS } from '../src/author.ts';
+import { FormRenderer, type SubmitPayload } from '../src/index.ts';
 import { content, fakeUploader, field, form, id, page, props, rich, runtime } from './build.ts';
 
 /*

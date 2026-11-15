@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { buildApiRequest, defaultSuccess, getAtPath, parseApiBody } from '@form/renderer';
+import { buildApiRequest, defaultSuccess, getAtPath, parseApiBody } from '@form/renderer/author';
 import {
   isSafeUrl,
   type ApiSuccessRule,

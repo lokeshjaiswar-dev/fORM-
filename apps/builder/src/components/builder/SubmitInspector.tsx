@@ -8,7 +8,7 @@ import {
   type SubmitButtonShape,
   type SubmitButtonSize,
 } from '@form/schema';
-import { SUBMIT_SECTION_ID } from '@form/renderer';
+import { SUBMIT_SECTION_ID } from '@form/renderer/author';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { applyPatch, type Patch } from '@/lib/patch';

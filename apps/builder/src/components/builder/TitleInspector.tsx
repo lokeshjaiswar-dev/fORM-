@@ -1,6 +1,6 @@
 import { defineMessages } from '@form/i18n';
 import { FORM_TITLE_WEIGHTS, type FormTitleStyle, type FormTitleWeight, type HexColor } from '@form/schema';
-import { TITLE_SECTION_ID } from '@form/renderer';
+import { TITLE_SECTION_ID } from '@form/renderer/author';
 import { t } from '@/i18n';
 import type { Patch } from '@/lib/patch';
 import { useDraft } from '@/lib/useDraft';

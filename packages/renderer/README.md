@@ -22,6 +22,8 @@ import '@form/renderer/styles.css';
 />
 ```
 
+Two entry points. `@form/renderer` is the respondent's: `FormRenderer`, its prop types and `browserSession`, nothing else, because `test/bundle.test.ts` holds everything it loads up front to a size ratchet. `@form/renderer/author` is for the builder and other authoring tools: the control table, theme, layout and section helpers the canvas shares with the live form, and the helpers behind API-driven options and API field checks. Put anything only an author needs in `src/author.ts`, never in `src/index.ts`; the API helpers are also fetched on demand by the form, so they only stay out of the first download while the respondent entry does not export them.
+
 | Path | What it holds |
 |---|---|
 | `src/FormRenderer.tsx` | The root: theme variables on `.fr-root`, status screens, the session (react-hook-form, paging, submit, ending) |

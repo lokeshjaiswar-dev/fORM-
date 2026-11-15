@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { ThemeColorTokenSchema, isSafeHref, tokenVar } from '@form/schema';
-import { LINK_REL } from '@form/renderer';
+import { LINK_REL } from '@form/renderer/author';
 import { CLIPBOARD_TYPE, clipboardContent, clipboardPayload } from '@/components/editor/paste';
 
 export type EditorKind = 'inline' | 'rich';

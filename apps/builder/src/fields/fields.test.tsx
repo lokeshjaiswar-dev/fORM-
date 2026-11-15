@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RESTRICTED_EDITION, editionSummary, loadEditionConfig } from '@form/config';
 import { AVAILABLE_TYPES, REGISTRY, STUB_AVAILABILITY } from '@form/registry';
-import { CONTROLS } from '@form/renderer';
+import { CONTROLS } from '@form/renderer/author';
 import type { BlockId, PaletteEntry } from '@form/schema';
 import { CANVAS } from '@/fields/canvas';
 import { ICONS } from '@/fields/icons';

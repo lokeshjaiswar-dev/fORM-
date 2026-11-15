@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Badge, Button, Checkbox, CheckboxField, Chip, DatePicker, FileDropzone, Input, MultiSelect, RadioField, RadioGroup, RadioGroupItem, Select as DsSelect, SelectTrigger, SelectValue, Slider, Textarea, TimePicker } from '@dmacq/ui';
 import { defineMessages } from '@form/i18n';
-import { themeImageUrl } from '@form/renderer';
+import { themeImageUrl } from '@form/renderer/author';
 import type { BlockStyle, ChoiceOption } from '@form/schema';
 import { t } from '@/i18n';
 import { inputStyle, labelString } from '@/fields/style';

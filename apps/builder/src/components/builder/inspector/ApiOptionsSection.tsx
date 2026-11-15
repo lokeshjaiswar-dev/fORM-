@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { defineMessages } from '@form/i18n';
-import { buildApiRequest, displayOptionPath, getAtPath, guessMapping, mapApiOptions, parseApiBody, pickFromTree } from '@form/renderer';
+import { buildApiRequest, displayOptionPath, getAtPath, guessMapping, mapApiOptions, parseApiBody, pickFromTree } from '@form/renderer/author';
 import {
   isSafeUrl,
   type ApiOptions,
