@@ -25,6 +25,8 @@ export type SecretKind = (typeof SECRET_KINDS)[number];
  * back: `select *` and `returning *` fail with "permission denied", so select `secretPublicColumns`. A system context
  * opens one with `secretEnc()`. `meta` is what the UI may show (host and user name, the last four characters).
  * RLS: `secrets_tenant`, and `secrets_access` (a system job; `org.settings` for kind smtp; `data.route` for webhook_hmac).
+ * Unique by (org, id, kind): a webhook or a sender points at a secret by all three, so a webhook can only name a
+ * webhook_hmac secret and a sender only an smtp one (foreign-key checks bypass RLS, so the kind has to be in the key).
  */
 export const secrets = pgTable(
   'secrets',
@@ -40,7 +42,7 @@ export const secrets = pgTable(
     createdAt: ts('created_at'),
     rotatedAt: tsNull('rotated_at'),
   },
-  (t) => [unique('secrets_org_id_id_key').on(t.orgId, t.id)],
+  (t) => [unique('secrets_org_id_id_kind_key').on(t.orgId, t.id, t.kind)],
 );
 
 /** Every column of `secrets` fr_app may read: all but `enc`. */
@@ -54,7 +56,8 @@ export const secretPublicColumns = {
 };
 
 /**
- * An org's own sending mailbox (NOT-01). Its SMTP credentials are a `secrets` row of the same org (composite key). At most
+ * An org's own sending mailbox (NOT-01). Its SMTP credentials are a `secrets` row of the same org and of kind smtp (composite
+ * key (org, id, kind); `smtpSecretKind` is fixed to 'smtp', is never written and is not updatable). At most
  * one default per org. RLS: `email_senders_tenant`; no respondent reads; writes need `org.settings` or a system job.
  */
 export const emailSenders = pgTable(
@@ -68,6 +71,8 @@ export const emailSenders = pgTable(
     fromAddress: text('from_address').notNull(),
     fromName: text('from_name'),
     smtpSecretId: uuid('smtp_secret_id').notNull(),
+    /** Always 'smtp': the kind half of the foreign key to `secrets`, so a sender cannot name a webhook_hmac secret. */
+    smtpSecretKind: text('smtp_secret_kind', { enum: ['smtp'] }).notNull().default('smtp'),
     /** Set by a successful test send; cleared when the credentials change. */
     verifiedAt: tsNull('verified_at'),
     /** What the last failed test send said, scrubbed of the URL and credentials. */
@@ -78,7 +83,7 @@ export const emailSenders = pgTable(
   },
   (t) => [
     unique('email_senders_org_id_id_key').on(t.orgId, t.id),
-    foreignKey({ name: 'email_senders_secret_fkey', columns: [t.orgId, t.smtpSecretId], foreignColumns: [secrets.orgId, secrets.id] }),
+    foreignKey({ name: 'email_senders_secret_fkey', columns: [t.orgId, t.smtpSecretId, t.smtpSecretKind], foreignColumns: [secrets.orgId, secrets.id, secrets.kind] }),
     uniqueIndex('email_senders_default_key').on(t.orgId).where(sql`${t.isDefault}`),
     index('email_senders_secret_idx').on(t.orgId, t.smtpSecretId),
   ],
@@ -182,7 +187,7 @@ export const WEBHOOK_FILES = ['signed_urls', 'none'] as const;
 /**
  * A form's outgoing webhook (INT-01). Sending answers to an outside address is a disclosure, so `purposeIds` is required
  * and non-empty, and every command needs `data.route` (or a system job). `secretId` names the signing secret (kind
- * webhook_hmac) of the same org. `fieldKeys` is `'all_in_purposes'` or the keys that narrow the purpose filter further.
+ * webhook_hmac, enforced by the foreign key through `secretKind`) of the same org. `fieldKeys` is `'all_in_purposes'` or the keys that narrow the purpose filter further.
  * `consecutiveFailures` and `disabledReason` are the auto-disable after 50 failures. `rev` is the CAS revision of PUT.
  * RLS: `webhooks_tenant`, and `webhooks_data_route`.
  */
@@ -195,6 +200,8 @@ export const webhooks = pgTable(
     url: text('url').notNull(),
     enabled: boolean('enabled').notNull().default(true),
     secretId: uuid('secret_id').notNull(),
+    /** Always 'webhook_hmac': the kind half of the foreign key to `secrets`, so a webhook cannot name an smtp secret. */
+    secretKind: text('secret_kind', { enum: ['webhook_hmac'] }).notNull().default('webhook_hmac'),
     events: text('events', { enum: WEBHOOK_EVENTS }).array().notNull(),
     keyBy: text('key_by', { enum: WEBHOOK_KEY_BY }).notNull().default('key'),
     fieldKeys: jsonb('field_keys').$type<string[] | 'all_in_purposes'>().notNull().default(sql`'"all_in_purposes"'::jsonb`),
@@ -211,7 +218,7 @@ export const webhooks = pgTable(
     unique('webhooks_org_id_id_key').on(t.orgId, t.id),
     check('webhooks_purpose_ids_check', sql`cardinality(${t.purposeIds}) > 0 and array_position(${t.purposeIds}, null) is null and '' <> all (${t.purposeIds})`),
     foreignKey({ name: 'webhooks_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
-    foreignKey({ name: 'webhooks_secret_fkey', columns: [t.orgId, t.secretId], foreignColumns: [secrets.orgId, secrets.id] }),
+    foreignKey({ name: 'webhooks_secret_fkey', columns: [t.orgId, t.secretId, t.secretKind], foreignColumns: [secrets.orgId, secrets.id, secrets.kind] }),
     index('webhooks_form_idx').on(t.orgId, t.formId),
     index('webhooks_secret_idx').on(t.orgId, t.secretId),
   ],

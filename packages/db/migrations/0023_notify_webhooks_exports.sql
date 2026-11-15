@@ -22,8 +22,8 @@
 --     an API key would otherwise be held to;
 --   * a restrictive policy narrows that per command, so a route that forgets its own permission check is still stopped;
 --     `system` is the worker's job context;
---   * a child names its org as well as its parent ((org_id, form_id) -> forms, (org_id, secret_id) -> secrets), so a
---     row can never point at another org's form or secret, whatever id a client sent;
+--   * a child names its org as well as its parent ((org_id, form_id) -> forms, (org_id, secret_id, kind) -> secrets), so
+--     a row can never point at another org's form or secret, or at a secret of the wrong kind, whatever id a client sent;
 --   * INSERT is granted on the whole table (Drizzle's INSERT lists every column, and a column it names without the
 --     privilege fails the statement); the restrictive WITH CHECK policies say who may insert what. UPDATE is granted
 --     per column, so a bug cannot move a row to another org or form.
@@ -36,6 +36,14 @@
 -- wraps; the id, kind and org are the associated data, so a sealed value pasted into another row does not open).
 -- `meta` is what the UI may show: for smtp the host, port and user name, for webhook_hmac the last four characters of
 -- the secret. Never the secret itself.
+--
+-- The unique key is (org_id, id, kind), not (org_id, id): a webhook or a sender points at a secret by all three, with
+-- the kind written into its own row (webhooks.secret_kind, email_senders.smtp_secret_kind), so the database, not the
+-- API, decides that a webhook names only a webhook_hmac secret and a sender only an smtp one. A foreign-key check reads
+-- the referenced row without RLS, so `secrets_access` below cannot stop a reference by itself: without the kind in the
+-- key, an editor with data.route (who may read email_senders.smtp_secret_id) could point a webhook at the org's SMTP
+-- credential, and the worker, which opens any secret as system, would sign every payload with it as the HMAC key and
+-- hand the editor's endpoint material to guess the SMTP password offline. `kind` is not updatable (see the grants).
 create table secrets (
   id uuid primary key,
   org_id uuid not null references orgs (id),
@@ -44,7 +52,7 @@ create table secrets (
   meta jsonb not null default '{}'::jsonb check (jsonb_typeof(meta) = 'object'),
   created_at timestamptz not null default now(),
   rotated_at timestamptz,
-  constraint secrets_org_id_id_key unique (org_id, id)
+  constraint secrets_org_id_id_kind_key unique (org_id, id, kind)
 );
 alter table secrets enable row level security;
 alter table secrets force row level security;
@@ -91,7 +99,8 @@ grant execute on function secret_enc(uuid) to fr_app;
 -- ---------------------------------------------------------------------------------------------------------------
 
 -- An org's own sending identity (NOT-01). A notification without a sender goes out through the platform mailer. The
--- SMTP secret is a foreign key by (org, id), so a sender can only use its own org's credentials. Deleting a sender that
+-- SMTP secret is a foreign key by (org, id, kind), so a sender can only use its own org's credentials, and only an smtp
+-- secret (`smtp_secret_kind` is fixed to 'smtp' and not updatable; see secrets for why the kind is in the key). Deleting a sender that
 -- a notification uses, or a secret that a sender uses, is refused (the API says "in use"): a notification must not
 -- silently change the address it is sent from.
 create table email_senders (
@@ -101,6 +110,8 @@ create table email_senders (
   from_address text not null check (char_length(from_address) between 3 and 254 and position('@' in from_address) > 1),
   from_name text check (from_name is null or char_length(from_name) <= 120),
   smtp_secret_id uuid not null,
+  -- Always 'smtp': the third column of the foreign key below, so the sender cannot name a webhook_hmac secret.
+  smtp_secret_kind text not null default 'smtp' check (smtp_secret_kind = 'smtp'),
   -- Set by the test send when the server accepted a message; cleared when the credentials change.
   verified_at timestamptz,
   -- What the last failed test send said, scrubbed of the URL and credentials by the API.
@@ -109,7 +120,7 @@ create table email_senders (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint email_senders_org_id_id_key unique (org_id, id),
-  constraint email_senders_secret_fkey foreign key (org_id, smtp_secret_id) references secrets (org_id, id)
+  constraint email_senders_secret_fkey foreign key (org_id, smtp_secret_id, smtp_secret_kind) references secrets (org_id, id, kind)
 );
 -- At most one default per org.
 create unique index email_senders_default_key on email_senders (org_id) where is_default;
@@ -255,6 +266,8 @@ create table webhooks (
   url text not null check (char_length(url) between 8 and 2048 and url ~ '^https?://'),
   enabled boolean not null default true,
   secret_id uuid not null,
+  -- Always 'webhook_hmac': the third column of the foreign key below, so a webhook cannot name an smtp secret.
+  secret_kind text not null default 'webhook_hmac' check (secret_kind = 'webhook_hmac'),
   events text[] not null,
   key_by text not null default 'key' check (key_by in ('key', 'id')),
   field_keys jsonb not null default '"all_in_purposes"'::jsonb,
@@ -272,7 +285,7 @@ create table webhooks (
   constraint webhooks_field_keys_check check (field_keys = '"all_in_purposes"'::jsonb or jsonb_typeof(field_keys) = 'array'),
   constraint webhooks_purpose_ids_check check (cardinality(purpose_ids) > 0 and array_position(purpose_ids, null) is null and '' <> all (purpose_ids)),
   constraint webhooks_form_fkey foreign key (org_id, form_id) references forms (org_id, id),
-  constraint webhooks_secret_fkey foreign key (org_id, secret_id) references secrets (org_id, id)
+  constraint webhooks_secret_fkey foreign key (org_id, secret_id, secret_kind) references secrets (org_id, id, kind)
 );
 create index webhooks_form_idx on webhooks (org_id, form_id);
 create index webhooks_secret_idx on webhooks (org_id, secret_id);

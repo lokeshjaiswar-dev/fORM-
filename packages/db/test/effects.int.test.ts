@@ -232,6 +232,45 @@ describe('email_senders', () => {
     expect(pgCode(await failure(run(system, sql`delete from email_senders where id = ${fx().senderId}`)))).toBe('23503');
   });
 
+  it('names an smtp secret and nothing else: a webhook_hmac secret of its own org is refused, on insert and on update', async () => {
+    // The foreign key carries the kind (smtp_secret_kind is always 'smtp'), and a foreign-key check bypasses RLS, so this
+    // holds for every actor, the table owner included.
+    const hookSecret = await secretOfB('webhook_hmac');
+    for (const ctx of [settings(), system]) {
+      const err = await failure(run(ctx, insertSender(randomUUID(), hookSecret)));
+      expect(pgCode(err), ctx.actor).toBe('23503');
+      expect(constraintOf(err), ctx.actor).toBe('email_senders_secret_fkey');
+    }
+    const asOwner = await failure(
+      t.owner.query(`insert into email_senders (id, org_id, name, from_address, smtp_secret_id) values ($1, $2, 'x', 'x@example.test', $3)`, [randomUUID(), seed.b.orgId, hookSecret]),
+    );
+    expect(pgCode(asOwner)).toBe('23503');
+    expect(constraintOf(asOwner)).toBe('email_senders_secret_fkey');
+    // Nor can the secret be turned into the wrong kind from under the sender that uses it (the key is checked on update too).
+    expect(pgCode(await failure(t.owner.query(`update secrets set kind = 'webhook_hmac' where id = $1`, [fx().smtpSecretId])))).toBe('23503');
+    // The kind cannot be written to fit: the column is fixed to 'smtp' and is not updatable.
+    const smtpSecret = await secretOfB('smtp');
+    const forged = await failure(
+      run(system, sql`insert into email_senders (id, org_id, name, from_address, smtp_secret_id, smtp_secret_kind) values (${randomUUID()}, ${seed.b.orgId}, 'x', 'x@example.test', ${hookSecret}, 'webhook_hmac')`),
+    );
+    expect(pgCode(forged)).toBe('23514');
+
+    // The same on update: a sender that uses an smtp secret cannot be pointed at a webhook_hmac one, by a member or a system job.
+    const id = randomUUID();
+    await run(settings(), insertSender(id, smtpSecret));
+    for (const ctx of [settings(), system]) {
+      const err = await failure(run(ctx, sql`update email_senders set smtp_secret_id = ${hookSecret} where id = ${id}`));
+      expect(pgCode(err), ctx.actor).toBe('23503');
+      expect(constraintOf(err), ctx.actor).toBe('email_senders_secret_fkey');
+    }
+    expect(pgCode(await failure(run(system, sql`update email_senders set smtp_secret_kind = 'webhook_hmac' where id = ${id}`)))).toBe('42501');
+    expect(await rowsOf('select smtp_secret_id, smtp_secret_kind from email_senders where id = $1', [id])).toEqual([{ smtp_secret_id: smtpSecret, smtp_secret_kind: 'smtp' }]);
+    // Moving it to another smtp secret of the org is fine.
+    const otherSmtp = await secretOfB('smtp');
+    expect((await run(settings(), sql`update email_senders set smtp_secret_id = ${otherSmtp} where id = ${id} returning 1`)).rows).toHaveLength(1);
+    expect(await rowsOf('select smtp_secret_id from email_senders where id = $1', [id])).toEqual([{ smtp_secret_id: otherSmtp }]);
+  });
+
   it('has a real address and a name', async () => {
     const secret = await secretOfB('smtp');
     for (const over of [{ address: 'no-at-sign' }, { address: '@example.test' }, { name: '' }, { name: 'x'.repeat(121) }]) {
@@ -396,6 +435,52 @@ describe('webhooks', () => {
     await run(router(), insertWebhook(id(), { url: 'http://hooks.internal.example/x' }));
     await run(router(), insertWebhook(id(), { events: '{submission.created,submission.updated,submission.deleted,payment.succeeded,consent.withdrawn}', keyBy: 'id', files: 'signed_urls' }));
     await run(router(), insertWebhook(id(), { fieldKeys: '["name","email"]' }));
+  });
+
+  it('signs with a webhook_hmac secret only: an smtp secret of its own org is refused, on insert and on update', async () => {
+    // The path this closes: a user with data.route and no org.settings reads email_senders.smtp_secret_id (a sender is
+    // readable by every context but a respondent), then points a webhook at that secret and a URL they control. The worker
+    // opens any secret as system, so it would sign each payload with the SMTP credential as the HMAC key. A foreign-key
+    // check bypasses RLS, so only the kind in the key stops it; the router needs no right to the secret for it to hold.
+    const router = () => user(['forms.read', 'data.route']);
+    const exposed = (await as(router(), async (tx) => (await tx.execute<{ smtp_secret_id: string }>(sql`select smtp_secret_id from email_senders where id = ${fx().senderId}`)).rows))[0]!.smtp_secret_id;
+    expect(exposed).toBe(fx().smtpSecretId);
+    // ... and cannot read the secret row itself (secrets_access gives data.route the webhook_hmac kind only).
+    expect(await as(router(), async (tx) => (await tx.execute(sql`select id from secrets where id = ${exposed}`)).rows.length)).toBe(0);
+    for (const ctx of [router(), system]) {
+      const err = await failure(run(ctx, insertWebhook(randomUUID(), { secret: exposed })));
+      expect(pgCode(err), ctx.actor).toBe('23503');
+      expect(constraintOf(err), ctx.actor).toBe('webhooks_secret_fkey');
+    }
+    const asOwner = await failure(
+      t.owner.query(
+        `insert into webhooks (id, org_id, form_id, url, secret_id, events, purpose_ids) values ($1, $2, $3, 'https://evil.example.test/x', $4, '{submission.created}', '{contact}')`,
+        [randomUUID(), seed.b.orgId, seed.b.formIds[1], exposed],
+      ),
+    );
+    expect(pgCode(asOwner)).toBe('23503');
+    expect(constraintOf(asOwner)).toBe('webhooks_secret_fkey');
+    // The kind cannot be written to fit: the column is fixed to 'webhook_hmac' and is not updatable.
+    const forged = await failure(
+      run(system, sql`insert into webhooks (id, org_id, form_id, url, secret_id, secret_kind, events, purpose_ids)
+        values (${randomUUID()}, ${seed.b.orgId}, ${seed.b.formIds[1]}, 'https://evil.example.test/x', ${exposed}, 'smtp', '{submission.created}', '{contact}')`),
+    );
+    expect(pgCode(forged)).toBe('23514');
+
+    // The same on update: a webhook that signs with a webhook_hmac secret cannot be moved onto an smtp one.
+    const id = randomUUID();
+    await run(router(), insertWebhook(id));
+    for (const ctx of [router(), system]) {
+      const err = await failure(run(ctx, sql`update webhooks set secret_id = ${exposed} where id = ${id}`));
+      expect(pgCode(err), ctx.actor).toBe('23503');
+      expect(constraintOf(err), ctx.actor).toBe('webhooks_secret_fkey');
+    }
+    expect(pgCode(await failure(run(system, sql`update webhooks set secret_kind = 'smtp' where id = ${id}`)))).toBe('42501');
+    expect(await rowsOf('select secret_id, secret_kind from webhooks where id = $1', [id])).toEqual([{ secret_id: fx().hookSecretId, secret_kind: 'webhook_hmac' }]);
+    // Moving it to another webhook_hmac secret of the org (a rotation that makes a new secret) is fine.
+    const otherHook = await secretOfB('webhook_hmac');
+    expect((await run(router(), sql`update webhooks set secret_id = ${otherHook} where id = ${id} returning 1`)).rows).toHaveLength(1);
+    expect(await rowsOf('select secret_id from webhooks where id = $1', [id])).toEqual([{ secret_id: otherHook }]);
   });
 
   it('signs with a webhook_hmac secret of its own org and belongs to a form of its own org', async () => {
