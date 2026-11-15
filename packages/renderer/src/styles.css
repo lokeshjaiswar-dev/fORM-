@@ -1579,6 +1579,11 @@
   align-items: center;
 }
 
+/* A card that takes several groups shows a list of checkboxes: its name sits at the top of the list, not in the middle. */
+:where(.fr-root) .fr-cardsort-row:has(.fr-choices) {
+  align-items: start;
+}
+
 @container fr (max-width: 479px) {
   :where(.fr-root) .fr-sum-row,
   :where(.fr-root) .fr-cardsort-row {
