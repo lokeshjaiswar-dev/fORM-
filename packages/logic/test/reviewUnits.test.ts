@@ -1,11 +1,13 @@
 import { REGISTRY } from '@form/registry';
-import { sha256Jcs } from '@form/schema';
+import { FormDefinitionSchema, sha256Jcs } from '@form/schema';
 import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import {
   applicableUnits, compile, evaluate, reviewUnitAnswersHash, reviewUnitIssues, reviewUnitMembership, validateDefinition, visibleBlocksForReviewer,
 } from '../src/index.ts';
 import { META, a, ans, bid, cond, field, form, heading, hide, id, page, rule, text, versionOf } from './build.ts';
+import { V1_FORMS } from './corpus/generate.ts';
+import { toV2 } from './corpus/v1.ts';
 import { REVIEW_ASSIGNMENTS, assign, breakTarget, groups, pageTarget, reviewCases, reviewForm, reviewUnit, sectionBreak, sectionOf } from './corpus/review.ts';
 
 /* WP-2.33: review units in the definition: membership, publish checks, compile, the answers hash, applicability and redaction. */
@@ -351,5 +353,19 @@ describe('determinism corpus entry', () => {
     expect(wholePlusBank).toContain('bank');
     expect(wholePlusBank).toContain('email');
     expect(wholePlusBank).not.toContain('applicant');
+  });
+});
+
+describe('forms without review (backward compatibility)', () => {
+  it('every existing corpus form still parses with the strict twin, has no review key, and compiles without reviewUnits', () => {
+    for (const v1 of V1_FORMS) {
+      const def = toV2(v1);
+      expect('review' in def, v1.name).toBe(false);
+      const parsed = FormDefinitionSchema.safeParse(JSON.parse(JSON.stringify(def)));
+      expect(parsed.success, v1.name).toBe(true);
+      const result = compile(def, REGISTRY);
+      expect(result.ok && 'reviewUnits' in result.compiled, v1.name).toBe(false);
+      expect(reviewUnitIssues(def, 'publish'), v1.name).toEqual([]);
+    }
   });
 });
