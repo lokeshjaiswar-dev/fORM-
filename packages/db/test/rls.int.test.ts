@@ -1,7 +1,21 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { desc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { assertTenantCtx, forms, orgs, userPublicColumns, users, withTenant, type TenantCtx, type Tx } from '../src/index.ts';
+import {
+  accountDelete,
+  assertTenantCtx,
+  formAccessPasswordHash,
+  formAccess,
+  formAccessPublicColumns,
+  forms,
+  orgs,
+  userPublicColumns,
+  users,
+  withTenant,
+  withUser,
+  type TenantCtx,
+  type Tx,
+} from '../src/index.ts';
 import { failure, pgCode, seedTwoOrgs, setupTestDb, type Seed, type TestDb } from './harness.ts';
 import { isolationSuite, publicTables, type TableSpec } from './isolation.ts';
 
@@ -555,5 +569,395 @@ describe('form_submissions and form_files data access (architecture §2.2, SR-5)
     // Deleting the submission un-holds the file (the orphan sweep then removes it).
     await t.owner.query('delete from form_submissions where id = $1', [submissionId]);
     expect((await t.owner.query('select submission_id from form_files where id = $1', [held])).rows).toEqual([{ submission_id: null }]);
+  });
+});
+
+// FormOps (WP-1.07, migration 0020). Org B's contexts; the isolation suite above covers the cross-org half.
+type FormOpsCtx = Omit<TenantCtx, 'requestId' | 'orgId'>;
+const formOpsAs = <T>(ctx: FormOpsCtx, fn: (tx: Tx) => Promise<T>, orgId: string = seed.b.orgId) =>
+  withTenant(t.app.db, { orgId, requestId: 'form-ops', ...ctx }, fn);
+const ownerOf = (): FormOpsCtx => ({ actor: 'user', userId: seed.b.ownerId, perms: ['forms.read', 'forms.publish', 'ops.manage'] });
+const editorOf = (): FormOpsCtx => ({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit', 'forms.publish', 'ops.manage'] });
+const viewerOf = (): FormOpsCtx => ({ actor: 'user', userId: seed.b.viewerId, perms: ['forms.read'] });
+const respondentCtx: FormOpsCtx = { actor: 'respondent' };
+const systemCtx: FormOpsCtx = { actor: 'system' };
+const apiKeyCtx: FormOpsCtx = { actor: 'api_key', perms: ['forms.read', 'ops.manage'] };
+
+describe('form_versions are immutable (PUB-01)', () => {
+  const versionOf = async (formId: string, number = 1) =>
+    (await t.owner.query<{ id: string }>('select id from form_versions where form_id = $1 and number = $2', [formId, number])).rows[0]!.id;
+  const hashOf = async (id: string) => (await t.owner.query<{ content_hash: string }>('select content_hash from form_versions where id = $1', [id])).rows[0]!.content_hash;
+
+  it('refuses UPDATE and DELETE to fr_app (no privilege) and to the owner (trigger)', async () => {
+    const id = await versionOf(seed.b.formIds[0]);
+    for (const ctx of [editorOf(), systemCtx]) {
+      const update = await failure(formOpsAs(ctx, (tx) => tx.execute(sql`update form_versions set content_hash = 'tampered' where id = ${id}`)));
+      expect(pgCode(update), ctx.actor).toBe('42501');
+      expect(String((update as { cause?: { message?: string } }).cause?.message ?? update)).toMatch(/permission denied/);
+      const del = await failure(formOpsAs(ctx, (tx) => tx.execute(sql`delete from form_versions where id = ${id}`)));
+      expect(pgCode(del), ctx.actor).toBe('42501');
+    }
+    // The owner has every privilege and bypasses RLS: the trigger is what stops it.
+    const update = await failure(t.owner.query(`update form_versions set content_hash = 'tampered' where id = $1`, [id]));
+    expect(pgCode(update)).toBe('55000');
+    expect(String(update)).toMatch(/a published version is immutable \(UPDATE refused\)/);
+    const del = await failure(t.owner.query('delete from form_versions where id = $1', [id]));
+    expect(pgCode(del)).toBe('55000');
+    expect(String(del)).toMatch(/a published version is immutable \(DELETE refused\)/);
+    // Not even a statement that would change no row of the version gets past the privilege check.
+    expect(pgCode(await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_versions set content_hash = content_hash where false`))))).toBe('42501');
+    expect(await hashOf(id)).toBe('0');
+  });
+
+  it('still lets a publisher insert a version: with the BL-241 defaults, and a state row of its own', async () => {
+    const id = randomUUID();
+    await formOpsAs(editorOf(), (tx) =>
+      tx.execute(sql`insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash)
+                     values (${id}, ${seed.b.orgId}, ${seed.b.formIds[1]}, 2, 2, ${seed.b.editorId}, '{}', '{}', 'h2')`),
+    );
+    const { rows } = await t.owner.query('select label, engine, draft_rev, template_lineage, variables_snapshot from form_versions where id = $1', [id]);
+    expect(rows).toEqual([{ label: null, engine: 'logic@2', draft_rev: null, template_lineage: [], variables_snapshot: {} }]);
+    expect((await t.owner.query('select superseded_at, retired_at from form_version_state where version_id = $1', [id])).rows).toEqual([
+      { superseded_at: null, retired_at: null },
+    ]);
+  });
+
+  it('takes the BL-241 columns as given, and refuses a draft_rev below 1', async () => {
+    const id = randomUUID();
+    await formOpsAs(editorOf(), (tx) =>
+      tx.execute(sql`insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash, label, engine, draft_rev, template_lineage, variables_snapshot)
+                     values (${id}, ${seed.b.orgId}, ${seed.b.formIds[1]}, 3, 2, ${seed.b.editorId}, '{}', '{}', 'h3', 'Before the GST change', 'logic@2', 7, '[{"templateId":"t1"}]', '{"org.name":"Acme"}')`),
+    );
+    const { rows } = await t.owner.query('select label, draft_rev, template_lineage, variables_snapshot from form_versions where id = $1', [id]);
+    expect(rows).toEqual([{ label: 'Before the GST change', draft_rev: 7, template_lineage: [{ templateId: 't1' }], variables_snapshot: { 'org.name': 'Acme' } }]);
+    const zero = await failure(
+      t.owner.query(
+        `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash, draft_rev) values ($1, $2, $3, 4, 2, $4, '{}', '{}', 'h4', 0)`,
+        [randomUUID(), seed.b.orgId, seed.b.formIds[1], seed.b.editorId],
+      ),
+    );
+    expect(pgCode(zero)).toBe('23514');
+  });
+});
+
+describe('form_version_state', () => {
+  const stateOf = async (versionId: string) =>
+    (await t.owner.query<{ superseded_at: Date | null; retired_at: Date | null }>('select superseded_at, retired_at from form_version_state where version_id = $1', [versionId])).rows[0]!;
+  const version1 = async () => (await t.owner.query<{ id: string }>('select id from form_versions where form_id = $1 and number = 1', [seed.b.formIds[0]])).rows[0]!.id;
+
+  it('has a row for every version, and each version is in the org and form its state names', async () => {
+    const missing = await t.owner.query('select v.id from form_versions v left join form_version_state s on s.version_id = v.id where s.version_id is null');
+    expect(missing.rows).toEqual([]);
+    const mismatched = await t.owner.query('select s.version_id from form_version_state s join form_versions v on v.id = s.version_id where (v.org_id, v.form_id) <> (s.org_id, s.form_id)');
+    expect(mismatched.rows).toEqual([]);
+  });
+
+  it('lets a publisher date a version as superseded or retired, and change nothing else', async () => {
+    const id = await version1();
+    const marked = await formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_version_state set superseded_at = now() where version_id = ${id} returning version_id`));
+    expect(marked.rows).toHaveLength(1);
+    expect((await stateOf(id)).superseded_at).toBeInstanceOf(Date);
+    for (const column of ['version_id', 'org_id', 'form_id']) {
+      const err = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_version_state set ${sql.identifier(column)} = ${sql.identifier(column)} where version_id = ${id}`)));
+      expect(pgCode(err), column).toBe('42501');
+    }
+    expect(pgCode(await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`delete from form_version_state where version_id = ${id}`))))).toBe('42501');
+  });
+
+  it('is read by a respondent context and never written by it', async () => {
+    const id = await version1();
+    const seen = await formOpsAs(respondentCtx, async (tx) => (await tx.execute<{ version_id: string }>(sql`select version_id from form_version_state where version_id = ${id}`)).rows);
+    expect(seen).toEqual([{ version_id: id }]);
+    const changed = await formOpsAs(respondentCtx, (tx) => tx.execute(sql`update form_version_state set retired_at = now() where version_id = ${id} returning 1`));
+    expect(changed.rows).toEqual([]);
+    expect((await stateOf(id)).retired_at).toBeNull();
+    // Without its own row (the trigger made one, so the owner removes it first) a respondent cannot add one either.
+    const bare = randomUUID();
+    await t.owner.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash) values ($1, $2, $3, 20, 2, $4, '{}', '{}', 'h20')`,
+      [bare, seed.b.orgId, seed.b.formIds[1], seed.b.editorId],
+    );
+    await t.owner.query('delete from form_version_state where version_id = $1', [bare]);
+    const insert = sql`insert into form_version_state (version_id, org_id, form_id) values (${bare}, ${seed.b.orgId}, ${seed.b.formIds[1]})`;
+    expect(pgCode(await failure(formOpsAs(respondentCtx, (tx) => tx.execute(insert))))).toBe('42501');
+    // A publisher can, but only for the form the version belongs to: the key names org, form and version together.
+    const wrongForm = sql`insert into form_version_state (version_id, org_id, form_id) values (${bare}, ${seed.b.orgId}, ${seed.b.formIds[0]})`;
+    expect(pgCode(await failure(formOpsAs(editorOf(), (tx) => tx.execute(wrongForm))))).toBe('23503');
+    await formOpsAs(editorOf(), (tx) => tx.execute(insert));
+    expect(await stateOf(bare)).toEqual({ superseded_at: null, retired_at: null });
+  });
+});
+
+describe('form_access: the password hash is write-only for fr_app (ACC-05)', () => {
+  const asking: Array<[string, ReturnType<typeof sql>]> = [
+    ['by name', sql`select password_hash from form_access`],
+    ['through *', sql`select * from form_access`],
+    ['in a predicate', sql`select form_id from form_access where password_hash is not null`],
+    ['in a grouping', sql`select count(*) from form_access group by password_hash`],
+    ['in a RETURNING', sql`update form_access set rev = rev returning password_hash`],
+    ['as a whole row', sql`select f from form_access f`],
+    ['as JSON of the whole row', sql`select to_jsonb(f) from form_access f`],
+    ['copied into another column', sql`update form_access set password_updated_at = null, rev = length(password_hash)`],
+    ['through a conflict update', sql`insert into form_access (form_id, org_id) select form_id, org_id from form_access where false on conflict (form_id) do update set password_hash = form_access.password_hash`],
+  ];
+
+  it('raises insufficient_privilege when password_hash is selected, however it is asked for, as any actor kind', async () => {
+    for (const ctx of [editorOf(), ownerOf(), respondentCtx, systemCtx, apiKeyCtx]) {
+      for (const [how, query] of asking) {
+        const err = await failure(formOpsAs(ctx, (tx) => tx.execute(query)));
+        expect(pgCode(err), `${ctx.actor} ${how}`).toBe('42501');
+        expect(String((err as { cause?: { message?: string } }).cause?.message ?? err), `${ctx.actor} ${how}`).toMatch(/permission denied/);
+      }
+    }
+    // The same through Drizzle: the table object selects every column, so it fails; the public column list does not.
+    const err = await failure(formOpsAs(editorOf(), (tx) => tx.select().from(formAccess)));
+    expect(pgCode(err)).toBe('42501');
+  });
+
+  it('lets a query that names its columns read the rest, and shows whether a password is set without showing it', async () => {
+    const rows = await formOpsAs(editorOf(), (tx) => tx.select(formAccessPublicColumns).from(formAccess));
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.orgId === seed.b.orgId)).toBe(true);
+    expect(rows.find((r) => r.formId === seed.b.formIds[0])).toEqual({
+      formId: seed.b.formIds[0],
+      orgId: seed.b.orgId,
+      rev: 1,
+      enabled: true,
+      openAt: null,
+      closeAt: null,
+      availability: null,
+      submissionLimit: 50,
+      passwordUpdatedAt: expect.any(Date),
+      embedAllowlist: [],
+      redirectAllowlist: null,
+      screens: {},
+      acceptPreviousVersionsHours: 72,
+    });
+    expect(rows.find((r) => r.formId === seed.b.formIds[1])).toMatchObject({ submissionLimit: null, passwordUpdatedAt: null });
+  });
+
+  it('lets a member set, replace and clear a password, and reports the new rev, without reading the hash back', async () => {
+    const created = randomUUID();
+    await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [created, seed.b.orgId, seed.b.teamId, seed.b.ownerId, 'fresh form']);
+    const hashOf = async () => (await t.owner.query<{ h: string | null }>('select password_hash as h from form_access where form_id = $1', [created])).rows[0]?.h;
+    const inserted = await formOpsAs(editorOf(), (tx) =>
+      tx.execute<{ rev: number }>(sql`insert into form_access (form_id, org_id, password_hash, password_updated_at) values (${created}, ${seed.b.orgId}, 'argon2id$one', now()) returning rev`),
+    );
+    expect(inserted.rows).toEqual([{ rev: 1 }]);
+    expect(await hashOf()).toBe('argon2id$one');
+    const replaced = await formOpsAs(editorOf(), (tx) =>
+      tx.execute<{ rev: number }>(sql`update form_access set password_hash = 'argon2id$two', password_updated_at = now(), rev = rev + 1 where form_id = ${created} and rev = 1 returning rev`),
+    );
+    expect(replaced.rows).toEqual([{ rev: 2 }]);
+    expect(await hashOf()).toBe('argon2id$two');
+    // A stale rev changes nothing (the compare-and-swap of PUT .../access).
+    const stale = await formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_access set rev = rev + 1 where form_id = ${created} and rev = 1 returning rev`));
+    expect(stale.rows).toEqual([]);
+    await formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_access set password_hash = null, password_updated_at = null where form_id = ${created}`));
+    expect(await hashOf()).toBeNull();
+  });
+
+  it('keeps the form and org of a row fixed, and refuses a window that closes before it opens or a limit below 1', async () => {
+    const [row] = await formOpsAs(editorOf(), (tx) => tx.select({ formId: formAccess.formId }).from(formAccess).limit(1));
+    for (const column of ['form_id', 'org_id']) {
+      const err = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_access set ${sql.identifier(column)} = ${sql.identifier(column)} where form_id = ${row!.formId}`)));
+      expect(pgCode(err), column).toBe('42501');
+    }
+    const window = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_access set open_at = now(), close_at = now() - interval '1 hour' where form_id = ${row!.formId}`)));
+    expect(pgCode(window)).toBe('23514');
+    const limit = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_access set submission_limit = 0 where form_id = ${row!.formId}`)));
+    expect(pgCode(limit)).toBe('23514');
+    const hours = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_access set accept_previous_versions_hours = 721 where form_id = ${row!.formId}`)));
+    expect(pgCode(hours)).toBe('23514');
+    // The row of another org's form cannot be created from this one either (the key names org and form together).
+    const orgAForm = randomUUID();
+    await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [orgAForm, seed.a.orgId, seed.a.teamId, seed.a.ownerId, 'org A form without access rules']);
+    const foreignForm = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`insert into form_access (form_id, org_id) values (${orgAForm}, ${seed.b.orgId})`)));
+    expect(pgCode(foreignForm)).toBe('23503');
+  });
+
+  it('lets a respondent context read the rules and write none, and nobody delete a row', async () => {
+    const seen = await formOpsAs(respondentCtx, async (tx) => (await tx.execute<{ n: number }>(sql`select count(form_id)::int as n from form_access`)).rows[0]!.n);
+    expect(seen).toBe((await t.owner.query<{ n: number }>('select count(*)::int as n from form_access where org_id = $1', [seed.b.orgId])).rows[0]!.n);
+    expect(seen).toBeGreaterThanOrEqual(2);
+    const changed = await formOpsAs(respondentCtx, (tx) => tx.execute(sql`update form_access set enabled = false returning 1`));
+    expect(changed.rows).toEqual([]);
+    const created = randomUUID();
+    await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [created, seed.b.orgId, seed.b.teamId, seed.b.ownerId, 'another form']);
+    const insert = await failure(formOpsAs(respondentCtx, (tx) => tx.execute(sql`insert into form_access (form_id, org_id, enabled) values (${created}, ${seed.b.orgId}, false)`)));
+    expect(pgCode(insert)).toBe('42501');
+    for (const ctx of [respondentCtx, editorOf(), ownerOf(), systemCtx]) {
+      expect(pgCode(await failure(formOpsAs(ctx, (tx) => tx.execute(sql`delete from form_access`)))), ctx.actor).toBe('42501');
+    }
+    expect((await t.owner.query('select count(*)::int as n from form_access where enabled = false and org_id = $1', [seed.b.orgId])).rows[0]!.n).toBe(0);
+  });
+
+  it('form_access_password_hash() returns the hash only for a form of app_org(), to a respondent or system context', async () => {
+    const [withPassword, without] = seed.b.formIds;
+    const hashAs = (ctx: FormOpsCtx, formId: string, orgId = seed.b.orgId) => formOpsAs({ ...ctx, readOnly: true }, (tx) => formAccessPasswordHash(tx, formId), orgId);
+    expect(await hashAs(respondentCtx, withPassword)).toBe(PASSWORD_HASHES[seed.b.orgId]);
+    expect(await hashAs(systemCtx, withPassword)).toBe(PASSWORD_HASHES[seed.b.orgId]);
+    // No password set, an unknown form, and org A's form from org B's context: all null, indistinguishable.
+    expect(await hashAs(respondentCtx, without)).toBeNull();
+    expect(await hashAs(respondentCtx, randomUUID())).toBeNull();
+    expect(await hashAs(respondentCtx, seed.a.formIds[0])).toBeNull();
+    expect(await hashAs(respondentCtx, withPassword, seed.a.orgId)).toBeNull();
+    expect(await hashAs(respondentCtx, seed.a.formIds[0], seed.a.orgId)).toBe(PASSWORD_HASHES[seed.a.orgId]);
+    // A member's or an API key's context has no reason to read it; outside any tenant nothing answers.
+    for (const ctx of [editorOf(), ownerOf(), apiKeyCtx, { actor: 'platform' } as FormOpsCtx]) expect(await hashAs(ctx, withPassword), ctx.actor).toBeNull();
+    expect(await formAccessPasswordHash(t.app.db, withPassword)).toBeNull();
+  });
+});
+
+describe('form_slugs', () => {
+  it('has no delete for anyone, and only is_primary changes: a slug is never released', async () => {
+    for (const ctx of [editorOf(), ownerOf(), systemCtx, respondentCtx]) {
+      expect(pgCode(await failure(formOpsAs(ctx, (tx) => tx.execute(sql`delete from form_slugs`)))), ctx.actor).toBe('42501');
+    }
+    for (const column of ['slug', 'org_id', 'form_id', 'created_at']) {
+      const err = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`update form_slugs set ${sql.identifier(column)} = ${sql.identifier(column)}`)));
+      expect(pgCode(err), column).toBe('42501');
+    }
+  });
+
+  it('is read by a respondent context and never written by it', async () => {
+    const seen = await formOpsAs(respondentCtx, async (tx) => (await tx.execute<{ slug: string }>(sql`select slug from form_slugs order by slug`)).rows.map((r) => r.slug));
+    expect(seen).toEqual([`form-${seed.b.orgId.slice(0, 8)}`, `old-${seed.b.orgId.slice(0, 8)}`]);
+    const changed = await formOpsAs(respondentCtx, (tx) => tx.execute(sql`update form_slugs set is_primary = true returning 1`));
+    expect(changed.rows).toEqual([]);
+    const insert = await failure(
+      formOpsAs(respondentCtx, (tx) => tx.execute(sql`insert into form_slugs (slug, org_id, form_id) values ('squatted', ${seed.b.orgId}, ${seed.b.formIds[1]})`)),
+    );
+    expect(pgCode(insert)).toBe('42501');
+  });
+
+  it('allows one primary slug per form, and refuses a slug that any other form holds, in any org', async () => {
+    const second = await failure(t.owner.query(`insert into form_slugs (slug, org_id, form_id, is_primary) values ('second-primary', $1, $2, true)`, [seed.b.orgId, seed.b.formIds[0]]));
+    expect(pgCode(second)).toBe('23505');
+    const taken = `form-${seed.a.orgId.slice(0, 8)}`;
+    const crossOrg = await failure(formOpsAs(editorOf(), (tx) => tx.execute(sql`insert into form_slugs (slug, org_id, form_id) values (${taken}, ${seed.b.orgId}, ${seed.b.formIds[1]})`)));
+    expect(pgCode(crossOrg)).toBe('23505');
+  });
+});
+
+describe('form_counters (ACC-04)', () => {
+  const countOf = async (formId: string) => (await t.owner.query<{ n: number }>('select submitted_total::int as n from form_counters where form_id = $1', [formId])).rows[0]!.n;
+  const reset = (formId: string) => t.owner.query('update form_counters set submitted_total = 0 where form_id = $1', [formId]);
+
+  it('has a row for every form, made with the form', async () => {
+    const created = randomUUID();
+    await formOpsAs(editorOf(), (tx) =>
+      tx.execute(sql`insert into forms (id, org_id, team_id, owner_user_id, title) values (${created}, ${seed.b.orgId}, ${seed.b.teamId}, ${seed.b.editorId}, 'a fresh form')`),
+    );
+    expect(await countOf(created)).toBe(0);
+    const missing = await t.owner.query('select f.id from forms f left join form_counters c on c.form_id = f.id where c.form_id is null');
+    expect(missing.rows).toEqual([]);
+  });
+
+  it('lets a respondent context change submitted_total and nothing else of the row', async () => {
+    const formId = seed.b.formIds[0];
+    await reset(formId);
+    const bumped = await formOpsAs(respondentCtx, (tx) =>
+      tx.execute<{ n: number }>(sql`update form_counters set submitted_total = submitted_total + 1 where form_id = ${formId} returning submitted_total::int as n`),
+    );
+    expect(bumped.rows).toEqual([{ n: 1 }]);
+    for (const column of ['form_id', 'org_id']) {
+      const err = await failure(formOpsAs(respondentCtx, (tx) => tx.execute(sql`update form_counters set ${sql.identifier(column)} = ${sql.identifier(column)}`)));
+      expect(pgCode(err), column).toBe('42501');
+    }
+    expect(pgCode(await failure(formOpsAs(respondentCtx, (tx) => tx.execute(sql`delete from form_counters`))))).toBe('42501');
+    const created = randomUUID();
+    await t.owner.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [created, seed.b.orgId, seed.b.teamId, seed.b.ownerId, 'counter form']);
+    await t.owner.query('delete from form_counters where form_id = $1', [created]);
+    const insert = await failure(formOpsAs(respondentCtx, (tx) => tx.execute(sql`insert into form_counters (form_id, org_id) values (${created}, ${seed.b.orgId})`)));
+    expect(pgCode(insert)).toBe('42501');
+    await t.owner.query('insert into form_counters (form_id, org_id) values ($1, $2)', [created, seed.b.orgId]);
+    expect(await countOf(formId)).toBe(1);
+  });
+
+  it('is moved by respondent and system contexts only: a member or an API key changes nothing', async () => {
+    const formId = seed.b.formIds[0];
+    await reset(formId);
+    for (const ctx of [editorOf(), ownerOf(), apiKeyCtx]) {
+      const changed = await formOpsAs(ctx, (tx) => tx.execute(sql`update form_counters set submitted_total = 99 where form_id = ${formId} returning 1`));
+      expect(changed.rows, ctx.actor).toEqual([]);
+    }
+    expect(await countOf(formId)).toBe(0);
+    const system = await formOpsAs(systemCtx, (tx) => tx.execute(sql`update form_counters set submitted_total = submitted_total + 1 where form_id = ${formId} returning 1`));
+    expect(system.rows).toHaveLength(1);
+    // A place given back (failed payment) cannot take the counter below zero.
+    await formOpsAs(systemCtx, (tx) => tx.execute(sql`update form_counters set submitted_total = submitted_total - 1 where form_id = ${formId}`));
+    const below = await failure(formOpsAs(systemCtx, (tx) => tx.execute(sql`update form_counters set submitted_total = submitted_total - 1 where form_id = ${formId}`)));
+    expect(pgCode(below)).toBe('23514');
+    expect(await countOf(formId)).toBe(0);
+  });
+
+  it('with a limit of N, N concurrent guarded updates take exactly N places', async () => {
+    const formId = seed.b.formIds[1];
+    await reset(formId);
+    const limit = 5;
+    // The submit transaction's last statement: the guard and the increment are one row lock.
+    const take = () =>
+      formOpsAs(respondentCtx, async (tx) => {
+        const { rows } = await tx.execute(sql`update form_counters set submitted_total = submitted_total + 1 where form_id = ${formId} and submitted_total < ${limit} returning submitted_total`);
+        return rows.length;
+      });
+    const results = await Promise.all(Array.from({ length: 30 }, take));
+    expect(results.filter((n) => n === 1)).toHaveLength(limit);
+    expect(results.filter((n) => n === 0)).toHaveLength(25);
+    expect(await countOf(formId)).toBe(limit);
+  });
+});
+
+describe('form_favourites', () => {
+  const starredBy = (ctx: FormOpsCtx) =>
+    formOpsAs(ctx, async (tx) => (await tx.execute<{ user_id: string }>(sql`select user_id from form_favourites order by user_id`)).rows.map((r) => r.user_id));
+
+  it('shows a user their own stars and no colleague’s, whatever the role', async () => {
+    expect(await starredBy(editorOf())).toEqual([seed.b.editorId]);
+    expect(await starredBy(ownerOf())).toEqual([seed.b.ownerId]);
+    expect(await starredBy(viewerOf())).toEqual([]);
+    expect((await t.owner.query('select count(*)::int as n from form_favourites where org_id = $1', [seed.b.orgId])).rows[0]!.n).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows no actor kind other than a user any star', async () => {
+    for (const ctx of [apiKeyCtx, systemCtx, respondentCtx, { actor: 'platform' } as FormOpsCtx]) expect(await starredBy(ctx), ctx.actor).toEqual([]);
+  });
+
+  it('lets a user star and unstar for themselves only', async () => {
+    const [first, second] = seed.b.formIds;
+    const star = (ctx: FormOpsCtx, userId: string, formId: string, orgId = seed.b.orgId) =>
+      formOpsAs(ctx, (tx) => tx.execute(sql`insert into form_favourites (form_id, user_id, org_id) values (${formId}, ${userId}, ${orgId})`));
+    await star(editorOf(), seed.b.editorId, second);
+    expect(await starredBy(editorOf())).toEqual([seed.b.editorId, seed.b.editorId]);
+    // Not for a colleague, not as another actor kind, not a form of another org.
+    expect(pgCode(await failure(star(editorOf(), seed.b.viewerId, second)))).toBe('42501');
+    expect(pgCode(await failure(star(respondentCtx, seed.b.editorId, first)))).toBe('42501');
+    expect(pgCode(await failure(star(editorOf(), seed.b.editorId, seed.a.formIds[0])))).toBe('23503');
+    expect(pgCode(await failure(star(editorOf(), seed.b.editorId, seed.a.formIds[0], seed.a.orgId)))).toBe('42501');
+    // A colleague's star is out of reach of a delete; one's own goes.
+    const colleague = await formOpsAs(editorOf(), (tx) => tx.execute(sql`delete from form_favourites where user_id = ${seed.b.ownerId}`));
+    expect(colleague.rowCount).toBe(0);
+    expect(await starredBy(ownerOf())).toEqual([seed.b.ownerId]);
+    const own = await formOpsAs(editorOf(), (tx) => tx.execute(sql`delete from form_favourites where form_id = ${second}`));
+    expect(own.rowCount).toBe(1);
+    expect(await starredBy(editorOf())).toEqual([seed.b.editorId]);
+    // A star is one row per form and user.
+    expect(pgCode(await failure(star(editorOf(), seed.b.editorId, first)))).toBe('23505');
+  });
+
+  it('goes with the account, and only with that account', async () => {
+    const leaver = randomUUID();
+    await t.owner.query(`insert into users (id, email, email_norm, password_hash) values ($1, $2, $2, 'argon2id$x')`, [leaver, `leaver-${leaver}@stars.test`]);
+    await t.owner.query(`insert into memberships (org_id, user_id, role) values ($1, $2, 'viewer')`, [seed.b.orgId, leaver]);
+    await t.owner.query('insert into form_favourites (form_id, user_id, org_id) values ($1, $2, $3), ($4, $2, $3)', [seed.b.formIds[0], leaver, seed.b.orgId, seed.b.formIds[1]]);
+    const stars = async (userId: string) => (await t.owner.query<{ n: number }>('select count(*)::int as n from form_favourites where user_id = $1', [userId])).rows[0]!.n;
+    expect(await stars(leaver)).toBe(2);
+    const others = await stars(seed.b.editorId);
+    expect(others).toBeGreaterThan(0);
+    const result = await withUser(t.app.db, { userId: leaver, requestId: 'stars' }, (tx) => accountDelete(tx, leaver, { apply: true }));
+    expect(result.status).toBe('deleted');
+    expect(await stars(leaver)).toBe(0);
+    expect(await stars(seed.b.editorId)).toBe(others);
   });
 });
