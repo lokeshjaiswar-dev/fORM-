@@ -325,6 +325,8 @@ export function formRoutes(app: FastifyInstance, deps: FormRouteDeps): void {
       const userId = accountOf(request).userId;
       return withTenant(deps.db, tenantOf(request), async (tx) => {
         const now = deps.now();
+        // The form row is locked first (by this update), the draft row second: the order PUT /v1/forms/:id/draft takes
+        // them in too. Do not select the draft before this update, or a save and a rename can deadlock.
         const renamed = await tx.update(forms).set({ title, updatedAt: now, updatedBy: userId }).where(eq(forms.id, id)).returning({ id: forms.id });
         if (!renamed[0]) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
         const drafts = await tx
@@ -637,7 +639,17 @@ export function formRoutes(app: FastifyInstance, deps: FormRouteDeps): void {
       const title = parsed.data.title.trim() || 'Untitled form';
 
       const outcome = await withTenant(deps.db, tenant, async (tx) => {
-        const found = await tx.select({ updatedAt: forms.updatedAt, updatedBy: forms.updatedBy }).from(forms).where(eq(forms.id, id)).limit(1);
+        // Lock order, here and in PATCH /v1/forms/:id: the form row first, then its draft row. A rename and an autosave of
+        // the same form take the same two locks, and two transactions that take them in opposite orders deadlock (Postgres
+        // aborts one with 40P01, withTenant does not retry, and the user loses that save). NO KEY UPDATE is the strength
+        // the later `update forms` takes anyway, and unlike FOR UPDATE it lets other transactions insert rows that point at
+        // the form (versions, submissions) while this save runs.
+        const found = await tx
+          .select({ updatedAt: forms.updatedAt, updatedBy: forms.updatedBy })
+          .from(forms)
+          .where(eq(forms.id, id))
+          .limit(1)
+          .for('no key update');
         const form = found[0];
         if (!form) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
         const now = deps.now();

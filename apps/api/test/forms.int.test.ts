@@ -380,6 +380,79 @@ describe('draft writes: If-Match, compare-and-swap and the strict definition', (
     }
   });
 
+  it('takes the form row before the draft row in both PUT draft and PATCH, so a save and a rename that meet cannot deadlock', async () => {
+    const id = await createForm(a.owner, a.id, 'Lock order');
+    expect((await putDraft(a.owner, a.id, id, def(id, 'Lock order'), '0')).statusCode).toBe(200);
+
+    // Force the unlucky interleaving instead of hoping for it. A test connection holds the draft row, so the save waits
+    // there; the rename queues behind it. With the old order the save then holds the draft row and wants the form row
+    // while the rename holds the form row and wants the draft row: Postgres aborts one of them (40P01, a 500 for the user).
+    const holder = await owner.connect();
+    let released = false;
+    const release = async () => {
+      if (released) return;
+      released = true;
+      await holder.query('rollback');
+      holder.release();
+    };
+    try {
+      await holder.query('begin');
+      await holder.query('select 1 from form_drafts where form_id = $1 for update', [id]);
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid')).rows[0]!.pid;
+      // Sessions of this database waiting on a lock, not counting the test's own (it holds, it does not wait).
+      const waiting = async (): Promise<number> =>
+        Number(
+          (
+            await owner.query<{ n: string }>(
+              `select count(*) as n from pg_stat_activity where datname = current_database() and pid <> $1 and cardinality(pg_blocking_pids(pid)) > 0`,
+              [holderPid],
+            )
+          ).rows[0]!.n,
+        );
+      const until = async (n: number) => {
+        for (let i = 0; i < 200 && (await waiting()) < n; i++) await new Promise((resolve) => setTimeout(resolve, 25));
+        expect(await waiting()).toBeGreaterThanOrEqual(n);
+      };
+
+      const save = putDraft(a.owner, a.id, id, def(id, 'Saved from the builder'), '1');
+      await until(1);
+      const rename = app.inject({ method: 'PATCH', url: `/v1/forms/${id}`, headers: asWrite(a.owner, a.id), payload: { title: 'Renamed from the list' } });
+      await until(2);
+      await release();
+
+      const [saved, renamed] = await Promise.all([save, rename]);
+      expect(saved.statusCode).toBe(200);
+      expect(renamed.statusCode).toBe(200);
+    } finally {
+      await release();
+    }
+    // Both took effect, in the order the locks were granted: the save (revision 2), then the rename (revision 3).
+    const { rows } = await owner.query<{ draft_rev: number; draft_title: string; form_title: string }>(
+      `select d.draft_rev, d.draft->>'title' as draft_title, f.title as form_title from form_drafts d join forms f on f.id = d.form_id where d.form_id = $1`,
+      [id],
+    );
+    expect(rows[0]).toEqual({ draft_rev: 3, draft_title: 'Renamed from the list', form_title: 'Renamed from the list' });
+  });
+
+  it('answers repeated saves and renames of one form that run at the same time with 200 or 409, never a 500', async () => {
+    const id = await createForm(a.owner, a.id, 'Autosave while renaming');
+    expect((await putDraft(a.owner, a.id, id, def(id, 'Autosave while renaming'), '0')).statusCode).toBe(200);
+    const bob = await newUser(a.id, 'editor');
+    for (let round = 0; round < 6; round++) {
+      const { rows } = await owner.query<{ draft_rev: number }>('select draft_rev from form_drafts where form_id = $1', [id]);
+      const rev = String(rows[0]!.draft_rev);
+      const results = await Promise.all([
+        putDraft(a.owner, a.id, id, def(id, `Save ${round}`), rev),
+        app.inject({ method: 'PATCH', url: `/v1/forms/${id}`, headers: asWrite(bob, a.id), payload: { title: `Rename ${round}` } }),
+        putDraft(bob, a.id, id, def(id, `Other save ${round}`), rev),
+        app.inject({ method: 'PATCH', url: `/v1/forms/${id}`, headers: asWrite(a.owner, a.id), payload: { title: `Second rename ${round}` } }),
+      ]);
+      expect(results.map((r) => r.statusCode).filter((code) => code !== 200 && code !== 409)).toEqual([]);
+      // Both renames always succeed: a rename never compares revisions.
+      expect([results[1]!.statusCode, results[3]!.statusCode]).toEqual([200, 200]);
+    }
+  });
+
   it('lets a viewer read a draft, and gives the viewer an audited 403 on a write (BL-228)', async () => {
     const viewer = await newUser(a.id, 'viewer');
     const id = await createForm(a.owner, a.id, 'Viewer target');
