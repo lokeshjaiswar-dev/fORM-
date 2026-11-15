@@ -63,7 +63,7 @@ describe('fetchPublicForm', () => {
     expect(calls[0]?.init).toMatchObject({ credentials: 'omit', headers: { accept: 'application/json', 'x-fr-access': 'tok' } });
     const without = stubFetch(problem(404, 'NOT_FOUND'));
     await fetchPublicForm('feedback', null);
-    expect((without[0]?.init.headers as Record<string, string>)['x-fr-access']).toBeUndefined();
+    expect(without[0]?.init.headers).not.toHaveProperty('x-fr-access');
   });
 
   it('{ redirectTo } is a redirect; a 5xx or an answer that breaks the contract is unavailable', async () => {

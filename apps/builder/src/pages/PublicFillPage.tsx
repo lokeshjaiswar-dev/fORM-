@@ -106,7 +106,8 @@ export function PublicFillPage() {
 
   /** What stands in for a form's own version when the server withholds it: a blank form, so the status screen has a theme and words to use. */
   const shell = useMemo(() => {
-    const built = previewVersion(blankDefinition('status-screen'), { state: 'open' }, session.startedAt ?? (new Date().toISOString() as IsoInstant), edition);
+    if (session.startedAt === undefined) return null;
+    const built = previewVersion(blankDefinition('status-screen'), { state: 'open' }, session.startedAt, edition);
     return built.ok ? built.version : null;
   }, [session.startedAt, edition]);
 

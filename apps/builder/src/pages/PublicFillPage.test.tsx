@@ -313,11 +313,10 @@ describe('PublicFillPage: submit', () => {
     expect(api.called('GET', '/v1/p/feedback')).toHaveLength(2);
 
     // The next submission is for the new version.
-    api.calls.length = 0;
-    fakeApi({ 'POST /v1/p/feedback/submissions': taken });
+    const next = fakeApi({ 'POST /v1/p/feedback/submissions': taken });
     await user.click(screen.getByRole('button', { name: 'Submit' }));
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
-    const body = JSON.parse(String((vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit).body)) as { formVersionId: string; answers: Record<string, unknown> };
+    await waitFor(() => expect(next.called('POST', '/v1/p/feedback/submissions')).toHaveLength(1));
+    const body = next.called('POST', '/v1/p/feedback/submissions')[0]?.body as { formVersionId: string; answers: Record<string, unknown> };
     expect(body.formVersionId).toBe(V2);
     expect(body.answers).toMatchObject({ full_name: { type: 'short_text', value: 'Asha' } });
   });
