@@ -175,25 +175,34 @@ describe('routes', () => {
     expect(Object.keys((record?.doc as { blocks?: object } | undefined)?.blocks ?? {}).length).toBeGreaterThan(3);
   });
 
-  it('opens responses for a form and shows filled data', async () => {
+  it('opens responses for a form and shows the responses the API holds for it, not the preview ones kept in this browser', async () => {
     const repo = new MemoryRepository();
     const submissions = new MemorySubmissions();
     await repo.save(stored('f1', 'Feedback'));
     await submissions.create({
-      id: 's1',
+      id: 'local1',
       formId: 'f1',
       submittedAt: NOW,
-      answers: { q: { type: 'short_text', value: 'Hello' } },
-      fields: [{ key: 'q', label: 'Question', value: 'Hello' }],
+      answers: { q: { type: 'short_text', value: 'Rehearsal answer' } },
+      fields: [{ key: 'q', label: 'Question', value: 'Rehearsal answer' }],
     });
+    const grid = {
+      columns: [{ id: 'q', key: 'q', label: 'Question', type: 'short_text' }],
+      items: [{ id: 's1', receivedAt: NOW, status: 'complete', read: false, starred: false, archivedAt: null, trashedAt: null, versionNumber: 1, cells: { q: 'Hello' }, masked: [] }],
+      nextCursor: null,
+    };
+    const answer = vi.fn((_url: string) => Promise.resolve(new Response(JSON.stringify(grid), { status: 200, headers: { 'content-type': 'application/json' } })));
+    vi.stubGlobal('fetch', answer);
+    // jsdom has no layout, and a list with no height shows no rows: give the grid a screen.
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(440);
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(1200);
     renderApp(repo, '/forms', submissions);
     fireEvent.click(await screen.findByRole('link', { name: /Responses/ }));
     expect(path()).toBe('/forms/f1/responses');
-    expect(await screen.findByText(/Submitted/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View data' }));
-    expect(await screen.findByRole('heading', { name: 'Submitted answers' })).toBeInTheDocument();
-    expect(screen.getAllByText('Question').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Hello').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Hello')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Question' })).toBeInTheDocument();
+    expect(screen.queryByText('Rehearsal answer')).not.toBeInTheDocument();
+    expect(answer.mock.calls[0]?.[0]).toContain('/v1/forms/f1/submissions?');
   });
 
   it('deletes a form from the list', async () => {

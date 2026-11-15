@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { ApiProblem, ApiUnreachable, ensureSession, orgApi } from '@/auth/client';
-import type { StoredSubmission, SubmissionSummary } from '@/persistence/SubmissionsRepository';
+import { orgApi } from '@/auth/client';
 
 /*
  * The builder's side of the responses API (WP-1.15, apps/api/src/routes/submissions.ts): the grid, one response, the
@@ -162,55 +161,4 @@ export function patchSubmission(formId: string, id: string, change: { read?: boo
 export function bulkSubmissions(formId: string, action: BulkAction, ids: readonly string[]): Promise<BulkResult> {
   if (ids.length === 0 || ids.length > MAX_BULK) throw new RangeError(`a bulk action names 1 to ${MAX_BULK} responses`);
   return orgApi('POST', `${formPath(formId)}/bulk`, bulkResultSchema, { action, ids: [...ids] });
-}
-
-// The page still reads responses through these until it moves to the grid API above.
-const legacyListSchema = z.object({
-  items: z.array(
-    z.object({
-      id: z.string(),
-      formId: z.string(),
-      submittedAt: z.string(),
-      fieldCount: z.number(),
-    }),
-  ),
-});
-const legacyDetailSchema = z.object({
-  id: z.string(),
-  formId: z.string(),
-  submittedAt: z.string(),
-  locale: z.string().optional(),
-  answers: z.record(z.string(), z.unknown()),
-  fields: z.array(z.object({ key: z.string(), label: z.string(), value: z.string() })),
-});
-
-async function signedIn(): Promise<boolean> {
-  return (await ensureSession()).status === 'signed_in';
-}
-
-/** Best-effort API calls: signed-out or unreachable servers are ignored. */
-async function quiet<T>(fn: () => Promise<T>): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (err instanceof ApiUnreachable || err instanceof ApiProblem) return null;
-    return null;
-  }
-}
-
-/**
- * Responses are read only by signed-in members of the form's org (`submissions.read`, under the database's row
- * security). The session cookie and the active org ride on `orgApi`; a signed-out visitor sees the local ones only.
- */
-export async function listRemoteSubmissions(formId: string): Promise<SubmissionSummary[] | null> {
-  if (!(await signedIn())) return null;
-  const res = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions`, legacyListSchema));
-  return res?.items ?? null;
-}
-
-/** One response from the API, marked as the server's: its rows are the ones the server built, and the page shows those. */
-export async function getRemoteSubmission(formId: string, id: string): Promise<StoredSubmission | null> {
-  if (!(await signedIn())) return null;
-  const row = await quiet(() => orgApi('GET', `/v1/forms/${formId}/submissions/${id}`, legacyDetailSchema));
-  return row ? { ...row, source: 'server' } : null;
 }

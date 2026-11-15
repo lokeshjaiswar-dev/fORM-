@@ -5,26 +5,17 @@ import {
   MAX_BULK,
   PAGE_SIZE,
   bulkSubmissions,
-  getRemoteSubmission,
   getSubmission,
   gridPath,
-  listRemoteSubmissions,
   listSubmissions,
   patchSubmission,
 } from '@/persistence/submissionsApi';
 
-const api = vi.fn();
 const orgApi = vi.fn();
-let session: { status: string } = { status: 'signed_in' };
 
 vi.mock('@/auth/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/auth/client')>();
-  return {
-    ...actual,
-    api: (...args: unknown[]) => api(...args),
-    orgApi: (...args: unknown[]) => orgApi(...args),
-    ensureSession: () => Promise.resolve(session),
-  };
+  return { ...actual, orgApi: (...args: unknown[]) => orgApi(...args) };
 });
 
 const FORM = '0196f0a0-0000-7000-8000-000000000001';
@@ -228,43 +219,5 @@ describe('submissionsApi', () => {
       orgApi.mockRejectedValue(new ApiProblem(409, 'SUBMISSION_NOT_TRASHED', 'Only responses in the trash can be deleted forever'));
       await expect(bulkSubmissions(FORM, 'delete', [ROW])).rejects.toMatchObject({ status: 409, code: 'SUBMISSION_NOT_TRASHED' });
     });
-  });
-});
-
-describe('submissionsApi (the page’s earlier reads)', () => {
-  beforeEach(() => {
-    api.mockReset();
-    orgApi.mockReset();
-    session = { status: 'signed_in' };
-  });
-
-  it('lists the responses of a form in the active org, never on a public route', async () => {
-    orgApi.mockResolvedValue({ items: [{ id: 's1', formId: 'f1', submittedAt: '2026-01-01T00:00:00.000Z', fieldCount: 2 }] });
-    await expect(listRemoteSubmissions('f1')).resolves.toEqual([
-      { id: 's1', formId: 'f1', submittedAt: '2026-01-01T00:00:00.000Z', fieldCount: 2 },
-    ]);
-    expect(orgApi).toHaveBeenCalledWith('GET', '/v1/forms/f1/submissions', expect.anything());
-    expect(api).not.toHaveBeenCalled();
-  });
-
-  it('reads one response through the org route, marked as the server’s so its rows are shown as built there', async () => {
-    const row = { id: 's1', formId: 'f1', submittedAt: '2026-01-01T00:00:00.000Z', answers: {}, fields: [] };
-    orgApi.mockResolvedValue(row);
-    await expect(getRemoteSubmission('f1', 's1')).resolves.toEqual({ ...row, source: 'server' });
-    expect(orgApi).toHaveBeenCalledWith('GET', '/v1/forms/f1/submissions/s1', expect.anything());
-    expect(api).not.toHaveBeenCalled();
-  });
-
-  it('asks the API nothing while signed out', async () => {
-    session = { status: 'signed_out' };
-    await expect(listRemoteSubmissions('f1')).resolves.toBeNull();
-    await expect(getRemoteSubmission('f1', 's1')).resolves.toBeNull();
-    expect(orgApi).not.toHaveBeenCalled();
-    expect(api).not.toHaveBeenCalled();
-  });
-
-  it('treats a refusal as no remote responses', async () => {
-    orgApi.mockRejectedValue(new Error('forbidden'));
-    await expect(listRemoteSubmissions('f1')).resolves.toBeNull();
   });
 });
