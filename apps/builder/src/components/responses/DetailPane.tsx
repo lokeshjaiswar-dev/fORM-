@@ -5,9 +5,11 @@ import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { getSubmission, patchSubmission, type SubmissionDetail } from '@/persistence/submissionsApi';
+import type { ReviewDetail } from '@/persistence/reviewsApi';
 import { describeFailure } from '@/components/responses/errors';
 import { formatWhen, statusLabel, versionLabel } from '@/components/responses/format';
 import { StoredFile } from '@/components/responses/StoredFile';
+import { UnitDecisionPanel } from '@/components/review/UnitDecisionPanel';
 
 const M = defineMessages('builder', {
   'responses.detail.label': 'Response',
@@ -42,6 +44,8 @@ export interface DetailPaneProps {
   onClose: () => void;
   /** Tells the grid a flag changed, so its row follows without asking the API for the page again. */
   onFlags: (id: string, change: Flags) => void;
+  /** Tells the grid a decision settled the response (`complete` or `rejected`), so its row shows the new status without asking for the page again. */
+  onStatus?: (id: string, status: string) => void;
 }
 
 type Loaded = { phase: 'loading' } | { phase: 'failed'; text: string } | { phase: 'ready'; detail: SubmissionDetail };
@@ -50,16 +54,25 @@ type Loaded = { phase: 'loading' } | { phase: 'failed'; text: string } | { phase
  * One response as an inbox reader: its answers as the server built them (protected ones hidden), the files it holds,
  * and what the member can change on it: star it, or mark it unread. Opening a response marks it read (`PATCH read=true`
  * once the response has loaded and the API says it is unread), the way an inbox does.
+ *
+ * A response that was held for review (WP-2.33) also shows its review units and, for a checker, the decision buttons
+ * (`UnitDecisionPanel`). Its answers are then the ones of the review read, whose token a decision names, so a checker
+ * decides on what they are looking at; they are the same answers, redacted by the same server rule, as the plain read.
  */
-export function DetailPane({ formId, id, hasPrevious, hasNext, onPrevious, onNext, onClose, onFlags }: DetailPaneProps) {
+export function DetailPane({ formId, id, hasPrevious, hasNext, onPrevious, onNext, onClose, onFlags, onStatus }: DetailPaneProps) {
   // What arrived is kept with the response it is for: moving to the next response shows "loading" until its own answer is in.
   const [held, setHeld] = useState<{ id: string; loaded: Loaded } | null>(null);
   const [saving, setSaving] = useState(false);
   const [trouble, setTrouble] = useState<{ id: string; text: string } | null>(null);
+  /** The review of the response shown, as the panel last read it; null when there is none (not under review, still loading, or it failed). */
+  const [review, setReview] = useState<{ id: string; detail: ReviewDetail | null } | null>(null);
+  /** Moves on when the answers a checker read are out of date, so the plain read is made again too. */
+  const [reads, setReads] = useState(0);
   const flagged = useRef(onFlags);
   const root = useRef<HTMLElement>(null);
   const loaded: Loaded = held?.id === id ? held.loaded : { phase: 'loading' };
   const problem = trouble?.id === id ? trouble.text : null;
+  const reviewed = review?.id === id ? review.detail : null;
 
   useEffect(() => {
     flagged.current = onFlags;
@@ -93,7 +106,7 @@ export function DetailPane({ formId, id, hasPrevious, hasNext, onPrevious, onNex
     return () => {
       live = false;
     };
-  }, [formId, id]);
+  }, [formId, id, reads]);
 
   async function change(next: Flags) {
     setSaving(true);
@@ -112,6 +125,16 @@ export function DetailPane({ formId, id, hasPrevious, hasNext, onPrevious, onNex
   }
 
   const detail = loaded.phase === 'ready' ? loaded.detail : null;
+  // A response is under review when the API says it was held for it, or its status says so (it is the only way to be pending_review or rejected).
+  const underReview = detail !== null && (detail.review !== undefined || detail.status === 'pending_review' || detail.status === 'rejected');
+  // The answers of the review read when there is one: its token is what a decision names.
+  const fields = reviewed?.fields ?? detail?.fields ?? [];
+  const files = reviewed?.files ?? detail?.files ?? [];
+
+  function settled(status: string) {
+    setHeld((now) => (now?.id === id && now.loaded.phase === 'ready' ? { id, loaded: { phase: 'ready', detail: { ...now.loaded.detail, status } } } : now));
+    onStatus?.(id, status);
+  }
 
   return (
     <aside ref={root} tabIndex={-1} aria-label={t(M['responses.detail.label'])} className="flex min-h-0 flex-col overflow-y-auto bg-background outline-none lg:rounded-[12px] lg:border lg:border-border">
@@ -165,10 +188,21 @@ export function DetailPane({ formId, id, hasPrevious, hasNext, onPrevious, onNex
               </p>
             ) : null}
 
+            {underReview ? (
+              <UnitDecisionPanel
+                key={id}
+                formId={formId}
+                id={id}
+                onDetail={(read) => setReview({ id, detail: read })}
+                onSettled={settled}
+                onStale={() => setReads((n) => n + 1)}
+              />
+            ) : null}
+
             <h3 className="mt-6 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['responses.detail.answers'])}</h3>
-            {detail.fields.length === 0 ? <p className="mt-2 text-[14px] text-muted-foreground">{t(M['responses.detail.empty'])}</p> : null}
+            {fields.length === 0 ? <p className="mt-2 text-[14px] text-muted-foreground">{t(M['responses.detail.empty'])}</p> : null}
             <dl className="mt-2">
-              {detail.fields.map((field, index) => (
+              {fields.map((field, index) => (
                 <div key={field.id} className={index === 0 ? 'pb-3' : 'border-t border-border py-3'}>
                   <dt className="text-[12px] font-medium text-muted-foreground">{field.label || field.key}</dt>
                   <dd className="mt-1 text-[15px] leading-6">
@@ -187,11 +221,11 @@ export function DetailPane({ formId, id, hasPrevious, hasNext, onPrevious, onNex
               ))}
             </dl>
 
-            {detail.files.length > 0 ? (
+            {files.length > 0 ? (
               <>
                 <h3 className="mt-6 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['responses.detail.files'])}</h3>
                 <ul className="mt-2 space-y-3">
-                  {detail.files.map((file, index) => (
+                  {files.map((file, index) => (
                     <li key={file.id ?? `${file.blockId}-${index}`}>
                       <StoredFile formId={formId} file={file} />
                     </li>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Inbox } from 'lucide-react';
 import type { OnChangeFn, RowSelectionState } from '@tanstack/react-table';
 import { Button } from '@dmacq/ui';
@@ -12,6 +12,7 @@ import { BulkBar } from '@/components/responses/BulkBar';
 import { DetailPane } from '@/components/responses/DetailPane';
 import { ResponsesGrid } from '@/components/responses/ResponsesGrid';
 import { PANEL_ID, tabId } from '@/components/responses/panelIds';
+import { OPEN_PARAM } from '@/components/review/links';
 import { ResponsesToolbar } from '@/components/responses/ResponsesToolbar';
 import { describeFailure } from '@/components/responses/errors';
 import { NO_FILTERS, toGridQuery, useDebounced, hasFilters, type ResponseFilters } from '@/components/responses/filters';
@@ -95,7 +96,12 @@ export function ResponsesPage() {
   const [view, setView] = useState<View>('inbox');
   const [filters, setFilters] = useState<ResponseFilters>(NO_FILTERS);
   const [selection, setSelection] = useState<RowSelectionState>({});
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [openId, setOpenId] = useState<string | null>(() => params.get(OPEN_PARAM));
+  /** The response the address asked for, until the member opens another or closes it: the pane stays for it even when its row is not loaded. */
+  const [linkedId, setLinkedId] = useState<string | null>(openId);
+  /** Responses a decision settled while their pane was open: the status shown for the row until the API's own list says it. */
+  const [settled, setSettled] = useState<Readonly<Record<string, { from: string; to: string }>>>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -128,6 +134,7 @@ export function ResponsesPage() {
     setListedFor(queryKey);
     setSelection({});
     setOpenId(null);
+    setLinkedId(null);
     setNotice(null);
   }
 
@@ -180,10 +187,33 @@ export function ResponsesPage() {
     [id, patchRows],
   );
 
-  const rows = state.rows;
+  // A row whose response a decision has just settled shows its new status; once the API's list says anything else, its own word stands.
+  const rows = useMemo(
+    () => state.rows.map((row) => (settled[row.id]?.from === row.status ? { ...row, status: settled[row.id]?.to ?? row.status } : row)),
+    [state.rows, settled],
+  );
   const openIndex = openId === null ? -1 : rows.findIndex((row) => row.id === openId);
   const openRow = openIndex >= 0 ? rows[openIndex] : undefined;
-  const open = useCallback((rowId: string) => setOpenId(rowId), []);
+  const paneId = openRow?.id ?? (openId !== null && openId === linkedId ? openId : null);
+  const open = useCallback((rowId: string) => {
+    setOpenId(rowId);
+    setLinkedId(null);
+  }, []);
+  const step = (by: -1 | 1) => {
+    const next = rows[openIndex + by];
+    if (next) open(next.id);
+  };
+  const close = useCallback(() => {
+    setOpenId(null);
+    setLinkedId(null);
+  }, []);
+  const statusSettled = useCallback(
+    (rowId: string, status: string) => {
+      const was = state.rows.find((row) => row.id === rowId)?.status;
+      if (was !== undefined && was !== status) setSettled((now) => ({ ...now, [rowId]: { from: was, to: status } }));
+    },
+    [state.rows],
+  );
   const flagsChanged = useCallback((rowId: string, change: { read?: boolean; starred?: boolean }) => patchRows(new Set([rowId]), change), [patchRows]);
   const hasMore = state.nextCursor !== null;
 
@@ -260,17 +290,18 @@ export function ResponsesPage() {
 
       <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(view)} className="flex min-h-0 flex-1 gap-4">
         <div className="min-w-0 flex-1">{body}</div>
-        {openRow ? (
+        {paneId !== null ? (
           <div className="fixed inset-0 z-40 flex flex-col bg-background lg:static lg:z-auto lg:w-[420px] lg:shrink-0">
             <DetailPane
               formId={id}
-              id={openRow.id}
+              id={paneId}
               hasPrevious={openIndex > 0}
-              hasNext={openIndex < rows.length - 1}
-              onPrevious={() => setOpenId(rows[openIndex - 1]?.id ?? null)}
-              onNext={() => setOpenId(rows[openIndex + 1]?.id ?? null)}
-              onClose={() => setOpenId(null)}
+              hasNext={openRow !== undefined && openIndex < rows.length - 1}
+              onPrevious={() => step(-1)}
+              onNext={() => step(1)}
+              onClose={close}
               onFlags={flagsChanged}
+              onStatus={statusSettled}
             />
           </div>
         ) : null}

@@ -73,6 +73,9 @@ const detailFileSchema = z.object({
 });
 export type DetailFile = z.infer<typeof detailFileSchema>;
 
+/** One review unit of a response that was held for review (WP-2.33): its name and where it stands. The key is absent for any other response. */
+const reviewSummarySchema = z.array(z.object({ name: z.string(), state: z.string() }));
+
 const detailSchema = z.object({
   id: z.string(),
   formId: z.string(),
@@ -86,6 +89,7 @@ const detailSchema = z.object({
   locale: z.string(),
   fields: z.array(detailFieldSchema),
   files: z.array(detailFileSchema),
+  review: reviewSummarySchema.optional(),
 });
 export type SubmissionDetail = z.infer<typeof detailSchema>;
 
