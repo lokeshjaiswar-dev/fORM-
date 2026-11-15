@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AppRoutes } from '@/App';
+import { useSessionStore, type Me } from '@/auth/client';
 import { DOCUMENT_FORMAT, LEGACY_FORMAT } from '@/persistence/DocumentRepository';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
@@ -11,6 +12,14 @@ import { MemoryCustomFieldRepository, setCustomFieldRepository } from '@/fields/
 import { MemoryRepository, MemorySubmissions, block, formWith, v1Form } from '@/test/fixtures';
 
 const NOW = '2026-10-19T04:30:00.000Z';
+
+const ME: Me = {
+  user: { id: 'u1', email: 'asha@example.test', name: null, emailVerified: true, totpEnabled: false },
+  session: null,
+  orgs: [{ id: 'o1', slug: 'acme', name: 'Acme', role: 'owner' }],
+  activeOrgId: 'o1',
+};
+const signedIn = () => useSessionStore.setState({ status: 'signed_in', me: ME }, true);
 
 function Where() {
   return <span aria-label="path">{useLocation().pathname}</span>;
@@ -41,6 +50,85 @@ function stored(id: string, title: string) {
 describe('routes', () => {
   beforeEach(() => {
     setCustomFieldRepository(new MemoryCustomFieldRepository());
+    signedIn();
+  });
+
+  afterEach(() => {
+    useSessionStore.setState({ status: 'unknown' }, true);
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+  });
+
+  describe('the session gate (BL-206)', () => {
+    /** An API that answers `/v1/me` with 401 and everything else with nothing the page can use. */
+    const stubSignedOutApi = () =>
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url: string) =>
+          Promise.resolve(
+            String(url).endsWith('/v1/me')
+              ? new Response(JSON.stringify({ code: 'UNAUTHENTICATED', title: 'Sign in' }), { status: 401, headers: { 'content-type': 'application/problem+json' } })
+              : new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } }),
+          ),
+        ),
+      );
+
+    it('/forms redirects a signed-out visitor to /auth/sign-in, and remembers the page to come back to', async () => {
+      useSessionStore.setState({ status: 'signed_out' }, true);
+      renderApp(new MemoryRepository(), '/forms');
+      expect(await screen.findByRole('heading', { name: 'Sign in' }, OPENS)).toBeInTheDocument();
+      expect(path()).toBe('/auth/sign-in');
+      expect(sessionStorage.getItem('fr.afterSignIn')).toBe('/forms');
+      expect(screen.queryByText(/No forms yet/)).not.toBeInTheDocument();
+    });
+
+    it('/builder/:id is gated the same way, and never opens the form for a signed-out visitor', async () => {
+      useSessionStore.setState({ status: 'signed_out' }, true);
+      const repo = new MemoryRepository();
+      await repo.save(stored('f1', 'Feedback'));
+      renderApp(repo, '/builder/f1/preview');
+      expect(await screen.findByRole('heading', { name: 'Sign in' }, OPENS)).toBeInTheDocument();
+      expect(path()).toBe('/auth/sign-in');
+      expect(sessionStorage.getItem('fr.afterSignIn')).toBe('/builder/f1/preview');
+      expect(screen.queryByDisplayValue('Feedback')).not.toBeInTheDocument();
+    });
+
+    it('a visitor whose session is not known yet is asked for once (/v1/me); a 401 sends them to sign in', async () => {
+      stubSignedOutApi();
+      useSessionStore.setState({ status: 'unknown' }, true);
+      renderApp(new MemoryRepository(), '/forms');
+      expect(await screen.findByRole('heading', { name: 'Sign in' }, OPENS)).toBeInTheDocument();
+      expect(path()).toBe('/auth/sign-in');
+      const asked = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/v1/me'));
+      expect(asked).toHaveLength(1);
+    });
+
+    it('/f/:slug stays open to a signed-out visitor: no redirect, no session lookup', async () => {
+      stubSignedOutApi();
+      useSessionStore.setState({ status: 'signed_out' }, true);
+      renderApp(new MemoryRepository(), '/f/hello');
+      expect(await screen.findByRole('heading', { name: 'Form not found' }, OPENS)).toBeInTheDocument();
+      expect(path()).toBe('/f/hello');
+      expect(sessionStorage.getItem('fr.afterSignIn')).toBeNull();
+    });
+
+    it('says so, with a retry, when the server cannot be reached; it does not send anyone to sign in', async () => {
+      useSessionStore.setState({ status: 'unreachable' }, true);
+      renderApp(new MemoryRepository(), '/forms');
+      expect(await screen.findByRole('heading', { name: 'The server cannot be reached' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(path()).toBe('/forms');
+    });
+
+    it('a member of no org is asked to create one instead of being shown a forms list that cannot be saved', async () => {
+      useSessionStore.setState({ status: 'signed_in', me: { ...ME, orgs: [], activeOrgId: null } }, true);
+      renderApp(new MemoryRepository(), '/forms');
+      expect(await screen.findByRole('heading', { name: 'Create an organisation to start' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Set up your organisation' })).toHaveAttribute('href', '/orgs/new');
+      // The account menu stays, so there is still a way to the account pages and to sign out.
+      expect(screen.getByRole('navigation', { name: 'Account' })).toBeInTheDocument();
+      expect(screen.queryByText(/No forms yet/)).not.toBeInTheDocument();
+    });
   });
 
   it('keeps /f/:slug as the public fill page', async () => {

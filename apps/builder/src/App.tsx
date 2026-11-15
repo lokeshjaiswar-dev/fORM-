@@ -1,5 +1,11 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Toaster, TooltipProvider } from '@dmacq/ui';
+import { useEffect, type ReactNode } from 'react';
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Button, Toaster, TooltipProvider } from '@dmacq/ui';
+import { defineMessages } from '@form/i18n';
+import { t } from '@/i18n';
+import { AccountMenu } from '@/auth/AccountMenu';
+import { activeOrgOf, loadSession, useSessionStore } from '@/auth/client';
+import { rememberAfterSignIn } from '@/auth/returnTo';
 import { BuilderPage } from '@/pages/BuilderPage';
 import { PublicFillPage } from '@/pages/PublicFillPage';
 import { FormsPage } from '@/pages/FormsPage';
@@ -19,14 +25,80 @@ import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 
+const M = defineMessages('builder', {
+  'gate.unreachable_title': 'The server cannot be reached',
+  'gate.unreachable_hint': 'Check your connection, then try again.',
+  'gate.retry': 'Try again',
+  'gate.no_org_title': 'Create an organisation to start',
+  'gate.no_org_hint': 'Forms belong to an organisation. Create one to start building.',
+  'gate.no_org_create': 'Set up your organisation',
+});
+
+/**
+ * The forms list and the builder need a signed-in member of an org (BL-206): the drafts live on the server, in that
+ * org. Someone who is signed out goes to sign in and comes back to this page afterwards. The respondent's page and the
+ * account pages are outside this gate.
+ */
+function RequireSession({ children }: { children: ReactNode }) {
+  const session = useSessionStore();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (session.status === 'unknown') void loadSession();
+  }, [session.status]);
+
+  useEffect(() => {
+    if (session.status !== 'signed_out') return;
+    rememberAfterSignIn(pathname);
+    navigate('/auth/sign-in', { replace: true });
+  }, [session.status, pathname, navigate]);
+
+  if (session.status === 'signed_in') {
+    if (activeOrgOf(session.me)) return <>{children}</>;
+    return (
+      <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
+        <div className="-mt-12 mb-6 flex justify-end">
+          <AccountMenu />
+        </div>
+        <h1 className="text-[28px] font-bold">{t(M['gate.no_org_title'])}</h1>
+        <p className="mt-2 text-[15px] text-muted-foreground">{t(M['gate.no_org_hint'])}</p>
+        <Button className="mt-6" asChild>
+          <Link to="/orgs/new">{t(M['gate.no_org_create'])}</Link>
+        </Button>
+      </main>
+    );
+  }
+  if (session.status === 'unreachable') {
+    return (
+      <main className="mx-auto max-w-[720px] px-8 pt-[72px] text-foreground">
+        <h1 className="text-[28px] font-bold">{t(M['gate.unreachable_title'])}</h1>
+        <p className="mt-2 text-[15px] text-muted-foreground">{t(M['gate.unreachable_hint'])}</p>
+        <Button className="mt-6" onClick={() => void loadSession()}>
+          {t(M['gate.retry'])}
+        </Button>
+      </main>
+    );
+  }
+  return <main className="h-svh bg-background" aria-busy="true" />;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/f/:slug" element={<PublicFillPage />} />
-      <Route path="/forms" element={<FormsPage />} />
-      <Route path="/forms/:id/responses" element={<ResponsesPage />} />
+      <Route
+        element={
+          <RequireSession>
+            <Outlet />
+          </RequireSession>
+        }
+      >
+        <Route path="/forms" element={<FormsPage />} />
+        <Route path="/forms/:id/responses" element={<ResponsesPage />} />
+        <Route path="/builder/:id/preview?" element={<BuilderPage />} />
+      </Route>
       <Route path="/fields/*" element={<Navigate to="/forms" replace />} />
-      <Route path="/builder/:id/preview?" element={<BuilderPage />} />
       <Route path="/auth/sign-in" element={<SignInPage />} />
       <Route path="/auth/sign-up" element={<SignUpPage />} />
       <Route path="/auth/verify" element={<VerifyEmailPage />} />
