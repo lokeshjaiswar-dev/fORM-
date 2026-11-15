@@ -72,13 +72,18 @@ export function PublicFillPage() {
     );
   }
 
+  // Answer in one of the form's own locales: the server refuses any other. Locale detection (?lang=, browser) is
+  // WP-1.21 work; until then use the builder's locale when the form has it, otherwise the form's default.
+  const { i18n } = load.version.definition;
+  const locale = i18n.locales.some((l) => l.locale === BUILDER_LOCALE) ? BUILDER_LOCALE : i18n.defaultLocale;
+
   return (
     <main className="fr-fill min-h-svh">
       <FormRenderer
         version={load.version}
         mode="live"
         status={load.version.status}
-        locale={BUILDER_LOCALE}
+        locale={locale}
         uploader={uploader}
         session={session}
         onSubmit={async (payload: SubmitPayload) => {
