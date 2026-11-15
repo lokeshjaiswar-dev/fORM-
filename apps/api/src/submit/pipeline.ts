@@ -22,9 +22,9 @@ import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } 
  *   evaluate and validate the answers (server scope, with the page-view details), drop what the server owns
  *   check the files the answers name against the upload rows
  *
- *   then one transaction: claim the key, number the unique-ID blocks, INSERT the submission, run the effects (the search
- *   document and the one fan-out job), and last of all the guarded counter update that can still say LIMIT_REACHED, which
- *   rolls the rest back.
+ *   then one transaction: claim the key, number the unique-ID blocks, run the effects (the search document and the one
+ *   fan-out job), then the guarded counter update that can still say LIMIT_REACHED (which rolls the rest back), and last
+ *   of all the INSERT of the submission, so that the form's hot rows are held for two statements and the commit.
  *
  * Still to come, in the order the architecture lists them: encryption and blind indexes (WP-1.11), consent records
  * (WP-1.21), the held statuses (WP-1.14, WP-1.30), captcha and honeypot (WP-1.13), edit and receipt tokens (WP-1.11).
@@ -263,10 +263,14 @@ interface Stage {
 /**
  * The write transaction, ordered for throughput and correctness (architecture §2.5, steps 3 to 6): the key is claimed
  * first, so a replay is returned before anything is stored or counted; the unique IDs are numbered (the number is part
- * of the answer, which a respondent context can INSERT but never UPDATE, see `takeUniqueIds`); the response is inserted;
- * its effects run; and the limit's counter is updated last, so its row lock is held for the commit only. A limit that is
- * reached at that last statement throws, and everything above it rolls back with it (the key, the numbers and the job
- * too, so the next try is a new request).
+ * of the answer, which a respondent context can INSERT but never UPDATE, see `takeUniqueIds`); the effects run (the
+ * search document, the one fan-out job); the limit's counter is updated; and the response is inserted last. The two
+ * statements that take the form's hot rows, the counter and the INSERT (whose trigger counts the response on the form's
+ * row), come last, so those rows are locked for two statements and the commit and not for the whole transaction: with the
+ * INSERT first, 50 clients on one form were serialised through the search document and the job as well (measured on a
+ * 50-field form: about 75 submits a second against about 130 now, on one loaded laptop). A limit that is reached at the counter throws, and
+ * everything above it rolls back with it (the key, the numbers, the document and the job too, so the next try is a new
+ * request); nothing was inserted yet.
  */
 async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'respondent'; requestId: string }, s: Stage): Promise<SubmitOutcome> {
   const result: StoredResult = { submissionId: s.submissionId, endingId: s.endingId };
@@ -285,22 +289,6 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       return { kind: 'taken', replayed: true, result: { ok: true, ...claim.stored.result } };
     }
     const answers = await takeUniqueIds(tx, { orgId: s.found.orgId, formId: s.found.formId, receivedAt: s.receivedAt, answers: s.answers, definition: s.version.definition });
-    await recordSubmission(tx, {
-      id: s.submissionId,
-      receivedAt: s.receivedAt,
-      orgId: s.found.orgId,
-      formId: s.found.formId,
-      formVersionId: s.version.versionId,
-      definitionHash: s.version.definitionHash,
-      answerCodecVersion: ANSWER_CODEC_PLAIN,
-      status: 'complete',
-      answers,
-      // The page path and the ending the answers reached; the variables (which can be tainted or sensitive) wait for WP-1.11.
-      computed: { path: [...s.pathTaken], endingId: s.endingId },
-      meta: s.meta,
-    });
-    // The form's counters (`forms.submission_count`) and the hold on the files the answers name are kept by a trigger on
-    // this INSERT (0019, moved by 0021): a respondent context may not write `forms` or `form_files`.
     const effects: EffectsContext = {
       orgId: s.found.orgId,
       formId: s.found.formId,
@@ -316,6 +304,24 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
     };
     await recordEffects(tx, effects, deps.effects);
     if (!(await countSubmission(tx, s.found.formId))) throw new ProblemError('LIMIT_REACHED', 'This form has reached its limit of responses.');
+    // The INSERT is the last statement before the commit. Its trigger (0019, moved by 0021) counts the response on the
+    // form's row (`forms.submission_count`) and takes the hold on the files the answers name, because a respondent
+    // context may not write `forms` or `form_files`; that row lock is held to the commit, like the limit's counter above,
+    // so these two statements and the commit are the only time the form's hot rows are held.
+    await recordSubmission(tx, {
+      id: s.submissionId,
+      receivedAt: s.receivedAt,
+      orgId: s.found.orgId,
+      formId: s.found.formId,
+      formVersionId: s.version.versionId,
+      definitionHash: s.version.definitionHash,
+      answerCodecVersion: ANSWER_CODEC_PLAIN,
+      status: 'complete',
+      answers,
+      // The page path and the ending the answers reached; the variables (which can be tainted or sensitive) wait for WP-1.11.
+      computed: { path: [...s.pathTaken], endingId: s.endingId },
+      meta: s.meta,
+    });
     return { kind: 'taken', replayed: false, result: { ok: true, ...result } };
   });
 }

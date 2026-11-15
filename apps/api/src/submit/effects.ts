@@ -66,10 +66,11 @@ function periodOf(resetEvery: UniqueIdConfig['resetEvery'], at: Date, timeZone: 
  * submission that rolls back (a reached limit) gives its number back. The row lock is held to the commit, so the
  * numbers are gap-free in commit order.
  *
- * This runs right after the idempotency key is claimed and BEFORE the INSERT of the response, although architecture
- * §2.5 step 6 lists the counters last: the number is part of the stored answer, and a respondent context may INSERT a
- * response but never UPDATE it (`submissions_data_update`), so the answer has to carry its number when it is inserted.
- * The cost is a longer hold of this one row (the INSERT's own trigger already holds the form's row to the commit).
+ * This runs right after the idempotency key is claimed, before the search document, the job, the limit's counter and
+ * the INSERT, although architecture §2.5 step 6 lists the counters last: the number is part of the stored answer (and of
+ * its search document), and a respondent context may INSERT a response but never UPDATE it (`submissions_data_update`),
+ * so the answer has to carry its number when it is inserted. The cost is a longer hold of this one row, which only a
+ * form with a unique ID pays.
  *
  * Only a block the respondent's path reached has an answer to number; a hidden one takes no number. Blocks are numbered
  * in id order, so two transactions that number two blocks lock the rows in the same order and cannot deadlock. The page
@@ -101,8 +102,9 @@ export async function takeUniqueIds(tx: Tx, ctx: Pick<EffectsContext, 'orgId' | 
 }
 
 /**
- * What a stored response sets in motion inside its own transaction, after the INSERT and before the guarded counter
- * update that can still roll everything back, so whatever it writes is undone with the rest by a `LIMIT_REACHED`:
+ * What a stored response sets in motion inside its own transaction, before the guarded counter update that can still roll
+ * everything back and before the INSERT of the response, so whatever it writes is undone with the rest by a
+ * `LIMIT_REACHED` and holds none of the form's hot rows while it runs:
  *
  * 1. the search document: the text of the answers that are safe to search (`searchDocFor`: no `encrypt` or `sensitive`
  *    field, nothing derived from one), written to `submission_search` as the respondent context may (insert only);
