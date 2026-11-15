@@ -1,18 +1,17 @@
-import type { AuditOutcome } from '../schema/index.ts';
+import { ACCESS_EVENTS } from './events/access.ts';
+import { FORMS_EVENTS } from './events/forms.ts';
+import { PUBLISH_EVENTS } from './events/publish.ts';
+import type { AuditEventSpec } from './events/spec.ts';
+import { SUBMISSIONS_EVENTS } from './events/submissions.ts';
 
-export interface AuditEventSpec {
-  /** The outcomes this action is recorded with; `success` goes in the business transaction, the others detached. */
-  outcomes: readonly AuditOutcome[];
-  resourceType: string;
-  description: string;
-}
+export type { AuditEventSpec } from './events/spec.ts';
 
 /**
- * Every audit action the platform emits (architecture §2.7). `audit.append()` accepts only these codes, and
- * `catalogue.test.ts` checks that each emitting call site names one and that each entry is emitted somewhere.
- * Later work packages add their codes here (auth, membership, publish, FormOps, DSR, templates, …).
+ * The audit actions of auth, accounts, orgs, members, the worker, the audit chain itself and the reads that predate the
+ * per-domain files. Domains that are still being built (forms, publish, access, submissions) list their codes in
+ * `events/*.ts` instead, so parallel work packages do not edit the same lines of this file.
  */
-export const AUDIT_EVENTS = {
+export const CORE_AUDIT_EVENTS = {
   'request.authorize': {
     outcomes: ['denied'],
     resourceType: 'route',
@@ -248,6 +247,20 @@ export const AUDIT_EVENTS = {
     resourceType: 'file',
     description: 'A file attached to a submission was downloaded.',
   },
+} as const satisfies Record<string, AuditEventSpec>;
+
+/**
+ * Every audit action the platform emits (architecture §2.7). `audit.append()` accepts only these codes, and
+ * `catalogue.test.ts` checks that each emitting call site names one and that each entry is emitted somewhere.
+ * Later work packages add their codes to their domain's file under `events/` (publish, FormOps, DSR, templates, …);
+ * `events.test.ts` checks that no code is listed twice, because a spread would let the later file silently win.
+ */
+export const AUDIT_EVENTS = {
+  ...CORE_AUDIT_EVENTS,
+  ...FORMS_EVENTS,
+  ...PUBLISH_EVENTS,
+  ...ACCESS_EVENTS,
+  ...SUBMISSIONS_EVENTS,
 } as const satisfies Record<string, AuditEventSpec>;
 
 export type AuditAction = keyof typeof AUDIT_EVENTS;
