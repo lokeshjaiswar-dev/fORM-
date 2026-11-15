@@ -12,6 +12,7 @@ import { parseConfig } from '../src/config.ts';
 import { createFileStore } from '../src/files.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 import { draftWith, fieldBlock } from './publishable-draft.ts';
+import { throttleWindowSeconds } from './throttle-window.ts';
 
 const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as const;
 const ADDRESS_A = '203.0.113.10';
@@ -60,15 +61,18 @@ beforeAll(async () => {
   await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [orgId, userId, 'owner']);
   const parsed = parseConfig({ NODE_ENV: 'test', DEPLOYMENT_MODE: 'onprem', DATABASE_URL: urls.fr_app, AUTH_DEV_HEADERS: 'true', LOG_LEVEL: 'silent' });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
+  const windowSeconds = await throttleWindowSeconds(owner);
   app = await buildApp(parsed.config, {
     underPressure: false,
     files: createFileStore(dir),
     // Small budgets, so a test spends them: three uploads or two submissions per address and form, six or five per address.
+    // The window is chosen from the database's clock so that the current one has an hour left: a window that ended
+    // mid-test would restart the count (see throttle-window.ts).
     authLimits: {
-      auth_files_ip: { max: 6, windowSeconds: 600 },
-      auth_files_form: { max: 3, windowSeconds: 600 },
-      auth_submit_ip: { max: 5, windowSeconds: 600 },
-      auth_submit_form: { max: 2, windowSeconds: 600 },
+      auth_files_ip: { max: 6, windowSeconds },
+      auth_files_form: { max: 3, windowSeconds },
+      auth_submit_ip: { max: 5, windowSeconds },
+      auth_submit_form: { max: 2, windowSeconds },
     },
   });
 });

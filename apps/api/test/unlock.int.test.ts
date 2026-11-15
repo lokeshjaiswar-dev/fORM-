@@ -9,6 +9,7 @@ import { parseConfig, type ApiConfig } from '../src/config.ts';
 import { ACCESS_TOKEN_TTL_SECONDS, verifyAccessToken } from '../src/runtime/access-token.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 import { publishableDraft } from './publishable-draft.ts';
+import { throttleWindowSeconds } from './throttle-window.ts';
 
 /*
  * `POST /v1/p/:slug/unlock` (WP-1.07, ACC-05): the respondent's password check for a protected form. The route is public
@@ -62,7 +63,10 @@ beforeAll(async () => {
   });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
   config = parsed.config;
-  app = await buildApp(config, { underPressure: false, authLimits: { auth_unlock_form: { max: BUDGET, windowSeconds: 600 }, auth_unlock_ip: { max: IP_BUDGET, windowSeconds: 600 } } });
+  // The budgets are small so a test can spend them, which is only right if no window ends while it does: the window is
+  // chosen from the database's clock so that the current one has an hour left (see throttle-window.ts).
+  const windowSeconds = await throttleWindowSeconds(owner);
+  app = await buildApp(config, { underPressure: false, authLimits: { auth_unlock_form: { max: BUDGET, windowSeconds }, auth_unlock_ip: { max: IP_BUDGET, windowSeconds } } });
   protectedForm = await publish('Protected form');
   openForm = await publish('Open form');
   const set = await member('PUT', `/v1/forms/${protectedForm.id}/access/password`, { password: PASSWORD });
