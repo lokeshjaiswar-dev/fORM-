@@ -199,14 +199,42 @@ describe('accepting the version a newer one replaced (F-34, frozen deps.now)', (
     expect(await stored(f.id)).toBe(2);
   });
 
+  it('stamps publish and republish with the app’s clock, so the window runs from the moment the newer version went live (clock frozen across publish, republish and submit)', async () => {
+    const publishedAt = new Date();
+    clock = publishedAt;
+    const f = await publish('Window frozen');
+    // The newer version goes live an hour after the first, with no real time passing: only the app's clock moves.
+    const republishedAt = new Date(publishedAt.getTime() + HOUR);
+    clock = republishedAt;
+    const next = await publishAgain(f.id);
+    const stamped = await owner.query<{ number: number; published_at: Date; superseded_at: Date | null }>(
+      `select v.number, v.published_at, s.superseded_at from form_versions v join form_version_state s on s.version_id = v.id where v.form_id = $1 order by v.number`,
+      [f.id],
+    );
+    expect(stamped.rows.map((r) => [r.number, r.published_at.toISOString(), r.superseded_at?.toISOString() ?? null])).toEqual([
+      [1, publishedAt.toISOString(), republishedAt.toISOString()],
+      [2, republishedAt.toISOString(), null],
+    ]);
+
+    // 71 hours after the republish (not after the first publish, 72 hours back): the old version still takes answers.
+    clock = new Date(republishedAt.getTime() + 71 * HOUR);
+    const inside = await submit(f.slug, f.versionId);
+    expect(inside.statusCode, inside.body).toBe(200);
+    // 73 hours after it: refused, whichever version the page was built from.
+    clock = new Date(republishedAt.getTime() + 73 * HOUR);
+    const outside = await submit(f.slug, f.versionId);
+    expect(outside.statusCode).toBe(409);
+    expect(outside.json()).toMatchObject({ code: 'VERSION_SUPERSEDED' });
+    expect((await submit(f.slug, next.versionId)).statusCode).toBe(200);
+    expect(await stored(f.id)).toBe(2);
+  });
+
   it('measures the window from the moment the newer version went live, and a window of exactly its length is over', async () => {
     clock = new Date();
     const f = await publish('Window edge');
     await publishAgain(f.id);
-    // The publish route stamps the moment the newer version went live with the database's clock, not the app's, so the
-    // edge is read from the row.
-    const state = await owner.query<{ superseded_at: Date }>('select superseded_at from form_version_state where version_id = $1', [f.versionId]);
-    const republishedAt = state.rows[0]!.superseded_at;
+    // The republish was stamped with the app's clock, so the edge is the clock itself and no row has to be read for it.
+    const republishedAt = clock;
     clock = new Date(republishedAt.getTime() + 72 * HOUR - 1);
     expect((await submit(f.slug, f.versionId)).statusCode).toBe(200);
     clock = new Date(republishedAt.getTime() + 72 * HOUR);

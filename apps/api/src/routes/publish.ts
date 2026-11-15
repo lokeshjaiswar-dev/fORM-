@@ -343,7 +343,10 @@ export function publishRoutes(app: FastifyInstance, deps: PublishDeps): void {
         const [last] = await tx.select({ n: max(formVersions.number) }).from(formVersions).where(eq(formVersions.formId, id));
         const number = (last?.n ?? 0) + 1;
         const versionId = randomUUID();
-        const now = new Date();
+        // The app's clock, not the process's: the moment a version went live and the moment it was superseded start the window
+        // in which submit accepts the old version (F-34), and submit judges that window at `deps.now()`, so a test that
+        // freezes the clock has to freeze these too.
+        const now = deps.now();
         const { definition } = outcome;
         await tx.insert(formVersions).values({
           id: versionId,
