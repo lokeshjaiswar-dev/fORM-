@@ -322,11 +322,11 @@ The full spec is `06-templates.md`. These rows replace BLD-13, DSN-03 and DSN-09
 
 | ID | Feature | JotForm behaviour | fORM- today | Phase | Cx | Notes |
 |---|---|---|---|---|---|---|
-| NOT-01 | SMTP sender configuration per org (host, port, TLS, test email), plus a platform default sender | Account senders: OAuth or custom SMTP | Missing | P1 | M | SMTP adapter (FND-17). Credentials encrypted with KMS |
-| NOT-02 | Owner notification email(s) on submission: To/CC/BCC, default answers table, hide empty fields, several per form | Notification email | Missing | P1 | M | Sent through pg-boss. Sensitive fields masked in emails by default (CMP-03) |
-| NOT-03 | Autoresponder to the respondent (to an email field), several per form | Autoresponder | Missing | P1 | M | |
-| NOT-04 | Merge tags in subject, body, recipients and reply-to; sender name; reply-to from a field | Form field tags, Reply-To | Missing | P1 | S | |
-| NOT-05 | Email delivery log with retries | Account History > Emails | Missing | P1 | S | SOC 2 evidence |
+| NOT-01 | SMTP sender configuration per org (host, port, TLS, test email), plus a platform default sender | Account senders: OAuth or custom SMTP | Have: per-org senders with a sealed SMTP URL (the builder shows host, port, encryption and user name, never the password) and a test send to the caller's own address; the platform mailer sends when a notification names no sender (WP-1.16, 16 Nov 2026). No `dkim_status` yet | P1 | M | SMTP adapter (FND-17). Credentials encrypted with KMS |
+| NOT-02 | Owner notification email(s) on submission: To/CC/BCC, default answers table, hide empty fields, several per form | Notification email | Have: owner notifications to fixed addresses, members, the form's owner and the org's admins, with an answers table that hides empty fields, up to 25 per form; answers pass the purpose filter and each field's own masking, and a recipient outside the people who may read answers needs `data.route` (WP-1.16) | P1 | M | Sent through pg-boss. Sensitive fields masked in emails by default (CMP-03) |
+| NOT-03 | Autoresponder to the respondent (to an email field), several per form | Autoresponder | Have: a reply to an email field of the form, used only when that field is inside the notification's purposes (WP-1.16). The forced withdrawal link waits for WP-1.21 (BL-309) | P1 | M | |
+| NOT-04 | Merge tags in subject, body, recipients and reply-to; sender name; reply-to from a field | Form field tags, Reply-To | Partial: merge tags in the subject and body (an Insert field menu in the builder), HTML-escaped; the worker also resolves a notification's `fromName` and `replyTo` (an address, a member or an email field), but the builder edits neither (WP-1.16) | P1 | S | |
+| NOT-05 | Email delivery log with retries | Account History > Emails | Partial: every message has a log row (masked recipients, status, attempts, last error, sent time) that the form's Email log tab shows a page at a time, and failed sends are retried 8 times; the 365-day purge is not built (WP-1.16, BL-302) | P1 | S | SOC 2 evidence |
 | NOT-06 | Rich email template editor: sanitised, preview, test send, action buttons | WYSIWYG, HTML source, Email Copilot | Missing | P2 | M | Uses the same AST as rich text. P1 ships a plain template with tags |
 | NOT-07 | Attachments: uploaded files, submission PDF, PDF password, one static file | Attachments tab | Missing | P2 | M | Size caps. Sensitive files sent as links instead |
 | NOT-08 | Send on submission edit / "update email" sync | When a Submission is Edited | Missing | P2 | S | |
@@ -408,7 +408,7 @@ Captcha → FLD-29. Unique submission → ACC-07.
 
 | ID | Feature | JotForm behaviour | fORM- today | Phase | Cx | Notes |
 |---|---|---|---|---|---|---|
-| EXP-01 | Export all, selected or filtered submissions to CSV / Excel | Download All | Missing | P1 | M | Async worker job. CSV formula-injection escaping. Every export is audited |
+| EXP-01 | Export all, selected or filtered submissions to CSV / Excel | Download All | Partial: CSV and XLSX of all responses, the selected ones or a received-at range, built by a worker job and downloaded through the API, formula-injection escaped, audited and written to the `disclosures` ledger (WP-1.17); the grid's other filters are not carried (BL-299) | P1 | M | Async worker job. CSV formula-injection escaping. Every export is audited |
 | EXP-02 | Download uploaded files (single and zip) | Download files | Missing | P1 | S | Short-lived signed URLs |
 | EXP-03 | Default submission PDF and print view | Automatic default PDF | Missing | P1 | M | Headless Chromium in an isolated worker image with no network, bundled Noto fonts (correct Indic shaping), works air-gapped. No pdf-lib text path: it cannot shape Indic scripts |
 | EXP-04 | Bulk PDF export (zip) | Default document zipped and emailed | Missing | P2 | S | |
@@ -444,7 +444,7 @@ Captcha → FLD-29. Unique submission → ACC-07.
 | WFL-06 | Document e-signature product (upload PDF, signer roles, signing order, audit trail) | Jotform Sign | Missing | P4 | XL | A separate product |
 | WFL-07 | Signature field audit metadata (timestamp, IP hash, version hash, consent statement) | Sign audit trail only | Missing | P2 | S | (exceeds) Basic e-sign evidence on the form signature |
 | WFL-08 | Aadhaar eSign / DSC signing (Indian IT Act 2000) | Not offered | Missing | P4 | L | (exceeds) Regional differentiator after feature match. Needs an ESP partner |
-| WFL-09 | Section-level maker-checker review: each review unit (page, section or section-break range) of a submission approved, rejected or returned by a checker from its group; submission final only when every required unit is approved; maker ≠ checker enforced on the server; append-only decisions | Not offered (approvals are per submission) | Missing | P2 (proposed) | L | (exceeds) Client demo ask, Nov 2026 (delivery plan §10) → WP-2.33. Not counted until signed off (R6, D22). Works air-gapped. Decisions in the audit chain; SOC 2 segregation-of-duties evidence |
+| WFL-09 | Section-level maker-checker review: each review unit (page, section or section-break range) of a submission approved, rejected or returned by a checker from its group; submission final only when every required unit is approved; maker ≠ checker enforced on the server; append-only decisions | Not offered (approvals are per submission) | Partial: slice 1 on `wf/next` (WP-2.33, 16 Nov 2026): review units on pages and section breaks, review groups, `review_open()` and `review_decide()` (four-eyes rule, order, answers hash, append-only decisions), a reviewer queue and decision panel, `own_unit` redaction; reason codes only. No return flow, notes, reviewer emails or respondent receipt (BL-287 to BL-289) | P2 (proposed) | L | (exceeds) Client demo ask, Nov 2026 (delivery plan §10) → WP-2.33. Not counted until signed off (R6, D22). Works air-gapped. Decisions in the audit chain; SOC 2 segregation-of-duties evidence |
 
 ## 19. Payments (PAY)
 
@@ -473,7 +473,7 @@ The Nov 2026 client demo asked for payments (delivery plan §10). The design is 
 
 | ID | Feature | JotForm behaviour | fORM- today | Phase | Cx | Notes |
 |---|---|---|---|---|---|---|
-| INT-01 | Webhooks per form: several, HMAC-signed, retries with backoff, delivery log, replay | Webhooks (POST, 30 s timeout) | Missing | P1 | M | (exceeds) Signing and replay. Every webhook declares purposes and is listed as a notice recipient; only fields of those purposes that are granted or legitimate-use are sent. Configuring one needs `data.route`. Works on-prem to internal endpoints |
+| INT-01 | Webhooks per form: several, HMAC-signed, retries with backoff, delivery log, replay | Webhooks (POST, 30 s timeout) | Have: several per form, HMAC-SHA256 signed (recipe in [webhook-signatures.md](webhook-signatures.md)), retried with backoff, switched off after 50 failures in a row, a delivery log with Replay, an SSRF guard, required purposes and `data.route`, a `disclosures` row per delivery (WP-1.18). The condition filter and every event but created and updated are not sent (BL-305, BL-306) | P1 | M | (exceeds) Signing and replay. Every webhook declares purposes and is listed as a notice recipient; only fields of those purposes that are granted or legitimate-use are sent. Configuring one needs `data.route`. Works on-prem to internal endpoints |
 | INT-02 | Public REST API (forms, versions, questions, submissions, files, webhooks, reports), OpenAPI generated from the zod schemas | REST API (user, forms, questions, properties, submissions, reports, folders) | Missing | P2 | L | The P1 internal API is designed with the same shape |
 | INT-03 | API keys with scopes (read / full / per-form), rotation, per-plan rate limits | Read or Full keys, daily limits | Missing | P2 | M | Key use is audited |
 | INT-04 | Zapier and Make apps; n8n node (on-prem friendly) | Official Zapier app, Make, Power Automate (Enterprise) | Missing | P2 | M | Covers the long tail of the catalogue |
@@ -600,7 +600,7 @@ Each row is counted once, at its own Phase. The three pointer rows (BLD-13, DSN-
 
 **Feature match is done when every P0, P1 and P2 row has shipped: 306 rows** (P0 46, P1 88, P2 172).
 
-**Proposed rows** (Phase "P2 (proposed)") are not in these counts until the PM and tech lead sign them off with a matching deferral (delivery plan R6). Open proposals: WFL-09 (Nov 2026 client demo, decision D22). The other demo asks with no row are listed in delivery plan §10.
+**Proposed rows** (Phase "P2 (proposed)") are not in these counts until the PM and tech lead sign them off with a matching deferral (delivery plan R6). Open proposals: WFL-09 (Nov 2026 client demo, decision D22; its slice 1 is built on `wf/next`, see WP-2.33 in the delivery plan). The other demo asks with no row are listed in delivery plan §10.
 
 **Changes in v1.1** (see `05-review-log.md`): +33 TPL rows; BLD-13, DSN-03 and DSN-09 became pointers; CMP-05, CMP-10 and CMP-13 moved from P2 to P1 for DPDP Rules commencement; new rows CMP-21 to CMP-24, TPL-32 and TPL-33.
 
