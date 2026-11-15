@@ -201,7 +201,7 @@ describe('members', () => {
 describe('org settings', () => {
   it('saves only what changed', async () => {
     answers['GET /v1/org'] = () => ({ status: 200, body: ORG('owner', OWNER_PERMS) });
-    answers['GET /v1/org/settings'] = () => ({ status: 200, body: { editorsApproveNotice: false, inviteDays: 7 } });
+    answers['GET /v1/org/settings'] = () => ({ status: 200, body: { editorsApproveNotice: false, inviteDays: 7, reviewCheckersMfa: true } });
     answers['PATCH /v1/org'] = () => ({ status: 200, body: {} });
     answers['PATCH /v1/org/settings'] = () => ({ status: 200, body: {} });
     at('/org/settings');
@@ -211,6 +211,27 @@ describe('org settings', () => {
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
     expect(sent('PATCH', '/v1/org')[0]?.body).toEqual({ timeZone: 'UTC' });
     expect(sent('PATCH', '/v1/org/settings')[0]?.body).toEqual({ editorsApproveNotice: true });
+  });
+
+  it('shows the checkers two-factor rule as on by default, and turns it off and on again with a one-key save each time', async () => {
+    answers['GET /v1/org'] = () => ({ status: 200, body: ORG('owner', OWNER_PERMS) });
+    answers['GET /v1/org/settings'] = () => ({ status: 200, body: { editorsApproveNotice: false, inviteDays: 7, reviewCheckersMfa: true } });
+    answers['PATCH /v1/org/settings'] = (body) => ({ status: 200, body });
+    at('/org/settings');
+    const toggle = await screen.findByRole('switch', { name: 'Checkers must use two-factor sign-in' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+    expect(sent('PATCH', '/v1/org/settings')).toHaveLength(1);
+    expect(sent('PATCH', '/v1/org/settings')[0]?.body).toEqual({ reviewCheckersMfa: false });
+    expect(sent('PATCH', '/v1/org')).toEqual([]);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Checkers must use two-factor sign-in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(sent('PATCH', '/v1/org/settings')).toHaveLength(2));
+    expect(sent('PATCH', '/v1/org/settings')[1]?.body).toEqual({ reviewCheckersMfa: true });
   });
 
   it('tells members without org.settings so', async () => {

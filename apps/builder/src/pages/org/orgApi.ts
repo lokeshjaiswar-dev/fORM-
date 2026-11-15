@@ -40,7 +40,12 @@ export type InviteRow = z.infer<typeof inviteSchema>;
 export const invitesSchema = z.object({ items: z.array(inviteSchema) });
 export const invitedSchema = z.object({ invite: inviteSchema, link: z.string(), emailed: z.boolean() });
 export const accessLinkSchema = z.object({ link: z.string(), purpose: z.string(), expiresAt: z.string() });
-export const settingsSchema = z.object({ editorsApproveNotice: z.boolean(), inviteDays: z.number() });
+export const settingsSchema = z.object({
+  editorsApproveNotice: z.boolean(),
+  inviteDays: z.number(),
+  /** WP-2.33: a checker must have two-factor sign-in on to decide a review unit. On unless an owner or admin turns it off. */
+  reviewCheckersMfa: z.boolean(),
+});
 export type OrgSettings = z.infer<typeof settingsSchema>;
 
 /** Mirrors the API (`canManage`): owners manage everyone; admins everyone but owners, and cannot make owners. */

@@ -1053,6 +1053,8 @@
   "org_settings.loading": "Loading…",
   "org_settings.locale": "Language",
   "org_settings.name": "Organisation name",
+  "org_settings.review_mfa": "Checkers must use two-factor sign-in",
+  "org_settings.review_mfa_hint": "A checker who has not turned on two-factor sign-in for their own account cannot approve or reject part of a response. Turn this off to let them decide without it.",
   "org_settings.save": "Save",
   "org_settings.saved": "Saved.",
   "org_settings.time_zone": "Time zone",

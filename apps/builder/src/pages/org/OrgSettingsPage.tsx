@@ -19,6 +19,8 @@ const M = defineMessages('builder', {
   'org_settings.defaults_hint': 'Defaults for new forms in this organisation.',
   'org_settings.editors_notice': 'Editors may approve privacy notices',
   'org_settings.invite_days': 'Invitations expire after (days)',
+  'org_settings.review_mfa': 'Checkers must use two-factor sign-in',
+  'org_settings.review_mfa_hint': 'A checker who has not turned on two-factor sign-in for their own account cannot approve or reject part of a response. Turn this off to let them decide without it.',
   'org_settings.save': 'Save',
   'org_settings.saved': 'Saved.',
   'org_settings.denied': 'Only owners and admins can change these settings.',
@@ -32,6 +34,7 @@ interface Form {
   dateFormat: string;
   editorsApproveNotice: boolean;
   inviteDays: number;
+  reviewCheckersMfa: boolean;
 }
 
 /** `/org/settings`: the org's name and defaults (WSP-09) and its settings; owners and admins (org.settings). */
@@ -76,7 +79,7 @@ export function OrgSettingsPage() {
     setNotice(null);
     try {
       const org = Object.fromEntries((['name', 'locale', 'timeZone', 'dateFormat'] as const).filter((k) => form[k] !== initial[k]).map((k) => [k, form[k]]));
-      const settings = Object.fromEntries((['editorsApproveNotice', 'inviteDays'] as const).filter((k) => form[k] !== initial[k]).map((k) => [k, form[k]]));
+      const settings = Object.fromEntries((['editorsApproveNotice', 'inviteDays', 'reviewCheckersMfa'] as const).filter((k) => form[k] !== initial[k]).map((k) => [k, form[k]]));
       if (Object.keys(org).length > 0) await orgApi('PATCH', '/v1/org', null, org);
       if (Object.keys(settings).length > 0) await orgApi('PATCH', '/v1/org/settings', null, settings);
       setInitial(form);
@@ -123,6 +126,13 @@ export function OrgSettingsPage() {
             {t(M['org_settings.editors_notice'])}
             <Switch checked={form.editorsApproveNotice} onCheckedChange={(v) => set('editorsApproveNotice', v)} aria-label={t(M['org_settings.editors_notice'])} />
           </label>
+          <div className="space-y-1">
+            <label className="flex items-center justify-between gap-3 text-[13px] font-medium text-foreground">
+              {t(M['org_settings.review_mfa'])}
+              <Switch checked={form.reviewCheckersMfa} onCheckedChange={(v) => set('reviewCheckersMfa', v)} aria-label={t(M['org_settings.review_mfa'])} />
+            </label>
+            <p className="text-[13px] text-muted-foreground">{t(M['org_settings.review_mfa_hint'])}</p>
+          </div>
           <Field label={t(M['org_settings.invite_days'])}>
             <Input type="number" min={1} max={30} value={form.inviteDays} onChange={(e) => set('inviteDays', Number(e.target.value))} required />
           </Field>
