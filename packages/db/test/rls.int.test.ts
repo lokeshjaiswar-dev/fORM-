@@ -80,6 +80,7 @@ const TABLES: Record<string, TableSpec> = {
     touch: 'locale',
     update: 0,
     delete: 0,
+    visibleTo: ['system'],
     insertForeign: (s) =>
       sql`insert into form_submissions (id, org_id, form_id, answers, fields)
           values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, '{}', '[]')`,
@@ -90,6 +91,7 @@ const TABLES: Record<string, TableSpec> = {
     touch: 'name',
     update: 'denied',
     delete: 0,
+    visibleTo: ['system'],
     insertForeign: (s) =>
       sql`insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256)
           values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, 'upload', 'cv.pdf', 'application/pdf', 4, ${'0'.repeat(64)})`,
@@ -360,5 +362,166 @@ describe('submission_search data access (architecture §2.2, C-M8)', () => {
     expect(all.length).toBe(await ownCount());
     expect((await visible({ actor: 'user', userId: seed.b.viewerId, perms: ['submissions.read'] })).sort()).toEqual(all.sort());
     expect((await visible({ actor: 'api_key', perms: ['submissions.read'] })).sort()).toEqual(all.sort());
+  });
+});
+
+describe('form_submissions and form_files data access (architecture §2.2, SR-5)', () => {
+  type Ctx = Omit<TenantCtx, 'requestId' | 'orgId'>;
+  const as = <T>(ctx: Ctx, fn: (tx: Tx) => Promise<T>) => withTenant(t.app.db, { orgId: seed.b.orgId, requestId: 'data-access', ...ctx }, fn);
+  const respondent: Ctx = { actor: 'respondent' };
+  const noRead = (): Ctx => ({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit', 'forms.publish', 'submissions.export'] });
+  const readerCtx = (): Ctx => ({ actor: 'user', userId: seed.b.viewerId, perms: ['forms.read', 'submissions.read'] });
+  const rows = async (table: 'form_submissions' | 'form_files', ctx: Ctx) =>
+    as(ctx, async (tx) => Number((await tx.execute<{ n: string }>(sql`select count(*)::text as n from ${sql.identifier(table)}`)).rows[0]!.n));
+  const ownRows = async (table: 'form_submissions' | 'form_files') =>
+    Number((await t.owner.query<{ n: string }>(`select count(*)::text as n from ${table} where org_id = $1`, [seed.b.orgId])).rows[0]!.n);
+  const insertFile = (id: string, formId = seed.b.formIds[0], blockId = 'cv') =>
+    t.owner.query(`insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256) values ($1, $2, $3, $4, 'cv.pdf', 'application/pdf', 4, $5)`, [
+      id,
+      seed.b.orgId,
+      formId,
+      blockId,
+      'a'.repeat(64),
+    ]);
+
+  it('lets a respondent transaction insert a submission and a file row, and nothing more: no read, change or delete', async () => {
+    const submissionId = randomUUID();
+    const fileId = randomUUID();
+    await as(respondent, async (tx) => {
+      await tx.execute(sql`insert into form_submissions (id, org_id, form_id, answers, fields) values (${submissionId}, ${seed.b.orgId}, ${seed.b.formIds[0]}, '{"q":{"type":"short_text","value":"private"}}', '[]')`);
+      await tx.execute(
+        sql`insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256) values (${fileId}, ${seed.b.orgId}, ${seed.b.formIds[0]}, 'cv', 'cv.pdf', 'application/pdf', 4, ${'b'.repeat(64)})`,
+      );
+    });
+    const submissions = await ownRows('form_submissions');
+    const files = await ownRows('form_files');
+    expect(submissions).toBeGreaterThan(0);
+    expect(files).toBeGreaterThan(0);
+    expect(await rows('form_submissions', respondent)).toBe(0);
+    expect(await rows('form_files', respondent)).toBe(0);
+    const changed = await as(respondent, (tx) => tx.execute(sql`update form_submissions set locale = 'hi-IN' returning 1`));
+    expect(changed.rows).toEqual([]);
+    for (const table of ['form_submissions', 'form_files'] as const) {
+      const removed = await as(respondent, (tx) => tx.execute(sql`delete from ${sql.identifier(table)} returning 1`));
+      expect(removed.rows, table).toEqual([]);
+    }
+    expect(await ownRows('form_submissions')).toBe(submissions);
+    expect(await ownRows('form_files')).toBe(files);
+    // The file row can neither be read back as the insert's RETURNING, nor by id.
+    const returning = await failure(as(respondent, (tx) => tx.execute(sql`insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256) values (${randomUUID()}, ${seed.b.orgId}, ${seed.b.formIds[0]}, 'cv', 'x', 'x', 1, 'x') returning id`)));
+    expect(pgCode(returning)).toBe('42501');
+  });
+
+  it('shows a respondent the submissions whose verified token it holds, and still no file rows', async () => {
+    const mine = randomUUID();
+    await t.owner.query(`insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, '{}', '[]')`, [mine, seed.b.orgId, seed.b.formIds[0]]);
+    const seen = await as({ actor: 'respondent', subjectIds: [mine] }, async (tx) => (await tx.execute<{ id: string }>(sql`select id from form_submissions`)).rows.map((r) => r.id));
+    expect(seen).toEqual([mine]);
+    expect(await rows('form_files', { actor: 'respondent', subjectIds: [mine] })).toBe(0);
+  });
+
+  it('hides both tables from members and API keys without submissions.read, and lets them change nothing', async () => {
+    for (const ctx of [noRead(), { actor: 'api_key', perms: ['forms.read', 'forms.edit'] } as Ctx]) {
+      expect(await rows('form_submissions', ctx)).toBe(0);
+      expect(await rows('form_files', ctx)).toBe(0);
+      const submissions = await ownRows('form_submissions');
+      const files = await ownRows('form_files');
+      expect((await as(ctx, (tx) => tx.execute(sql`update form_submissions set locale = 'hi-IN' returning 1`))).rows).toEqual([]);
+      expect((await as(ctx, (tx) => tx.execute(sql`delete from form_submissions returning 1`))).rows).toEqual([]);
+      expect((await as(ctx, (tx) => tx.execute(sql`delete from form_files returning 1`))).rows).toEqual([]);
+      expect([await ownRows('form_submissions'), await ownRows('form_files')]).toEqual([submissions, files]);
+    }
+  });
+
+  it('shows them to readers and system jobs; deleting needs submissions.delete or a system job', async () => {
+    const all = await ownRows('form_submissions');
+    const files = await ownRows('form_files');
+    expect(await rows('form_submissions', readerCtx())).toBe(all);
+    expect(await rows('form_files', readerCtx())).toBe(files);
+    expect(await rows('form_submissions', { actor: 'system' })).toBe(all);
+    // A reader may read, not delete or edit.
+    expect((await as(readerCtx(), (tx) => tx.execute(sql`delete from form_files returning 1`))).rows).toEqual([]);
+    expect((await as(readerCtx(), (tx) => tx.execute(sql`update form_submissions set locale = 'hi-IN' returning 1`))).rows).toEqual([]);
+    const id = randomUUID();
+    await insertFile(id);
+    const deleter: Ctx = { actor: 'user', userId: seed.b.ownerId, perms: ['submissions.read', 'submissions.delete'] };
+    expect((await as(deleter, (tx) => tx.execute(sql`delete from form_files where id = ${id} returning 1`))).rows).toHaveLength(1);
+    const again = randomUUID();
+    await insertFile(again);
+    expect((await as({ actor: 'system' }, (tx) => tx.execute(sql`delete from form_files where id = ${again} returning 1`))).rows).toHaveLength(1);
+  });
+
+  it('never lets a respondent context write forms: no update, no insert, no delete', async () => {
+    const before = (await t.owner.query<{ title: string }>('select title from forms where id = $1', [seed.b.formIds[0]])).rows[0]!.title;
+    const update = await as(respondent, (tx) => tx.execute(sql`update forms set title = 'hijacked', submission_count = 999 where id = ${seed.b.formIds[0]}`));
+    expect(update.rowCount).toBe(0);
+    const del = await as(respondent, (tx) => tx.execute(sql`delete from forms where id = ${seed.b.formIds[1]}`));
+    expect(del.rowCount).toBe(0);
+    const insert = await failure(
+      as(respondent, (tx) => tx.execute(sql`insert into forms (id, org_id, team_id, owner_user_id, title) values (${randomUUID()}, ${seed.b.orgId}, ${seed.b.teamId}, ${seed.b.ownerId}, 'planted')`)),
+    );
+    expect(pgCode(insert)).toBe('42501');
+    expect((await t.owner.query<{ title: string }>('select title from forms where id = $1', [seed.b.formIds[0]])).rows[0]!.title).toBe(before);
+    // Members still edit their forms.
+    const renamed = await as({ actor: 'user', userId: seed.b.editorId, perms: ['forms.read', 'forms.edit'] }, (tx) =>
+      tx.execute(sql`update forms set title = ${before} where id = ${seed.b.formIds[0]}`),
+    );
+    expect(renamed.rowCount).toBe(1);
+  });
+
+  it('form_files_check tells a respondent only what the upload route recorded, for ids of this form of its own org', async () => {
+    const mine = randomUUID();
+    const otherForm = randomUUID();
+    const foreign = randomUUID();
+    await insertFile(mine, seed.b.formIds[0], 'cv');
+    await insertFile(otherForm, seed.b.formIds[1], 'cv');
+    await t.owner.query(`insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256) values ($1, $2, $3, 'cv', 'a.pdf', 'application/pdf', 4, $4)`, [
+      foreign,
+      seed.a.orgId,
+      seed.a.formIds[0],
+      'c'.repeat(64),
+    ]);
+    const check = (formId: string, ids: string[], orgId = seed.b.orgId) =>
+      withTenant(t.app.db, { orgId, actor: 'respondent', requestId: 'check', readOnly: true }, (tx) =>
+        tx.execute<{ id: string; block_id: string; purpose: string; name: string; size_bytes: number }>(
+          sql`select * from form_files_check(${formId}::uuid, ${`{${ids.join(',')}}`}::uuid[])`,
+        ),
+      );
+    const found = await check(seed.b.formIds[0], [mine, otherForm, foreign, randomUUID()]);
+    expect(found.rows).toEqual([{ id: mine, block_id: 'cv', purpose: 'file', name: 'cv.pdf', mime: 'application/pdf', size_bytes: 4, sha256: 'a'.repeat(64) }]);
+    // Org A's file is invisible from org B's context, even under org A's own form id.
+    expect((await check(seed.a.formIds[0], [foreign])).rows).toEqual([]);
+    expect((await check(seed.a.formIds[0], [foreign], seed.a.orgId)).rows).toHaveLength(1);
+    // No tenant context, no rows. And a long list is refused outright.
+    const bare = await t.app.db.execute<{ id: string }>(sql`select id from form_files_check(${seed.b.formIds[0]}::uuid, ${`{${mine}}`}::uuid[])`);
+    expect(bare.rows).toEqual([]);
+    const many = Array.from({ length: 101 }, () => randomUUID());
+    many[0] = mine;
+    expect((await check(seed.b.formIds[0], many)).rows).toEqual([]);
+  });
+
+  it('counts a stored submission and holds the files its answers name, whoever inserts it', async () => {
+    const held = randomUUID();
+    const strayFile = randomUUID();
+    const otherForms = randomUUID();
+    await insertFile(held, seed.b.formIds[0]);
+    await insertFile(strayFile, seed.b.formIds[0]);
+    await insertFile(otherForms, seed.b.formIds[1]);
+    const before = (await t.owner.query<{ n: string }>('select submission_count::text as n from forms where id = $1', [seed.b.formIds[0]])).rows[0]!.n;
+    const submissionId = randomUUID();
+    await as(respondent, (tx) =>
+      tx.execute(sql`insert into form_submissions (id, org_id, form_id, answers, fields) values (
+        ${submissionId}, ${seed.b.orgId}, ${seed.b.formIds[0]},
+        ${JSON.stringify({ cv: { type: 'file_upload', value: [{ fileId: held, name: 'cv.pdf' }, { fileId: otherForms, name: 'x.pdf' }] } })}::jsonb, '[]')`),
+    );
+    const { rows } = await t.owner.query<{ id: string; submission_id: string | null }>('select id, submission_id from form_files where id = any ($1)', [[held, strayFile, otherForms]]);
+    const by = Object.fromEntries(rows.map((r) => [r.id, r.submission_id]));
+    expect(by).toEqual({ [held]: submissionId, [strayFile]: null, [otherForms]: null });
+    const after = (await t.owner.query<{ n: string; at: Date | null }>('select submission_count::text as n, last_submission_at as at from forms where id = $1', [seed.b.formIds[0]])).rows[0]!;
+    expect(Number(after.n)).toBe(Number(before) + 1);
+    expect(after.at).toBeInstanceOf(Date);
+    // Deleting the submission un-holds the file (the orphan sweep then removes it).
+    await t.owner.query('delete from form_submissions where id = $1', [submissionId]);
+    expect((await t.owner.query('select submission_id from form_files where id = $1', [held])).rows).toEqual([{ submission_id: null }]);
   });
 });

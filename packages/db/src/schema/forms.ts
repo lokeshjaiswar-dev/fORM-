@@ -78,7 +78,7 @@ export const formVersions = pgTable(
   ],
 );
 
-/** RLS: `form_submissions_tenant`. */
+/** RLS: `form_submissions_tenant` and the restrictive `form_submissions_data_access`: reads need `submissions.read` or a system job. */
 export const formSubmissions = pgTable(
   'form_submissions',
   {
@@ -96,7 +96,15 @@ export const formSubmissions = pgTable(
   ],
 );
 
-/** What a respondent uploaded to a published form; the bytes are in the file store. RLS: `form_files_tenant`. */
+/** `file`: whatever the upload field accepts; `signature`: the PNG a signature pad drew. */
+export const FILE_PURPOSES = ['file', 'signature'] as const;
+export type FilePurpose = (typeof FILE_PURPOSES)[number];
+
+/**
+ * What a respondent uploaded to a published form; the bytes are in the file store. RLS: `form_files_tenant`, and
+ * `form_files_data_access` (reads need `submissions.read` or a system job). Respondent routes look files up through
+ * `form_files_check()`, never the table. `purpose` and `submissionId` were added by 0019, hence last.
+ */
 export const formFiles = pgTable(
   'form_files',
   {
@@ -109,6 +117,9 @@ export const formFiles = pgTable(
     sizeBytes: integer('size_bytes').notNull(),
     sha256: text('sha256').notNull(),
     createdAt: ts('created_at'),
+    purpose: text('purpose', { enum: FILE_PURPOSES }).notNull().default('file'),
+    /** The submission whose answers name the file; null until one does (the orphan sweep removes files that stay null). */
+    submissionId: uuid('submission_id'),
   },
   (t) => [
     foreignKey({ name: 'form_files_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
-import { formFiles, formSubmissions, formVersions, forms, resolveFormSlug, withTenant, type Db } from '@form/db';
+import { formFiles, formFilesCheck, formSubmissions, formVersions, resolveFormSlug, withTenant, type Db } from '@form/db';
 import { projectForRuntime } from '@form/logic';
 import { acceptsFile } from '@form/registry';
 import type { BlockId, CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
@@ -56,6 +56,9 @@ const liveByVersion = new Map<string, LiveForm>();
 const liveInflight = new Map<string, Promise<LiveForm>>();
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** The most files one submission may name (the narrow lookup of 0019 takes at most this many ids). */
+const MAX_FILES_PER_SUBMISSION = 100;
 
 export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig; files: FileStore }): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -217,7 +220,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       const sha256 = createHash('sha256').update(bytes).digest('hex');
       try {
         await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
-          await tx.insert(formFiles).values({ id, orgId: live.orgId, formId: live.formId, blockId, name, mime, sizeBytes: bytes.length, sha256 });
+          await tx.insert(formFiles).values({ id, orgId: live.orgId, formId: live.formId, blockId, purpose, name, mime, sizeBytes: bytes.length, sha256 });
           // Bytes before commit: a failed write rolls the row back; a failed commit leaves an unreferenced file, removed below.
           await deps.files.put(id, bytes);
         });
@@ -274,12 +277,9 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         if (refs.length > 0) {
           // Every file the answers name was uploaded to this form, and is the file they say it is.
           const ids = [...new Set(refs.map((ref) => ref.fileId))];
-          const known = ids.every((fileId) => z.uuid().safeParse(fileId).success)
-            ? await tx
-                .select({ id: formFiles.id, sizeBytes: formFiles.sizeBytes, sha256: formFiles.sha256 })
-                .from(formFiles)
-                .where(and(eq(formFiles.formId, live.formId), inArray(formFiles.id, ids)))
-            : [];
+          if (ids.length > MAX_FILES_PER_SUBMISSION) throw new ProblemError('VALIDATION_FAILED', 'Too many files in one submission.');
+          // Through the narrow definer function: a respondent context cannot read form_files (SR-5).
+          const known = ids.every((fileId) => z.uuid().safeParse(fileId).success) ? await formFilesCheck(tx, live.formId, ids) : [];
           const byId = new Map(known.map((row) => [row.id, row]));
           for (const ref of refs) {
             const stored = byId.get(ref.fileId);
@@ -296,7 +296,8 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
           fields: request.body.fields,
           locale: request.body.locale,
         });
-        await tx.update(forms).set({ submissionCount: sql`${forms.submissionCount} + 1`, lastSubmissionAt: new Date() }).where(eq(forms.id, live.formId));
+        // The form's counters and the hold on the files are kept by a trigger on this INSERT (0019): a respondent
+        // context may not write `forms` or `form_files`.
       });
       return { id };
     },

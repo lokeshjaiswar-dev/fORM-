@@ -63,7 +63,7 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     retainBasis: 'with the form or retention.sweep / dsr.execute',
   },
   form_files: {
-    columns: ['name', 'sha256'],
+    columns: ['name', 'sha256', 'submission_id'],
     erase: 'delete',
     retainBasis: 'with the form or retention.sweep / dsr.execute, which also delete the stored bytes (file store, WP-1.14)',
   },

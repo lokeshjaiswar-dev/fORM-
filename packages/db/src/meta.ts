@@ -11,7 +11,8 @@ export interface RlsViolation {
     | 'parts-schema-granted'
     | 'raw-current-setting'
     | 'definer-unsafe'
-    | 'app-role-bypasses-rls';
+    | 'app-role-bypasses-rls'
+    | 'no-data-access-policy';
   object: string;
 }
 
@@ -86,12 +87,22 @@ const CHECKS: ReadonlyArray<readonly [RlsViolation['rule'], string]> = [
     'app-role-bypasses-rls',
     `select rolname as object from pg_roles where rolname in ('fr_app', 'fr_template_seeder') and (rolbypassrls or rolsuper)`,
   ],
+  [
+    // Architecture §2.2: the answers and the files respondents sent are readable only with `submissions.read`, by a
+    // system job, or (submissions) by a respondent holding a verified token. The org-wide tenant policy alone lets every
+    // context of the org read them (SR-5), so each of these tables needs a restrictive SELECT policy of its own.
+    'no-data-access-policy',
+    `select t as object from unnest(array['form_submissions', 'form_files', 'submission_search']) t
+     where not exists (select 1 from pg_policy p
+       where p.polrelid = to_regclass('public.' || t) and p.polname = t || '_data_access' and not p.polpermissive and p.polcmd in ('r', '*'))`,
+  ],
 ];
 
 /**
  * RLS meta-checks (architecture §2.3). Every table in `public` forces RLS and has a policy; tables with an
  * `org_id` column have a `<table>_tenant` policy; partitions of those tables live in `parts`, force RLS and grant nothing;
- * policies never call `current_setting(` directly; definer functions pin `search_path` and are not public.
+ * policies never call `current_setting(` directly; definer functions pin `search_path` and are not public; the tables
+ * of respondent answers and files carry a restrictive `<table>_data_access` SELECT policy.
  */
 export async function rlsViolations(client: Queryable): Promise<RlsViolation[]> {
   const out: RlsViolation[] = [];

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Executor } from './client.ts';
+import { pgArray } from './tenant.ts';
 import type { MembershipRole } from './schema/index.ts';
 
 /** Typed calls of the SECURITY DEFINER functions in migration 0003. */
@@ -75,4 +76,27 @@ export async function resolveFormSlug(db: Executor, slug: string): Promise<Resol
 export async function createPartitions(db: Executor, parent: PartitionedTable, months: number): Promise<string[]> {
   const { rows } = await db.execute<{ name: string }>(sql`select name from create_partitions(${`public.${parent}`}::regclass, ${months}) as name`);
   return rows.map((r) => r.name);
+}
+
+/** What the upload route recorded about a file (migration 0019, `form_files_check`): never the bytes, the owner or the log. */
+export interface CheckedFile {
+  id: string;
+  blockId: string;
+  purpose: 'file' | 'signature';
+  name: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
+/**
+ * The files named by `ids` that were uploaded to this form, inside a tenant context (the org is the context's). The
+ * respondent routes use this instead of reading `form_files`, which a respondent cannot read at all. At most 100 ids.
+ */
+export async function formFilesCheck(db: Executor, formId: string, ids: readonly string[]): Promise<CheckedFile[]> {
+  if (ids.length === 0) return [];
+  const { rows } = await db.execute<{ id: string; block_id: string; purpose: 'file' | 'signature'; name: string; mime: string; size_bytes: number; sha256: string }>(
+    sql`select id, block_id, purpose, name, mime, size_bytes, sha256 from form_files_check(${formId}::uuid, ${pgArray(ids)}::uuid[])`,
+  );
+  return rows.map((r) => ({ id: r.id, blockId: r.block_id, purpose: r.purpose, name: r.name, mime: r.mime, sizeBytes: r.size_bytes, sha256: r.sha256 }));
 }
