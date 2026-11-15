@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  newSubmissionKey,
   orgSettings,
   partitionsOf,
   REVIEW_DECISIONS,
@@ -371,6 +372,94 @@ describe('submissions.status', () => {
   });
 });
 
+describe('submissions.status: only the table’s owner moves a response into or out of the review statuses', () => {
+  // fr_app holds UPDATE (status) since 0021, so without the guard of 0022 any transaction could release a held response with no
+  // decision, no checker and no four-eyes check. These are the writes a route, a bulk action, a system job or a bug in one could make.
+  const statusOf = async (id: string) => (await t.owner.query<{ status: string }>('select status from submissions where id = $1', [id])).rows[0]!.status;
+  const setStatus = (row: Pick<SubmissionSeed, 'id' | 'receivedAt'>, status: string) =>
+    sql`update submissions set status = ${status} where id = ${row.id} and received_at = ${row.receivedAt.toISOString()}::timestamptz`;
+  const actors = () => [['a member with every permission', everything()], ['a system job', system]] as const;
+
+  it.each([
+    ['pending_review', 'complete'],
+    ['rejected', 'complete'],
+    ['pending_review', 'rejected'],
+    ['rejected', 'pending_review'],
+    ['pending_review', 'archived'],
+    ['rejected', 'trashed'],
+    ['complete', 'pending_review'],
+    ['complete', 'rejected'],
+    ['pending_payment', 'pending_review'],
+    ['spam', 'rejected'],
+  ] as const)('refuses %s -> %s to an fr_app user with every permission and to a system job, and leaves the row as it was', async (from, to) => {
+    const row = await insertSubmission(t.owner, newSubmission(seed.b, 0, { status: from }));
+    for (const [who, ctx] of actors()) {
+      const err = await failure(as(ctx, (tx) => tx.execute(setStatus(row, to))));
+      expect(pgCode(err), who).toBe('42501');
+      expect(messageOf(err), who).toMatch(new RegExp(`submissions\\.status ${from} -> ${to} is made by the review functions only`));
+      expect(await statusOf(row.id), who).toBe(from);
+    }
+    // The same through a statement that names no row: a bulk action over the form's responses is refused as a whole.
+    const err = await failure(as(system, (tx) => tx.execute(sql`update submissions set status = ${to} where form_id = ${seed.b.formIds[0]} and status = ${from}`)));
+    expect(pgCode(err)).toBe('42501');
+    expect(await statusOf(row.id)).toBe(from);
+  });
+
+  it('lets the owner through, which is the role the definers of 0024 run as', async () => {
+    const row = await insertSubmission(t.owner, newSubmission(seed.b, 0, { status: 'pending_review' }));
+    expect((await t.owner.query('update submissions set status = $2 where id = $1', [row.id, 'complete'])).rowCount).toBe(1);
+    expect(await statusOf(row.id)).toBe('complete');
+    expect((await t.owner.query('update submissions set status = $2 where id = $1', [row.id, 'rejected'])).rowCount).toBe(1);
+    expect(await statusOf(row.id)).toBe('rejected');
+    expect((await t.owner.query('update submissions set status = $2 where id = $1', [row.id, 'pending_review'])).rowCount).toBe(1);
+    expect(await statusOf(row.id)).toBe('pending_review');
+  });
+
+  it('lets a SECURITY DEFINER function owned by the owner make the move, with the caller still fr_app (the shape review_decide() will have)', async () => {
+    const row = await insertSubmission(t.owner, newSubmission(seed.b, 0, { status: 'pending_review' }));
+    await t.owner.query(
+      `create function guard_probe_release(p_id uuid) returns void language sql security definer set search_path = pg_catalog, public
+       as $$ update public.submissions set status = 'complete' where id = p_id $$`,
+    );
+    try {
+      await t.owner.query('grant execute on function guard_probe_release(uuid) to fr_app');
+      await as(everything(), (tx) => tx.execute(sql`select guard_probe_release(${row.id}::uuid)`));
+      expect(await statusOf(row.id)).toBe('complete');
+    } finally {
+      await t.owner.query('drop function guard_probe_release(uuid)');
+    }
+  });
+
+  it('leaves everything outside the two statuses alone: an update that keeps the status, a change to another column, and every move between the other statuses', async () => {
+    const held = await insertSubmission(t.owner, newSubmission(seed.b, 0, { status: 'pending_review' }));
+    const rejected = await insertSubmission(t.owner, newSubmission(seed.b, 0, { status: 'rejected' }));
+    for (const row of [held, rejected]) {
+      const status = (await statusOf(row.id)) as string;
+      // Naming the status without changing it, and changing something else, are not a status change.
+      expect(await as(everything(), async (tx) => (await tx.execute(setStatus(row, status))).rowCount), status).toBe(1);
+      expect(await as(everything(), async (tx) => (await tx.execute(sql`update submissions set starred = true, read = true where id = ${row.id} and received_at = ${row.receivedAt.toISOString()}::timestamptz`)).rowCount), status).toBe(1);
+      expect(await statusOf(row.id)).toBe(status);
+    }
+    // Core's own statuses move as before, for a member and for a system job.
+    const moves = [['pending_payment', 'complete'], ['complete', 'archived'], ['archived', 'trashed'], ['pending_scan', 'complete'], ['complete', 'spam'], ['payment_failed', 'trashed']] as const;
+    for (const [from, to] of moves) {
+      for (const [who, ctx] of actors()) {
+        const row = await insertSubmission(t.owner, newSubmission(seed.b, 0, { status: from }));
+        expect(await as(ctx, async (tx) => (await tx.execute(setStatus(row, to))).rowCount), `${who}: ${from} -> ${to}`).toBe(1);
+        expect(await statusOf(row.id)).toBe(to);
+      }
+    }
+  });
+
+  it('still takes pending_review and rejected on INSERT, so the submit transaction can hold a response', async () => {
+    for (const status of ['pending_review', 'rejected']) {
+      const row = newSubmission(seed.b, 0, { status });
+      await as(respondent, (tx) => tx.execute(insertSubmissionSql(row)));
+      expect(await statusOf(row.id)).toBe(status);
+    }
+  });
+});
+
 describe('deleting a submission deletes its review', () => {
   it('removes its submission_reviews and review_decisions rows when a system job deletes it, through the append-only trigger, and nothing else', async () => {
     const { sub } = await reviewedSubmission();
@@ -560,6 +649,34 @@ describe('partitions', () => {
        from pg_inherits i join pg_class c on c.oid = i.inhrelid where i.inhparent = 'public.submission_reviews'::regclass`,
     );
     for (const r of reviews.rows) expect(r.fks).toEqual(['submission_reviews_submission_fkey']);
+  });
+
+  it('has the status guard on submissions and on every partition of it, the months made later included', async () => {
+    const guards = () =>
+      t.owner.query<{ relation: string; triggers: string[] }>(
+        `select c.oid::regclass::text as relation,
+           array(select tgname::text from pg_trigger g where g.tgrelid = c.oid and not g.tgisinternal and g.tgname = 'submissions_review_status_guard') as triggers
+         from pg_class c where c.oid = 'public.submissions'::regclass
+            or c.oid in (select inhrelid from pg_inherits where inhparent = 'public.submissions'::regclass) order by 1`,
+      );
+    const before = await guards();
+    expect(before.rows.length).toBeGreaterThanOrEqual(5);
+    for (const r of before.rows) expect(r, r.relation).toEqual({ relation: r.relation, triggers: ['submissions_review_status_guard'] });
+    // A month made after this migration (what partitions.maintain does) inherits it, and the guard holds there.
+    const { rows: made } = await t.owner.query<{ name: string }>(`select create_partitions('public.submissions'::regclass, 4) as name`);
+    expect(made).toHaveLength(1);
+    const after = await guards();
+    expect(after.rows.map((r) => r.relation)).toContain(`parts.${made[0]!.name}`);
+    for (const r of after.rows) expect(r, r.relation).toEqual({ relation: r.relation, triggers: ['submissions_review_status_guard'] });
+    // The row lands in that partition (a week into the month it covers): the guard answers there too.
+    const now = new Date();
+    const later = await insertSubmission(
+      t.owner,
+      newSubmission(seed.b, 0, { ...newSubmissionKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 4, 8))), status: 'pending_review' }),
+    );
+    expect((await t.owner.query('select tableoid::regclass::text as part from submissions where id = $1', [later.id])).rows).toEqual([{ part: `parts.${made[0]!.name}` }]);
+    const err = await failure(as(system, (tx) => tx.execute(sql`update submissions set status = 'complete' where id = ${later.id} and received_at = ${later.receivedAt.toISOString()}::timestamptz`)));
+    expect(pgCode(err)).toBe('42501');
   });
 
   it('denies a direct SELECT, INSERT, UPDATE and DELETE on a parts.* review partition, to a member, a respondent and a system job', async () => {

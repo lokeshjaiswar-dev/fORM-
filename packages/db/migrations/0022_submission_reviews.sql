@@ -3,7 +3,8 @@
 -- two review tables goes through them.
 --
 -- 1. submissions.status: two new values, 'pending_review' (held until every required unit is approved) and 'rejected'
---    (a required unit was rejected, final).
+--    (a required unit was rejected, final), and a trigger that lets only the table's owner (the definers of 0024)
+--    move a response into or out of either of them.
 -- 2. org_settings.review_checkers_mfa: "checkers must use 2FA", on by default.
 -- 3. review_groups and review_group_members: who may check. Managed with members.manage.
 -- 4. form_review_settings: which units of a form are reviewed, by which group, in which order (FormOps-like, revisioned).
@@ -24,6 +25,35 @@ alter table submissions
   add constraint submissions_status_check check (status in (
     'complete', 'pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'spam', 'archived', 'trashed',
     'pending_review', 'rejected'));
+
+-- fr_app may write submissions.status (0021 grants UPDATE on the column, for the spam, archive and trash moves and for
+-- the payment and scan states), so on its own the check above would let any fr_app transaction (a route, a bulk
+-- action, a system job, or a bug in one) run `update submissions set status = 'complete' where status = 'pending_review'`.
+-- That releases a held response with no decision row, no checker and no four-eyes check; the same statement could
+-- also undo a 'rejected', or hold a response that has no review rows. The review tables are read-only to fr_app, but
+-- the outcome a decision exists to gate is this column, so it is guarded here, in the database, not only in the API.
+--
+-- A status change into or out of 'pending_review' or 'rejected' is refused unless the session user is the table's
+-- owner, with the same owner test as review_decisions_append_only below. The SECURITY DEFINER functions of 0024
+-- (review_open() and review_decide(), which check the permission, the group, the order, the answers' hash and the
+-- four-eyes rule first) run as the owner, so they pass. Everything else is outside the guard:
+-- INSERT (the submit transaction creates a held response with status 'pending_review'), an UPDATE that leaves the
+-- status as it is, and every move between the other statuses (pending_payment, pending_scan, spam, trashed, ...).
+-- It is a trigger on the parent, so every partition has it, the months made later by create_partitions() too.
+create function submissions_review_status_guard() returns trigger
+language plpgsql set search_path = pg_catalog as $$
+begin
+  if (old.status in ('pending_review', 'rejected') or new.status in ('pending_review', 'rejected'))
+     and current_user <> (select pg_get_userbyid(c.relowner) from pg_class c where c.oid = tg_relid) then
+    raise exception 'submissions.status % -> % is made by the review functions only', old.status, new.status
+      using errcode = 'insufficient_privilege',
+            hint = 'A response leaves pending_review, or becomes rejected, only through review_decide().';
+  end if;
+  return new;
+end
+$$;
+create trigger submissions_review_status_guard before update of status on submissions
+  for each row when (old.status is distinct from new.status) execute function submissions_review_status_guard();
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- 2. org_settings.review_checkers_mfa
