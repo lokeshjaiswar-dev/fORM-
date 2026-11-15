@@ -6,6 +6,14 @@ import type { AuditEventSpec } from './spec.ts';
  * another file already lists (`events.test.ts`).
  *
  * Kept apart from `webhooks.ts` because the worker emits these and the API emits those, so two parallel tasks never edit
- * one file. Empty until the webhook worker task lists its codes.
+ * one file. A delivery itself is not audited: the delivery log (`webhook_deliveries`) and the disclosures ledger are its
+ * record. Only the automatic turn-off is, because it changes the owner's settings without anyone asking.
  */
-export const WEBHOOK_DELIVERY_EVENTS = {} as const satisfies Record<string, AuditEventSpec>;
+export const WEBHOOK_DELIVERY_EVENTS = {
+  'webhook.disabled': {
+    outcomes: ['success'],
+    resourceType: 'webhook',
+    description:
+      'The worker turned a webhook off by itself after 50 failed deliveries in a row (the count, the last status and the delivery id in metadata, never the address, a secret or an answer). The owner turns it on again after fixing the receiver.',
+  },
+} as const satisfies Record<string, AuditEventSpec>;
