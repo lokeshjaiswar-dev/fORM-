@@ -21,7 +21,9 @@ export type Published = z.infer<typeof published>;
 
 function publicSlug(title: string, formId: string): string {
   const base = slugOf(title).replaceAll('_', '-').slice(0, 80) || 'form';
-  return `${base}-${formId.slice(0, 8)}`;
+  // The random end of the id, not its start: in a UUIDv7 (clone and import make them) the first 32 bits are a timestamp
+  // that repeats for about a minute, so two forms with one title made close together would get one slug.
+  return `${base}-${formId.slice(-8)}`;
 }
 
 const ASSET_ID = /^[A-Za-z0-9_-]{1,64}$/;

@@ -80,7 +80,7 @@ describe('publish and public fill', () => {
     expect(published.statusCode).toBe(200);
     const live = published.json<{ slug: string; versionId: string; number: number }>();
     expect(live.number).toBe(1);
-    expect(live.slug).toContain(id.slice(0, 8));
+    expect(live.slug).toContain(id.slice(-8));
 
     const again = await app.inject({ url: `/v1/forms/${id}/live`, headers: as(userId) });
     expect(again.json()).toMatchObject({ slug: live.slug, versionId: live.versionId });
