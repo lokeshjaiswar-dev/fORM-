@@ -41,7 +41,9 @@ const RECEIVER_HOST = 'hooks.example.test';
 /** What the fake DNS answers. A name that is not here does not resolve. */
 const DNS: Record<string, string> = { [RECEIVER_HOST]: '127.0.0.1', 'metadata.example.test': '169.254.169.254', 'internal.example.test': '10.0.0.1' };
 
-const log = pino({ level: 'silent' });
+/** The worker's log, kept in memory at `info`: a test reads it to see what an operator would be told. Cleared by the tests that read it. */
+const logLines: string[] = [];
+const log = pino({ level: 'info' }, { write: (line: string) => void logLines.push(line) });
 const keys = createKeyfileKeyProvider({ masterKey: randomBytes(32) });
 const orgSecrets = createOrgSecrets(keys);
 
@@ -394,15 +396,16 @@ describe('webhook.deliver', () => {
   });
 
   it.each([
-    ['a host that resolves to the cloud metadata address', 'http://metadata.example.test/latest/meta-data'],
-    ['the metadata address as a literal', 'http://169.254.169.254/latest/meta-data'],
-    ['a host that resolves to a private address', 'http://internal.example.test/admin'],
-    ['a private address as a literal', 'http://10.0.0.1/admin'],
-  ])('is dead at once, with no request and no retry, for %s', async (_name, url) => {
+    ['a host that resolves to the cloud metadata address', 'http://metadata.example.test/latest/meta-data', '169.254.169.254', '/latest/meta-data'],
+    ['the metadata address as a literal', 'http://169.254.169.254/latest/meta-data', '169.254.169.254', '/latest/meta-data'],
+    ['a host that resolves to a private address', 'http://internal.example.test/admin', '10.0.0.1', '/admin'],
+    ['a private address as a literal', 'http://10.0.0.1/admin', '10.0.0.1', '/admin'],
+  ])('is dead at once, with no request and no retry, for %s', async (_name, url, address, path) => {
     const hook = await seedWebhook(a, { url });
     const s = await store(a);
     const delivery = await seedDelivery(a, hook.id, s);
     const before = hits.length;
+    logLines.length = 0;
 
     // Not an error: a refusal is final, so the queue is not asked to try again.
     expect(await attempt(a, delivery)).toBeNull();
@@ -410,10 +413,33 @@ describe('webhook.deliver', () => {
     expect(hits.length).toBe(before);
     const row = await deliveryRow(delivery);
     expect(row).toMatchObject({ attempt: 1, status: 'dead', http_status: null, duration_ms: null, request_hash: null, next_attempt_at: null });
-    expect(row.response_snippet).toMatch(/^not sent: the address is not allowed: egress to http:\/\//);
+    // The log of the delivery is read by every member with data.route, so the reason is a fixed sentence: no address the resolver
+    // returned (that would map the platform's own network for a tenant), no host, no scheme, no path.
+    expect(row.response_snippet).toBe('not sent: the address is not allowed (private, internal or not permitted)');
+    const stored = JSON.stringify(row);
+    for (const leak of [address, '169.254', '10.0.0', 'metadata.example.test', 'internal.example.test', 'not a public address', 'never reachable', path]) expect(stored).not.toContain(leak);
+    // The detail is not lost: an operator reads it in the worker's log, which holds the guard's message but not the path.
+    const logged = logLines.filter((l) => l.includes('the egress guard refused the address'));
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toContain(address);
+    expect(logged[0]).toContain(delivery);
+    expect(logged[0]).not.toContain(path);
     // Nothing left the system, so nothing is in the ledger; the refusal still counts as a failure of the webhook.
     expect(await disclosuresOf(hook.id)).toEqual([]);
     expect((await hookRow(hook.id)).consecutive_failures).toBe(1);
+  });
+
+  it('does not tell the log a policy refusal either: a host the installation does not allow gets the same fixed sentence', async () => {
+    // `none`/`allowlist` refusals ("not in EGRESS_ALLOWLIST (EGRESS_POLICY=allowlist)", "scheme ftp: is not allowed") name the
+    // installation's policy; the member is told only that the address is not allowed.
+    const strict = createEgressGuard({ policy: 'allowlist', allowlist: ['only.example.test'], resolve: async () => [{ address: '203.0.113.7', family: 4 }] });
+    const hook = await seedWebhook(a, { url: 'http://elsewhere.example.test/x' });
+    const delivery = await seedDelivery(a, hook.id, await store(a));
+    expect(await attempt(a, delivery, 1, effectDeps({ tenantEgress: strict, tenantHttp: (url, request) => egressHttp(strict, url, request) }))).toBeNull();
+    const row = await deliveryRow(delivery);
+    expect(row).toMatchObject({ status: 'dead', http_status: null });
+    expect(row.response_snippet).toBe('not sent: the address is not allowed (private, internal or not permitted)');
+    expect(JSON.stringify(row)).not.toMatch(/EGRESS_|allowlist|elsewhere\.example\.test/);
   });
 
   it('retries a name that does not resolve (it may be a DNS blip) instead of calling it a refusal, and sends nothing', async () => {
@@ -423,7 +449,9 @@ describe('webhook.deliver', () => {
     expect(await attempt(a, delivery)).toBeInstanceOf(Error);
     expect(hits.length).toBe(before);
     expect(await deliveryRow(delivery)).toMatchObject({ status: 'retrying', http_status: null });
-    expect((await deliveryRow(delivery)).response_snippet).toMatch(/^no answer: the address did not resolve: egress to nowhere\.example\.test denied/);
+    // Fixed text again: the resolver's own error (and the guard's message) go to the worker's log, not to the member's delivery log.
+    expect((await deliveryRow(delivery)).response_snippet).toBe('no answer: the address did not resolve');
+    expect(JSON.stringify(await deliveryRow(delivery))).not.toMatch(/ENOTFOUND|nowhere\.example\.test|denied/);
     expect(await disclosuresOf(hook.id)).toEqual([]);
     // On the last attempt it is dead like any other failure.
     expect(await attempt(a, delivery, 4)).toBeNull();

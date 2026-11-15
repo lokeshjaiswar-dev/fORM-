@@ -135,6 +135,16 @@ type Outcome =
   | { kind: 'no_answer'; reason: string; mayHaveSent: boolean; platformFault?: true }
   | { kind: 'refused'; reason: string };
 
+/**
+ * What the delivery log says when the egress guard turns an address away. FIXED, never the guard's own message: that message
+ * names the address the worker's resolver returned ("10.0.0.1 is not a public address"), and the log is shown to every member
+ * with `data.route`. A tenant could save a webhook for an internal name and read its private address from the log, which makes
+ * the guard a DNS oracle for the platform's own network. The detail goes to the worker's log (see `send`), which tenants cannot read.
+ */
+export const ADDRESS_REFUSED_REASON = 'the address is not allowed (private, internal or not permitted)';
+/** Same rule for a name the resolver could not answer for: the resolver's error text stays out of the tenant's log. */
+export const ADDRESS_UNRESOLVED_REASON = 'the address did not resolve';
+
 /** An error's message for the delivery log: scrubbed and cut, because a message can echo what a receiver sent. */
 const reasonOf = (prefix: string, err: unknown): string => scrubSnippet(`${prefix}: ${err instanceof Error ? err.message : 'unexpected error'}`) ?? prefix;
 
@@ -193,7 +203,7 @@ function webhookDeliver(deps: EffectDeps) {
 
       const { delivery, hook, submission, body, sentKeys, enc } = prepared;
       const started = performance.now();
-      const outcome = await send(deps, { orgId, deliveryId, hook, event: delivery.event, enc, body });
+      const outcome = await send(deps, log, { orgId, deliveryId, hook, event: delivery.event, enc, body });
       const durationMs = Math.round(performance.now() - started);
       const requestHash = createHash('sha256').update(body).digest();
 
@@ -310,6 +320,7 @@ async function prepare(tx: Tx, deliveryId: string, attempt: number, log: Logger)
  */
 async function send(
   deps: EffectDeps,
+  log: Logger,
   o: { orgId: string; deliveryId: string; hook: { url: string; secretId: string }; event: WebhookEvent; enc: Record<string, unknown>; body: string },
 ): Promise<Outcome> {
   let url: URL;
@@ -347,10 +358,16 @@ async function send(
     return { kind: 'answered', status: res.status, snippet: scrubSnippet(res.text()) };
   } catch (err) {
     if (isPortError(err, 'egress_denied')) {
+      // The guard's message holds the host and the address the resolver returned. It goes to the worker's log (which has no
+      // path, query, secret or body in it) and NEVER to the delivery row, which members read: see ADDRESS_REFUSED_REASON.
       // The guard keeps the resolver's own error as the cause when the name did not resolve: that may be a DNS blip, not a
       // refusal of the address, so it is retried like `assertEndpoint` retries it. A policy refusal has no cause and is final.
-      if (err.cause !== undefined) return { kind: 'no_answer', reason: reasonOf('the address did not resolve', err), mayHaveSent: false };
-      return { kind: 'refused', reason: reasonOf('the address is not allowed', err) };
+      if (err.cause !== undefined) {
+        log.info({ deliveryId: o.deliveryId, guard: err.message }, 'webhook.deliver: the address did not resolve');
+        return { kind: 'no_answer', reason: ADDRESS_UNRESOLVED_REASON, mayHaveSent: false };
+      }
+      log.warn({ deliveryId: o.deliveryId, guard: err.message }, 'webhook.deliver: the egress guard refused the address');
+      return { kind: 'refused', reason: ADDRESS_REFUSED_REASON };
     }
     if (err instanceof PortError && err.code === 'invalid_argument') return { kind: 'refused', reason: 'the webhook address is not an http(s) URL' };
     // Network failure, timeout or an answer over the cap: the request may have reached the receiver. Anything else is a bug; it is retried too.
