@@ -216,27 +216,50 @@ describe('the four-eyes rule (WP-2.33: the maker, the last editor, the responden
     expect(rows).toEqual([]);
   });
 
-  it('excludes only active members of this org with a verified address, matched case-insensitively', async () => {
+  it('excludes every member of this org with a verified address, whatever their status, matched case-insensitively', async () => {
     const group = await newGroup();
     const verified = await person({ group, email: 'Mixed.Case@Corp.test' });
     const unverified = await person({ group, email: 'unverified@corp.test', verified: false });
     const suspended = await person({ group, email: 'suspended@corp.test', memberStatus: 'suspended' });
+    const disabled = await person({ group, email: 'disabled@corp.test' });
+    await t.owner.query(`update users set status = 'disabled' where id = $1`, [disabled.id]);
     // Same address in the other org: an account of org A is not a member of org B.
     const elsewhere = await person({ org: seed.a, email: 'elsewhere@corp.test' });
     const h = await held([{ id: 'u1', group }, { id: 'u2', group }], {
-      emails: ['mixed.case@corp.test', 'UNVERIFIED@corp.test', 'suspended@corp.test', 'elsewhere@corp.test', 'nobody@corp.test'],
+      emails: ['mixed.case@corp.test', 'UNVERIFIED@corp.test', 'suspended@corp.test', 'disabled@corp.test', 'elsewhere@corp.test', 'nobody@corp.test'],
     });
     const rows = (await t.owner.query<{ unit_id: string; excluded: string[] }>('select unit_id, excluded_user_ids as excluded from submission_reviews where submission_id = $1 order by unit_id', [h.sub.id])).rows;
-    expect(rows).toEqual([
-      { unit_id: 'u1', excluded: [verified.id] },
-      { unit_id: 'u2', excluded: [verified.id] },
+    const expected = [verified.id, suspended.id, disabled.id].sort();
+    expect(rows.map((r) => ({ unit_id: r.unit_id, excluded: [...r.excluded].sort() }))).toEqual([
+      { unit_id: 'u1', excluded: expected },
+      { unit_id: 'u2', excluded: expected },
     ]);
     expect(rows.flatMap((r) => r.excluded)).not.toContain(unverified.id);
-    expect(rows.flatMap((r) => r.excluded)).not.toContain(suspended.id);
     expect(rows.flatMap((r) => r.excluded)).not.toContain(elsewhere.id);
     // The unverified member is not excluded (their address proves nothing yet): they may check.
     expect(await decide(unverified, h, 'u1')).toMatchObject({ outcome: 'decided' });
     expect(await decide(verified, h, 'u2')).toMatchObject({ outcome: 'four_eyes_violation' });
+  });
+
+  it('keeps a member who was suspended or disabled when the review opened excluded after they are reactivated, and writes no decision', async () => {
+    const group = await newGroup();
+    const onLeave = await person({ group, email: 'on-leave@corp.test', memberStatus: 'suspended' });
+    const locked = await person({ group, email: 'locked@corp.test' });
+    await t.owner.query(`update users set status = 'disabled' where id = $1`, [locked.id]);
+    const other = await person({ group });
+    const h = await held([{ id: 'u1', group }, { id: 'u2', group }], { emails: ['On-Leave@corp.test', 'locked@corp.test'] });
+    // While suspended or disabled they cannot decide at all.
+    await refused(h, () => decide(onLeave, h, 'u1'), 'not_in_group');
+    await refused(h, () => decide(locked, h, 'u1'), 'not_in_group');
+    // An admin brings them back: every other check passes now, and only the exclusion stands between them and their own response.
+    await t.owner.query(`update memberships set status = 'active' where org_id = $1 and user_id = $2`, [seed.b.orgId, onLeave.id]);
+    await t.owner.query(`update users set status = 'active' where id = $1`, [locked.id]);
+    await refused(h, () => decide(onLeave, h, 'u1'), 'four_eyes_violation');
+    await refused(h, () => decide(locked, h, 'u2'), 'four_eyes_violation');
+    expect((await t.owner.query('select 1 from review_decisions where submission_id = $1', [h.sub.id])).rows).toEqual([]);
+    // Someone else can still check both units.
+    expect(await decide(other, h, 'u1')).toMatchObject({ outcome: 'decided' });
+    expect(await decide(other, h, 'u2')).toMatchObject({ outcome: 'decided', submissionStatus: 'complete' });
   });
 
   it('counts how many members the match excluded, for the audit event', async () => {

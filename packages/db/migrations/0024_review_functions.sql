@@ -28,8 +28,11 @@
 -- decisions of review_decide() take their version from the response itself).
 --
 -- p_respondent_emails are the addresses the respondent gave (every email-type answer, not only the principal
--- identifier). They are used for one thing: the active members of this org whose VERIFIED address is one of them are
--- written into excluded_user_ids on every unit, so they cannot check a response about themselves (the four-eyes rule).
+-- identifier). They are used for one thing: the members of this org whose VERIFIED address is one of them are written
+-- into excluded_user_ids on every unit, so they cannot check a response about themselves (the four-eyes rule). Every
+-- membership counts, whatever its status: a member who is suspended (on leave, say) when the response arrives is excluded
+-- too, because review_decide() lets them decide again as soon as an admin reactivates them, and by then the exclusion
+-- could no longer be made. Excluding someone who cannot decide anyway costs nothing.
 -- The addresses are not stored anywhere. The match is made now: a member who joins, or verifies their address, after the
 -- response was stored is not excluded (a known limit until the blind index of WP-1.11 can match at decision time).
 --
@@ -104,10 +107,12 @@ begin
     raise exception 'review_open: no required unit is applicable, so the response is not held for review' using errcode = 'invalid_parameter_value';
   end if;
 
-  -- Verified, active members of this org whose address is one the respondent gave. email_norm is trimmed and lower-case.
+  -- Members of this org, of any membership or account status, whose verified address is one the respondent gave. No status
+  -- filter on purpose: a suspended member is not able to decide now, but review_decide() lets them decide once an admin
+  -- reactivates them, and they would then approve a response about themselves. email_norm is trimmed and lower-case.
   select coalesce(array_agg(distinct u.id), '{}') into v_excluded
-  from users u join memberships m on m.user_id = u.id and m.org_id = v_org and m.status = 'active'
-  where u.status = 'active' and u.email_verified_at is not null
+  from users u join memberships m on m.user_id = u.id and m.org_id = v_org
+  where u.email_verified_at is not null
     and u.email_norm in (select lower(btrim(e, E' \t\r\n')) from unnest(coalesce(p_respondent_emails, '{}')) as e);
 
   -- group_id is checked by the foreign key (org_id, group_id): a group of another org fails with 23503. The constraints

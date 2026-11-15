@@ -46,8 +46,9 @@ export interface ReviewOpenInput {
   /** One element per review unit of the form (1 to 200). At least one must be required and applicable. */
   units: readonly ReviewOpenUnit[];
   /**
-   * The addresses the respondent gave (every email-type answer). Used only to exclude the active members of the org whose
-   * verified address is one of them from checking the response; never stored. A member who joins or verifies afterwards is not excluded.
+   * The addresses the respondent gave (every email-type answer). Used only to exclude the members of the org whose verified
+   * address is one of them from checking the response (whatever their membership or account status, so a suspended member
+   * stays excluded after being reactivated); never stored. A member who joins or verifies afterwards is not excluded.
    */
   respondentEmails?: readonly string[] | undefined;
 }
