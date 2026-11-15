@@ -17,6 +17,8 @@ export interface CheckedDefinition {
   order: number[];
   /** The review units that passed every check, with their blocks (empty when the definition has no `review`). */
   reviewUnits: Partial<Record<ReviewUnitId, BlockId[]>>;
+  /** The `section_break` that opens each of those units that targets one. */
+  reviewUnitMarkers: Partial<Record<ReviewUnitId, BlockId>>;
 }
 
 /** Warnings for elements that start hidden while no enabled rule can show them. */
@@ -61,7 +63,7 @@ export function checkDefinition(def: FormDefinition, mode: Mode, registry: Field
   /* Review units (WP-2.33): errors at publish, warnings in a draft, where a failing unit is simply left out of the plan. */
   const review = checkReviewUnits(def, mode, analysis.placement);
   issues.push(...review.issues);
-  return { issues, analysis, graph, order, reviewUnits: review.valid };
+  return { issues, analysis, graph, order, reviewUnits: review.valid, reviewUnitMarkers: review.markers };
 }
 
 /**

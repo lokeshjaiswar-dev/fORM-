@@ -262,6 +262,64 @@ describe('applicableUnits', () => {
     expect(states('hide')).toEqual([{ unitId: 'u1', state: 'applicable' }, { unitId: 'u2', state: 'not_applicable' }]);
   });
 
+  describe('the section_break that opens a unit is not something to review', () => {
+    /** u1 = brk, x, y (page unit u_page for the control); a rule hides x and y but never the break. */
+    const breakForm = () => withUnits(form([
+      field('short_text', 'name'), sectionBreak('brk'), field('short_text', 'x'), field('short_text', 'y'),
+    ], [page('p1', ['name', 'brk', 'x', 'y'])], [rule('r', cond(ans('name'), 'eq', text('hide')), [hide('x', 'y')])]), reviewUnit('u1', breakTarget('brk')));
+    const run = (def: S.FormDefinition, answers: Record<string, S.AnswerValue>) => {
+      const v = versionOf(def);
+      return { state: evaluate(v, answers as S.Answers, META, 'server'), compiled: v.compiled };
+    };
+
+    it('is not_applicable when the break is shown but every field after it is hidden', () => {
+      const { state, compiled } = run(breakForm(), { name: a.text('hide') });
+      expect(state.visible.has(bid('brk'))).toBe(true);
+      expect(state.visible.has(bid('x'))).toBe(false);
+      expect(applicableUnits(compiled, state)).toEqual([{ unitId: 'u1', state: 'not_applicable' }]);
+    });
+
+    it('stays applicable while one field of the unit is shown', () => {
+      const { state, compiled } = run(breakForm(), { name: a.text('show') });
+      expect(applicableUnits(compiled, state)).toEqual([{ unitId: 'u1', state: 'applicable' }]);
+      const partly = withUnits(form([
+        field('short_text', 'name'), sectionBreak('brk'), field('short_text', 'x'), field('short_text', 'y'),
+      ], [page('p1', ['name', 'brk', 'x', 'y'])], [rule('r', cond(ans('name'), 'eq', text('hide')), [hide('x')])]), reviewUnit('u1', breakTarget('brk')));
+      const half = run(partly, { name: a.text('hide') });
+      expect(applicableUnits(half.compiled, half.state)).toEqual([{ unitId: 'u1', state: 'applicable' }]);
+    });
+
+    it('is not_applicable when the whole page of the unit is hidden, break included', () => {
+      const def = withUnits(form([
+        field('short_text', 'name'), sectionBreak('brk'), field('short_text', 'x'),
+      ], [page('p1', ['name']), page('p2', ['brk', 'x'])], [rule('r', cond(ans('name'), 'eq', text('hide')), [hide('p2')])]), reviewUnit('u1', breakTarget('brk')));
+      const { state, compiled } = run(def, { name: a.text('hide') });
+      expect(applicableUnits(compiled, state)).toEqual([{ unitId: 'u1', state: 'not_applicable' }]);
+    });
+
+    it('compile records each break that opens a unit, and no marker for a page unit', () => {
+      const result = compile(reviewForm(), REGISTRY);
+      expect(result.ok && result.compiled.reviewUnitMarkers).toEqual({ u_applicant: 'brk_a', u_contact: 'brk_b' });
+      const page = compile(withUnits(twoPages(), reviewUnit('u1', pageTarget('p1'))), REGISTRY);
+      expect(page.ok && page.compiled.reviewUnitMarkers).toEqual({});
+      const dropped = compile(withUnits(reviewForm(), reviewUnit('o1', breakTarget('brk_a')), reviewUnit('o2', pageTarget('p1')), reviewUnit('dangling', breakTarget('ghost')), reviewUnit('kept', breakTarget('brk_c'))), REGISTRY);
+      expect(dropped.ok && dropped.compiled.reviewUnitMarkers).toEqual({ kept: 'brk_c' });
+      const plain = compile(twoPages(), REGISTRY);
+      expect(plain.ok && 'reviewUnitMarkers' in plain.compiled).toBe(false);
+    });
+
+    it('a page unit that holds a break counts it like any block, and a compiled form without markers still works', () => {
+      const def = withUnits(form([
+        field('short_text', 'name'), sectionBreak('brk'), field('short_text', 'x'),
+      ], [page('p1', ['name', 'brk', 'x'])], [rule('r', cond(ans('name'), 'eq', text('hide')), [hide('x')])]), reviewUnit('u1', pageTarget('p1')));
+      const { state, compiled } = run(def, { name: a.text('hide') });
+      expect(applicableUnits(compiled, state)).toEqual([{ unitId: 'u1', state: 'applicable' }]);
+      const old = run(breakForm(), { name: a.text('hide') });
+      const { reviewUnitMarkers: _markers, ...withoutMarkers } = old.compiled;
+      expect(applicableUnits(withoutMarkers, old.state)).toEqual([{ unitId: 'u1', state: 'applicable' }]);
+    });
+  });
+
   it('is applicable when one block of the unit is still shown, and is empty for a form without review', () => {
     const def = withUnits(form([
       field('short_text', 'name'), field('short_text', 'x'), field('short_text', 'y'),
@@ -313,15 +371,142 @@ describe('visibleBlocksForReviewer', () => {
     expect([...(set ?? [])]).toEqual(compiled.documentOrder.filter((b) => b === 'intro' || BANK.includes(b)));
   });
 
-  it('ignores assignments for units this version does not hold, and hides a block it does not know by default', () => {
-    expect(visibleBlocksForReviewer(compiled, { units: [assign('u_removed', 'g_old', 1, 'own_unit')] }, groups('g_old'))).toBeNull();
+  it('hides a block it does not know by default', () => {
     const set = visibleBlocksForReviewer(compiled, settings, groups('g_bank'));
     expect(set?.has(bid('removed_block'))).toBe(false);
   });
 
-  it('works on a compiled form without units', () => {
+  describe('when the live settings and the submission\'s version disagree', () => {
+    /**
+     * The version a submission was made on holds u_applicant and u_contact; the live settings have since added u_new (and
+     * u_new_whole), which this version does not hold. In this version the bank page belongs to no unit.
+     */
+    const v1 = versionOf(withUnits(reviewForm(), reviewUnit('u_applicant', breakTarget('brk_a')), reviewUnit('u_contact', breakTarget('brk_b'))));
+    const live = {
+      units: [
+        assign('u_applicant', 'g_x', 1, 'own_unit'), assign('u_contact', 'g_y', 1, 'own_unit'),
+        assign('u_new', 'g_z', 2, 'own_unit'), assign('u_new_whole', 'g_w', 2, 'whole_submission'),
+      ],
+    };
+    const see = (...g: string[]) => {
+      const set = visibleBlocksForReviewer(v1.compiled, live, groups(...g));
+      return set === null ? null : [...set];
+    };
+    const OUTSIDE = ['intro', 'brk_c', 'bank', 'ifsc'];
+
+    it('a checker of an own_unit unit this version lacks sees only the blocks outside all units, never the whole submission', () => {
+      expect(see('g_z')).toEqual(OUTSIDE);
+      expect(see('g_z')).not.toContain('applicant');
+      expect(see('g_z')).not.toContain('email');
+    });
+
+    it('the checker of a unit the version holds still sees that unit and not the other, and a whole_submission unit the version lacks does not redact', () => {
+      expect(see('g_x')).toEqual(['intro', 'brk_a', 'applicant', 'has_bank', 'address', 'brk_c', 'bank', 'ifsc']);
+      expect(see('g_y')).toEqual(['intro', 'brk_b', 'contact', 'email', 'phone', 'brk_c', 'bank', 'ifsc']);
+      expect(see('g_w')).toBeNull();
+    });
+
+    it('own_unit on a missing unit wins over whole_submission on another, and adds nothing to what the caller sees', () => {
+      expect(see('g_z', 'g_w')).toEqual(OUTSIDE);
+      expect(see('g_z', 'g_x')).toEqual(see('g_x'));
+    });
+
+    it('a caller in no group of this form is still not redacted', () => {
+      expect(see()).toBeNull();
+      expect(see('g_elsewhere')).toBeNull();
+    });
+  });
+
+  describe('values worked out from a hidden block', () => {
+    const num = (blockId: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(blockId) } });
+    const lit = (n: string): S.Expr => ({ k: 'lit', value: { type: 'number', value: id<S.DecimalString>(n) } });
+    const calc = (blockId: string, e: S.Expr) => field('calculation', blockId, { config: { expr: e, resultType: 'number', display: 'visible' } });
+    const plus = (left: S.Expr, right: S.Expr): S.Expr => ({ k: 'binary', op: '+', left, right });
+    /**
+     * top and top_x2 sit before the first break; shadow (outside every unit) reads unit B; in unit A, a_x2 reads A, a_copy reads B and
+     * a_chain reads a_copy; in unit B, b_from_a reads A and b_x2 reads B.
+     */
+    const calcForm = () => withUnits(form([
+      field('number', 'top'), calc('top_x2', plus(num('top'), lit('1'))), calc('shadow', plus(num('b_amount'), lit('1'))),
+      sectionBreak('brk_a'), field('number', 'a_amount'), calc('a_x2', plus(num('a_amount'), num('a_amount'))),
+      calc('a_copy', num('b_amount')), calc('a_chain', plus(num('a_copy'), lit('1'))),
+      sectionBreak('brk_b'), field('number', 'b_amount'), calc('b_from_a', num('a_amount')), calc('b_x2', plus(num('b_amount'), lit('2'))),
+    ], [page('p1', ['top', 'top_x2', 'shadow', 'brk_a', 'a_amount', 'a_x2', 'a_copy', 'a_chain']), page('p2', ['brk_b', 'b_amount', 'b_from_a', 'b_x2'])]),
+    reviewUnit('A', breakTarget('brk_a')), reviewUnit('B', breakTarget('brk_b')));
+    const v = versionOf(calcForm());
+    const assignments = { units: [assign('A', 'g_a', 1, 'own_unit'), assign('B', 'g_b', 1, 'own_unit')] };
+    const sees = (...g: string[]) => [...(visibleBlocksForReviewer(v.compiled, assignments, groups(...g)) ?? [])];
+
+    it('a calculation outside every unit that reads unit B is hidden from a unit-A checker, and shown to unit B\'s', () => {
+      expect(sees('g_a')).not.toContain('shadow');
+      expect(sees('g_b')).toContain('shadow');
+    });
+
+    it('a calculation inside the caller\'s unit that copies another unit\'s answer is hidden, and so is one that reads that calculation', () => {
+      expect(sees('g_a')).toEqual(['top', 'top_x2', 'brk_a', 'a_amount', 'a_x2']);
+      expect(sees('g_a')).not.toContain('a_copy');
+      expect(sees('g_a')).not.toContain('a_chain');
+      expect(sees('g_b')).toEqual(['top', 'top_x2', 'shadow', 'brk_b', 'b_amount', 'b_x2']);
+      expect(sees('g_b')).not.toContain('b_from_a');
+    });
+
+    it('keeps a calculation that reads only blocks the caller sees', () => {
+      expect(sees('g_a')).toEqual(expect.arrayContaining(['top_x2', 'a_x2']));
+      expect(sees('g_b')).toEqual(expect.arrayContaining(['top_x2', 'b_x2']));
+    });
+
+    it('a caller who is not redacted sees every derived value, whatever it reads', () => {
+      expect(visibleBlocksForReviewer(v.compiled, assignments, groups('g_other'))).toBeNull();
+      expect(visibleBlocksForReviewer(v.compiled, { units: [assign('A', 'g_a', 1, 'whole_submission')] }, groups('g_a'))).toBeNull();
+    });
+
+    it('a checker of both units sees both units\' calculations', () => {
+      expect(sees('g_a', 'g_b')).toEqual(v.compiled.documentOrder);
+    });
+
+    it('follows variable, default and calc steps through the compiled reads, to a fixed point', () => {
+      /* Hand-built: v1 reads B's value, c1 (a calc in A) reads v1, d1 (a default outside every unit) reads c1, ok reads only A.
+       * A's checker loses c1 (through v1) and d1 (through c1); B's checker loses A's blocks and d1, which reads one of them. */
+      const compiledByHand = {
+        documentOrder: ['brk_a', 'a', 'c1', 'ok', 'brk_b', 'b', 'd1'].map(bid),
+        reviewUnits: { A: ['brk_a', 'a', 'c1', 'ok'].map(bid), B: ['brk_b', 'b'].map(bid) },
+        plan: [
+          { kind: 'default', blockId: bid('d1') }, { kind: 'calc', blockId: bid('c1') }, { kind: 'variable', varId: id<S.VariableId>('v1') },
+          { kind: 'calc', blockId: bid('ok') },
+        ],
+        reads: { 'default:d1': ['value:c1'], 'calc:c1': ['var:v1'], 'variable:v1': ['value:b', 'visible:b'], 'calc:ok': ['value:a'] },
+      } as unknown as Parameters<typeof visibleBlocksForReviewer>[0];
+      expect([...(visibleBlocksForReviewer(compiledByHand, assignments, groups('g_a')) ?? [])]).toEqual(['brk_a', 'a', 'ok']);
+      expect([...(visibleBlocksForReviewer(compiledByHand, assignments, groups('g_b')) ?? [])]).toEqual(['brk_b', 'b']);
+    });
+
+    it('does not follow a visibility read: a rule that shows a block of the caller\'s unit is not a value', () => {
+      const gated = withUnits(form([
+        sectionBreak('brk_a'), field('short_text', 'a'), field('short_text', 'a_late'),
+        sectionBreak('brk_b'), field('short_text', 'b'),
+      ], [page('p1', ['brk_a', 'a', 'a_late', 'brk_b', 'b'])], [rule('r', cond(ans('b'), 'eq', text('x')), [hide('a_late')])]),
+      reviewUnit('A', breakTarget('brk_a')), reviewUnit('B', breakTarget('brk_b')));
+      const gv = versionOf(gated);
+      expect([...(visibleBlocksForReviewer(gv.compiled, assignments, groups('g_a')) ?? [])]).toEqual(['brk_a', 'a', 'a_late']);
+    });
+
+    it('rules write no data today: set_value and logic variables are still refused by compile, which this function relies on', () => {
+      const withSetValue = form([field('short_text', 'name'), field('short_text', 'other')], [page('p1', ['name', 'other'])], [
+        rule('r', cond(ans('name'), 'eq', text('x')), [{ type: 'set_value', target: bid('other'), value: { k: 'lit', value: { type: 'text', value: 'y' } } }]),
+      ]);
+      const result = compile(withSetValue, REGISTRY);
+      expect(!result.ok && result.issues.some((i) => i.code === 'missing_capability' && i.path === '/logic/rules/0/then/0')).toBe(true);
+      const withVariable = form([field('short_text', 'name')], [page('p1', ['name'])]);
+      withVariable.logic.variables = [{ id: id<S.VariableId>('v1'), key: id<S.FieldKey>('v1'), name: 'v', type: 'number', expr: lit('1'), persist: false }];
+      const variable = compile(withVariable, REGISTRY);
+      expect(!variable.ok && variable.issues.some((i) => i.code === 'missing_capability' && i.path === '/logic/variables/0')).toBe(true);
+    });
+  });
+
+  it('a form version without units has every block outside all units, so an own_unit checker sees all of it and a stranger is not redacted', () => {
     const plain = versionOf(twoPages()).compiled;
-    expect(visibleBlocksForReviewer(plain, settings, groups('g_bank'))).toBeNull();
+    expect([...(visibleBlocksForReviewer(plain, settings, groups('g_bank')) ?? [])]).toEqual(plain.documentOrder);
+    expect(visibleBlocksForReviewer(plain, settings, groups('g_unrelated'))).toBeNull();
   });
 });
 

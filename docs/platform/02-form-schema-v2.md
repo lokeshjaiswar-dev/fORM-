@@ -63,7 +63,7 @@ Three candidate designs were scored. Weights: expressiveness 20%, determinism 20
 
 | Area | Change | Source |
 |---|---|---|
-| Review units | `FormDefinition.review?` (units that target a page or a `section_break`), `CompiledForm.reviewUnits?`, `ReviewSettings` (server-stored), invariant I15, four publish issue codes, statuses `pending_review` and `rejected`, `SubmitResult.held: 'pending_review'`. A form without `review` is unchanged byte for byte. Rules in §2.3 | WFL-09 → WP-2.33 |
+| Review units | `FormDefinition.review?` (units that target a page or a `section_break`), `CompiledForm.reviewUnits?` and `reviewUnitMarkers?`, `ReviewSettings` (server-stored), invariant I15, four publish issue codes, statuses `pending_review` and `rejected`, `SubmitResult.held: 'pending_review'`. A form without `review` is unchanged byte for byte. Rules in §2.3 | WFL-09 → WP-2.33 |
 | Section break | `section_break` (a content block that opens a named section) is part of the catalogue and §6, with the membership rule §2.3 gives it | WP-2.33, FLD-48 → WP-2.09 |
 
 ---
@@ -1438,6 +1438,12 @@ export interface CompiledForm {
    * `review`; a unit that fails the review checks is absent here. Server-only: the runtime projection drops it.
    */
   reviewUnits?: Partial<Record<ReviewUnitId, BlockId[]>>;
+  /**
+   * The `section_break` that opens each valid unit that targets one (page units have none). The break is a member of its
+   * unit but holds no answer, so `applicableUnits` does not count it as something to review. Present with `reviewUnits`;
+   * server-only: the runtime projection drops it.
+   */
+  reviewUnitMarkers?: Partial<Record<ReviewUnitId, BlockId>>;
   definitionHash: Sha256Hex;
 }
 
@@ -1488,7 +1494,7 @@ export interface RuntimeFormVersion {
   versionId: FormVersionId; formId: FormId; contentHash: Sha256Hex;
   definition: PublicFormDefinition;  // notes, origin stamps, server actions stripped
   /** `reads` is kept (filtered to client steps) for incremental client evaluation (FND-13). */
-  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
+  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits' | 'reviewUnitMarkers'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
   status: RuntimeStatus;
   accessToken?: string;              // short-lived, proves unlock/schedule checks
   publicConfig: {
@@ -2438,15 +2444,18 @@ Blocks before the first break, and blocks no unit covers, belong to no unit: eve
 | `review_unit_contains_payment` | a `payment` block is among the unit's blocks: money has its own flow and is not approved by a checker |
 | `duplicate_id` | a unit id is used twice (the later unit is flagged) |
 
-**Compile.** `compile()` fills `compiled.reviewUnits` (unit id → block ids) only when the definition has `review`; units that fail a check are left out, so a draft with a bad unit still compiles and previews, with the problem as a warning. Publishing refuses it (the pipeline runs `validateDefinition(def, 'publish')`). The record is stored as jsonb, so consumers sort unit ids themselves instead of relying on key order.
+**Compile.** `compile()` fills `compiled.reviewUnits` (unit id → block ids) and `compiled.reviewUnitMarkers` (unit id → the `section_break` that opens it, for units that target one) only when the definition has `review`; units that fail a check are left out of both, so a draft with a bad unit still compiles and previews, with the problem as a warning. Publishing refuses it (the pipeline runs `validateDefinition(def, 'publish')`). The record is stored as jsonb, so consumers sort unit ids themselves instead of relying on key order.
 
 **Pure helpers** (all in `@form/logic`, all covered by the determinism corpus):
 
-- `applicableUnits(compiled, evalState)`: each unit is `applicable` or `not_applicable`; a unit none of whose blocks is in `EvalState.visible` (every block hidden, or its page off the respondent's path) needs no review.
+- `applicableUnits(compiled, evalState)`: each unit is `applicable` or `not_applicable`; a unit none of whose blocks is in `EvalState.visible` (every block hidden, or its page off the respondent's path) needs no review. The `section_break` that opens a unit (`compiled.reviewUnitMarkers`) is not counted: it holds no answer, so a unit whose fields are all hidden is `not_applicable` even while its break is still shown. Otherwise a required unit with nothing to look at would hold the submission in `pending_review` for ever, because no checker could meaningfully decide it.
 - `reviewUnitAnswersHash(compiled, unitId, answers)`: `sha256(JCS({ [blockId]: answer }))` over the unit's blocks that have a stored answer (unanswered = absent, I9). Independent of key order; an answer outside the unit does not change it. A decision records it; a decision against an older hash is stale. `null` for a unit the compiled form does not hold.
-- `visibleBlocksForReviewer(compiled, settings, callerGroupIds)`: `null` when nothing is hidden from the caller, otherwise the set of block ids they may see. `own_unit` redaction applies to anyone in a review group assigned to an `own_unit` unit of the form, whatever their role (owners and admins included); they see the blocks of the units assigned to their groups plus every block outside all units. A caller in no such group, or only in `whole_submission` units, is not redacted. `own_unit` wins when a person holds both kinds. A block the function does not know is not in the set, so callers hide it by default.
+- `visibleBlocksForReviewer(compiled, settings, callerGroupIds)`: `null` when nothing is hidden from the caller, otherwise the set of block ids they may see. `own_unit` redaction applies to anyone in a review group that has an `own_unit` assignment on this form, whatever their role (owners and admins included); they see the blocks of the units assigned to their groups plus every block outside all units. A caller in no such group, or only in `whole_submission` units, is not redacted. `own_unit` wins when a person holds both kinds. A block the function does not know is not in the set, so callers hide it by default. Two rules keep the redaction from failing open:
+  - **Settings and version can disagree.** `ReviewSettings` is live and keyed by unit id, while a submission keeps the compiled form of its own version, and a later version routinely adds, renames or drops a unit. Whether to redact is decided from *every* assignment of the caller's groups, whether or not the submission's version holds that unit; only the blocks the caller may see come from the units that version does hold. A checker of an `own_unit` unit the version lacks therefore sees the blocks outside all units and nothing else (never the whole submission).
+  - **A value derived from a hidden block is hidden.** A `calculation`, a `hidden` or `context` field, a default or a variable whose step reads (in `compiled.reads`, directly or through other derived values, to a fixed point) the value of a block hidden from the caller is hidden from them too, wherever it sits: a calculation before the first break that reads unit B, or one inside unit A that copies a unit-B answer, would otherwise hand B's answer to A's checker. Rule steps are not followed: today they write visibility, required and enabled cells, never data, because `set_value` and logic variables are refused by `compile()` (`missing_capability`); when WP-2.01 allows them, this function must read the rule targets from the definition (a test fails until it does).
+- **Not blocks, so the API withholds them.** `StoredSubmission.computed.variables` (values derived from answers of any unit) and `computed.firedRuleIds` (a rule that fired tells the reader what its condition read) are not in the returned set and cannot be filtered by it: the API drops both from every response to a redacted caller (review detail, grid, detail, exports). One inference stays by design: logic that shows a block of one unit only when another unit's answer matches still lets that unit's checker see that the block is shown; authors who need segregation keep such conditions inside a unit.
 
-**What respondents see.** `projectForRuntime` keeps `review` as `{ units: [{ id, name }] }` and drops `compiled.reviewUnits`: no targets, groups, visibility or assignments. Unit names are static text (the twin refuses answer pipes, which would carry one unit's answer to a checker who may not see it) and are shown in the default locale; unit-name translations (`review:<unitId>:name`) are not part of the first slice.
+**What respondents see.** `projectForRuntime` keeps `review` as `{ units: [{ id, name }] }` and drops `compiled.reviewUnits` and `compiled.reviewUnitMarkers`: no targets, groups, visibility or assignments. Unit names are static text (the twin refuses answer pipes, which would carry one unit's answer to a checker who may not see it) and are shown in the default locale; unit-name translations (`review:<unitId>:name`) are not part of the first slice.
 
 **Server side, not in the definition.** `ReviewSettings` (`enabled`, `distinctCheckers`, one `ReviewUnitAssignment` per unit with `groupId`, `order` ≥ 1, `required`, `visibility`) is stored per form with a revision check and audit; reason codes are the fixed catalogue `REVIEW_REASON_CODES` (no free-text notes until WP-1.11 can encrypt them). Submissions held for review have status `pending_review`; a required reject finalises them as `rejected`. Neither status is sent to outside systems in the first slice.
 

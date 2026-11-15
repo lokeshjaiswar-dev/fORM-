@@ -143,11 +143,18 @@ describe('compiled and runtime shapes', () => {
     expect(S.CompiledFormSchema.safeParse(compiled({ reviewUnits: JSON.parse('{"__proto__":["a"]}') as unknown })).success).toBe(false);
   });
 
+  it('CompiledForm.reviewUnitMarkers is optional and holds one block id per unit', () => {
+    expect(S.CompiledFormSchema.safeParse(compiled({ reviewUnits: { u1: ['brk_1', 'name_1'] }, reviewUnitMarkers: { u1: 'brk_1' } })).success).toBe(true);
+    expect(S.CompiledFormSchema.safeParse(compiled({ reviewUnitMarkers: { u1: ['brk_1'] } })).success).toBe(false);
+    expect(S.CompiledFormSchema.safeParse(compiled({ reviewUnitMarkers: JSON.parse('{"__proto__":"a"}') as unknown })).success).toBe(false);
+  });
+
   it('the runtime form version carries no reviewUnits, and its definition holds unit ids and names only', () => {
     const runtime = S.RuntimeFormVersionSchema.shape;
     const { dataInventory: _d, taint: _t, plan: _p, ...client } = compiled();
     expect(runtime.compiled.safeParse({ ...client, plan: [] }).success).toBe(true);
     expect(runtime.compiled.safeParse({ ...client, plan: [], reviewUnits: { u1: ['name_1'] } }).success).toBe(false);
+    expect(runtime.compiled.safeParse({ ...client, plan: [], reviewUnitMarkers: { u1: 'brk_1' } }).success).toBe(false);
 
     const base = { ...definition(), review: { units: [{ id: 'u1', name: 'Unit' }] } };
     expect(S.PublicFormDefinitionSchema.safeParse(base).success).toBe(true);

@@ -103,6 +103,12 @@ export interface CompiledForm {
    * `review`; a unit that fails the review checks is absent here. Server-only: the runtime projection drops it.
    */
   reviewUnits?: Partial<Record<ReviewUnitId, BlockId[]>>;
+  /**
+   * The `section_break` that opens each valid unit that targets one (page units have none). The break is a member of its
+   * unit but holds no answer, so `applicableUnits` does not count it as something to review. Present with `reviewUnits`;
+   * server-only: the runtime projection drops it.
+   */
+  reviewUnitMarkers?: Partial<Record<ReviewUnitId, BlockId>>;
   definitionHash: Sha256Hex;
 }
 
@@ -153,7 +159,7 @@ export interface RuntimeFormVersion {
   versionId: FormVersionId; formId: FormId; contentHash: Sha256Hex;
   definition: PublicFormDefinition;  // notes, origin stamps, server actions stripped
   /** `reads` is kept (filtered to client steps) for incremental client evaluation (FND-13). */
-  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
+  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits' | 'reviewUnitMarkers'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
   status: RuntimeStatus;
   accessToken?: string;              // short-lived, proves unlock/schedule checks
   publicConfig: {
