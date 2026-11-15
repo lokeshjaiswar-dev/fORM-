@@ -11,8 +11,9 @@ export const NOTIFICATIONS_PROBLEMS = {
   // The body is not a NotificationConfig (the strict twin refused it): the field issues carry the paths, like DRAFT_INVALID.
   NOTIFICATION_INVALID: { status: 422, title: 'The notification is not valid' },
   // purposeIds is empty, or names a purpose the form's draft does not declare in privacy.purposes. A notification with no
-  // purpose would send every field, which the purpose filter exists to stop, so nothing is written.
-  MISSING_PURPOSE: { status: 422, title: 'Name at least one purpose that this form declares' },
+  // purpose would send every field, which the purpose filter exists to stop, so nothing is written. A webhook is refused
+  // with this same code for the same reason (WP-1.18: its body leaves for an outside address), so the title says "the form".
+  MISSING_PURPOSE: { status: 422, title: 'Name at least one purpose that the form declares' },
   // `senderId` is not one of this org's email senders (RLS makes another org's sender look exactly like one that never existed).
   SENDER_NOT_FOUND: { status: 422, title: 'That email sender is not in this organisation' },
   // A `member` recipient is not an active member of this org (or not a member id at all).

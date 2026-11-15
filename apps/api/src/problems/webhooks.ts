@@ -8,9 +8,9 @@ import type { ProblemSpec } from './spec.ts';
  * webhook, a form or a delivery of another org is the core `NOT_FOUND`, because row-level security makes them not exist.
  */
 export const WEBHOOKS_PROBLEMS = {
-  // Sending answers to an outside address is a disclosure (CONTRIBUTING §5, rule 6), so a webhook must name the purposes it
-  // serves, and each must be one the form's draft declares. Nothing is written when this is answered.
-  MISSING_PURPOSE: { status: 422, title: 'Name at least one purpose that the form declares' },
+  // `MISSING_PURPOSE` (422) is answered here too: sending answers to an outside address is a disclosure (CONTRIBUTING §5,
+  // rule 6), so a webhook must name the purposes it serves, each one the form's draft declares. The code is listed once, in
+  // `notifications.ts`, because a code appears in one file only; the route's own message says which purpose is the problem.
   // The URL fails the edition's egress policy: a scheme the deployment does not allow, a host that is not on the
   // allowlist, or an address that is private, loopback or link-local (the cloud metadata address among them).
   EGRESS_DENIED: { status: 422, title: 'That address cannot be reached from this installation' },
