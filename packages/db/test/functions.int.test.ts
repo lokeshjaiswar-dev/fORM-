@@ -171,6 +171,8 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'orgs_due_for',
       'resolve_form_slug',
       'resolve_job_org',
+      'review_decide',
+      'review_open',
       'secret_enc',
       'template_delete',
       'template_for_binding',
