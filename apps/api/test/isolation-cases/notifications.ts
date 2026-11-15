@@ -2,7 +2,7 @@ import { expect } from 'vitest';
 import type { Fixture, IsolationCase, IsolationDomain, Res, SeedEnv } from './types.ts';
 
 /**
- * Cases for the notification routes (WP-1.16): org email senders and the notifications of a form. Each is
+ * Cases for the notification routes (WP-1.16): org email senders and the notifications and email log of a form. Each is
  * an `auth: 'user'` route, so each needs a case here or the suite fails.
  *
  * Org A's sender and notification are made by the seed through the API, as org A's owner, so the cases aim real ids at org
@@ -115,6 +115,11 @@ const cases: IsolationCase[] = [
   {
     route: 'DELETE /v1/forms/:formId/notifications/:id',
     call: (f) => ({ url: `/v1/forms/${f.a.formId}/notifications/${f.extra.notificationId}` }),
+  },
+  {
+    route: 'GET /v1/forms/:formId/email-log',
+    call: (f) => ({ url: `/v1/forms/${f.a.formId}/email-log` }),
+    note: 'Org A’s own owner gets 200 for the same request (an empty log: the seed makes no response that sends mail). Org B must not learn that the form exists.',
   },
 ];
 

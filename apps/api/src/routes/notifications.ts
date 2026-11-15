@@ -1,11 +1,12 @@
-import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { audit, auditActor, emailSenders, formDrafts, forms, isUuid, memberships, notifications, withTenant, type Db, type MembershipRole, type Tx } from '@form/db';
+import { audit, auditActor, emailMessages, emailSenders, formDrafts, forms, isUuid, memberships, notifications, withTenant, type Db, type MembershipRole, type Tx } from '@form/db';
 import { canonicalJson, NotificationConfigSchema, type NotificationConfig } from '@form/schema';
 import { accountOf, clientInfo, tenantOf } from '../auth.ts';
 import { permissionsFor } from '../authz/roles.ts';
+import { MAX_CURSOR_LENGTH, readCursor, signCursor } from '../cursor.ts';
 import { ProblemError, sendProblem, type FieldIssue } from '../errors.ts';
 import { hex } from '../modules/auth/crypto.ts';
 import { uuidv7 } from '../uuid7.ts';
@@ -15,7 +16,7 @@ export interface NotificationRouteDeps {
   db: Db;
   /** The small separate pool for denied and failed audit records (ADR-0006). */
   auditDb: Db;
-  /** Keys the IP hash of audit records (`config.auth.secret`). */
+  /** Keys the IP hash of audit records and signs the email log's cursors (`config.auth.secret`). */
   secret: Uint8Array;
   now: () => Date;
 }
@@ -56,6 +57,27 @@ type NotificationView = z.infer<typeof notificationView>;
 
 /** Loose on purpose: the body is parsed with the strict twin in the handler, so a bad one is a 422 with paths. */
 const configBody = z.record(z.string(), z.unknown());
+
+const logQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  status: z.enum(['queued', 'sending', 'retrying', 'sent', 'failed']).optional(),
+  cursor: z.string().max(MAX_CURSOR_LENGTH).optional(),
+});
+const logItem = z.object({
+  id: z.uuid(),
+  notificationId: z.uuid(),
+  submissionId: z.uuid(),
+  /** Why this person is a recipient (`to`, `cc`, `bcc`, ...), as the worker recorded it. */
+  role: z.string(),
+  /** Masked addresses, as the worker stored them (`a***@example.com`): the log never holds a full one. */
+  to: z.array(z.string()),
+  status: z.enum(['queued', 'sending', 'retrying', 'sent', 'failed']),
+  attempts: z.number().int().min(0),
+  /** The mail server's last complaint, scrubbed by the worker. */
+  lastError: z.string().nullable(),
+  sentAt: isoInstant.nullable(),
+  createdAt: isoInstant,
+});
 
 /** The revision a save read, from `If-Match` (`3`, `"3"` or `W/"3"`). */
 function expectedRev(request: FastifyRequest): number {
@@ -336,7 +358,8 @@ function columnsOf(config: NotificationConfig) {
 }
 
 /**
- * The notifications of a form (WP-1.16, NOT-01 to NOT-03): `/v1/forms/:formId/notifications`. A notification is live and unversioned (architecture §2.4): publishing freezes the form,
+ * The notifications of a form and its email log (WP-1.16, NOT-01 to NOT-04): `/v1/forms/:formId/notifications` and
+ * `/v1/forms/:formId/email-log`. A notification is live and unversioned (architecture §2.4): publishing freezes the form,
  * not its emails. The stored `config` is the `NotificationConfig` of `@form/schema`; the server makes the id, so a client
  * cannot pick one that collides with another org's row, and copies `kind`, `trigger`, `enabled`, `senderId` and `purposeIds`
  * into the columns the worker queries.
@@ -605,4 +628,69 @@ export function notificationRoutes(app: FastifyInstance, deps: NotificationRoute
     },
   );
 
+  r.get(
+    '/v1/forms/:formId/email-log',
+    {
+      config: { auth: 'user', perm: 'submissions.read' },
+      schema: {
+        tags: TAGS,
+        summary: "The delivery log of a form's emails",
+        description:
+          'Newest first, by cursor: `nextCursor` is signed and bound to this form, status filter and org; pass it back unchanged for the next page and stop when it is null. Recipients are masked (`a***@example.com`) as the worker recorded them, never a full address, and no message body is kept. Reading needs `submissions.read`: the log says who a response\'s data was emailed to.',
+        security: SECURITY,
+        params: formParam,
+        querystring: logQuery,
+        response: { 200: z.object({ items: z.array(logItem), nextCursor: z.string().nullable() }) },
+      },
+    },
+    async (request, reply) => {
+      const { formId } = request.params;
+      const { limit, status, cursor } = request.query;
+      const tenant = tenantOf(request);
+      const scope = JSON.stringify(['email-log', tenant.orgId, formId, status ?? null]);
+      let after: [string, string] | undefined;
+      if (cursor !== undefined) {
+        const values = readCursor(deps.secret, scope, cursor);
+        const [at, id] = values ?? [];
+        if (values?.length !== 2 || typeof at !== 'string' || !isUuid(id)) throw new ProblemError('INVALID_CURSOR');
+        after = [at, id];
+      }
+      const rows = await withTenant(deps.db, { ...tenant, readOnly: true }, async (tx) => {
+        await requireForm(tx, formId);
+        return tx
+          .select({
+            id: emailMessages.id,
+            notificationId: emailMessages.notificationId,
+            submissionId: emailMessages.submissionId,
+            role: emailMessages.role,
+            to: emailMessages.toDisplayMasked,
+            status: emailMessages.status,
+            attempts: emailMessages.attempts,
+            lastError: emailMessages.lastError,
+            sentAt: emailMessages.sentAt,
+            createdAt: emailMessages.createdAt,
+            // The cursor keeps the microseconds a JavaScript Date would round.
+            createdKey: sql<string>`${emailMessages.createdAt}::text`,
+          })
+          .from(emailMessages)
+          .where(
+            and(
+              eq(emailMessages.formId, formId),
+              status ? eq(emailMessages.status, status) : undefined,
+              after ? sql`(${emailMessages.createdAt}, ${emailMessages.id}) < (${after[0]}::timestamptz, ${after[1]}::uuid)` : undefined,
+            ),
+          )
+          .orderBy(desc(emailMessages.createdAt), desc(emailMessages.id))
+          // One row more than the page, to know whether there is a next page without a count.
+          .limit(limit + 1);
+      });
+      const page = rows.slice(0, limit);
+      const last = page.at(-1);
+      reply.header('cache-control', 'private, no-store');
+      return {
+        items: page.map(({ createdKey: _key, ...row }) => ({ ...row, sentAt: row.sentAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString() })),
+        nextCursor: rows.length > limit && last ? signCursor(deps.secret, scope, [last.createdKey, last.id]) : null,
+      };
+    },
+  );
 }
