@@ -259,6 +259,10 @@ function makeDeps(queue: PgBossQueue, mail: Pick<FakeMailer, 'mailer' | 'asked'>
       return mail.mailer;
     },
     tenantEgress: { assertAllowed: async () => ({ pinnedIp: '127.0.0.1' }) },
+    // An email job makes no HTTP request to a tenant's address; one that tried would be a leak, so the fake fails loudly.
+    tenantHttp: async () => {
+      throw new Error('a notification job must not call tenantHttp');
+    },
     config: { publicBuilderUrl: 'https://forms.acme.example', mailFrom: { address: 'noreply@acme.example', name: 'fORM-' }, messageIdDomain: DOMAIN, webhookUserAgent: 'fORM-test' },
     now: () => new Date(),
   };
