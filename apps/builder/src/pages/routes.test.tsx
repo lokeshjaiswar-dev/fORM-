@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AppRoutes } from '@/App';
@@ -329,5 +329,73 @@ describe('routes', () => {
     expect(repo.records.get('old')).toMatchObject({ format: DOCUMENT_FORMAT, rev: 3, doc: { formId: 'old', schemaVersion: 2 }, ops: {} });
     // The plaintext password is in neither the saved draft nor the saved local settings (BL-145).
     expect(JSON.stringify(repo.records.get('old'))).not.toContain('hunter2');
+  });
+
+  describe('the shells of the approvals, notifications and webhooks pages (WP-2.33, WP-1.16, WP-1.18)', () => {
+    it('/reviews shows the review queue page', async () => {
+      renderApp(new MemoryRepository(), '/reviews');
+      expect(await screen.findByRole('heading', { name: 'Review queue' }, OPENS)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Back to forms' })).toHaveAttribute('href', '/forms');
+      expect(path()).toBe('/reviews');
+    });
+
+    it('/org/email-senders shows the email senders page', async () => {
+      renderApp(new MemoryRepository(), '/org/email-senders');
+      expect(await screen.findByRole('heading', { name: 'Email senders' }, OPENS)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Back to organisation settings' })).toHaveAttribute('href', '/org/settings');
+      expect(path()).toBe('/org/email-senders');
+    });
+
+    it('/forms/:id/settings shows the form’s title and the Emails tab, with a link to each of the three tabs', async () => {
+      const repo = new MemoryRepository();
+      await repo.save(stored('f1', 'Feedback'));
+      renderApp(repo, '/forms/f1/settings');
+      expect(await screen.findByRole('heading', { level: 1, name: 'Feedback' }, OPENS)).toBeInTheDocument();
+      const tabs = within(screen.getByRole('navigation', { name: 'Settings sections' }));
+      expect(tabs.getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+        ['Emails', '/forms/f1/settings/emails'],
+        ['Webhooks', '/forms/f1/settings/webhooks'],
+        ['Email log', '/forms/f1/settings/email-log'],
+      ]);
+      expect(tabs.getByRole('link', { name: 'Emails' })).toHaveAttribute('aria-current', 'page');
+      expect(tabs.getByRole('link', { name: 'Webhooks' })).not.toHaveAttribute('aria-current');
+      expect(within(screen.getByRole('region', { name: 'Emails' })).getByRole('heading', { name: 'Email notifications' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open form' })).toHaveAttribute('href', '/builder/f1');
+      expect(path()).toBe('/forms/f1/settings');
+    });
+
+    it('/forms/:id/settings/:tab shows that tab’s panel, and the tab links move between them', async () => {
+      const repo = new MemoryRepository();
+      await repo.save(stored('f1', 'Feedback'));
+      renderApp(repo, '/forms/f1/settings/webhooks');
+      expect(await screen.findByRole('heading', { name: 'Webhooks', level: 2 }, OPENS)).toBeInTheDocument();
+      expect(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('link', { name: 'Webhooks' })).toHaveAttribute('aria-current', 'page');
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('link', { name: 'Email log' }));
+      expect(await screen.findByRole('heading', { name: 'Email log', level: 2 })).toBeInTheDocument();
+      expect(path()).toBe('/forms/f1/settings/email-log');
+      expect(screen.queryByRole('heading', { name: 'Webhooks', level: 2 })).not.toBeInTheDocument();
+    });
+
+    it('an unknown tab goes to the first, and the title falls back for a form this browser does not hold', async () => {
+      renderApp(new MemoryRepository(), '/forms/nope/settings/not-a-tab');
+      expect(await screen.findByRole('heading', { name: 'Email notifications' }, OPENS)).toBeInTheDocument();
+      expect(path()).toBe('/forms/nope/settings/emails');
+      expect(await screen.findByRole('heading', { level: 1, name: 'Untitled form' })).toBeInTheDocument();
+    });
+
+    it.each([
+      ['/reviews', 'Review queue'],
+      ['/forms/f1/settings/emails', 'Email notifications'],
+      ['/org/email-senders', 'Email senders'],
+    ])('%s is gated like the other builder pages: a signed-out visitor is sent to sign in and the page is not shown', async (where, heading) => {
+      useSessionStore.setState({ status: 'signed_out' }, true);
+      renderApp(new MemoryRepository(), where);
+      expect(await screen.findByRole('heading', { name: 'Sign in' }, OPENS)).toBeInTheDocument();
+      expect(path()).toBe('/auth/sign-in');
+      expect(sessionStorage.getItem('fr.afterSignIn')).toBe(where);
+      expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument();
+    });
   });
 });

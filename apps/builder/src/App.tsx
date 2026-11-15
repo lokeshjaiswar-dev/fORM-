@@ -8,8 +8,10 @@ import { activeOrgOf, loadSession, useSessionStore } from '@/auth/client';
 import { rememberAfterSignIn } from '@/auth/returnTo';
 import { BuilderPage } from '@/pages/BuilderPage';
 import { PublicFillPage } from '@/pages/PublicFillPage';
+import { FormSettingsPage } from '@/pages/FormSettingsPage';
 import { FormsPage } from '@/pages/FormsPage';
 import { ResponsesPage } from '@/pages/ResponsesPage';
+import { ReviewQueuePage } from '@/pages/ReviewQueuePage';
 import { MagicLinkPage, VerifyEmailPage } from '@/pages/auth/LinkPages';
 import { MfaPage } from '@/pages/auth/MfaPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPages';
@@ -19,6 +21,7 @@ import { SignUpPage } from '@/pages/auth/SignUpPage';
 import { NoticePage } from '@/pages/privacy/NoticePage';
 import { PrivacyPage } from '@/pages/privacy/PrivacyPage';
 import { CreateOrgPage } from '@/pages/org/CreateOrgPage';
+import { EmailSendersPage } from '@/pages/org/EmailSendersPage';
 import { InvitePage } from '@/pages/org/InvitePage';
 import { MembersPage } from '@/pages/org/MembersPage';
 import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
@@ -96,6 +99,9 @@ export function AppRoutes() {
       >
         <Route path="/forms" element={<FormsPage />} />
         <Route path="/forms/:id/responses" element={<ResponsesPage />} />
+        <Route path="/forms/:id/settings/:tab?" element={<FormSettingsPage />} />
+        <Route path="/reviews" element={<ReviewQueuePage />} />
+        <Route path="/org/email-senders" element={<EmailSendersPage />} />
         <Route path="/builder/:id/preview?" element={<BuilderPage />} />
       </Route>
       <Route path="/fields/*" element={<Navigate to="/forms" replace />} />
