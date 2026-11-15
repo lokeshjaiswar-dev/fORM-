@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createKeyfileKeyProvider } from '@form/adapters/kms';
+import { createKeyfileKeyProvider, createOrgSecrets } from '@form/adapters/kms';
 import { PLATFORM_ORG_KEY, provision, type MembershipRole } from '@form/db';
 import { createTestDatabase } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
@@ -93,10 +93,13 @@ beforeAll(async () => {
     MAILER_DRIVER: 'log',
   });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
+  const keys = createKeyfileKeyProvider({ masterKey: randomBytes(32) });
   app = await buildApp(parsed.config, {
     underPressure: false,
     files: createFileStore(filesDir),
-    keys: createKeyfileKeyProvider({ masterKey: randomBytes(32) }),
+    keys,
+    // The org email senders seal their SMTP URL under the org's key (WP-1.16), so their cases can reach the database.
+    orgSecrets: createOrgSecrets(keys),
     // Dozens of auth requests from one address in a minute are the point of this suite, not an attack.
     authLimits: { auth_any: { max: 100_000, windowSeconds: 60 } },
     onRoute: (route) => collect(routes, route),

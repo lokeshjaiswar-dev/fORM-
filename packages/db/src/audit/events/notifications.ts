@@ -5,7 +5,25 @@ import type { AuditEventSpec } from './spec.ts';
  * `AUDIT_EVENTS` by `../catalogue.ts`; add codes here, not there. List only codes something emits (`catalogue.test.ts`),
  * and none that another file already lists (`events.test.ts`).
  *
- * Empty until the notification tasks list their codes. A record names ids and counts, never a recipient's address, a
- * sender's SMTP credentials or an answer.
+ * A record names ids, counts and the keys that changed. It never holds a recipient's address, a sender's SMTP URL or
+ * credentials, a subject or a body, so the chain can be read by someone who may not read the answers.
  */
-export const NOTIFICATIONS_EVENTS = {} as const satisfies Record<string, AuditEventSpec>;
+export const NOTIFICATIONS_EVENTS = {
+  'email_sender.saved': {
+    outcomes: ['success'],
+    resourceType: 'email_sender',
+    description:
+      'An org email sender was created or changed (`change` is `created` or `updated`); the metadata names the keys that changed (`name`, `fromAddress`, `fromName`, `smtpUrl`), never the address or the SMTP URL.',
+  },
+  'email_sender.deleted': {
+    outcomes: ['success'],
+    resourceType: 'email_sender',
+    description: 'An org email sender and its sealed SMTP credentials were deleted.',
+  },
+  'email_sender.tested': {
+    outcomes: ['success'],
+    resourceType: 'email_sender',
+    description:
+      'A test message was sent through an org email sender to the caller\'s own address; `ok` says whether the server accepted it and `verified` whether the sender is now marked verified. The error text is stored on the sender, scrubbed, and is not in the record.',
+  },
+} as const satisfies Record<string, AuditEventSpec>;
