@@ -1,5 +1,7 @@
 -- Submissions (WP-1.12: SUB-01; architecture §2.4, ADR-0004). Replaces the prototype's form_submissions.
 --
+-- 0. A form with responses and no version (the prototype's preview of a never-published form) gets one retired
+--    legacy version, so its responses have a version to be filed under and are not refused or dropped.
 -- 1. uuid_v7_ts(): the timestamp inside a UUIDv7, which is what binds a submission to its partition.
 -- 2. submissions: monthly range partitions on received_at, kept in schema `parts` (no default partition), with the
 --    restrictive data-access policies of 0019, the status check and the grid / unread / due / status / principal indexes.
@@ -14,20 +16,70 @@
 -- ---------------------------------------------------------------------------------------------------------------
 
 -- submissions.form_version_id is not null and a foreign key, because a response is only meaningful against the form
--- as the respondent saw it (definition_hash, the answers' shape). A prototype row carries no version, so it gets the
--- form's live version, or its newest one when none is live (an unpublished form). A form with no version at all
--- (nothing the app ever made: the public route needs a published form) has nothing to point at, and dropping its rows
--- silently is worse than stopping here, so the migration refuses and says which.
+-- as the respondent saw it (definition_hash, the answers' shape). A prototype row carries no version, so step 4 files
+-- it under the form's live version, or its newest one when none is live (an unpublished form).
+--
+-- A form can have responses and no version at all. The prototype's signed-in route POST /v1/forms/:formId/submissions
+-- (from 283f4ba2 until 64ddc33c) stored a row for any form of the org, published or not, and the builder called it on
+-- every preview submit; previews usually happen before a form is first published. So a database where the prototype
+-- builder was used signed-in very likely holds such rows. They are real responses and the product owner's decision is
+-- that prototype rows move, so the migration neither refuses nor drops them: each such form gets one LEGACY version,
+-- here, and step 4 files the rows under it.
+--
+-- A legacy version is a stand-in, never a published form, and is marked so in four ways that later code can rely on:
+--   * number 0. Real versions count from 1 and the publish route numbers the next one max(number) + 1, so the form's
+--     first real publish is still version 1 and cannot collide with the legacy one; (org_id, form_id, number) stays
+--     unique.
+--   * label 'legacy (prototype preview)', engine 'legacy@0' (no plan was compiled), compiled '{}', draft_rev null. The
+--     null draft_rev matters: publishing a draft revision that a version already froze returns that version, so a
+--     legacy version holding the current revision would turn the form's first publish into a no-op.
+--   * never live: forms.live_version_id stays null, so resolve_form_slug and the public page never see it.
+--   * retired from birth: its form_version_state row (the trigger of 0020 makes it) is set to retired_at = now() and
+--     superseded_at = 'epoch'. The old date is on purpose: submit accepts a version that is not live for
+--     accept_previous_versions_hours (at most 720) after superseded_at, and a legacy version must not fall inside that
+--     window on any date.
+-- Its definition is the form's current draft when that has the v2 shape (the answers are keyed by that draft's block
+-- ids, so the Responses page can still label them), else an empty definition (no pages, no blocks) that names only the
+-- form. Either way it is a snapshot made now, not a claim of what the form looked like when the previews were made.
+-- published_at is when the form was created: nothing was ever published, and this keeps the date before every response.
 do $$
 declare
-  v_orphans bigint;
+  v_ids uuid[];
+  v_forms bigint;
+  v_rows bigint;
 begin
-  select count(*) into v_orphans from form_submissions s
-  where not exists (select 1 from form_versions v where v.org_id = s.org_id and v.form_id = s.form_id);
-  if v_orphans > 0 then
-    raise exception '0021: % form_submissions row(s) belong to a form that has no version, so they cannot move to submissions', v_orphans
-      using errcode = 'object_not_in_prerequisite_state',
-            hint = 'List them with: select distinct org_id, form_id from form_submissions s where not exists (select 1 from form_versions v where v.org_id = s.org_id and v.form_id = s.form_id). Give each form a version or remove the rows, then run the migration again.';
+  with versionless as (
+    select f.org_id, f.id as form_id, f.owner_user_id, f.created_at, f.title, d.schema_version, d.draft,
+      coalesce(jsonb_typeof(d.draft -> 'pages') = 'array' and jsonb_typeof(d.draft -> 'blocks') = 'object', false) as usable
+    from forms f
+    left join form_drafts d on d.org_id = f.org_id and d.form_id = f.id
+    where exists (select 1 from form_submissions s where s.org_id = f.org_id and s.form_id = f.id)
+      and not exists (select 1 from form_versions v where v.org_id = f.org_id and v.form_id = f.id)
+  ), snapshot as (
+    select o.*, case when o.usable then o.draft
+      else jsonb_build_object('schemaVersion', 2, 'formId', o.form_id, 'title', o.title, 'pages', '[]'::jsonb, 'blocks', '{}'::jsonb) end as definition
+    from versionless o
+  ), inserted as (
+    insert into form_versions (id, org_id, form_id, number, schema_version, published_at, published_by, definition, compiled,
+      content_hash, label, engine, draft_rev)
+    select gen_random_uuid(), x.org_id, x.form_id, 0, case when x.usable then x.schema_version else 2 end,
+      x.created_at, x.owner_user_id, x.definition, '{}'::jsonb,
+      encode(sha256(convert_to(x.definition::text, 'UTF8')), 'hex'), 'legacy (prototype preview)', 'legacy@0', null
+    from snapshot x
+    returning id
+  )
+  select coalesce(array_agg(id), '{}') into v_ids from inserted;
+
+  -- The trigger of 0020 made a form_version_state row for each (an AFTER trigger: the rows exist once the statement
+  -- above is done); retire them. The upsert also covers a row the trigger did not make.
+  insert into form_version_state (version_id, org_id, form_id, superseded_at, retired_at)
+  select v.id, v.org_id, v.form_id, 'epoch'::timestamptz, now() from form_versions v where v.id = any (v_ids)
+  on conflict (version_id) do update set superseded_at = excluded.superseded_at, retired_at = excluded.retired_at;
+
+  select count(distinct s.form_id), count(*) into v_forms, v_rows
+  from form_submissions s join form_versions v on v.org_id = s.org_id and v.form_id = s.form_id and v.id = any (v_ids);
+  if v_forms > 0 then
+    raise notice '0021: % prototype response(s) of % form(s) that were never published are filed under a legacy version (number 0)', v_rows, v_forms;
   end if;
 end
 $$;

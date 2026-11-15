@@ -413,17 +413,150 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
     }
   });
 
-  it('refuses, and changes nothing, when a response belongs to a form that has no version', async () => {
+  it('files the responses of a form that was never published under a retired legacy version instead of refusing or dropping them', async () => {
     const m = await prototypeAt20();
     try {
-      const bare = randomUUID();
-      await m.c.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [bare, m.orgA, randomUUID(), randomUUID(), 'Never published']);
-      await m.c.query(`insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, '{}', '[]')`, [randomUUID(), m.orgA, bare]);
-      const err = String(await failure(migrate(m.c, m.files.filter((x) => x.version <= 21))));
-      expect(err).toMatch(/0021_submissions failed: 0021: 1 form_submissions row\(s\) belong to a form that has no version/);
-      expect((await m.c.query(`select to_regclass('public.form_submissions') as old, to_regclass('public.submissions') as new`)).rows).toEqual([{ old: 'form_submissions', new: null }]);
-      expect((await m.c.query<{ n: number }>('select count(*)::int as n from form_submissions')).rows[0]!.n).toBe(6);
-      expect((await m.c.query<{ v: number }>('select max(version) as v from fr_meta.schema_migrations')).rows[0]!.v).toBe(20);
+      // The prototype's signed-in preview stored a response for any form of the org, published or not. Four shapes of
+      // such a form, plus one that has no response (and so needs no stand-in).
+      const owner = randomUUID();
+      const bare = async (org: string, title: string, draft: object | null, draftRev = 4) => {
+        const id = randomUUID();
+        await m.c.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [id, org, randomUUID(), owner, title]);
+        if (draft) {
+          await m.c.query(`insert into form_drafts (form_id, org_id, draft, draft_rev, schema_version, size_bytes, updated_by) values ($1, $2, $3, $4, 2, 10, $5)`, [id, org, JSON.stringify(draft), draftRev, owner]);
+        }
+        return id;
+      };
+      const v2Draft = { schemaVersion: 2, title: 'Draft', pages: [{ id: 'page_1', children: ['blk_n'] }], blocks: { blk_n: { id: 'blk_n', key: 'n', type: 'number' } } };
+      const withDraft = await bare(m.orgA, 'Previewed with a draft', v2Draft);
+      const noDraft = await bare(m.orgA, 'Previewed without a draft', null);
+      const oldShape = await bare(m.orgA, 'Previewed with an old-shaped draft', { fields: [{ id: 'x' }] });
+      const otherOrg = await bare(m.orgB, 'Previewed in another org', null);
+      const noRows = await bare(m.orgA, 'Never previewed', v2Draft);
+      const received = [
+        { n: 10, org: m.orgA, form: withDraft, at: '2026-10-20T10:00:00Z' },
+        { n: 11, org: m.orgA, form: withDraft, at: '2026-10-21T10:00:00Z' },
+        { n: 12, org: m.orgA, form: noDraft, at: '2026-10-22T10:00:00Z' },
+        { n: 13, org: m.orgA, form: oldShape, at: '2026-10-23T10:00:00Z' },
+        { n: 14, org: m.orgB, form: otherOrg, at: '2026-10-24T10:00:00Z' },
+      ];
+      for (const r of received) {
+        await m.c.query(`insert into form_submissions (id, org_id, form_id, answers, fields, submitted_at) values ($1, $2, $3, $4, '[]', $5)`, [
+          randomUUID(),
+          r.org,
+          r.form,
+          JSON.stringify({ n: { type: 'number', value: r.n } }),
+          r.at,
+        ]);
+      }
+      const versionsBefore = (await m.c.query<{ n: number }>('select count(*)::int as n from form_versions')).rows[0]!.n;
+      const countsBefore = await m.counters();
+      const notices: string[] = [];
+      m.c.on('notice', (n) => notices.push(n.message ?? ''));
+
+      // Not refused: the migration applies, and says how many responses it filed this way.
+      expect((await migrate(m.c, m.files.filter((x) => x.version <= 21))).applied).toEqual(['0021_submissions']);
+      expect(notices.filter((n) => n.startsWith('0021:'))).toEqual(['0021: 5 prototype response(s) of 4 form(s) that were never published are filed under a legacy version (number 0)']);
+      // Nothing was dropped: the five responses are all in submissions, next to the five of the fixture.
+      expect((await m.c.query<{ n: number }>('select count(*)::int as n from submissions')).rows[0]!.n).toBe(10);
+
+      // One legacy version for each of the four forms with responses; none for a form that has none, or that has versions.
+      const legacy = (
+        await m.c.query<{
+          id: string;
+          org_id: string;
+          form_id: string;
+          number: number;
+          schema_version: number;
+          published_by: string;
+          definition: Record<string, unknown>;
+          compiled: unknown;
+          content_hash: string;
+          label: string;
+          engine: string;
+          draft_rev: number | null;
+          media: unknown;
+          created_ok: boolean;
+          hash_ok: boolean;
+        }>(
+          `select v.id, v.org_id, v.form_id, v.number, v.schema_version, v.published_by, v.definition, v.compiled, v.content_hash, v.label, v.engine, v.draft_rev, v.media,
+             v.published_at = f.created_at as created_ok, encode(sha256(convert_to(v.definition::text, 'UTF8')), 'hex') = v.content_hash as hash_ok
+           from form_versions v join forms f on f.org_id = v.org_id and f.id = v.form_id where v.label is not null`,
+        )
+      ).rows;
+      expect(legacy.map((v) => v.form_id).sort()).toEqual([withDraft, noDraft, oldShape, otherOrg].sort());
+      expect((await m.c.query<{ n: number }>('select count(*)::int as n from form_versions')).rows[0]!.n).toBe(versionsBefore + 4);
+      expect((await m.c.query(`select 1 from form_versions where form_id = $1`, [noRows])).rowCount).toBe(0);
+      const legacyOf = (formId: string) => legacy.find((v) => v.form_id === formId)!;
+      for (const v of legacy) {
+        // Number 0: the first real publish is max(number) + 1 = 1. Never compiled, never named for a draft revision (a
+        // legacy version holding the draft's revision would make that publish return it), owned by the form's owner.
+        expect(v, v.form_id).toMatchObject({
+          number: 0,
+          label: 'legacy (prototype preview)',
+          engine: 'legacy@0',
+          compiled: {},
+          draft_rev: null,
+          media: null,
+          published_by: owner,
+          created_ok: true,
+          hash_ok: true,
+        });
+      }
+      // The definition: a usable draft is copied as it is; anything else becomes an empty one that names the form.
+      expect(legacyOf(withDraft)).toMatchObject({ schema_version: 2, definition: v2Draft });
+      for (const [formId, title] of [[noDraft, 'Previewed without a draft'], [oldShape, 'Previewed with an old-shaped draft'], [otherOrg, 'Previewed in another org']] as const) {
+        expect(legacyOf(formId), title).toMatchObject({ schema_version: 2, definition: { schemaVersion: 2, formId, title, pages: [], blocks: {} } });
+      }
+      expect(legacyOf(otherOrg).org_id).toBe(m.orgB);
+      expect(legacyOf(withDraft).org_id).toBe(m.orgA);
+
+      // Never live and never accepting: the forms stay unpublished, and the version state of each says it is retired,
+      // with a superseded date no accept-previous-versions window (at most 720 h) can reach.
+      expect((await m.c.query('select 1 from forms where id = any ($1) and live_version_id is not null', [[withDraft, noDraft, oldShape, otherOrg]])).rowCount).toBe(0);
+      const states = (
+        await m.c.query<{ version_id: string; retired_ok: boolean; superseded_at: Date }>(
+          `select version_id, retired_at is not null and retired_at <= now() as retired_ok, superseded_at from form_version_state where version_id = any ($1)`,
+          [legacy.map((v) => v.id)],
+        )
+      ).rows;
+      expect(states.map((r) => r.version_id).sort()).toEqual(legacy.map((v) => v.id).sort());
+      for (const st of states) {
+        expect(st.retired_ok).toBe(true);
+        expect(st.superseded_at.getTime()).toBe(0);
+      }
+      // Every version still has exactly one state row (the 0020 invariant).
+      expect((await m.c.query(`select 1 from form_versions v where not exists (select 1 from form_version_state s where s.version_id = v.id)`)).rowCount).toBe(0);
+
+      // The responses are filed under their form's legacy version, with its hash, in the order they were received.
+      const filed = (
+        await m.c.query<{ n: number; form_id: string; form_version_id: string; hash: string }>(
+          `select (answers #>> '{n,value}')::int as n, form_id, form_version_id, encode(definition_hash, 'hex') as hash from submissions where (answers #>> '{n,value}')::int >= 10 order by seq`,
+        )
+      ).rows;
+      expect(filed.map((r) => r.n)).toEqual([10, 11, 12, 13, 14]);
+      for (const r of filed) {
+        const v = legacyOf(r.form_id);
+        expect(r.form_version_id, `row ${r.n}`).toBe(v.id);
+        expect(r.hash, `row ${r.n}`).toBe(v.content_hash);
+      }
+      // The forms' counters are what they were: the copy counts nothing again.
+      expect(await m.counters()).toEqual(countsBefore);
+
+      // The legacy version is a version like any other for the rules about versions: immutable...
+      expect(pgCode(await failure(m.c.query(`update form_versions set label = 'x' where id = $1`, [legacyOf(withDraft).id])))).toBe('55000');
+      // ...and the form's first real publish is version 1, which a unique (org_id, form_id, number) does not refuse.
+      const next = (await m.c.query<{ n: number }>('select coalesce(max(number), 0) + 1 as n from form_versions where form_id = $1', [withDraft])).rows[0]!.n;
+      expect(next).toBe(1);
+      const firstReal = randomUUID();
+      await m.c.query(
+        `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash, draft_rev) values ($1, $2, $3, $4, 2, $5, '{}', '{}', $6, 4)`,
+        [firstReal, m.orgA, withDraft, next, owner, 'ab'.repeat(32)],
+      );
+      await m.c.query('update forms set live_version_id = $1 where id = $2', [firstReal, withDraft]);
+      // Its state row is live (the trigger of 0020 made it, not retired), and the legacy version's is untouched.
+      expect((await m.c.query(`select 1 from form_version_state where version_id = $1 and retired_at is null and superseded_at is null`, [firstReal])).rowCount).toBe(1);
+      expect((await m.c.query(`select 1 from form_version_state where version_id = $1 and retired_at is not null`, [legacyOf(withDraft).id])).rowCount).toBe(1);
     } finally {
       await m.c.end();
     }
