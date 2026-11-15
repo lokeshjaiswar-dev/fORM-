@@ -3,10 +3,26 @@ import { describe, expect, it } from 'vitest';
 import { toIsoInstant, type SearchDocument, type SearchIndex } from '@form/ports';
 import { expectPortError, useSubject, type ContractSetup, type ContractSubject } from './contract.ts';
 
+const MINUTE_MS = 60_000;
+
+/**
+ * The `receivedAt` (epoch milliseconds) of a contract document: a minute before `nowMs`, plus `offsetMs` to keep the
+ * documents apart, but never earlier than the first instant of the current UTC month. `create_partitions` makes the
+ * current month onward, so a plain `now - 60 s` fell into the previous month, which has no partition, during the first
+ * minute of every month, and the contract failed on that one minute (BL-262). The offset is milliseconds, so the result
+ * stays in the month.
+ */
+export function searchContractReceivedAt(nowMs: number, offsetMs = 0): number {
+  const now = new Date(nowMs);
+  const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  return Math.max(monthStart, nowMs - MINUTE_MS) + offsetMs;
+}
+
 /**
  * What every SearchIndex does (architecture §2.4, §6): word search within one form of one org, accents folded,
  * Indian scripts matched as written, replaced and removed documents gone at once, stable cursor pagination.
- * Documents get `receivedAt` within the last minute, so a partitioned store needs the current month's partition.
+ * Documents get `receivedAt` within the last minute and never before the start of the current UTC month, so a
+ * partitioned store needs only the current month's partition (BL-262).
  */
 export function runSearchIndexContract(label: string, setup: ContractSetup<ContractSubject<SearchIndex>>): void {
   describe(`SearchIndex contract: ${label}`, () => {
@@ -19,7 +35,7 @@ export function runSearchIndexContract(label: string, setup: ContractSetup<Contr
     let n = 0;
     const doc = (text: string[], o: Partial<SearchDocument> = {}): SearchDocument => ({
       submissionId: randomUUID(),
-      receivedAt: toIsoInstant(new Date(Date.now() - 60_000 + (n += 7))),
+      receivedAt: toIsoInstant(new Date(searchContractReceivedAt(Date.now(), (n += 7)))),
       formId: form,
       locale: 'en-IN',
       text,
