@@ -1126,12 +1126,13 @@ describe('submissions: who reads a row, and which columns anyone writes', () => 
     const changed = await asEditor(sql`update submissions set read = true, starred = true, tags = '{vip}', revision = 2, status_label = 'seen', updated_at = now() where id = ${row.id} returning 1`);
     expect(changed.rows).toHaveLength(1);
     // Everything else is refused before a row is looked at. (`seq` is a GENERATED ALWAYS identity: the parser refuses first.)
-    for (const column of ['id', 'received_at', 'org_id', 'form_id', 'form_version_id', 'definition_hash', 'seq', 'delete_after', 'statutory_hold_until', 'legal_hold']) {
+    for (const column of ['id', 'received_at', 'org_id', 'form_id', 'form_version_id', 'definition_hash', 'seq', 'delete_after', 'statutory_hold_until', 'legal_hold', 'legacy_fields']) {
       const err = await failure(asEditor(sql`update submissions set ${sql.identifier(column)} = ${sql.identifier(column)} where id = ${row.id}`));
       expect(pgCode(err), column).toBe(column === 'seq' ? '428C9' : '42501');
     }
-    // An insert may name the identity and answer columns only.
-    for (const column of ['delete_after', 'statutory_hold_until', 'legal_hold', 'read', 'starred', 'tags', 'revision', 'assignee_id', 'trashed_at', 'updated_at']) {
+    // An insert may name the identity and answer columns only (legacy_fields, the prototype's display rows, is written by
+    // migration 0021 alone).
+    for (const column of ['delete_after', 'statutory_hold_until', 'legal_hold', 'legacy_fields', 'read', 'starred', 'tags', 'revision', 'assignee_id', 'trashed_at', 'updated_at']) {
       const err = await failure(
         submissionsAs(respondentOnly, (tx) =>
           tx.execute(sql`insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta, ${sql.identifier(column)})

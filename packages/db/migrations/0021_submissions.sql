@@ -6,8 +6,9 @@
 -- 2. submissions: monthly range partitions on received_at, kept in schema `parts` (no default partition), with the
 --    restrictive data-access policies of 0019, the status check and the grid / unread / due / status / principal indexes.
 -- 3. submission_idempotency and form_id_counters: the two satellite tables the submit transaction writes first and last.
--- 4. The rows of form_submissions move into submissions (nothing is dropped), form_files follows them to the new key,
---    the insert trigger moves over, and form_submissions goes.
+-- 4. The rows of form_submissions move into submissions with everything they held (nothing is dropped: the answers, the
+--    locale, the moment received and the prototype's display rows, which go to legacy_fields), form_files follows them
+--    to the new key, the insert trigger moves over, and form_submissions goes.
 --
 -- A new migration: 0012 and 0019 have been applied and are never edited.
 
@@ -130,6 +131,14 @@ create table submissions (
   answers jsonb not null,
   computed jsonb not null,
   meta jsonb not null,
+  -- Prototype data. form_submissions.fields held display rows ([{ key, label, value }]: the label and the text of each
+  -- answer, as the page sent them) next to the answers. The new design builds those rows when a response is read, from
+  -- the answers and the version they were validated against, and stores none (the submit route ignores what the page
+  -- sends), so there is no column for them; the prototype's rows are kept here, as they were, for the responses this
+  -- migration moves. Null for every response the submit route takes; a moved response has an array (empty when the
+  -- prototype stored no rows), so `legacy_fields is not null` is what marks a row as prototype data. Only this migration
+  -- writes it: fr_app has no INSERT or UPDATE grant on it, below.
+  legacy_fields jsonb,
   principal_bidx bytea[],
   delete_after timestamptz not null,
   statutory_hold_until timestamptz,
@@ -152,6 +161,7 @@ create table submissions (
   constraint submissions_answers_object check (jsonb_typeof(answers) = 'object'),
   constraint submissions_computed_object check (jsonb_typeof(computed) = 'object'),
   constraint submissions_meta_object check (jsonb_typeof(meta) = 'object'),
+  constraint submissions_legacy_fields_array check (legacy_fields is null or jsonb_typeof(legacy_fields) = 'array'),
   constraint submissions_codec_check check (answer_codec_version >= 0),
   constraint submissions_revision_check check (revision >= 1),
   -- One foreign key does both jobs: the version names its org and form (0020), so a row can never point at another
@@ -185,9 +195,10 @@ create policy submissions_data_delete on submissions as restrictive for delete t
   using ((select app_actor()) = 'system' or 'submissions.delete' = any ((select app_perms())::text[]));
 
 -- Column grants keep the rest of a row out of reach of the code that writes it: the submit route names exactly these
--- columns, so a bug (or a body spread into an insert) cannot set the retention, hold, inbox or ordering columns, and
--- nothing can move a row to another form, version or month. delete_after, statutory_hold_until and legal_hold are
--- not writable yet: WP-1.22 grants them with the policy that decides who may change a retention date.
+-- columns, so a bug (or a body spread into an insert) cannot set the retention, hold, inbox, ordering or prototype
+-- (legacy_fields) columns, and nothing can move a row to another form, version or month. delete_after,
+-- statutory_hold_until and legal_hold are not writable yet: WP-1.22 grants them with the policy that decides who may
+-- change a retention date.
 grant select on submissions to fr_app;
 grant insert (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers,
   computed, meta, principal_bidx) on submissions to fr_app;
@@ -330,10 +341,14 @@ from form_submissions s cross join lateral (select pg_temp.uuid_v7_at(s.submitte
 -- seq follows the order the responses were received in. The triggers that count and link are not on submissions yet,
 -- so this copy changes no counter and no file; the file links are rewritten below, from the same map.
 insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version,
-  status, answers, computed, meta, updated_at)
+  status, answers, computed, meta, legacy_fields, updated_at)
 select m.new_id, m.received_at, s.org_id, s.form_id, v.id,
   case when v.content_hash ~ '^[0-9a-f]{64}$' then decode(v.content_hash, 'hex') else sha256(convert_to(v.content_hash, 'UTF8')) end,
-  0, 'complete', s.answers, '{}'::jsonb, jsonb_build_object('locale', s.locale), s.submitted_at
+  0, 'complete', s.answers, '{}'::jsonb, jsonb_build_object('locale', s.locale),
+  -- The display rows, as they were. The prototype's route only ever wrote arrays; a value that is not one (written by
+  -- hand) is kept as the one element of an array, which the column's check needs, instead of being refused or dropped.
+  case when jsonb_typeof(s.fields) = 'array' then s.fields else jsonb_build_array(s.fields) end,
+  s.submitted_at
 from form_submissions s
 join submission_move m on m.old_id = s.id
 cross join lateral (

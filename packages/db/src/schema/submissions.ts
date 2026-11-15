@@ -16,6 +16,13 @@ export const SUBMISSION_STATUSES = [
 ] as const;
 export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 
+/** One display row of a prototype response, as the prototype's page sent it and `form_submissions.fields` stored it (`submissions.legacyFields`). */
+export interface LegacyFieldRow {
+  key: string;
+  label: string;
+  value: string;
+}
+
 /** `answer_codec_version` of answers stored as plain jsonb. The encrypted codec (WP-1.11) writes a later number. */
 export const ANSWER_CODEC_PLAIN = 0;
 
@@ -52,6 +59,13 @@ export const submissions = pgTable(
     computed: jsonb('computed').$type<Record<string, unknown>>().notNull(),
     /** `{ locale }` for now; later source, durations, signal hashes (TTL), device, country, utm. */
     meta: jsonb('meta').$type<Record<string, unknown>>().notNull(),
+    /**
+     * The prototype's display rows (`form_submissions.fields`: the label and text of each answer as the page sent them),
+     * kept for the responses migration 0021 moved; null for every response the submit route takes, which stores none and
+     * builds them from the answers when a response is read. A moved response has an array (empty when the prototype stored
+     * no rows), so not null means prototype data. fr_app can read it and has no grant to write it.
+     */
+    legacyFields: jsonb('legacy_fields').$type<LegacyFieldRow[]>(),
     /** Blind indexes of the principal-identifier fields, for DSR lookup (WP-1.11); null until then. */
     principalBidx: bytea('principal_bidx').array(),
     deleteAfter: timestamp('delete_after', { withTimezone: true }).notNull(),

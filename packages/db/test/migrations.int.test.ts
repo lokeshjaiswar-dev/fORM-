@@ -232,6 +232,15 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
     const other = await form(orgB, 'Other org');
     const otherV = await version(orgB, other, 1, HASHES.v1);
 
+    // What the prototype stored next to the answers: display rows (the label and text of each answer as its page sent
+    // them). Each response has its own, so a copy that mixed them up, shared one or dropped them shows; response 2 had none.
+    const fieldsOf = (n: number): Array<{ key: string; label: string; value: string }> =>
+      n === 2
+        ? []
+        : [
+            { key: 'n', label: `Question ${n}`, value: `Answer ${n}` },
+            { key: 'note', label: 'Note “with” quotes', value: `ünïcode ✓ ${n}\nsecond line` },
+          ];
     // `n` in the answers is how the test finds a row again once its id has changed. Inserted out of order on purpose.
     const rows = [
       { n: 5, org: orgB, form: other, at: '2026-11-10T09:00:00Z', locale: 'en-IN' },
@@ -243,11 +252,12 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
     const oldIds: Record<number, string> = {};
     for (const r of rows) {
       oldIds[r.n] = randomUUID();
-      await c.query(`insert into form_submissions (id, org_id, form_id, answers, fields, locale, submitted_at) values ($1, $2, $3, $4, '[{"key":"n","label":"N","value":"x"}]', $5, $6)`, [
+      await c.query(`insert into form_submissions (id, org_id, form_id, answers, fields, locale, submitted_at) values ($1, $2, $3, $4, $5, $6, $7)`, [
         oldIds[r.n],
         r.org,
         r.form,
         JSON.stringify({ n: { type: 'number', value: r.n } }),
+        JSON.stringify(fieldsOf(r.n)),
         r.locale,
         r.at,
       ]);
@@ -268,7 +278,7 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
     };
     const counters = async () =>
       (await c.query<{ id: string; submission_count: number; last_submission_at: Date | null }>('select id, submission_count::int, last_submission_at from forms order by id')).rows;
-    return { c, files, orgA, orgB, live, liveV, unpublished, unpublishedV, other, otherV, rows, oldIds, f, counters, HASHES };
+    return { c, files, orgA, orgB, live, liveV, unpublished, unpublishedV, other, otherV, rows, oldIds, f, counters, HASHES, fieldsOf };
   }
 
   it('moves every row with the form version it was received on, in the order it was received, and keeps what the forms counted', async () => {
@@ -342,6 +352,35 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
       expect((await m.c.query(`select to_regclass('public.form_submissions') as t`)).rows).toEqual([{ t: null }]);
       const triggers = await m.c.query<{ tgname: string; tgrelid: string }>(`select tgname, tgrelid::regclass::text from pg_trigger where tgname in ('form_submissions_recorded', 'submissions_recorded') and not tgisinternal and tgparentid = 0`);
       expect(triggers.rows).toEqual([{ tgname: 'submissions_recorded', tgrelid: 'submissions' }]);
+    } finally {
+      await m.c.end();
+    }
+  });
+
+  it('carries each response’s display rows into legacy_fields as they were, and leaves the column null for a response taken afterwards', async () => {
+    const m = await prototypeAt20();
+    try {
+      await migrate(m.c, m.files.filter((x) => x.version <= 21));
+      const { rows } = await m.c.query<{ n: number; legacy_fields: unknown }>(
+        `select (answers #>> '{n,value}')::int as n, legacy_fields from submissions order by seq`,
+      );
+      // Every moved response, in the order received, with the rows its own prototype row held: the labels and the text
+      // (quotes, non-ASCII, a line break) unchanged, and response 2, which had none, an empty array and not null.
+      expect(rows.map((r) => r.n)).toEqual([1, 2, 3, 4, 5]);
+      for (const r of rows) expect(r.legacy_fields, `response ${r.n}`).toEqual(m.fieldsOf(r.n));
+      expect(rows.find((r) => r.n === 2)!.legacy_fields).toEqual([]);
+
+      // Not null is what marks prototype data: a response the submit route takes afterwards stores no display rows.
+      const later = newSubmissionKey(new Date());
+      await m.c.query(
+        `insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta)
+         values ($1, $2, $3, $4, $5, $6, 0, 'complete', '{}', '{}', '{}')`,
+        [later.id, later.receivedAt, m.orgA, m.live, m.liveV[1], Buffer.alloc(32)],
+      );
+      expect((await m.c.query('select legacy_fields from submissions where id = $1', [later.id])).rows).toEqual([{ legacy_fields: null }]);
+      expect((await m.c.query<{ n: number }>('select count(*)::int as n from submissions where legacy_fields is not null')).rows[0]!.n).toBe(5);
+      // The column holds a list of rows or nothing: a value of another shape is refused by its check.
+      expect(pgCode(await failure(m.c.query(`update submissions set legacy_fields = '{"key":"n"}' where id = $1 and received_at = $2`, [later.id, later.receivedAt])))).toBe('23514');
     } finally {
       await m.c.end();
     }
@@ -433,19 +472,23 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
       const oldShape = await bare(m.orgA, 'Previewed with an old-shaped draft', { fields: [{ id: 'x' }] });
       const otherOrg = await bare(m.orgB, 'Previewed in another org', null);
       const noRows = await bare(m.orgA, 'Never previewed', v2Draft);
+      // Their display rows come with them too: rows, none (the column's own default), and a value written by hand that is
+      // not a list, which is kept as the one element of one instead of failing the migration or being dropped.
+      const rowsOf = (n: number) => [{ key: 'n', label: `Preview question ${n}`, value: `Preview answer ${n}` }];
       const received = [
-        { n: 10, org: m.orgA, form: withDraft, at: '2026-10-20T10:00:00Z' },
-        { n: 11, org: m.orgA, form: withDraft, at: '2026-10-21T10:00:00Z' },
-        { n: 12, org: m.orgA, form: noDraft, at: '2026-10-22T10:00:00Z' },
-        { n: 13, org: m.orgA, form: oldShape, at: '2026-10-23T10:00:00Z' },
-        { n: 14, org: m.orgB, form: otherOrg, at: '2026-10-24T10:00:00Z' },
+        { n: 10, org: m.orgA, form: withDraft, at: '2026-10-20T10:00:00Z', fields: rowsOf(10), kept: rowsOf(10) },
+        { n: 11, org: m.orgA, form: withDraft, at: '2026-10-21T10:00:00Z', fields: [], kept: [] },
+        { n: 12, org: m.orgA, form: noDraft, at: '2026-10-22T10:00:00Z', fields: rowsOf(12), kept: rowsOf(12) },
+        { n: 13, org: m.orgA, form: oldShape, at: '2026-10-23T10:00:00Z', fields: rowsOf(13), kept: rowsOf(13) },
+        { n: 14, org: m.orgB, form: otherOrg, at: '2026-10-24T10:00:00Z', fields: { hand: 'written' }, kept: [{ hand: 'written' }] },
       ];
       for (const r of received) {
-        await m.c.query(`insert into form_submissions (id, org_id, form_id, answers, fields, submitted_at) values ($1, $2, $3, $4, '[]', $5)`, [
+        await m.c.query(`insert into form_submissions (id, org_id, form_id, answers, fields, submitted_at) values ($1, $2, $3, $4, $5, $6)`, [
           randomUUID(),
           r.org,
           r.form,
           JSON.stringify({ n: { type: 'number', value: r.n } }),
+          JSON.stringify(r.fields),
           r.at,
         ]);
       }
@@ -530,8 +573,8 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
 
       // The responses are filed under their form's legacy version, with its hash, in the order they were received.
       const filed = (
-        await m.c.query<{ n: number; form_id: string; form_version_id: string; hash: string }>(
-          `select (answers #>> '{n,value}')::int as n, form_id, form_version_id, encode(definition_hash, 'hex') as hash from submissions where (answers #>> '{n,value}')::int >= 10 order by seq`,
+        await m.c.query<{ n: number; form_id: string; form_version_id: string; hash: string; legacy_fields: unknown }>(
+          `select (answers #>> '{n,value}')::int as n, form_id, form_version_id, encode(definition_hash, 'hex') as hash, legacy_fields from submissions where (answers #>> '{n,value}')::int >= 10 order by seq`,
         )
       ).rows;
       expect(filed.map((r) => r.n)).toEqual([10, 11, 12, 13, 14]);
@@ -539,6 +582,8 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
         const v = legacyOf(r.form_id);
         expect(r.form_version_id, `row ${r.n}`).toBe(v.id);
         expect(r.hash, `row ${r.n}`).toBe(v.content_hash);
+        // Their display rows survived the move with the answers.
+        expect(r.legacy_fields, `row ${r.n}`).toEqual(received.find((x) => x.n === r.n)!.kept);
       }
       // The forms' counters are what they were: the copy counts nothing again.
       expect(await m.counters()).toEqual(countsBefore);

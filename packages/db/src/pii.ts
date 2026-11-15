@@ -75,10 +75,10 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     retainBasis: 'until the member unstars the form; deleted with the account (a trigger on users, migration 0020)',
   },
   submissions: {
-    columns: ['answers', 'computed', 'meta', 'principal_bidx', 'assignee_id', 'tags', 'status_label'],
+    columns: ['answers', 'computed', 'meta', 'legacy_fields', 'principal_bidx', 'assignee_id', 'tags', 'status_label'],
     erase: 'delete',
     retainBasis:
-      'delete_after (received_at + 10 years as a placeholder until retention purposes, WP-1.22), unless legal_hold; retention.sweep and dsr.execute delete the row, which un-holds its files; moved there from form_submissions by migration 0021',
+      'delete_after (received_at + 10 years as a placeholder until retention purposes, WP-1.22), unless legal_hold; retention.sweep and dsr.execute delete the row, which un-holds its files, and legacy_fields (the display rows the prototype stored for the answers, as text) goes with it; moved there from form_submissions by migration 0021',
   },
   submission_idempotency: {
     columns: ['submission_id', 'request_hash'],
