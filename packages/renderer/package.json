@@ -12,7 +12,6 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@dmacq/ui": "file:../../dmacq-ui-0.1.0.tgz",
     "@form/i18n": "workspace:*",
     "@form/logic": "workspace:*",
     "@form/registry": "workspace:*",
