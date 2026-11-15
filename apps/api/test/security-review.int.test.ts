@@ -61,7 +61,7 @@ async function upload(slug: string, blockId: string, name: string, mime: string,
 }
 
 const submit = (slug: string, body: Record<string, unknown>) =>
-  app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, payload: { locale: 'en-IN', fields: [], ...body } });
+  app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, headers: { 'idempotency-key': randomUUID() }, payload: { locale: 'en-IN', fields: [], ...body } });
 
 beforeAll(async () => {
   const adminUrl = inject('pgAdminUrl');
@@ -110,7 +110,7 @@ describe('SR-1: a file reference in the answers is bound to the stored file only
     const { rows } = await owner.query('select answers from submissions where form_id = $1', [form.id]);
     const storedName = (rows[0]?.answers as { doc?: { value?: Array<{ name?: string }> } } | undefined)?.doc?.value?.[0]?.name;
     // Wanted: refused, or the reference rewritten from the form_files row (name notes.txt).
-    expect(res.statusCode === 400 || storedName === 'notes.txt', `status ${res.statusCode}, stored name ${storedName}`).toBe(true);
+    expect(res.statusCode === 422 || storedName === 'notes.txt', `status ${res.statusCode}, stored name ${storedName}`).toBe(true);
   });
 
   it('lets a file uploaded through one field stand in an answer to another field with stricter type rules', async () => {
@@ -124,7 +124,7 @@ describe('SR-1: a file reference in the answers is bound to the stored file only
       formVersionId: form.versionId,
       answers: { cv: { type: 'file_upload', value: [{ ...png, name: 'cv.pdf', mime: 'application/pdf' }] } },
     });
-    expect(res.statusCode, 'a file uploaded to "photo" accepted as the answer to "cv"').toBe(400);
+    expect(res.statusCode, 'a file uploaded to "photo" accepted as the answer to "cv"').toBe(422);
   });
 });
 
@@ -136,12 +136,12 @@ describe('SR-2: the display rows a respondent sends are stored and shown as the 
     // The Responses page rebuilds rows from the answers, and falls back to these rows when that gives none.
     if (res.statusCode === 200) {
       // No display rows are stored any more: the page shows the ones rebuilt from the answers and the form's own labels.
-      const { id } = res.json<{ id: string }>();
-      const shown = await app.inject({ url: `/v1/forms/${form.id}/submissions/${id}`, headers: as() });
+      const { submissionId } = res.json<{ submissionId: string }>();
+      const shown = await app.inject({ url: `/v1/forms/${form.id}/submissions/${submissionId}`, headers: as() });
       expect(shown.statusCode).toBe(200);
       expect(JSON.stringify(shown.json<{ fields: unknown }>().fields), 'forged display row shown').not.toContain('Approved by HR');
     } else {
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(422);
     }
   });
 });

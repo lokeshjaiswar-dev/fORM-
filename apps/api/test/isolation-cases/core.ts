@@ -67,10 +67,11 @@ export async function seedCore(env: SeedEnv): Promise<Fixture> {
   await ok(putFirstDraft(env, aOwner, aOrg, secondFormId, draftWith(secondFormId, fields(), 'Acme second 7f3a')));
 
   // A respondent's answer and file reach the form the way they really do, through the public routes.
-  const submitted = await ok<{ id: string }>(
+  const submitted = await ok<{ ok: true; submissionId: string }>(
     env.app.inject({
       method: 'POST',
       url: `/v1/p/${live.slug}/submissions`,
+      headers: { 'idempotency-key': randomUUID() },
       payload: { formVersionId: live.versionId, answers: { name: { type: 'short_text', value: ANSWER } }, fields: [], locale: 'en-IN' },
     }),
   );
@@ -107,7 +108,7 @@ export async function seedCore(env: SeedEnv): Promise<Fixture> {
     secondFormId,
     versionId: live.versionId,
     formSlug: live.slug,
-    submissionId: submitted.id,
+    submissionId: submitted.submissionId,
     fileId: file.fileId,
     inviteId,
     inviteToken,

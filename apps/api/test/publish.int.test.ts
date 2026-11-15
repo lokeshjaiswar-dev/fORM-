@@ -110,10 +110,11 @@ describe('publish and public fill', () => {
     const submit = await app.inject({
       method: 'POST',
       url: `/v1/p/${live.slug}/submissions`,
+      headers: { 'idempotency-key': randomUUID() },
       payload: { formVersionId: live.versionId, answers: {}, fields: [], locale: 'en-IN' },
     });
     expect(submit.statusCode).toBe(200);
-    expect(submit.json()).toEqual({ id: expect.any(String) });
+    expect(submit.json()).toEqual({ ok: true, submissionId: expect.any(String), endingId: expect.any(String) });
   });
 
   it('keeps the slug and numbers the next version when a form is published again, without naming a draft revision', async () => {

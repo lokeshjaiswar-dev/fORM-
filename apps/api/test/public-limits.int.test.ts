@@ -39,7 +39,13 @@ const upload = (slug: string, remoteAddress = ADDRESS_A) =>
   app.inject({ method: 'POST', url: `/v1/p/${slug}/files`, remoteAddress, payload: { blockId: 'doc', name: 'n.txt', mime: 'text/plain', data: Buffer.from('notes').toString('base64') } });
 
 const submit = (slug: string, versionId: string, remoteAddress = ADDRESS_A) =>
-  app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, remoteAddress, payload: { formVersionId: versionId, answers: { comment: text('hi') }, fields: [], locale: 'en-IN' } });
+  app.inject({
+    method: 'POST',
+    url: `/v1/p/${slug}/submissions`,
+    remoteAddress,
+    headers: { 'idempotency-key': randomUUID() },
+    payload: { formVersionId: versionId, answers: { comment: text('hi') }, fields: [], locale: 'en-IN' },
+  });
 
 beforeAll(async () => {
   const adminUrl = inject('pgAdminUrl');
