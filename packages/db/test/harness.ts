@@ -1,8 +1,9 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { sql, type SQL } from 'drizzle-orm';
 import pg from 'pg';
 import { inject } from 'vitest';
 import { createTestDatabase } from '@form/testkit';
-import { createDb, provision, type DbHandle, type RoleName } from '../src/index.ts';
+import { createDb, newSubmissionKey, provision, uuidV7Time, type DbHandle, type RoleName } from '../src/index.ts';
 import { TEST_PASSWORDS } from './passwords.ts';
 
 export interface TestDb {
@@ -65,6 +66,8 @@ export interface OrgSeed {
   viewerId: string;
   teamId: string;
   formIds: [string, string];
+  /** The one published version of each form (same order as `formIds`). */
+  versionIds: [string, string];
   tpl: OrgTemplates;
 }
 
@@ -85,6 +88,53 @@ export interface Seed {
 }
 
 export const HASH = Buffer.alloc(32);
+
+/** One response to insert into `submissions`: the columns fr_app may insert, and `locale` for `meta`. */
+export interface SubmissionSeed {
+  id: string;
+  receivedAt: Date;
+  orgId: string;
+  formId: string;
+  formVersionId: string;
+  status: string;
+  answers: unknown;
+  locale: string;
+}
+
+/**
+ * A response of one of the org's two forms with a fresh UUIDv7 id, received now (the current month always has a
+ * partition; a past or future moment might not). `over.id` takes a given UUIDv7 and `received_at` follows it.
+ */
+export function newSubmission(org: Pick<OrgSeed, 'orgId' | 'formIds' | 'versionIds'>, formIndex: 0 | 1 = 0, over: Partial<SubmissionSeed> = {}): SubmissionSeed {
+  const key = over.id ? { id: over.id, receivedAt: uuidV7Time(over.id) ?? new Date() } : newSubmissionKey(new Date());
+  return {
+    ...key,
+    orgId: org.orgId,
+    formId: org.formIds[formIndex],
+    formVersionId: org.versionIds[formIndex],
+    status: 'complete',
+    answers: { q: { type: 'short_text', value: 'answer' } },
+    locale: 'en-IN',
+    ...over,
+  };
+}
+
+/** The INSERT a respondent's submit transaction runs, for `tx.execute`: only the columns fr_app has an INSERT grant on. */
+export function insertSubmissionSql(s: SubmissionSeed): SQL {
+  return sql`insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta)
+    values (${s.id}, ${s.receivedAt.toISOString()}::timestamptz, ${s.orgId}, ${s.formId}, ${s.formVersionId}, ${HASH}, 0, ${s.status},
+      ${JSON.stringify(s.answers)}::jsonb, '{}'::jsonb, ${JSON.stringify({ locale: s.locale })}::jsonb)`;
+}
+
+/** The same INSERT as the schema owner (seeding: it bypasses RLS and the column grants). */
+export async function insertSubmission(owner: pg.Pool, s: SubmissionSeed): Promise<SubmissionSeed> {
+  await owner.query(
+    `insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta)
+     values ($1, $2, $3, $4, $5, $6, 0, $7, $8, '{}', $9)`,
+    [s.id, s.receivedAt, s.orgId, s.formId, s.formVersionId, HASH, s.status, JSON.stringify(s.answers), JSON.stringify({ locale: s.locale })],
+  );
+  return s;
+}
 
 /** A word every seeded title shares, so a search finds the rows of every org unless RLS hides them. */
 export const SEED_SEARCH_WORD = 'onboarding';
@@ -265,6 +315,7 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
     viewerId: randomUUID(),
     teamId: randomUUID(),
     formIds: [randomUUID(), randomUUID()],
+    versionIds: [randomUUID(), randomUUID()],
   };
   await owner.query('insert into orgs (id, slug, name) values ($1, $2, $3)', [s.orgId, slug, `Org ${slug}`]);
   await owner.query('insert into org_settings (org_id) values ($1)', [s.orgId]);
@@ -291,12 +342,18 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
     await owner.query(
       `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash)
        values ($1, $2, $3, 1, 2, $4, '{}', '{}', '0')`,
-      [randomUUID(), s.orgId, formId, s.ownerId],
+      [s.versionIds[i], s.orgId, formId, s.ownerId],
     );
-    await owner.query(
-      `insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, '{}', '[]')`,
-      [randomUUID(), s.orgId, formId],
-    );
+    const submission = await insertSubmission(owner, newSubmission(s, i as 0 | 1, { answers: {} }));
+    if (i === 0) {
+      // The satellite tables of the submit transaction: one row each, so every actor kind has own rows to see or not see.
+      await owner.query(
+        `insert into submission_idempotency (org_id, form_id, key, submission_id, received_at, request_hash, response, expires_at)
+         values ($1, $2, 'seeded-key', $3, $4, $5, $6, now() + interval '1 day')`,
+        [s.orgId, formId, submission.id, submission.receivedAt, HASH, JSON.stringify({ id: submission.id })],
+      );
+      await owner.query(`insert into form_id_counters (form_id, block_id, period, org_id) values ($1, 'ticket', '2026', $2)`, [formId, s.orgId]);
+    }
     await owner.query(
       `insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256) values ($1, $2, $3, 'upload', 'cv.pdf', 'application/pdf', 4, $4)`,
       [randomUUID(), s.orgId, formId, '0'.repeat(64)],

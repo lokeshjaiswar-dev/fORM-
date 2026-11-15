@@ -74,13 +74,21 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     erase: 'delete',
     retainBasis: 'until the member unstars the form; deleted with the account (a trigger on users, migration 0020)',
   },
-  form_submissions: {
-    columns: ['answers', 'fields'],
+  submissions: {
+    columns: ['answers', 'computed', 'meta', 'principal_bidx', 'assignee_id', 'tags', 'status_label'],
     erase: 'delete',
-    retainBasis: 'with the form or retention.sweep / dsr.execute',
+    retainBasis:
+      'delete_after (received_at + 10 years as a placeholder until retention purposes, WP-1.22), unless legal_hold; retention.sweep and dsr.execute delete the row, which un-holds its files; moved there from form_submissions by migration 0021',
   },
+  submission_idempotency: {
+    columns: ['submission_id', 'request_hash'],
+    erase: 'ttl',
+    retainBasis:
+      '24 hours (expires_at), then deleted by a system sweep; holds the id of the submission it answered and a digest of the request, never the answers',
+  },
+  form_id_counters: { columns: [], erase: 'delete', retainBasis: 'with the form: one number per unique-ID field and period' },
   form_files: {
-    columns: ['name', 'sha256', 'submission_id'],
+    columns: ['name', 'sha256', 'submission_id', 'submission_received_at'],
     erase: 'delete',
     retainBasis: 'with the form or retention.sweep / dsr.execute, which also delete the stored bytes (file store, WP-1.14)',
   },

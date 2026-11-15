@@ -2,6 +2,7 @@ export * from './schema/index.ts';
 export * from './client.ts';
 export * from './tenant.ts';
 export * from './functions.ts';
+export * from './submission-key.ts';
 export * from './auth.ts';
 export * from './account.ts';
 export * from './audit/index.ts';

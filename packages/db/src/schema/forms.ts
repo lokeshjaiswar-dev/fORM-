@@ -222,24 +222,6 @@ export const formFavourites = pgTable(
   ],
 );
 
-/** RLS: `form_submissions_tenant` and the restrictive `form_submissions_data_access`: reads need `submissions.read` or a system job. */
-export const formSubmissions = pgTable(
-  'form_submissions',
-  {
-    id: uuid('id').primaryKey(),
-    orgId: uuid('org_id').notNull(),
-    formId: uuid('form_id').notNull(),
-    answers: jsonb('answers').$type<Record<string, unknown>>().notNull(),
-    fields: jsonb('fields').$type<Array<{ key: string; label: string; value: string }>>().notNull(),
-    locale: text('locale').notNull().default('en-IN'),
-    submittedAt: ts('submitted_at'),
-  },
-  (t) => [
-    foreignKey({ name: 'form_submissions_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
-    index('form_submissions_form_idx').on(t.orgId, t.formId, t.submittedAt),
-  ],
-);
-
 /** `file`: whatever the upload field accepts; `signature`: the PNG a signature pad drew. */
 export const FILE_PURPOSES = ['file', 'signature'] as const;
 export type FilePurpose = (typeof FILE_PURPOSES)[number];
@@ -247,7 +229,8 @@ export type FilePurpose = (typeof FILE_PURPOSES)[number];
 /**
  * What a respondent uploaded to a published form; the bytes are in the file store. RLS: `form_files_tenant`, and
  * `form_files_data_access` (reads need `submissions.read` or a system job). Respondent routes look files up through
- * `form_files_check()`, never the table. `purpose` and `submissionId` were added by 0019, hence last.
+ * `form_files_check()`, never the table. `purpose` and `submissionId` were added by 0019 and `submissionReceivedAt` by
+ * 0021, hence last.
  */
 export const formFiles = pgTable(
   'form_files',
@@ -264,6 +247,8 @@ export const formFiles = pgTable(
     purpose: text('purpose', { enum: FILE_PURPOSES }).notNull().default('file'),
     /** The submission whose answers name the file; null until one does (the orphan sweep removes files that stay null). */
     submissionId: uuid('submission_id'),
+    /** The held submission's `received_at`: with `submissionId` the key of a row in the partitioned table (0021); both or neither. */
+    submissionReceivedAt: tsNull('submission_received_at'),
   },
   (t) => [
     foreignKey({ name: 'form_files_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),

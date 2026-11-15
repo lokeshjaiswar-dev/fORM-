@@ -92,7 +92,7 @@ const CHECKS: ReadonlyArray<readonly [RlsViolation['rule'], string]> = [
     // system job, or (submissions) by a respondent holding a verified token. The org-wide tenant policy alone lets every
     // context of the org read them (SR-5), so each of these tables needs a restrictive SELECT policy of its own.
     'no-data-access-policy',
-    `select t as object from unnest(array['form_submissions', 'form_files', 'submission_search']) t
+    `select t as object from unnest(array['submissions', 'form_files', 'submission_search']) t
      where not exists (select 1 from pg_policy p
        where p.polrelid = to_regclass('public.' || t) and p.polname = t || '_data_access' and not p.polpermissive and p.polcmd in ('r', '*'))`,
   ],

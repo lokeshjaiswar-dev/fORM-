@@ -91,7 +91,7 @@ describe('RLS meta-tests', () => {
 
   it('fail when answers or files lose their restrictive data-access policy, or it is not restrictive', async () => {
     expect(await violationsAfter('drop policy form_files_data_access on form_files')).toEqual([{ rule: 'no-data-access-policy', object: 'form_files' }]);
-    expect(await violationsAfter('drop policy form_submissions_data_access on form_submissions')).toEqual([{ rule: 'no-data-access-policy', object: 'form_submissions' }]);
+    expect(await violationsAfter('drop policy submissions_data_access on submissions')).toEqual([{ rule: 'no-data-access-policy', object: 'submissions' }]);
     expect(await violationsAfter('drop policy submission_search_data_access on submission_search')).toEqual([{ rule: 'no-data-access-policy', object: 'submission_search' }]);
     // A permissive policy of the same name would widen access instead of narrowing it.
     expect(

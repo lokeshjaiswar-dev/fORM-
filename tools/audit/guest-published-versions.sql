@@ -28,7 +28,9 @@
 --
 -- A version with `in_guest_window` and either `same_transaction_*` is almost certainly the guest path. A version
 -- with `in_guest_window` alone is a candidate to ask the org about. `has_submissions` shows which forms already
--- took responses (people filled a form nobody in the org knowingly published).
+-- took responses (people filled a form nobody in the org knowingly published). It reads `submissions`, the table
+-- migration 0021 made from the prototype's `form_submissions`: run this on a database that has applied 0021 (a
+-- database that has not can replace the table name below with `form_submissions`).
 
 select
   o.slug as org_slug,
@@ -48,7 +50,7 @@ select
   (f.created_at = v.published_at) as same_transaction_as_form,
   exists (select 1 from form_drafts d where d.form_id = v.form_id and d.org_id = v.org_id and d.updated_at = v.published_at) as same_transaction_as_draft,
   (v.media is not null) as has_pictures,
-  exists (select 1 from form_submissions s where s.form_id = v.form_id and s.org_id = v.org_id) as has_submissions
+  exists (select 1 from submissions s where s.form_id = v.form_id and s.org_id = v.org_id) as has_submissions
 from form_versions v
 join forms f on f.id = v.form_id and f.org_id = v.org_id
 join orgs o on o.id = v.org_id

@@ -7,3 +7,4 @@ export * from './audit.ts';
 export * from './orgs.ts';
 export * from './templates.ts';
 export * from './adapters.ts';
+export * from './submissions.ts';
