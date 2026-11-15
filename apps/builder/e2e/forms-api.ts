@@ -6,7 +6,8 @@ import type { Route } from '@playwright/test';
  * builder sits behind sign-in and keeps every draft on the server (WP-1.06, BL-206), so a spec that opens /forms or
  * /builder needs a signed-in session and somewhere to save to. This answers `GET /v1/me`, the forms list, a form's
  * draft with `If-Match` (a stale write is a 409 with the server draft, as the real API sends it), validate, publish and
- * trash. The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks are the
+ * trash, and the two reads the form settings make when the Review tab opens (a form's review settings, the org's review
+ * groups; both empty). The publish checks are only the one the specs use (a redirect that is not http(s)); the real checks are the
  * API's, and run in apps/api/test/publish.int.test.ts. A spec about what the server decides belongs in a `*.stack.spec.ts`.
  *
  * e2e/test.ts gives every test one of these as the `formsApi` fixture, routed for the whole browser context (a second
@@ -122,7 +123,14 @@ export class FakeFormsApi {
       }
     }
 
-    const match = /^\/v1\/forms\/([^/]+)\/(draft|validate|publish|trash)$/.exec(path);
+    // The org's review groups (WP-2.33): the Members page lists them and a form's Review tab offers them. A fresh org has none.
+    if (method === 'GET' && path === '/v1/org/review-groups') {
+      if (!this.signedIn) return unauthenticated();
+      record();
+      return route.fulfill({ json: { items: [] }, headers: { 'cache-control': 'no-store' } });
+    }
+
+    const match = /^\/v1\/forms\/([^/]+)\/(draft|validate|publish|trash|review)$/.exec(path);
     if (!match) return route.fallback();
     if (!this.signedIn) return unauthenticated();
     record();
@@ -162,6 +170,12 @@ export class FakeFormsApi {
       }
       form.isLive = true;
       return route.fulfill({ json: { slug: `e2e-${id.slice(0, 8)}`, versionId: randomUUID(), number: 1, draftRev: form.draftRev } });
+    }
+
+    // The form's review settings (WP-2.33), as GET /v1/forms/:id/review answers a form nobody set up: review off, no
+    // units, revision 0 (the first save names it in If-Match), with the revision as the ETag. A save is the stack suite's.
+    if (action === 'review' && method === 'GET') {
+      return route.fulfill({ json: { rev: 0, enabled: false, distinctCheckers: false, units: [] }, headers: { etag: '"0"', 'cache-control': 'no-store' } });
     }
 
     if (action === 'trash' && method === 'POST') {
