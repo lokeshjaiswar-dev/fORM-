@@ -1,5 +1,6 @@
 import { checkClock, startTelemetry } from '@form/observability';
 import { parseConfig } from './config.ts';
+import type { EffectDeps } from './effects/deps.ts';
 
 // Composition root. Telemetry must start before pg and pg-boss are imported, so the rest is loaded dynamically.
 const parsed = parseConfig(process.env);
@@ -26,14 +27,16 @@ if (clock.status === 'failed') {
 const [
   { createDb },
   { createPgBossQueue, parseJobKeyring },
-  { openKeyProvider },
+  { createOrgSecrets, openKeyProvider },
+  { createSmtpMailer, MAILPIT_SMTP_URL },
   { openStorage },
   { createOtlpAuditSink, createSyslogAuditSink, createWormBucketAuditSink },
-  { createInfrastructureEgressGuard, infrastructureHosts },
+  { createInfrastructureEgressGuard, createTenantEgressGuard, infrastructureHosts },
   { jobGuard },
   { startWorker },
   { onShutdownSignal },
-  { createAuditJobs, createUploadJobs, JOB_DEFINITIONS },
+  { createAuditJobs, createEffectFanout, createEffectJobs, createUploadJobs, JOB_DEFINITIONS },
+  { createLogMailer, createMailerFor, unavailableOrgSecrets },
   { startAuditChainDispatcher },
   { createUploadStore },
   path,
@@ -42,6 +45,7 @@ const [
   import('@form/db'),
   import('@form/adapters/queue'),
   import('@form/adapters/kms'),
+  import('@form/adapters/mailer'),
   import('@form/adapters/storage'),
   import('@form/adapters/audit-sink'),
   import('@form/adapters/egress'),
@@ -49,6 +53,7 @@ const [
   import('./runtime.ts'),
   import('./signals.ts'),
   import('./jobs/index.ts'),
+  import('./effects/deps.ts'),
   import('./audit/dispatcher.ts'),
   import('./file-store.ts'),
   import('node:path'),
@@ -76,11 +81,18 @@ const auditHandle = createDb(config.database.url, {
   onError: (err) => log.error({ err }, 'idle audit database connection failed'),
 });
 
-// Every connection to the KMS, the store and the SIEM passes EGRESS_POLICY; the configured hosts are trusted endpoints.
+// Every connection to the KMS, the store, the SIEM and the platform SMTP relay passes EGRESS_POLICY; the configured hosts are trusted endpoints.
+const smtpUrl = config.mailer.smtpUrl ?? MAILPIT_SMTP_URL;
 const egress = createInfrastructureEgressGuard(
   config.edition,
-  infrastructureHosts({ kms: config.kms, storage: config.storage, urls: [config.audit.syslog?.url, config.audit.otlp?.url] }),
+  infrastructureHosts({
+    kms: config.kms,
+    storage: config.storage,
+    urls: [config.audit.syslog?.url, config.audit.otlp?.url, ...(config.mailer.driver === 'smtp' ? [smtpUrl] : [])],
+  }),
 );
+// What a tenant chose (a webhook URL, an org's own SMTP server) gets no trusted hosts: EGRESS_POLICY and its allowlist only.
+const tenantEgress = createTenantEgressGuard(config.edition);
 
 let keys;
 try {
@@ -113,8 +125,49 @@ if (keys && config.audit.requireAnchor && !sink) {
     process.exit(1);
   }
 }
+
+const queue = createPgBossQueue({
+  connectionString: config.queue.url,
+  keyring,
+  mode: 'worker',
+  applicationName: 'fr-worker',
+  pollingIntervalSeconds: config.queue.pollIntervalMs / 1000,
+  ...jobGuard(handle.db, log, auditHandle.db),
+  onError: (err) => log.error({ err }, 'queue error'),
+});
+if (!config.queue.sharesDatabase) log.warn('QUEUE_DATABASE_URL is set: producers cannot enqueue inside their business transactions');
+
+// The effect jobs (notifications, webhooks, exports) and the fan-out consumers that feed them. Org secrets (SMTP credentials,
+// webhook keys) open only with a KMS; without one (development) every open fails as `unavailable` and a job retries.
+const orgSecrets = keys ? createOrgSecrets(keys) : unavailableOrgSecrets;
+if (!keys) log.warn('no KMS key provider: org secrets (org SMTP senders, webhook signing keys) cannot be opened, so those deliveries are retried until KMS_KEYFILE_PATH is set (development only)');
+const platformMailer = config.mailer.driver === 'smtp' ? createSmtpMailer({ url: smtpUrl, egress, messageIdDomain: config.mailer.messageIdDomain }) : createLogMailer(log);
+const effectDeps: EffectDeps = {
+  db: handle.db,
+  queue,
+  orgSecrets,
+  storage,
+  mailerFor: createMailerFor({
+    db: handle.db,
+    orgSecrets,
+    platform: platformMailer,
+    // An org's own SMTP server is a tenant destination: it goes through the tenant guard and is read from the org's secret by id.
+    makeOrgMailer: (senders) => createSmtpMailer({ url: smtpUrl, egress, senders: { resolve: senders.resolve, egress: tenantEgress }, messageIdDomain: config.mailer.messageIdDomain }),
+  }),
+  tenantEgress,
+  config: {
+    publicBuilderUrl: config.publicBuilderUrl,
+    mailFrom: config.mailer.from,
+    messageIdDomain: config.mailer.messageIdDomain,
+    webhookUserAgent: 'fORM-Webhooks/1',
+  },
+  now: () => new Date(),
+};
 const jobs = [
-  ...JOB_DEFINITIONS,
+  // The registry's consumerless submission.fanout is replaced by the one that feeds notifications and webhooks.
+  ...JOB_DEFINITIONS.filter((d) => d.name !== 'submission.fanout'),
+  createEffectFanout(effectDeps),
+  ...createEffectJobs(effectDeps),
   // drafts.expire: the upload GC. It removes bytes where the API wrote them, so FILE_STORE_DIR must name the API's directory.
   ...createUploadJobs({ files: createUploadStore(config.filesDir ?? path.resolve(process.cwd(), '.data/files')) }),
   ...(keys
@@ -131,17 +184,6 @@ const jobs = [
       })
     : []),
 ];
-
-const queue = createPgBossQueue({
-  connectionString: config.queue.url,
-  keyring,
-  mode: 'worker',
-  applicationName: 'fr-worker',
-  pollingIntervalSeconds: config.queue.pollIntervalMs / 1000,
-  ...jobGuard(handle.db, log, auditHandle.db),
-  onError: (err) => log.error({ err }, 'queue error'),
-});
-if (!config.queue.sharesDatabase) log.warn('QUEUE_DATABASE_URL is set: producers cannot enqueue inside their business transactions');
 
 let dispatcher: { stop(): Promise<void> } | undefined;
 onShutdownSignal(

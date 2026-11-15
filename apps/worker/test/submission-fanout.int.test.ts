@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import pg from 'pg';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, inject, it, vi } from 'vitest';
@@ -7,14 +8,16 @@ import { createDb, newSubmissionKey, provision, type DbHandle } from '@form/db';
 import { toIsoInstant, type JobRequest, type SubmissionEvent } from '@form/ports';
 import { createTestDatabase } from '@form/testkit';
 import { jobGuard } from '../src/guard.ts';
-import { createSubmissionFanout, JOB_DEFINITIONS, submissionFanout, type FanoutTarget } from '../src/jobs/index.ts';
+import { createSubmissionFanout, JOB_DEFINITIONS, submissionFanout, type FanoutConsumer, type FanoutTarget } from '../src/jobs/index.ts';
 import { startWorker } from '../src/runtime.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 
 /*
  * WP-1.12: the `submission.fanout` handler. A committed response sends one job; the handler loads the response as
- * `system` in the tenant of the org that owns the form and hands it to the consumers. There are none yet, so the
- * handler acks. These tests give it a consumer of their own to see what the handler found.
+ * `system` in the tenant of the org that owns the form and hands it to the consumers (notifications and webhooks, WP-1.16
+ * and WP-1.18, are wired in `main.ts`; the registered handler here has none and acks). A response that is not `complete`
+ * (held, rejected, set aside) is acked without calling any of them. These tests give the handler consumers of their own to
+ * see what it found.
  */
 
 interface Org {
@@ -198,11 +201,78 @@ describe('submission.fanout', () => {
     expect(seen.at(-1)).toMatchObject({ submissionId: elsewhere.id, formId: a.other });
   });
 
-  it('hands a held response to the consumers with its status, so each can decide what a held one may do', async () => {
-    const s = await store(a, { status: 'pending_payment' });
-    const id = await producer.send('submission.fanout', fanoutFor(a, s));
+  it.each(['pending_review', 'rejected', 'pending_scan', 'pending_payment', 'payment_failed', 'pending_guardian_consent', 'spam', 'archived', 'trashed'] as const)(
+    'calls no consumer for a %s response, and acks it',
+    async (status) => {
+      const before = seen.length;
+      const s = await store(a, { status });
+      const id = await producer.send('submission.fanout', fanoutFor(a, s));
+      expect(await finished(id!)).toBe('completed');
+      expect(seen).toHaveLength(before);
+      expect(seen.some((t) => t.submissionId === s.id)).toBe(false);
+    },
+  );
+
+  it('fans out a held response once it is released: the same response, now complete, sent again with the event released', async () => {
+    const s = await store(a, { status: 'pending_review' });
+    const held = await producer.send('submission.fanout', fanoutFor(a, s));
+    expect(await finished(held!)).toBe('completed');
+    expect(seen.some((t) => t.submissionId === s.id)).toBe(false);
+    await owner.query(`update submissions set status = 'complete' where id = $1 and received_at = $2`, [s.id, s.receivedAt]);
+    const released = await producer.send('submission.fanout', fanoutFor(a, s, { event: 'released' }));
+    expect(await finished(released!)).toBe('completed');
+    expect(seen.filter((t) => t.submissionId === s.id)).toEqual([
+      { orgId: a.id, formId: a.form, formVersionId: a.versions[a.form], submissionId: s.id, status: 'complete', event: 'released' },
+    ]);
+  });
+});
+
+describe('submission.fanout consumers of a complete response', () => {
+  interface Seen {
+    consumer: string;
+    submissionId: string;
+    txid: string;
+    org: string;
+    actor: string;
+  }
+  const calls: Seen[] = [];
+  /** Each consumer records the transaction it ran in and the tenant identity of that transaction, through the `tx` it is given. */
+  const consumer =
+    (name: string): FanoutConsumer =>
+    async (target, { tx }) => {
+      const { rows } = await tx.execute<{ txid: string; org: string; actor: string }>(
+        sql`select txid_current()::text as txid, current_setting('app.org_id') as org, current_setting('app.actor_kind') as actor`,
+      );
+      calls.push({ consumer: name, submissionId: target.submissionId, ...rows[0]! });
+    };
+
+  let worker: PgBossQueue;
+  beforeAll(async () => {
+    worker = await serve([createSubmissionFanout([consumer('first'), consumer('second')])]);
+  });
+  // Stopped before the registered handler is tested, so the two never compete for a job.
+  afterAll(() => worker.stop({ graceMs: 1000 }));
+
+  it('calls every consumer once, in order, inside the one job transaction, as system in the org that owns the form', async () => {
+    const s = await store(b);
+    const id = await producer.send('submission.fanout', fanoutFor(b, s));
     expect(await finished(id!)).toBe('completed');
-    expect(seen.find((t) => t.submissionId === s.id)).toMatchObject({ status: 'pending_payment' });
+    const mine = calls.filter((c) => c.submissionId === s.id);
+    expect(mine.map((c) => c.consumer)).toEqual(['first', 'second']);
+    expect(mine[0]!.txid).toBe(mine[1]!.txid);
+    expect(mine.map((c) => [c.org, c.actor])).toEqual([
+      [b.id, 'system'],
+      [b.id, 'system'],
+    ]);
+  });
+
+  it('calls none for a response that is pending_review, rejected or pending_scan', async () => {
+    for (const status of ['pending_review', 'rejected', 'pending_scan']) {
+      const s = await store(b, { status });
+      const id = await producer.send('submission.fanout', fanoutFor(b, s));
+      expect(await finished(id!)).toBe('completed');
+      expect(calls.some((c) => c.submissionId === s.id), status).toBe(false);
+    }
   });
 });
 

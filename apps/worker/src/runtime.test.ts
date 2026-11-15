@@ -4,7 +4,8 @@ import type { Db } from '@form/db';
 import { JOBS, type JobHandler, type JobName, type KeyProvider, type Queue, type ReceivedJob } from '@form/ports';
 import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
-import { createAuditJobs, defineJob, JOB_DEFINITIONS, type AnyJobDefinition } from './jobs/index.ts';
+import type { EffectDeps } from './effects/deps.ts';
+import { createAuditJobs, createEffectFanout, createEffectJobs, defineJob, JOB_DEFINITIONS, submissionFanout, type AnyJobDefinition } from './jobs/index.ts';
 import { runJob, selectJobs, startWorker } from './runtime.ts';
 
 const log = pino({ level: 'silent' });
@@ -58,6 +59,27 @@ describe('the job registry', () => {
         expect(d.cron.split(' '), d.name).toHaveLength(5);
       }
     }
+  });
+});
+
+describe('the effect jobs', () => {
+  // The stubs of notifications, webhooks and exports read nothing from the deps yet; the work packages that fill them do.
+  const deps = {} as EffectDeps;
+
+  it('never register a queue the registry or the audit jobs already serve, and replace the consumerless fan-out under its own name', () => {
+    const fanout = createEffectFanout(deps);
+    expect(fanout).toMatchObject({ name: 'submission.fanout', perms: [] });
+    expect(fanout).not.toBe(submissionFanout);
+    const names = [...JOB_DEFINITIONS.filter((d) => d !== submissionFanout), fanout, ...createEffectJobs(deps), ...auditDefs].map((d) => d.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('start in a worker beside the registry with the fan-out swapped, one handler for submission.fanout', async () => {
+    const { queue, calls } = fakeQueue();
+    const jobs = [...JOB_DEFINITIONS.filter((d) => d.name !== 'submission.fanout'), createEffectFanout(deps), ...createEffectJobs(deps)];
+    const w = await startWorker({ db, log, queue, jobs });
+    expect(w.queues.filter((n) => n === 'submission.fanout')).toHaveLength(1);
+    expect(calls.filter((c) => c[0] === 'work' && c[1] === 'submission.fanout')).toHaveLength(1);
   });
 });
 
