@@ -59,7 +59,7 @@ test('create from a template → three pages with a show rule → preview → su
   await openSettings(page, 4);
   await page.getByRole('tab', { name: 'Logic' }).click();
   await page.getByRole('button', { name: 'Add a rule' }).click();
-  await expect(page.getByRole('button', { name: 'Ticket type' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'When' })).toContainText('Ticket type');
   await page.getByRole('radio', { name: 'VIP' }).check();
   await expect(page.getByText('Hidden until a rule shows it').first()).toBeVisible();
   await expect(page.getByText('Saved', { exact: true })).toBeVisible();
@@ -72,7 +72,8 @@ test('create from a template → three pages with a show rule → preview → su
 
   /* The template's ticket question is a dropdown. */
   const ticket = page.getByRole('combobox', { name: /Ticket type/ });
-  const guests = page.getByRole('spinbutton', { name: /Number of guests/ }).or(page.getByRole('textbox', { name: /Number of guests/ }));
+  /* The renderer draws a bounded number (0 to 10 here) as a slider. */
+  const guests = page.getByRole('slider', { name: /Number of guests/ });
   await ticket.selectOption('General admission');
   await expect(guests).toBeHidden();
   await ticket.selectOption('VIP');

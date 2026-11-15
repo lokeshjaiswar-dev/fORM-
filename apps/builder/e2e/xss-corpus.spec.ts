@@ -33,8 +33,9 @@ test('the XSS corpus pasted into the editors never runs, in the builder or the p
   await insert.press('Enter');
   await insert.fill('/short');
   await page.getByRole('option', { name: /Short answer/ }).click();
+  /* The paragraph, the question's label and the question's hint: every rich-text editor on the canvas takes the corpus. */
   const editors = page.locator('.ProseMirror');
-  await expect(editors).toHaveCount(2);
+  await expect(editors).toHaveCount(3);
 
   await page.evaluate((payloads) => {
     const targets = [...document.querySelectorAll<HTMLElement>('.ProseMirror')];
