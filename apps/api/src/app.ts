@@ -10,7 +10,7 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fast
 import type { DestinationStream } from 'pino';
 import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
 import { cachedClockCheck, type ClockStatus } from '@form/observability';
-import type { KeyProvider, Mailer } from '@form/ports';
+import type { KeyProvider, Mailer, Queue } from '@form/ports';
 import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
 import { createServiceLogger } from './log.ts';
@@ -64,6 +64,12 @@ export interface AppDeps {
    * may be imported); without it, searching responses and deleting them forever answer 503.
    */
   searchIndex?: SearchIndexFactory;
+  /**
+   * A producer queue (pg-boss through `createPgBossQueue({ mode: 'producer' })`; the composition root makes it, starts it
+   * and stops it after the app closes). Every stored response sends one `submission.fanout` job through it, inside the
+   * submit transaction, so it must run on the app's own database. Without it no job is sent, which only tests do.
+   */
+  queue?: Queue;
   now?: () => Date;
   /**
    * Called with every route as it is registered, including routes a test adds after `buildApp` returns (tests only). The
@@ -209,7 +215,7 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   publishRoutes(app, { db: handle.db, secret: config.auth.secret, now });
   accessRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   const files = deps.files ?? createFileStore(path.resolve(config.filesDir ?? path.resolve(process.cwd(), '.data/files')));
-  publicFormRoutes(app, { db: handle.db, config, files, throttle, now });
+  publicFormRoutes(app, { db: handle.db, config, files, throttle, now, effects: { searchIndex: deps.searchIndex, queue: deps.queue } });
   publicUnlockRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
   submissionRoutes(app, { db: handle.db, files, secret: config.auth.secret, searchIndex: deps.searchIndex, now });

@@ -7,7 +7,7 @@ import { runtimeStatus } from '../runtime/status.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
 import { checkAnswers, type ClientMeta } from '../validate-submission.ts';
 import { isUnlocked, readAccess, type AccessView } from './access.ts';
-import { recordEffects, type EffectsContext } from './effects.ts';
+import { recordEffects, takeUniqueIds, type EffectsContext, type EffectsDeps } from './effects.ts';
 import { claimIdempotency, findIdempotent, hashRequest, type StoredResult } from './idempotency.ts';
 import type { LoadedVersion, VersionLoader } from './live.ts';
 import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } from './meta.ts';
@@ -22,8 +22,9 @@ import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } 
  *   evaluate and validate the answers (server scope, with the page-view details), drop what the server owns
  *   check the files the answers name against the upload rows
  *
- *   then one transaction: claim the key, INSERT the submission, run the effects, and last of all the guarded counter
- *   update that can still say LIMIT_REACHED, which rolls the rest back.
+ *   then one transaction: claim the key, number the unique-ID blocks, INSERT the submission, run the effects (the search
+ *   document and the one fan-out job), and last of all the guarded counter update that can still say LIMIT_REACHED, which
+ *   rolls the rest back.
  *
  * Still to come, in the order the architecture lists them: encryption and blind indexes (WP-1.11), consent records
  * (WP-1.21), the held statuses (WP-1.14, WP-1.30), captcha and honeypot (WP-1.13), edit and receipt tokens (WP-1.11).
@@ -41,6 +42,8 @@ export interface SubmitDeps {
   secret: Uint8Array;
   loader: VersionLoader;
   now: () => Date;
+  /** What the effects write to or send through (the search index and the producer queue); without it they are skipped, which only tests do. */
+  effects?: EffectsDeps | undefined;
 }
 
 /** What the route hands over: the parts of the request that are the respondent's word, already shaped by the route's schemas. */
@@ -259,9 +262,11 @@ interface Stage {
 
 /**
  * The write transaction, ordered for throughput and correctness (architecture §2.5, steps 3 to 6): the key is claimed
- * first, so a replay is returned before anything is stored or counted; the response is inserted; its effects run; and
- * the counter is updated last, so its row lock is held for the commit only. A limit that is reached at that last
- * statement throws, and everything above it rolls back with it (the key too, so the next try is a new request).
+ * first, so a replay is returned before anything is stored or counted; the unique IDs are numbered (the number is part
+ * of the answer, which a respondent context can INSERT but never UPDATE, see `takeUniqueIds`); the response is inserted;
+ * its effects run; and the limit's counter is updated last, so its row lock is held for the commit only. A limit that is
+ * reached at that last statement throws, and everything above it rolls back with it (the key, the numbers and the job
+ * too, so the next try is a new request).
  */
 async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'respondent'; requestId: string }, s: Stage): Promise<SubmitOutcome> {
   const result: StoredResult = { submissionId: s.submissionId, endingId: s.endingId };
@@ -279,6 +284,7 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       if (!claim.stored.requestHash.equals(s.requestHash)) throw new ProblemError('IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was already used for different answers.');
       return { kind: 'taken', replayed: true, result: { ok: true, ...claim.stored.result } };
     }
+    const answers = await takeUniqueIds(tx, { orgId: s.found.orgId, formId: s.found.formId, receivedAt: s.receivedAt, answers: s.answers, definition: s.version.definition });
     await recordSubmission(tx, {
       id: s.submissionId,
       receivedAt: s.receivedAt,
@@ -288,7 +294,7 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       definitionHash: s.version.definitionHash,
       answerCodecVersion: ANSWER_CODEC_PLAIN,
       status: 'complete',
-      answers: s.answers,
+      answers,
       // The page path and the ending the answers reached; the variables (which can be tainted or sensitive) wait for WP-1.11.
       computed: { path: [...s.pathTaken], endingId: s.endingId },
       meta: s.meta,
@@ -304,11 +310,11 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
       receivedAt: s.receivedAt,
       status: 'complete',
       locale: s.locale,
-      answers: s.answers,
+      answers,
       definition: s.version.definition,
       compiled: s.version.compiled,
     };
-    await recordEffects(tx, effects);
+    await recordEffects(tx, effects, deps.effects);
     if (!(await countSubmission(tx, s.found.formId))) throw new ProblemError('LIMIT_REACHED', 'This form has reached its limit of responses.');
     return { kind: 'taken', replayed: false, result: { ok: true, ...result } };
   });

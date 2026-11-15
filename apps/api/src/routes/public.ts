@@ -25,6 +25,7 @@ import {
 } from '../files.ts';
 import { runtimeStatus } from '../runtime/status.ts';
 import { isUnlocked, readAccess } from '../submit/access.ts';
+import type { EffectsDeps } from '../submit/effects.ts';
 import { createVersionLoader, type LoadedVersion } from '../submit/live.ts';
 import { submit } from '../submit/pipeline.ts';
 import { storableJson, storableString } from '../text-safety.ts';
@@ -85,7 +86,10 @@ const accessTokenOf = (request: FastifyRequest): string | undefined => {
   return typeof raw === 'string' ? raw : undefined;
 };
 
-export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date }): void {
+export function publicFormRoutes(
+  app: FastifyInstance,
+  deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date; effects?: EffectsDeps | undefined },
+): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const edition: RuntimeEdition = runtimeEdition(editionSummary(deps.config.edition));
   const loader = createVersionLoader({ db: deps.db, edition });
@@ -315,7 +319,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       const { formVersionId, answers, locale, client } = request.body;
       const userAgent = request.headers['user-agent'];
       const outcome = await submit(
-        { db: deps.db, secret: deps.config.auth.secret, loader, now: deps.now },
+        { db: deps.db, secret: deps.config.auth.secret, loader, now: deps.now, effects: deps.effects },
         {
           slug: request.params.slug,
           requestId: request.id,

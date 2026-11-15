@@ -1,11 +1,15 @@
-import type { Answers, CompiledForm, FormDefinition } from '@form/schema';
-import type { Tx } from '@form/db';
+import { sql } from 'drizzle-orm';
+import { txExecutor, type SubmissionStatus, type Tx } from '@form/db';
+import { formatUniqueId } from '@form/registry';
+import { toIsoInstant, type Queue } from '@form/ports';
+import type { Answers, BlockId, CompiledForm, FormDefinition, UniqueIdConfig } from '@form/schema';
+import { searchDocFor } from '../submissions/search-doc.ts';
+import { searchIndexOn, type SearchIndexFactory } from '../submissions/search.ts';
 
 /**
  * What the submit transaction has decided when it runs the effects of a stored response. Everything the effects need is
- * here, so adding one (the search document, the fan-out job, the unique-ID counters) is a change to this file and not to
- * the pipeline. Nothing in it is the respondent's word: the answers are the server's evaluation of them, the ids and the
- * moment are the server's, and the org comes from the slug.
+ * here, so adding one is a change to this file and not to the pipeline. Nothing in it is the respondent's word: the
+ * answers are the server's evaluation of them, the ids and the moment are the server's, and the org comes from the slug.
  */
 export interface EffectsContext {
   orgId: string;
@@ -16,10 +20,10 @@ export interface EffectsContext {
   submissionId: string;
   /** The moment the server took the answers (the one inside `submissionId`, and `submissions.received_at`). */
   receivedAt: Date;
-  /** `complete` today; the held statuses (payment, scan, guardian consent) arrive with their work packages and enqueue nothing. */
-  status: 'complete';
+  /** `complete` today; a held status (payment, scan, guardian consent) is searchable at once but enqueues no fan-out until it is released. */
+  status: SubmissionStatus;
   locale: string;
-  /** The validated answers as they are stored (plain, until WP-1.11 encrypts the sensitive ones), with file references rewritten from the upload rows. */
+  /** The validated answers as they are stored (plain, until WP-1.11 encrypts the sensitive ones), with file references rewritten from the upload rows and the unique IDs numbered. */
   answers: Answers;
   /** The version the answers were checked against. */
   definition: FormDefinition;
@@ -27,12 +31,112 @@ export interface EffectsContext {
 }
 
 /**
- * The hook for what a stored response sets in motion inside its own transaction: the search document, the single
- * `submission.fanout` job (the transactional outbox, so a rolled-back submission enqueues nothing), the gap-free
- * unique-ID counters. It runs after the INSERT of the submission and before the guarded counter update that can still
- * roll everything back, so whatever it writes is undone with the rest by a `LIMIT_REACHED`. A no-op until WP-1.12's
- * effects work fills it in.
+ * What the effects write to or send through. Both are made by the composition root (`main.ts`, the only place an adapter
+ * may be imported) and handed to `buildApp`. An app built without one skips that effect, which only tests do: the
+ * production config refuses to start without `JOB_SIGNING_KEYS`, and `main.ts` always passes the search index.
  */
-export async function recordEffects(_tx: Tx, _ctx: EffectsContext): Promise<void> {
-  // Deliberately empty.
+export interface EffectsDeps {
+  /** The full-text index the search document goes to (`submission_search`), bound to the submit transaction. */
+  searchIndex?: SearchIndexFactory | undefined;
+  /** A producer queue; its `send` runs on the submit transaction, so the fan-out job commits or rolls back with the response. */
+  queue?: Queue | undefined;
+}
+
+/** The statuses a response is released to its side effects in: held ones (payment, scan, guardian consent) wait for their release. */
+const FANS_OUT: readonly SubmissionStatus[] = ['complete'];
+
+/** The year or month of `at` as the form's own calendar names it (`YYYY`, `YYYY-MM`), which is when a numbering that restarts restarts. */
+function periodOf(resetEvery: UniqueIdConfig['resetEvery'], at: Date, timeZone: string): string {
+  if (resetEvery === 'never') return '';
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' }).formatToParts(at);
+  } catch {
+    // A time zone this runtime does not know (the definition passed publish, so this is a runtime gap, not the respondent's doing): UTC.
+    parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit' }).formatToParts(at);
+  }
+  const year = parts.find((p) => p.type === 'year')?.value ?? '';
+  const month = parts.find((p) => p.type === 'month')?.value ?? '';
+  return resetEvery === 'year' ? year : `${year}-${month}`;
+}
+
+/**
+ * Gives each unique-ID block its number (FLD-32): one `form_id_counters` row per form, block and period, advanced by a
+ * single `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`, so two submissions can never get the same number and a
+ * submission that rolls back (a reached limit) gives its number back. The row lock is held to the commit, so the
+ * numbers are gap-free in commit order.
+ *
+ * This runs right after the idempotency key is claimed and BEFORE the INSERT of the response, although architecture
+ * §2.5 step 6 lists the counters last: the number is part of the stored answer, and a respondent context may INSERT a
+ * response but never UPDATE it (`submissions_data_update`), so the answer has to carry its number when it is inserted.
+ * The cost is a longer hold of this one row (the INSERT's own trigger already holds the form's row to the commit).
+ *
+ * Only a block the respondent's path reached has an answer to number; a hidden one takes no number. Blocks are numbered
+ * in id order, so two transactions that number two blocks lock the rows in the same order and cannot deadlock. The page
+ * never chooses the number: the value the evaluation put in the answer (a preview of the first number) is replaced.
+ */
+export async function takeUniqueIds(tx: Tx, ctx: Pick<EffectsContext, 'orgId' | 'formId' | 'receivedAt' | 'answers' | 'definition'>): Promise<Answers> {
+  const blocks = (Object.keys(ctx.definition.blocks) as BlockId[])
+    .sort()
+    .map((id) => ctx.definition.blocks[id])
+    .filter((block): block is Extract<NonNullable<typeof block>, { type: 'unique_id' }> => block?.type === 'unique_id' && ctx.answers[block.id]?.type === 'unique_id');
+  if (blocks.length === 0) return ctx.answers;
+  const numbered: Answers = { ...ctx.answers };
+  for (const block of blocks) {
+    const { config } = block;
+    const period = periodOf(config.resetEvery, ctx.receivedAt, ctx.definition.behavior.timeZone);
+    // `next_seq` is the number the NEXT submission gets. The first submission of a period creates the row at startAt + 1
+    // and takes startAt; every later one takes the stored number and advances it. `greatest` lets a later version raise
+    // `startAt` and have it apply, and never lets one lower the numbering below what was already given out.
+    const { rows } = await tx.execute<{ taken: string }>(sql`
+      insert into form_id_counters as c (form_id, block_id, period, org_id, next_seq)
+      values (${ctx.formId}, ${block.id}, ${period}, ${ctx.orgId}, ${config.startAt + 1})
+      on conflict (form_id, block_id, period) do update set next_seq = greatest(c.next_seq, ${config.startAt}::bigint) + 1
+      returning next_seq - 1 as taken`);
+    const taken = rows[0]?.taken;
+    if (taken === undefined) throw new Error('form_id_counters returned no number');
+    numbered[block.id] = { type: 'unique_id', value: formatUniqueId(config, Number(taken)) };
+  }
+  return numbered;
+}
+
+/**
+ * What a stored response sets in motion inside its own transaction, after the INSERT and before the guarded counter
+ * update that can still roll everything back, so whatever it writes is undone with the rest by a `LIMIT_REACHED`:
+ *
+ * 1. the search document: the text of the answers that are safe to search (`searchDocFor`: no `encrypt` or `sensitive`
+ *    field, nothing derived from one), written to `submission_search` as the respondent context may (insert only);
+ * 2. the single `submission.fanout` job, sent through the same transaction (the transactional outbox, architecture §2.5
+ *    step 5): a response that is not committed enqueues nothing, and one that is committed has its job. A held status
+ *    enqueues nothing; its release sends the job.
+ *
+ * The job names the form as its resource (the worker resolves the org from it with `resolve_job_org`, which knows forms
+ * and not submissions) and carries ids only, never an answer.
+ */
+export async function recordEffects(tx: Tx, ctx: EffectsContext, deps: EffectsDeps = {}): Promise<void> {
+  if (deps.searchIndex) {
+    await searchIndexOn(deps.searchIndex, tx).upsert(ctx.orgId, [
+      {
+        submissionId: ctx.submissionId,
+        receivedAt: toIsoInstant(ctx.receivedAt),
+        formId: ctx.formId,
+        locale: ctx.locale,
+        text: searchDocFor({ definition: ctx.definition, compiled: ctx.compiled }, ctx.answers),
+      },
+    ]);
+  }
+  if (deps.queue && FANS_OUT.includes(ctx.status)) {
+    const jobId = await deps.queue.send(
+      'submission.fanout',
+      {
+        orgId: ctx.orgId,
+        resource: { type: 'form', id: ctx.formId },
+        data: { submissionId: ctx.submissionId, receivedAt: toIsoInstant(ctx.receivedAt), event: 'created' },
+      },
+      { tx: txExecutor(tx) },
+    );
+    // A standard queue gives every send an id; none means the job was not stored, and a stored response without its
+    // fan-out would never notify anyone: fail the whole transaction instead.
+    if (jobId === null) throw new Error('submission.fanout was not enqueued');
+  }
 }
