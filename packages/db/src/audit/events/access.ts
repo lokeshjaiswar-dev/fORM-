@@ -5,4 +5,21 @@ import type { AuditEventSpec } from './spec.ts';
  * `AUDIT_EVENTS` by `../catalogue.ts`; add codes here, not there. List only codes something emits (`catalogue.test.ts`),
  * and none that another file already lists (`events.test.ts`).
  */
-export const ACCESS_EVENTS = {} as const satisfies Record<string, AuditEventSpec>;
+export const ACCESS_EVENTS = {
+  'form.access_changed': {
+    outcomes: ['success'],
+    resourceType: 'form',
+    description:
+      "A form's access settings were saved (open and close times, limit, allowlists, status screens); the metadata names the keys that changed and the new revision, never their values.",
+  },
+  'form.password_changed': {
+    outcomes: ['success'],
+    resourceType: 'form',
+    description: 'A form password was set, replaced or removed (`set` or `removed` in the metadata); never the password or its hash.',
+  },
+  'form.slug_changed': {
+    outcomes: ['success'],
+    resourceType: 'form',
+    description: "A form's public address was changed; the old address keeps resolving and the metadata names both.",
+  },
+} as const satisfies Record<string, AuditEventSpec>;
