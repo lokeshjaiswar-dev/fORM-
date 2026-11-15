@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { audit, disclosures, secretEnc, txExecutor, uuidV7, uuidV7Time, webhookDeliveries, webhooks, type Tx, type WebhookEvent } from '@form/db';
 import { isPortError, JOB_POLICIES, PortError, toIsoInstant, type SubmissionEvent } from '@form/ports';
@@ -35,6 +35,9 @@ export const AUTO_DISABLED_REASON = 'Turned off automatically after 50 failed de
 export const DELIVERY_TIMEOUT_MS = 30_000;
 /** More of the answer than this is not read: the receiver is misbehaving, and the log keeps 1 KB anyway. */
 export const RESPONSE_CAP_BYTES = 64 * 1024;
+
+/** How far the API's clock (a response's `receivedAt`) may be ahead of the database's (`created_at` of its deliveries). */
+const CLOCK_SLACK_MS = 24 * 60 * 60 * 1000;
 
 /** The queue's own count of retries, so the last attempt is known when it is made. */
 const RETRY_LIMIT = JOB_POLICIES['webhook.deliver'].retryLimit;
@@ -102,13 +105,48 @@ function webhookFanout(deps: EffectDeps) {
         .from(webhooks)
         .where(and(eq(webhooks.formId, resource.id), eq(webhooks.enabled, true), sql`${data.event} = any(${webhooks.events})`))
         .orderBy(webhooks.createdAt, webhooks.id);
+      // Exactly once per webhook for a new response. The queue is at-least-once: a `submission.fanout` (or this job) that
+      // committed but was not marked complete (the worker died in between, the ack hit a connection blip) runs again, and
+      // without this check it would insert a second delivery with a new id, which a receiver cannot tell from a new event.
+      // The lock makes two runs for the same response take turns, so the second sees the first one's rows (read committed),
+      // as `notification.dispatch` does. A replay (`replayOf` set) is an owner's deliberate resend and does not count.
+      // Not for `submission.updated`: each edit is an event of its own, and the job does not yet say which edit it is (BL-311).
+      let already = new Set<string>();
+      if (data.event === 'submission.created' && subscribed.length > 0) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`webhook.fanout:${data.submissionId}:${data.event}`}, 0))`);
+        const existing = await tx
+          .selectDistinct({ webhookId: webhookDeliveries.webhookId })
+          .from(webhookDeliveries)
+          .where(
+            and(
+              inArray(
+                webhookDeliveries.webhookId,
+                subscribed.map((h) => h.id),
+              ),
+              // No delivery is older than its response, so this bound lets the planner skip the older monthly partitions. The
+              // day of slack is for clocks: `receivedAt` is the API's clock, `created_at` the database's.
+              gte(webhookDeliveries.createdAt, new Date(receivedAt.getTime() - CLOCK_SLACK_MS)),
+              eq(webhookDeliveries.submissionId, data.submissionId),
+              eq(webhookDeliveries.submissionReceivedAt, receivedAt),
+              eq(webhookDeliveries.event, data.event),
+              isNull(webhookDeliveries.replayOf),
+            ),
+          );
+        already = new Set(existing.map((e) => e.webhookId));
+      }
+      let created = 0;
       for (const hook of subscribed) {
         job.signal.throwIfAborted();
+        if (already.has(hook.id)) {
+          log.info({ submissionId: data.submissionId, webhookId: hook.id, event: data.event }, 'webhook.fanout: this response already has its delivery; not sending another');
+          continue;
+        }
+        created += 1;
         const id = uuidV7(deps.now());
         await tx.insert(webhookDeliveries).values({ id, orgId, webhookId: hook.id, event: data.event, submissionId: data.submissionId, submissionReceivedAt: receivedAt, status: 'pending' });
         await deps.queue.send('webhook.deliver', { orgId, resource: { type: 'webhook_delivery', id }, data: { deliveryId: id } }, { tx: txExecutor(tx) });
       }
-      log.debug({ submissionId: data.submissionId, event: data.event, deliveries: subscribed.length }, 'webhook.fanout done');
+      log.debug({ submissionId: data.submissionId, event: data.event, deliveries: created }, 'webhook.fanout done');
     },
   });
 }

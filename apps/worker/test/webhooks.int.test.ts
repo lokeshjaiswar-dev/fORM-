@@ -737,6 +737,45 @@ describe('webhook.fanout and the consumer', () => {
     expect(rows.every((r) => /^[0-9a-f]{8}-[0-9a-f]{4}-7/.test(r.id))).toBe(true);
   });
 
+  it('fires exactly once per webhook when the queue hands a fan-out over again: submission.fanout twice, each webhook.fanout twice, two at once', async () => {
+    const org = await seedOrg('hooks-once');
+    const one = await seedWebhook(org);
+    const two = await seedWebhook(org);
+    const s = await store(org);
+    const fanout = createSubmissionFanout([webhooksConsumer(deps)]) as unknown as Parameters<typeof runJob>[0];
+    const fanoutJob = {
+      id: randomUUID(),
+      name: 'submission.fanout',
+      attempt: 1,
+      signal: new AbortController().signal,
+      envelope: { v: 1, orgId: org.id, resource: { type: 'form', id: org.form }, data: { submissionId: s.id, receivedAt: toIsoInstant(s.receivedAt), event: 'created' }, sig: 'k.x' },
+    };
+    sent.length = 0;
+    // submission.fanout committed but was not marked complete (the worker died in between), so the queue runs it again.
+    await runJob(fanout, fanoutJob as never, { db: app.db, log });
+    await runJob(fanout, { ...fanoutJob, attempt: 2 } as never, { db: app.db, log });
+    const fanouts = sent.filter((x) => x.name === 'webhook.fanout');
+    expect(fanouts).toHaveLength(2);
+
+    sent.length = 0;
+    const def = definitionOf(deps, 'webhook.fanout') as Parameters<typeof runJob>[0];
+    const jobOf = (x: (typeof fanouts)[number]) => receivedJob('webhook.fanout', org.id, org.form, 1, x.request.data as never);
+    // The two copies at the same moment (two workers), then the first one again (its own ack was lost).
+    await Promise.all(fanouts.map((x) => runJob(def, jobOf(x) as never, { db: app.db, log })));
+    await runJob(def, jobOf(fanouts[0]!) as never, { db: app.db, log });
+
+    const { rows } = await owner.query<{ webhook_id: string }>('select webhook_id from webhook_deliveries where org_id = $1', [org.id]);
+    expect(rows.map((r) => r.webhook_id).sort()).toEqual([one.id, two.id].sort());
+    expect(sent.map((x) => x.name)).toEqual(['webhook.deliver', 'webhook.deliver']);
+
+    // An owner's replay is a deliberate resend: it neither counts as the delivery nor is stopped by it.
+    const other = await store(org);
+    await seedDelivery(org, one.id, other, { replayOf: randomUUID() });
+    sent.length = 0;
+    await runJob(def, receivedJob('webhook.fanout', org.id, org.form, 1, { submissionId: other.id, receivedAt: toIsoInstant(other.receivedAt), formId: org.form, event: 'submission.created' }) as never, { db: app.db, log });
+    expect(sent.map((x) => x.name)).toEqual(['webhook.deliver', 'webhook.deliver']);
+  });
+
   it('ignores a job whose response id is not a UUIDv7 or whose form is not its resource', async () => {
     const org = await seedOrg('hooks-forged');
     await seedWebhook(org);
