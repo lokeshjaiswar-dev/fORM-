@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { roleLabel } from './roles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -37,6 +37,11 @@ const MEMBERS = {
   ],
   accessLinks: false,
 };
+
+const GROUP = (id: string, name: string, extra: Record<string, unknown> = {}) => ({ id, name, createdAt: '2026-11-01T00:00:00.000Z', archivedAt: null, members: [], ...extra });
+const RAVI = { userId: 'u2', email: 'ravi@example.test', name: null, role: 'editor', canReview: true, addedAt: '2026-11-02T00:00:00.000Z' };
+const GROUPS = { items: [GROUP('g1', 'Finance', { members: [RAVI] }), GROUP('g2', 'Legacy', { archivedAt: '2026-11-05T00:00:00.000Z' })] };
+const GROUPS_URL = '/v1/org/review-groups?includeArchived=true';
 
 let calls: Call[];
 let answers: Record<string, (body: unknown) => { status: number; body: unknown }>;
@@ -114,6 +119,7 @@ describe('create org', () => {
     answers['GET /v1/org'] = () => ({ status: 200, body: ORG('owner', OWNER_PERMS) });
     answers['GET /v1/org/members'] = () => ({ status: 200, body: MEMBERS });
     answers['GET /v1/org/invites'] = () => ({ status: 200, body: { items: [] } });
+    answers[`GET ${GROUPS_URL}`] = () => ({ status: 200, body: { items: [] } });
     at('/orgs/new');
     expect(await screen.findByLabelText('Language')).toHaveValue('en-IN');
     expect(screen.getByLabelText('Time zone')).toHaveValue('Asia/Kolkata');
@@ -128,6 +134,7 @@ describe('create org', () => {
 
 describe('members', () => {
   beforeEach(() => {
+    answers[`GET ${GROUPS_URL}`] = () => ({ status: 200, body: GROUPS });
     answers['GET /v1/org/members'] = () => ({ status: 200, body: MEMBERS });
     answers['GET /v1/org/invites'] = () => ({
       status: 200,
@@ -182,6 +189,9 @@ describe('members', () => {
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
     expect(screen.queryByRole('link', { name: /Organisation settings/ })).toBeNull();
     expect(sent('GET', '/v1/org/invites')).toEqual([]);
+    // Review groups are managed with the members, so a member who cannot manage them neither sees nor asks for them.
+    expect(screen.queryByRole('region', { name: 'Review groups' })).toBeNull();
+    expect(sent('GET', GROUPS_URL)).toEqual([]);
   });
 
   it('keeps an admin away from the owner and the owner role', async () => {
@@ -195,6 +205,110 @@ describe('members', () => {
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('combobox', { name: 'Role' }));
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['admin', 'editor', 'viewer'].map(roleLabel));
+  });
+});
+
+describe('review groups on the members page', () => {
+  beforeEach(() => {
+    answers['GET /v1/org'] = () => ({ status: 200, body: ORG('owner', OWNER_PERMS) });
+    answers['GET /v1/org/members'] = () => ({ status: 200, body: MEMBERS });
+    answers['GET /v1/org/invites'] = () => ({ status: 200, body: { items: [] } });
+    answers[`GET ${GROUPS_URL}`] = () => ({ status: 200, body: GROUPS });
+  });
+
+  it('lists the groups with their members, archived ones marked, in the active org', async () => {
+    at('/org/members');
+    const section = await screen.findByRole('region', { name: 'Review groups' });
+    expect(await within(section).findByText('Finance')).toBeInTheDocument();
+    expect(sent('GET', GROUPS_URL)[0]?.headers['x-fr-org']).toBe('o1');
+    expect(within(section).getByText('Legacy')).toBeInTheDocument();
+    expect(within(section).getByText('Archived')).toBeInTheDocument();
+    expect(within(section).getByRole('button', { name: 'Remove ravi@example.test from Finance' })).toBeInTheDocument();
+    expect(within(section).getByText('No members yet.')).toBeInTheDocument();
+    // An archived group takes no new members.
+    expect(within(section).getByRole('combobox', { name: 'Add a member to Finance' })).toBeInTheDocument();
+    expect(within(section).queryByRole('combobox', { name: 'Add a member to Legacy' })).toBeNull();
+    expect(within(section).getByRole('button', { name: 'Restore Legacy' })).toBeInTheDocument();
+  });
+
+  it('creates a group through the API and lists it', async () => {
+    answers['POST /v1/org/review-groups'] = (body) => ({ status: 201, body: GROUP('g3', (body as { name: string }).name) });
+    at('/org/members');
+    const section = await screen.findByRole('region', { name: 'Review groups' });
+    const create = within(section).getByRole('button', { name: 'Create group' });
+    expect(create).toBeDisabled();
+    fireEvent.change(within(section).getByLabelText('Group name'), { target: { value: '  Legal  ' } });
+    fireEvent.click(create);
+    expect(await within(section).findByText('Legal')).toBeInTheDocument();
+    expect(sent('POST', '/v1/org/review-groups')).toEqual([expect.objectContaining({ body: { name: 'Legal' }, headers: expect.objectContaining({ 'x-fr-org': 'o1', 'x-fr-client': 'builder' }) })]);
+    expect(within(section).getByLabelText('Group name')).toHaveValue('');
+  });
+
+  it('renames a group, archives one and brings one back, each as one call', async () => {
+    answers['PATCH /v1/org/review-groups/g1'] = (body) => ({
+      status: 200,
+      body: GROUP('g1', (body as { name?: string }).name ?? 'Accounts', { members: [RAVI], archivedAt: (body as { archived?: boolean }).archived ? '2026-11-10T00:00:00.000Z' : null }),
+    });
+    answers['PATCH /v1/org/review-groups/g2'] = () => ({ status: 200, body: GROUP('g2', 'Legacy') });
+    at('/org/members');
+    const section = await screen.findByRole('region', { name: 'Review groups' });
+    const user = userEvent.setup();
+
+    await user.click(await within(section).findByRole('button', { name: 'Rename Finance' }));
+    const field = within(section).getByLabelText('New name for Finance');
+    await user.clear(field);
+    await user.type(field, 'Accounts');
+    await user.click(within(section).getByRole('button', { name: 'Save name' }));
+    expect(await within(section).findByText('Accounts')).toBeInTheDocument();
+    expect(sent('PATCH', '/v1/org/review-groups/g1')[0]?.body).toEqual({ name: 'Accounts' });
+
+    await user.click(within(section).getByRole('button', { name: 'Archive Accounts' }));
+    expect(await within(section).findByRole('button', { name: 'Restore Accounts' })).toBeInTheDocument();
+    expect(sent('PATCH', '/v1/org/review-groups/g1')[1]?.body).toEqual({ archived: true });
+
+    await user.click(within(section).getByRole('button', { name: 'Restore Legacy' }));
+    expect(await within(section).findByRole('button', { name: 'Archive Legacy' })).toBeInTheDocument();
+    expect(sent('PATCH', '/v1/org/review-groups/g2')[0]?.body).toEqual({ archived: false });
+  });
+
+  it('adds a member who can review and takes one out', async () => {
+    const asha = { userId: 'u1', email: 'asha@example.test', name: 'Asha', role: 'owner', canReview: true, addedAt: '2026-11-10T00:00:00.000Z' };
+    answers['PUT /v1/org/review-groups/g1/members/u1'] = () => ({ status: 200, body: GROUP('g1', 'Finance', { members: [asha, RAVI] }) });
+    answers['DELETE /v1/org/review-groups/g1/members/u2'] = () => ({ status: 204, body: null });
+    at('/org/members');
+    const section = await screen.findByRole('region', { name: 'Review groups' });
+    const user = userEvent.setup();
+
+    await user.click(await within(section).findByRole('combobox', { name: 'Add a member to Finance' }));
+    // Ravi is in the group already; only members who could review are offered.
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Asha (asha@example.test)']);
+    await user.click(screen.getByRole('option', { name: 'Asha (asha@example.test)' }));
+    expect(await within(section).findByRole('button', { name: 'Remove asha@example.test from Finance' })).toBeInTheDocument();
+    expect(sent('PUT', '/v1/org/review-groups/g1/members/u1')).toHaveLength(1);
+
+    await user.click(within(section).getByRole('button', { name: 'Remove ravi@example.test from Finance' }));
+    await waitFor(() => expect(within(section).queryByRole('button', { name: 'Remove ravi@example.test from Finance' })).toBeNull());
+    expect(sent('DELETE', '/v1/org/review-groups/g1/members/u2')).toHaveLength(1);
+    expect(within(section).getByRole('button', { name: 'Remove asha@example.test from Finance' })).toBeInTheDocument();
+  });
+
+  it('shows the server’s refusal when a member cannot be a checker, without losing the list', async () => {
+    answers['PUT /v1/org/review-groups/g1/members/u1'] = () => ({ status: 422, body: { code: 'NOT_A_REVIEWER', detail: 'A member with the viewer role cannot review responses. Only owners, admins and editors can.' } });
+    at('/org/members');
+    const section = await screen.findByRole('region', { name: 'Review groups' });
+    const user = userEvent.setup();
+    await user.click(await within(section).findByRole('combobox', { name: 'Add a member to Finance' }));
+    await user.click(await screen.findByRole('option', { name: 'Asha (asha@example.test)' }));
+    expect(await screen.findByText('A member with the viewer role cannot review responses. Only owners, admins and editors can.')).toBeInTheDocument();
+    expect(within(section).getByText('Finance')).toBeInTheDocument();
+  });
+
+  it('keeps the member list when the groups cannot be read', async () => {
+    answers[`GET ${GROUPS_URL}`] = () => ({ status: 403, body: { code: 'FORBIDDEN', detail: 'Requires members.manage or submissions.review.' } });
+    at('/org/members');
+    expect(await screen.findByText('Members of Acme')).toBeInTheDocument();
+    expect(await screen.findByText('Requires members.manage or submissions.review.')).toBeInTheDocument();
+    expect(screen.getAllByText('ravi@example.test').length).toBeGreaterThan(0);
   });
 });
 

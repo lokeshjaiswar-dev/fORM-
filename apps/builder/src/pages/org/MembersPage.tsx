@@ -22,6 +22,7 @@ import {
   type Members,
   type OrgInfo,
 } from './orgApi';
+import { ReviewGroups } from './ReviewGroups';
 import { roleLabel } from './roles';
 
 const M = defineMessages('builder', {
@@ -290,6 +291,7 @@ export function MembersPage() {
               ))}
             </ul>
           )}
+          <ReviewGroups members={data.members.items} />
         </>
       ) : null}
     </Page>
