@@ -6,7 +6,7 @@ import { ProblemError, type FieldIssue } from '../errors.ts';
 import { runtimeStatus } from '../runtime/status.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
 import { checkAnswers, type ClientMeta } from '../validate-submission.ts';
-import { isUnlocked, readAccess, type AccessView } from './access.ts';
+import { assertOpen, isUnlocked, readAccess, type AccessView } from './access.ts';
 import { recordEffects, takeUniqueIds, type EffectsContext, type EffectsDeps } from './effects.ts';
 import { claimIdempotency, findIdempotent, hashRequest, type StoredResult } from './idempotency.ts';
 import type { LoadedVersion, VersionLoader } from './live.ts';
@@ -178,21 +178,7 @@ export async function submit(deps: SubmitDeps, input: SubmitInput): Promise<Subm
   // What the form may do at the moment the answers arrived. The token proves the password was given for the version the
   // respondent's page was built from (the one the answers name).
   const unlocked = isUnlocked(deps.secret, seen.access, input.accessToken, { formId: found.formId, versionScope: named }, receivedAt);
-  const status = runtimeStatus(seen.access, { submittedTotal: seen.submittedTotal }, receivedAt, { unlocked });
-  switch (status.state) {
-    case 'open':
-      break;
-    case 'password':
-      throw new ProblemError('PASSWORD_REQUIRED', 'This form needs its password.');
-    case 'limit_reached':
-      throw new ProblemError('LIMIT_REACHED', 'This form has reached its limit of responses.');
-    case 'not_yet_open':
-      throw new ProblemError('FORM_CLOSED', 'This form is not open yet.');
-    case 'outside_hours':
-      throw new ProblemError('FORM_CLOSED', 'This form is outside its opening hours.');
-    default:
-      throw new ProblemError('FORM_CLOSED', 'This form is closed.');
-  }
+  assertOpen(runtimeStatus(seen.access, { submittedTotal: seen.submittedTotal }, receivedAt, { unlocked }));
 
   // The language is one the form offers: it is stored, and handed to Intl when the answers are checked.
   if (!version.definition.i18n.locales.some((l) => l.locale === body.locale)) {

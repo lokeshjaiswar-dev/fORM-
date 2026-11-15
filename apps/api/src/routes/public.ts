@@ -24,7 +24,7 @@ import {
   type FileStore,
 } from '../files.ts';
 import { runtimeStatus } from '../runtime/status.ts';
-import { isUnlocked, readAccess } from '../submit/access.ts';
+import { assertOpen, isUnlocked, readAccess } from '../submit/access.ts';
 import type { EffectsDeps } from '../submit/effects.ts';
 import { createVersionLoader, type LoadedVersion } from '../submit/live.ts';
 import { submit } from '../submit/pipeline.ts';
@@ -130,6 +130,23 @@ export function publicFormRoutes(
     }
   }
 
+  /**
+   * What the form may do now, asked of an upload exactly as a submission is asked: the same read of the rules and the
+   * counter (`readAccess`), the same check of the password token (`isUnlocked`), the same status (`runtimeStatus`) and
+   * the same refusals (`assertOpen`: 409 `FORM_CLOSED` or `LIMIT_REACHED`, 401 `PASSWORD_REQUIRED`). Without it a form
+   * that is switched off, closed, full or behind its password still took files from anyone who knew its address, which
+   * the page never offers but `curl` does.
+   *
+   * An upload names no version, so a password token has to be the one for the live version, as for `GET /v1/p/:slug`:
+   * after a republish a respondent who unlocked the old page is asked for the password again.
+   */
+  async function requireOpen(found: ResolvedFormSlug, request: FastifyRequest): Promise<void> {
+    const now = deps.now();
+    const { access, submittedTotal } = await withTenant(deps.db, { orgId: found.orgId, actor: 'respondent', requestId: request.id, readOnly: true }, (tx) => readAccess(tx, found.formId));
+    const unlocked = isUnlocked(deps.config.auth.secret, access, accessTokenOf(request), { formId: found.formId, versionScope: found.liveVersionId }, now);
+    assertOpen(runtimeStatus(access, { submittedTotal }, now, { unlocked }));
+  }
+
   r.get(
     '/v1/p/:slug',
     {
@@ -189,13 +206,22 @@ export function publicFormRoutes(
   });
 
   /**
-   * Before the body of an anonymous upload is read: the slug must be a live form (else 404), and a body bigger than the
-   * biggest file this form takes (its largest `maxFileBytes`, a signature's 2 MiB) is refused from its `Content-Length`
-   * (413) without reading a byte; a body that declares no length is counted as it arrives and cut off past the same
-   * limit. Without this, every request read and JSON-parsed up to 14 MB before anything about the form was looked at.
+   * Before the body of an anonymous upload is read: the slug must be a live form (else 404), the form must be taking
+   * responses now (`requireOpen`: closed, not yet open, full, outside its hours or behind its password is refused as a
+   * submission would be), and a body bigger than the biggest file this form takes (its largest `maxFileBytes`, a
+   * signature's 2 MiB) is refused from its `Content-Length` (413) without reading a byte; a body that declares no length
+   * is counted as it arrives and cut off past the same limit. Without this, every request read and JSON-parsed up to
+   * 14 MB before anything about the form was looked at. A refusal because of the form's status closes the connection, as
+   * the throttle's does, so a client does not go on sending a file nobody will read.
    */
   const guardUpload = async (request: FastifyRequest, reply: FastifyReply, payload: RequestPayload): Promise<RequestPayload> => {
     const found = await admit(request, reply, 'files');
+    try {
+      await requireOpen(found, request);
+    } catch (err) {
+      reply.header('connection', 'close');
+      throw err;
+    }
     const limit = uploadBodyLimit(await liveOf(found, request.id));
     const declared = request.headers['content-length'];
     if (declared !== undefined && Number(declared) > limit) {
@@ -215,7 +241,7 @@ export function publicFormRoutes(
         tags: ['runtime'],
         summary: 'Upload a file to an upload or signature field of a published form',
         description:
-          "Respondents are anonymous, so this is public, but it only takes files for a field the form's live version has, within that field's type and size rules. The server names the file (a uuid); a client-chosen id is ignored. Downloads are for signed-in members of the owning org only.",
+          "Respondents are anonymous, so this is public, but it only takes files for a field the form's live version has, within that field's type and size rules, and only while the form is taking responses: a form that is switched off, past its close date, before its open date, outside its weekly hours or full is refused with 409 `FORM_CLOSED` or `LIMIT_REACHED`, and a password form without a valid `X-FR-Access` token for its live version with 401 `PASSWORD_REQUIRED`, the same as a submission. The server names the file (a uuid); a client-chosen id is ignored. Downloads are for signed-in members of the owning org only.",
         params: slugParam,
         body: z.object({
           blockId: z.string().min(1).max(64),

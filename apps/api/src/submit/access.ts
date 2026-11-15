@@ -1,12 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { formCounters, type Tx } from '@form/db';
+import type { RuntimeStatus } from '@form/schema';
+import { ProblemError } from '../errors.ts';
 import { ACCESS_DEFAULTS, loadAccess, type AccessSettings } from '../runtime/access-config.ts';
 import { verifyAccessToken } from '../runtime/access-token.ts';
 
 /*
- * What both public routes read to say what a form may do right now (WP-1.07's `runtimeStatus`): the stored access rules
+ * What the public routes read to say what a form may do right now (WP-1.07's `runtimeStatus`): the stored access rules
  * and the counter of responses taken. `GET /v1/p/:slug` shows the status to the page, `POST .../submissions` enforces it
- * at the moment the answers arrive, and both must read it the same way.
+ * at the moment the answers arrive, `POST .../files` enforces it before an upload's body is read, and all of them must
+ * read it, and refuse on it, the same way: `readAccess`, `isUnlocked` and `assertOpen` are the one copy of each step.
  */
 
 export interface AccessView {
@@ -44,4 +47,28 @@ export function isUnlocked(
   if (!access.hasPassword || access.passwordUpdatedAt === null || token === undefined) return false;
   const claims = verifyAccessToken(secret, token, scope, now);
   return claims !== null && claims.iat >= Math.floor(access.passwordUpdatedAt.getTime() / 1000);
+}
+
+/**
+ * Throws the refusal for a status in which the form takes nothing: what a submission and an upload both answer, so a
+ * respondent is told the same thing by either and a form that is off, not yet open, over its date, full, outside its
+ * hours or behind its password refuses the same way on both. Returns for `open`.
+ *
+ * `FORM_CLOSED` and `LIMIT_REACHED` are 409 and `PASSWORD_REQUIRED` is 401 (`problems/submit.ts`).
+ */
+export function assertOpen(status: RuntimeStatus): void {
+  switch (status.state) {
+    case 'open':
+      return;
+    case 'password':
+      throw new ProblemError('PASSWORD_REQUIRED', 'This form needs its password.');
+    case 'limit_reached':
+      throw new ProblemError('LIMIT_REACHED', 'This form has reached its limit of responses.');
+    case 'not_yet_open':
+      throw new ProblemError('FORM_CLOSED', 'This form is not open yet.');
+    case 'outside_hours':
+      throw new ProblemError('FORM_CLOSED', 'This form is outside its opening hours.');
+    default:
+      throw new ProblemError('FORM_CLOSED', 'This form is closed.');
+  }
 }
