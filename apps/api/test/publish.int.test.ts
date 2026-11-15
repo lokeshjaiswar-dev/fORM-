@@ -62,7 +62,7 @@ async function savedForm(draft: (id: string) => FormDefinition = (id) => publish
   const created = await app.inject({ method: 'POST', url: '/v1/forms', headers: as(userId), payload: { title: 'Live form' } });
   expect(created.statusCode).toBe(200);
   const { id } = created.json<{ id: string }>();
-  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(userId), payload: { draft: draft(id) } });
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(userId), 'if-match': '0' }, payload: { draft: draft(id) } });
   expect(put.statusCode).toBe(200);
   return id;
 }

@@ -47,7 +47,7 @@ type Block = ReturnType<typeof fieldBlock>;
 
 async function publish(title: string, blocks: Block[], body: Record<string, unknown> = {}): Promise<{ id: string; slug: string; versionId: string }> {
   const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title } })).json<{ id: string }>();
-  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft: draftWith(id, blocks, title) } });
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft: draftWith(id, blocks, title) } });
   expect(put.statusCode, put.body).toBe(200);
   const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: body });
   expect(live.statusCode, live.body).toBe(200);
@@ -227,7 +227,7 @@ describe('SR-6: publish media is cached per live version without a byte bound', 
     const draft = draftWith(id, blocks, 'SR6') as unknown as Record<string, unknown>;
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['cover'] = { image: { assetId: 'cover_a' }, heightPx: 200 };
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['background'] = { kind: 'image', image: { assetId: 'bg_a' }, fit: 'cover' };
-    const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft } });
+    const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft } });
     expect(put.statusCode, put.body).toBe(200);
     gc();
     const before = process.memoryUsage().heapUsed;
@@ -251,7 +251,7 @@ describe('SR-6: publish media is cached per live version without a byte bound', 
     const draft = draftWith(id, [fieldBlock('comment', 'short_text')], 'SR6 cap') as unknown as Record<string, unknown>;
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['cover'] = { image: { assetId: 'cover_a' }, heightPx: 200 };
     (draft['theme'] as { tokens: Record<string, unknown> }).tokens['background'] = { kind: 'image', image: { assetId: 'bg_a' }, fit: 'cover' };
-    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft } })).statusCode).toBe(200);
     // 1.2 MB and 1.2 MB: each under the per-picture limit, together over the version's.
     const over = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: { media: { cover_a: pic(900_000), bg_a: pic(900_000) } } });
     expect(over.statusCode, over.body.slice(0, 200)).toBe(413);

@@ -33,7 +33,7 @@ const FIELDS = () => [
 
 async function publish(title: string): Promise<{ id: string; slug: string; versionId: string }> {
   const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title } })).json<{ id: string }>();
-  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft: draftWith(id, FIELDS(), title) } });
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft: draftWith(id, FIELDS(), title) } });
   expect(put.statusCode).toBe(200);
   const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: {} });
   expect(live.statusCode).toBe(200);
@@ -268,7 +268,7 @@ describe('what is stored of the files and the rows (SR-1, SR-2)', () => {
   async function publishSigned(title: string): Promise<{ id: string; slug: string; versionId: string }> {
     const blocks = [...FIELDS(), fieldBlock('sig', 'signature')];
     const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(), payload: { title } })).json<{ id: string }>();
-    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(), payload: { draft: draftWith(id, blocks, title) } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(), 'if-match': '0' }, payload: { draft: draftWith(id, blocks, title) } })).statusCode).toBe(200);
     const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(), payload: {} });
     expect(live.statusCode).toBe(200);
     return { id, ...live.json<{ slug: string; versionId: string }>() };

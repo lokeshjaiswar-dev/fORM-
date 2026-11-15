@@ -37,6 +37,16 @@ async function ok<T>(res: Res | Promise<Res>, status = 200): Promise<T> {
   return r.json<T>();
 }
 
+/** The first save of a form's draft: `If-Match: 0` says "no draft yet" (a draft write without it is a 428). */
+function putFirstDraft(env: SeedEnv, userId: string, orgId: string, formId: string, draft: unknown): Promise<Res> {
+  return env.app.inject({
+    method: 'PUT',
+    url: `/v1/forms/${formId}/draft`,
+    headers: { 'x-fr-dev-user': userId, 'x-fr-org': orgId, 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin', 'if-match': '0' },
+    payload: { draft } as Record<string, unknown>,
+  });
+}
+
 /** Org A, the victim, with every kind of row the routes below can name; org B, the caller, with one form. */
 export async function seedCore(env: SeedEnv): Promise<Fixture> {
   const aOwner = await createUser(env, 'owner@iso-a.test');
@@ -51,10 +61,10 @@ export async function seedCore(env: SeedEnv): Promise<Fixture> {
   const formTitle = 'Acme intake 7f3a';
   const fields = () => [fieldBlock('name', 'short_text', {}, { required: true }), fieldBlock('cv', 'file_upload', { accept: { extensions: ['pdf'], mimeTypes: ['application/pdf'] } })];
   const { id: formId } = await ok<{ id: string }>(env.as(aOwner, aOrg, 'POST', '/v1/forms', { title: formTitle }));
-  await ok(env.as(aOwner, aOrg, 'PUT', `/v1/forms/${formId}/draft`, { draft: draftWith(formId, fields(), formTitle) }));
+  await ok(putFirstDraft(env, aOwner, aOrg, formId, draftWith(formId, fields(), formTitle)));
   const live = await ok<{ slug: string; versionId: string }>(env.as(aOwner, aOrg, 'POST', `/v1/forms/${formId}/publish`, {}));
   const { id: secondFormId } = await ok<{ id: string }>(env.as(aOwner, aOrg, 'POST', '/v1/forms', { title: 'Acme second 7f3a' }));
-  await ok(env.as(aOwner, aOrg, 'PUT', `/v1/forms/${secondFormId}/draft`, { draft: draftWith(secondFormId, fields(), 'Acme second 7f3a') }));
+  await ok(putFirstDraft(env, aOwner, aOrg, secondFormId, draftWith(secondFormId, fields(), 'Acme second 7f3a')));
 
   // A respondent's answer and file reach the form the way they really do, through the public routes.
   const submitted = await ok<{ id: string }>(
