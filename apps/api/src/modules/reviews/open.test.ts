@@ -69,7 +69,7 @@ const ANSWERS = {
   note: { type: 'long_text', value: 'Not in any unit' },
 } as unknown as Answers;
 
-const shown = (...ids: string[]) => ({ visible: new Set(ids) as ReadonlySet<never> }) as PlanInput['evalState'];
+const shown = (...ids: string[]): PlanInput['evalState'] => ({ visible: new Set(ids) as unknown as PlanInput['evalState']['visible'] });
 const ALL_SHOWN = shown('name', 'age', 'brk', 'email', 'note');
 const input = (over: Partial<PlanInput> = {}): PlanInput => ({ compiled: COMPILED, answers: ANSWERS, evalState: ALL_SHOWN, ...over });
 
