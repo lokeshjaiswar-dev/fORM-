@@ -113,9 +113,18 @@ async function knownUnitIds(tx: Tx, formId: string, liveVersionId: string | null
   return new Set([...reviewUnitIdsOf(draft?.review), ...reviewUnitIdsOf(live?.review)]);
 }
 
-/** Which of `ids` are unarchived review groups of the caller's org (RLS makes another org's groups invisible). */
+const uuidShape = z.uuid();
+
+/**
+ * Which of `ids` are unarchived review groups of the caller's org (RLS makes another org's groups invisible).
+ *
+ * `ReviewSettingsSchema` accepts any opaque id as a `groupId` ("abc", "grp_1"), but `review_groups.id` is a uuid column and
+ * Postgres answers a non-uuid in `id in (...)` with 22P02, which aborts the transaction and reaches the caller as a 500.
+ * An id that is not a uuid cannot be a group, so it is never sent to the database: it is simply not in the found set, and
+ * the caller gets the same 400 as for a group that does not exist.
+ */
 async function liveGroupIds(tx: Tx, ids: readonly string[]): Promise<Set<string>> {
-  const unique = [...new Set(ids)];
+  const unique = [...new Set(ids)].filter((id) => uuidShape.safeParse(id).success);
   if (unique.length === 0) return new Set();
   const rows = await tx.select({ id: reviewGroups.id }).from(reviewGroups).where(and(inArray(reviewGroups.id, unique), isNull(reviewGroups.archivedAt)));
   return new Set(rows.map((r) => r.id));

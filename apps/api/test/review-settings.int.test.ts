@@ -271,7 +271,7 @@ describe('PUT review', () => {
     expect(off.json()).toEqual({ rev: 1, enabled: false, distinctCheckers: false, units: [] });
   });
 
-  it('refuses a unit assigned twice, a group of another org and an archived group with 400, and writes nothing', async () => {
+  it('refuses a unit assigned twice, a group of another org, a group id that is not a uuid and an archived group with 400, and writes nothing', async () => {
     const id = await newForm({ draftUnits: ['unit_a', 'unit_b'] });
     const twice = await put(id, settings([unit('unit_a'), unit('unit_a', { order: 2 })]), '0');
     expect(twice.statusCode).toBe(400);
@@ -283,6 +283,13 @@ describe('PUT review', () => {
     // The answer is the same as for a group that never existed: it does not say the group is another org's.
     const missing = await put(id, settings([unit('unit_a', { groupId: randomUUID() })]), '0');
     expect(missing.json()).toEqual({ ...foreign.json(), instance: expect.any(String), requestId: expect.any(String) });
+
+    // A valid opaque id that is not a uuid never reaches the uuid column (22P02 would be a 500): the answer is the same 400, and a real group beside it is not blamed.
+    for (const groupId of ['abc', 'grp_1', 'not-a-uuid', '0190a000-0000-7000-8000-00000000000']) {
+      const notUuid = await put(id, settings([unit('unit_a', { groupId }), unit('unit_b', { groupId: groupA, order: 2 })]), '0');
+      expect(notUuid.statusCode, `${groupId}: ${notUuid.body}`).toBe(400);
+      expect(notUuid.json(), groupId).toEqual({ ...foreign.json(), instance: expect.any(String), requestId: expect.any(String) });
+    }
 
     const archived = await put(id, settings([unit('unit_a', { groupId: archivedGroup }), unit('unit_b', { groupId: groupA, order: 2 })]), '0');
     expect(archived.statusCode).toBe(400);
