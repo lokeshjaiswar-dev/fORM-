@@ -500,6 +500,7 @@ describe('OpenAPI', () => {
       '/v1/forms/{id}/publish',
       '/v1/forms/{id}/restore',
       '/v1/forms/{id}/trash',
+      '/v1/forms/{id}/validate',
       '/v1/invites/accept',
       '/v1/invites/lookup',
       '/v1/me',
