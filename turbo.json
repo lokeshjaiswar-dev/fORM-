@@ -9,13 +9,13 @@
       "dependsOn": ["^typecheck"],
       "cache": false,
       "env": ["FORM_TEST_DATABASE_ADMIN_URL", "FORM_TEST_PG_IMAGE", "FORM_AUDIT_LAG_BUDGET_MS", "FORM_TEST_S3_*", "FORM_TEST_CLAMAV", "FORM_TEST_CLAMAV_HOST"],
-      "passThroughEnv": ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*"]
+      "passThroughEnv": ["DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*", "SSH_AUTH_SOCK"]
     },
     "e2e": { "dependsOn": ["build"], "passThroughEnv": ["CI"] },
     "e2e:stack": {
       "dependsOn": ["build"],
       "cache": false,
-      "passThroughEnv": ["CI", "DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*", "FR_E2E_*"]
+      "passThroughEnv": ["CI", "DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "TESTCONTAINERS_*", "SSH_AUTH_SOCK", "FR_E2E_*"]
     },
     "test:determinism": { "dependsOn": ["^typecheck"], "cache": false, "passThroughEnv": ["CI"] },
     "test:perf": { "cache": false, "passThroughEnv": ["FORM_PERF_SLACK"] },
