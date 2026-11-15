@@ -7,3 +7,4 @@ export * from './gcp.ts';
 export * from './azure.ts';
 export * from './vault.ts';
 export * from './open.ts';
+export * from './org-secret.ts';

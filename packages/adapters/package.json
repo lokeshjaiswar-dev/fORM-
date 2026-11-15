@@ -32,7 +32,8 @@
     "@form/ports": "workspace:*",
     "mmdb-lib": "3.0.3",
     "nodemailer": "10.0.13",
-    "pg-boss": "catalog:"
+    "pg-boss": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@form/testkit": "workspace:*",
