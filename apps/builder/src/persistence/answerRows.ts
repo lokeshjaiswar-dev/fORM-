@@ -81,7 +81,7 @@ export function displayAnswer(block: FieldBlock | undefined, answer: unknown): s
  * published page keep these beside the answers of a response made in this browser; the Responses page does not use
  * them: it shows what the API built from the answers it validated (WP-1.15).
  */
-export function answerRows(definition: FormDefinition, answers: Answers): SubmissionField[] {
+export function answerRows(definition: Pick<FormDefinition, 'blocks' | 'pages'>, answers: Answers): SubmissionField[] {
   const rows: SubmissionField[] = [];
   for (const id of blockOrder(definition)) {
     const block = definition.blocks[id];

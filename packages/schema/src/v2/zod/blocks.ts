@@ -60,6 +60,7 @@ export const PUBLISH_ISSUE_CODES = [
   'template_variable_unresolved', 'brand_ref_unresolved', 'lock_violation', 'template_update_required',
   'notice_incomplete', 'consent_after_consent_fields', 'sensitive_pipe_in_unsafe_context', 'recipient_not_declared',
   'children_policy_incomplete', 'data_route_not_permitted', 'validation_bound_page_order', 'invalid_rich_text',
+  'review_unit_empty', 'review_unit_overlap', 'review_unit_contains_payment', 'review_unit_dangling_target',
 ] as const satisfies ReadonlyArray<PublishIssue['code']>;
 export const PublishIssueSchema = z.strictObject({
   severity: z.enum(['error', 'warning']),

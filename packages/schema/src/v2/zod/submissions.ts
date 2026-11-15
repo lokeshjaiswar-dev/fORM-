@@ -71,7 +71,7 @@ export const SubmitResultSchema = z.discriminatedUnion('ok', [
     uniqueId: z.string().exactOptional(),
     editToken: z.string().exactOptional(),
     receiptToken: z.string().exactOptional(),
-    held: z.enum(['pending_guardian_consent', 'pending_scan']).exactOptional(),
+    held: z.enum(['pending_guardian_consent', 'pending_scan', 'pending_review']).exactOptional(),
   }),
   z.discriminatedUnion('kind', [
     z.strictObject({ ok: z.literal(false), kind: z.literal('invalid'), status: z.literal(422), errors: z.array(FieldErrorSchema) }),
@@ -130,7 +130,9 @@ export const PaymentRecordSchema = z.strictObject({
   subscriptionRef: z.string().exactOptional(),
 });
 
-export const SubmissionStatusSchema = z.enum(['complete', 'pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'spam', 'archived', 'trashed']);
+export const SubmissionStatusSchema = z.enum([
+  'complete', 'pending_payment', 'payment_failed', 'pending_scan', 'pending_guardian_consent', 'pending_review', 'rejected', 'spam', 'archived', 'trashed',
+]);
 
 export const StoredSubmissionSchema = z.strictObject({
   id: SubmissionIdSchema,

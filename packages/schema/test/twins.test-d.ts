@@ -56,6 +56,8 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.BrandKitIdSchema>>().toEqualTypeOf<S.BrandKitId>();
   expectTypeOf<z.infer<typeof S.LockIdSchema>>().toEqualTypeOf<S.LockId>();
   expectTypeOf<z.infer<typeof S.TemplatePartIdSchema>>().toEqualTypeOf<S.TemplatePartId>();
+  expectTypeOf<z.infer<typeof S.ReviewUnitIdSchema>>().toEqualTypeOf<S.ReviewUnitId>();
+  expectTypeOf<z.infer<typeof S.ReviewGroupIdSchema>>().toEqualTypeOf<S.ReviewGroupId>();
   expectTypeOf<z.infer<typeof S.FieldKeySchema>>().toEqualTypeOf<S.FieldKey>();
   expectTypeOf<z.infer<typeof S.LocaleSchema>>().toEqualTypeOf<S.Locale>();
   expectTypeOf<z.infer<typeof S.TimeZoneSchema>>().toEqualTypeOf<S.TimeZone>();
@@ -222,6 +224,13 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.EndingActionSchema>>().toEqualTypeOf<S.EndingAction>();
   expectTypeOf<z.infer<typeof S.EndingSchema>>().toEqualTypeOf<S.Ending>();
   expectTypeOf<z.infer<typeof S.WelcomeScreenSchema>>().toEqualTypeOf<S.WelcomeScreen>();
+  expectTypeOf<z.infer<typeof S.ReviewUnitTargetSchema>>().toEqualTypeOf<S.ReviewUnitTarget>();
+  expectTypeOf<z.infer<typeof S.ReviewUnitSchema>>().toEqualTypeOf<S.ReviewUnit>();
+  expectTypeOf<z.infer<typeof S.FormReviewDefinitionSchema>>().toEqualTypeOf<S.FormReviewDefinition>();
+  expectTypeOf<z.infer<typeof S.ReviewReasonCodeSchema>>().toEqualTypeOf<S.ReviewReasonCode>();
+  expectTypeOf<z.infer<typeof S.ReviewVisibilitySchema>>().toEqualTypeOf<S.ReviewVisibility>();
+  expectTypeOf<z.infer<typeof S.ReviewUnitAssignmentSchema>>().toEqualTypeOf<S.ReviewUnitAssignment>();
+  expectTypeOf<z.infer<typeof S.ReviewSettingsSchema>>().toEqualTypeOf<S.ReviewSettings>();
   expectTypeOf<z.infer<typeof S.LiteralSchema>>().toEqualTypeOf<S.Literal>();
   expectTypeOf<z.infer<typeof S.OperandSchema>>().toEqualTypeOf<S.Operand>();
   expectTypeOf<z.infer<typeof S.LogicOperatorSchema>>().toEqualTypeOf<S.LogicOperator>();

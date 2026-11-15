@@ -8,6 +8,7 @@ import { CaptchaConfigSchema } from './config.ts';
 import { I18nBundleSchema } from './i18n.ts';
 import { ClientRuleSchema, LogicModelSchema } from './logic.ts';
 import { EndingSchema, PageSchema, WelcomeScreenSchema } from './pages.ts';
+import { FormReviewDefinitionSchema, PublicFormReviewSchema, ReviewUnitIdSchema } from './review.ts';
 import {
   BlockIdSchema, BrandKitIdSchema, BrandTokenSchema, EndingIdSchema, ExtensionsSchema, FormIdSchema, FormVersionIdSchema, HexColorSchema, IsoInstantSchema,
   LocaleSchema, OrgIdSchema, PageIdSchema, ProductIdSchema, PurposeIdSchema, RuleIdSchema, Sha256HexSchema, TeamIdSchema,
@@ -41,6 +42,7 @@ export const FormDefinitionSchema = z.strictObject({
   theme: ThemeSchema,
   behavior: BehaviorSchema,
   i18n: I18nBundleSchema,
+  review: FormReviewDefinitionSchema.exactOptional(),
   x: ExtensionsSchema.exactOptional(),
 });
 
@@ -95,6 +97,7 @@ export const CompiledFormSchema = z.strictObject({
   reads: keyed(z.partialRecord(z.string(), z.array(z.string()))),
   dataInventory: z.array(z.strictObject({ purposeId: PurposeIdSchema, blockIds: z.array(BlockIdSchema), classifications: z.array(DataClassificationSchema) })),
   taint: keyed(z.partialRecord(z.string(), z.strictObject({ classification: DataClassificationSchema, purposeIds: z.array(PurposeIdSchema) }))),
+  reviewUnits: keyed(z.partialRecord(ReviewUnitIdSchema, z.array(BlockIdSchema))).exactOptional(),
   definitionHash: Sha256HexSchema,
 });
 
@@ -130,6 +133,7 @@ export const FormVersionSchema = z.strictObject({
 
 export const PublicFormDefinitionSchema = FormDefinitionSchema.extend({
   logic: LogicModelSchema.extend({ rules: z.array(ClientRuleSchema) }),
+  review: PublicFormReviewSchema.exactOptional(),
 });
 
 const screen = { screen: RichDocSchema };
@@ -148,7 +152,7 @@ export const RuntimeFormVersionSchema = z.strictObject({
   formId: FormIdSchema,
   contentHash: Sha256HexSchema,
   definition: PublicFormDefinitionSchema,
-  compiled: CompiledFormSchema.omit({ dataInventory: true, taint: true, plan: true }).extend({ plan: z.array(RuntimePlanStepSchema) }),
+  compiled: CompiledFormSchema.omit({ dataInventory: true, taint: true, plan: true, reviewUnits: true }).extend({ plan: z.array(RuntimePlanStepSchema) }),
   status: RuntimeStatusSchema,
   accessToken: z.string().exactOptional(),
   publicConfig: z.strictObject({

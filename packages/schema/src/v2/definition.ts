@@ -2,9 +2,10 @@ import type { StoredBlock } from './blocks.ts';
 import type { DataClassification, PrivacyConfig } from './compliance.ts';
 import type { CaptchaConfig } from './config.ts';
 import type { I18nBundle } from './i18n.ts';
-import type { BlockId, BrandKitId, EndingId, Extensions, FormId, FormVersionId, IsoInstant, Locale, OrgId, PageId, ProductId, PurposeId, RuleId, Sha256Hex, TeamId, TemplateBindingId, TemplateId, TemplateVersionId, UserId, VariableId } from './ids.ts';
+import type { BlockId, BrandKitId, EndingId, Extensions, FormId, FormVersionId, IsoInstant, Locale, OrgId, PageId, ProductId, PurposeId, ReviewUnitId, RuleId, Sha256Hex, TeamId, TemplateBindingId, TemplateId, TemplateVersionId, UserId, VariableId } from './ids.ts';
 import type { ClientAction, LogicModel, Rule } from './logic.ts';
 import type { Ending, Page, WelcomeScreen } from './pages.ts';
+import type { FormReviewDefinition, ReviewUnit } from './review.ts';
 import type { RichDoc } from './rich-text.ts';
 import type { BrandToken, TemplateVariableName } from './template-primitives.ts';
 import type { TemplateKind } from './templates.ts';
@@ -47,6 +48,8 @@ export interface FormDefinition {
   theme: Theme;
   behavior: Behavior;
   i18n: I18nBundle;
+  /** Review units (WP-2.33); who reviews them is server-side `ReviewSettings`. Absent: no review. */
+  review?: FormReviewDefinition;
   x?: Extensions;
 }
 
@@ -95,6 +98,11 @@ export interface CompiledForm {
   dataInventory: Array<{ purposeId: PurposeId; blockIds: BlockId[]; classifications: DataClassification[] }>;
   /** I13: effective classification and purposes of every derived cell (variables, calcs, set_value targets). */
   taint: Partial<Record<string, { classification: DataClassification; purposeIds: PurposeId[] }>>;
+  /**
+   * Block ids of each valid review unit, derived at compile time (document order). Present only when the definition has
+   * `review`; a unit that fails the review checks is absent here. Server-only: the runtime projection drops it.
+   */
+  reviewUnits?: Partial<Record<ReviewUnitId, BlockId[]>>;
   definitionHash: Sha256Hex;
 }
 
@@ -125,8 +133,10 @@ export interface FormVersion {
 }
 
 /** Rules keep only client actions; rules left with no actions are dropped. */
-export type PublicFormDefinition = Omit<FormDefinition, 'logic'> & {
+export type PublicFormDefinition = Omit<FormDefinition, 'logic' | 'review'> & {
   logic: Omit<LogicModel, 'rules'> & { rules: Array<Rule<ClientAction>> };
+  /** Unit ids and names only: no targets, groups or visibility (the receipt names each unit, nothing more). */
+  review?: { units: Array<Pick<ReviewUnit, 'id' | 'name'>> };
 };
 
 export type RuntimeStatus =
@@ -143,7 +153,7 @@ export interface RuntimeFormVersion {
   versionId: FormVersionId; formId: FormId; contentHash: Sha256Hex;
   definition: PublicFormDefinition;  // notes, origin stamps, server actions stripped
   /** `reads` is kept (filtered to client steps) for incremental client evaluation (FND-13). */
-  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
+  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
   status: RuntimeStatus;
   accessToken?: string;              // short-lived, proves unlock/schedule checks
   publicConfig: {

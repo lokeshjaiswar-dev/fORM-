@@ -64,6 +64,13 @@ export type BrandKitId = Brand<string, 'BrandKitId'>;
 export type LockId = Brand<string, 'LockId'>;
 export type TemplatePartId = Brand<string, 'TemplatePartId'>;
 
+/**
+ * Review namespace (WP-2.33). A unit id is scoped to its form and never derived from text, like a rule id; a group id
+ * names an org-level review group (live, not versioned) and appears only in the server-stored `ReviewSettings`.
+ */
+export type ReviewUnitId = Brand<string, 'ReviewUnitId'>;
+export type ReviewGroupId = Brand<string, 'ReviewGroupId'>;
+
 /** Stable machine name `^[a-z][a-z0-9_]{0,63}$` (FND-07). Prefill param, CSV header, API/webhook key. */
 export type FieldKey = Brand<string, 'FieldKey'>;
 

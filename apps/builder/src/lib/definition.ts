@@ -157,8 +157,8 @@ export type Parent = { pageId: PageId } | { blockId: BlockId };
 export const childrenOf = (block: StoredBlock | undefined): readonly BlockId[] =>
   block && (block.type === 'section' || block.type === 'repeating_group') ? block.config.children : [];
 
-/** Every placed block id in document order (pages, then children depth-first). */
-export function blockOrder(def: FormDefinition): BlockId[] {
+/** Every placed block id in document order (pages, then children depth-first). Reads blocks and pages only, so a runtime definition fits too. */
+export function blockOrder(def: Pick<FormDefinition, 'blocks' | 'pages'>): BlockId[] {
   const out: BlockId[] = [];
   const visit = (id: BlockId) => {
     out.push(id);

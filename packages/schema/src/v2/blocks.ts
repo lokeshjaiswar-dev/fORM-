@@ -56,7 +56,9 @@ export interface PublishIssue {
     | 'notice_incomplete' | 'consent_after_consent_fields' | 'sensitive_pipe_in_unsafe_context' | 'recipient_not_declared'
     | 'children_policy_incomplete' | 'data_route_not_permitted' | 'validation_bound_page_order'
     /** I5/I6: rich text outside the allowed AST (node types, limits, single-paragraph InlineDoc). */
-    | 'invalid_rich_text';
+    | 'invalid_rich_text'
+    /** WP-2.33 review units: no blocks, a block in two units, a payment block inside a unit, a target that is not in the form. */
+    | 'review_unit_empty' | 'review_unit_overlap' | 'review_unit_contains_payment' | 'review_unit_dangling_target';
   path: string;        // JSON pointer
   message: string;
   fixUrl?: string;     // e.g. '/settings/org-profile#privacy_contact'

@@ -26,7 +26,7 @@ export interface DraftSaveRequest { formVersionId: FormVersionId; answers: Answe
 export interface FieldError { blockId?: BlockId; path?: AnswerPath; rowId?: GroupRowId; code: ValidationErrorCode; message: string; params?: Record<string, string | number> }
 
 export type SubmitResult =
-  | { ok: true; submissionId: SubmissionId; endingId: EndingId; redirectUrl?: SafeUrl; uniqueId?: string; editToken?: string; receiptToken?: string; held?: 'pending_guardian_consent' | 'pending_scan' }
+  | { ok: true; submissionId: SubmissionId; endingId: EndingId; redirectUrl?: SafeUrl; uniqueId?: string; editToken?: string; receiptToken?: string; held?: 'pending_guardian_consent' | 'pending_scan' | 'pending_review' }
   | { ok: false; kind: 'invalid'; status: 422; errors: FieldError[] }
   | { ok: false; kind: 'payment_required'; submissionId: SubmissionId; checkout: { gateway: 'stripe' | 'razorpay'; clientSecretOrOrderId: string; amount: MinorUnits; currency: CurrencyCode } }
   | { ok: false; kind: 'closed' | 'limit_reached' | 'version_superseded' | 'rate_limited' | 'spam_rejected' | 'amount_changed' };
@@ -62,8 +62,12 @@ export interface PaymentRecord {
   couponCode?: string; invoiceNumber?: string; subscriptionRef?: string;
 }
 
-export type SubmissionStatus = 'complete' | 'pending_payment' | 'payment_failed' | 'pending_scan' | 'pending_guardian_consent' | 'spam' | 'archived' | 'trashed';
+export type SubmissionStatus =
+  | 'complete' | 'pending_payment' | 'payment_failed' | 'pending_scan' | 'pending_guardian_consent' | 'pending_review' | 'rejected'
+  | 'spam' | 'archived' | 'trashed';
 /* pending_guardian_consent: no notifications, webhooks, integrations, drafts or analytics; deleted when the guardian window expires. */
+/* pending_review (WP-2.33): held until every required, applicable review unit is approved; only reviewer notifications go out, the
+ * rest runs once, on finalisation. rejected: a required unit was rejected; terminal, and nothing is sent to outside systems. */
 
 export interface StoredSubmission {
   id: SubmissionId; orgId: OrgId; formId: FormId; formVersionId: FormVersionId;

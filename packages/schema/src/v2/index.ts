@@ -30,6 +30,8 @@
  *      explicit `declassify` with a reason (audited).
  *  I14 In a form with a 'dpdp' consent block, that block is on a page before (or the same page
  *      as, and above) the first block whose purposes are consent-based.
+ *  I15 Review units (WP-2.33): every unit targets a page or a section_break of the form, holds at
+ *      least one block, shares no block with another unit and holds no payment block.
  */
 
 export * from './ids.ts';
@@ -41,6 +43,7 @@ export * from './envelope.ts';
 export * from './config.ts';
 export * from './blocks.ts';
 export * from './pages.ts';
+export * from './review.ts';
 export * from './logic.ts';
 export * from './expr.ts';
 export * from './theme.ts';
