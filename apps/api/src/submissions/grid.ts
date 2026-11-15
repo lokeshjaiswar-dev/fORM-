@@ -3,6 +3,7 @@ import { auditReads, forms, isUuid, submissions, withTenant, type Db, type ReadC
 import { ProblemError } from '../errors.ts';
 import { readCursor, signCursor } from '../cursor.ts';
 import { cellsOf, gridColumns, type GridColumn, type PlanLoader } from './plans.ts';
+import { mayShow, reviewerViewOf, SEES_ALL, type RedactionLoader } from './review-view.ts';
 import { searchIndexOn, type SearchIndexFactory } from './search.ts';
 import type { View } from './schemas.ts';
 
@@ -173,6 +174,8 @@ export interface GridDeps {
   plans: PlanLoader;
   /** Makes the search index of the deployment; without it a search answers 503. */
   searchIndex?: SearchIndexFactory | undefined;
+  /** What a reviewer who sees only their own units may read of each version (required, so no route can forget to redact). */
+  redaction: RedactionLoader;
 }
 
 export interface GridPage {
@@ -197,6 +200,10 @@ export interface GridPage {
  * response is on exactly one page while rows arrive; or, with `q`, in order of relevance. The page and its audit record
  * are one read-write transaction (`auditReads.gridPage`, C-M9): a page that was shown has its record, one per page, with
  * every id shown. No total is counted: a count over a form of a million responses is the slowest thing a grid could ask.
+ *
+ * A caller who is acting as a reviewer of the form with `own_unit` visibility (WP-2.33) gets the cells of the blocks of their
+ * own units and of no other, in a column list cut the same way; their `q` is refused, because the search document of a
+ * response holds the text of every unit.
  */
 export async function listGrid(
   deps: GridDeps,
@@ -217,6 +224,10 @@ export async function listGrid(
     const found = await tx.select({ id: forms.id }).from(forms).where(eq(forms.id, formId)).limit(1);
     if (!found[0]) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
     const plans = await deps.plans.ofForm(tx, formId);
+    const reviewer = await reviewerViewOf(tx, tenant, formId);
+    if (searching && reviewer.redacted) {
+      throw new ProblemError('SEARCH_NOT_ALLOWED_FOR_REVIEWER', 'You see only the units you review, and a search would match the text of the others. Leave the search box empty.');
+    }
 
     let rows: Row[];
     let next: string | null = null;
@@ -248,16 +259,24 @@ export async function listGrid(
     await auditReads.gridPage(tx, tenant, { formId, submissionIds: rows.map((r) => r.id), page, filtered: isFiltered(f), client });
 
     const planOf = new Map(plans.map((p) => [p.id, p]));
+    // The blocks of each version a redacted reviewer may see; every version of the form, so the columns can be cut too.
+    const visibility = reviewer.redacted ? await deps.redaction.visibility(tx, reviewer, plans.map((p) => p.id)) : SEES_ALL;
     const last = rows.at(-1);
     let nextCursor: string | null = null;
     if (searching) nextCursor = more && next !== null ? signCursor(deps.secret, scope, [next, page + 1]) : null;
     else if (more && last) nextCursor = signCursor(deps.secret, scope, [last.receivedAt.toISOString(), last.id, page + 1]);
 
+    // For a redacted caller a column stays only when some version that has the field lets them see it.
+    const all = gridColumns(plans);
+    const columns = reviewer.redacted ? all.filter((c) => plans.some((p) => p.byId.has(c.id) && mayShow(visibility.of(p.id), c.id))) : all;
     return {
-      columns: gridColumns(plans),
+      columns,
       items: rows.map((row) => {
         const plan = planOf.get(row.formVersionId);
-        const { cells, masked } = cellsOf(plan, row.answers);
+        const shown = cellsOf(plan, row.answers);
+        const visible = visibility.of(row.formVersionId);
+        const cells = visible === null ? shown.cells : Object.fromEntries(Object.entries(shown.cells).filter(([id]) => mayShow(visible, id)));
+        const masked = visible === null ? shown.masked : shown.masked.filter((id) => mayShow(visible, id));
         return {
           id: row.id,
           receivedAt: row.receivedAt.toISOString(),

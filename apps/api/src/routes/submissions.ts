@@ -10,6 +10,7 @@ import { bulkAct } from '../submissions/bulk.ts';
 import { readDetail, setFlags } from '../submissions/detail.ts';
 import { listGrid, type GridFilters } from '../submissions/grid.ts';
 import { createPlanLoader } from '../submissions/plans.ts';
+import { createRedactionLoader } from '../submissions/review-view.ts';
 import type { SearchIndexFactory } from '../submissions/search.ts';
 import { bulkBody, bulkResponse, detailResponse, gridQuery, gridResponse, patchBody, patchResponse } from '../submissions/schemas.ts';
 
@@ -40,6 +41,7 @@ export interface SubmissionRouteDeps {
 export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const plans = createPlanLoader();
+  const redaction = createRedactionLoader();
 
   /** Where the request came from, for the audit records: the session and a keyed hash of the address, never the address. */
   const clientOf = (request: FastifyRequest): ReadClient => {
@@ -59,6 +61,7 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
           'Cells are built on the server from the answers (the field type\'s own text); encrypted and sensitive fields are masked. ' +
           '`view` picks the inbox, the archive or the trash. `q` searches the non-sensitive answers of this form and orders by relevance. ' +
           '`nextCursor` is signed and bound to this exact query: pass it back unchanged for the next page, and stop when it is null; a page can hold fewer than `limit` rows while `nextCursor` is set (a search whose filters dropped hits). ' +
+          'A caller who reviews this form with `own_unit` visibility gets only the cells and columns of their own units, and `q` answers 403 `SEARCH_NOT_ALLOWED_FOR_REVIEWER`. ' +
           'The read is audited: one `submission.page_viewed` record per page with the ids shown.',
         security: SECURITY,
         params: formParams,
@@ -78,7 +81,7 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
         to: to === undefined ? undefined : new Date(to),
         q: q || undefined,
       };
-      return listGrid({ db: deps.db, secret: deps.secret, plans, searchIndex: deps.searchIndex }, tenantOf(request), clientOf(request), formId, filters, limit, cursor);
+      return listGrid({ db: deps.db, secret: deps.secret, plans, searchIndex: deps.searchIndex, redaction }, tenantOf(request), clientOf(request), formId, filters, limit, cursor);
     },
   );
 
@@ -90,7 +93,8 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
         tags: ['submissions'],
         summary: 'Read one response: its fields, answers, files and what the server recorded',
         description:
-          'The fields are rebuilt from the answers and the version the response was received on. Encrypted and sensitive answers are masked. The read is audited (`submission.viewed`).',
+          'The fields are rebuilt from the answers and the version the response was received on. Encrypted and sensitive answers are masked. ' +
+          'A caller who reviews this form with `own_unit` visibility gets the answers, fields and files of their own units only. The read is audited (`submission.viewed`).',
         security: SECURITY,
         params: submissionParams,
         response: { 200: detailResponse },
@@ -98,7 +102,7 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
     },
     async (request) => {
       const { formId, id } = request.params;
-      return readDetail({ db: deps.db, plans, now: deps.now }, tenantOf(request), clientOf(request), formId, id);
+      return readDetail({ db: deps.db, plans, now: deps.now, redaction }, tenantOf(request), clientOf(request), formId, id);
     },
   );
 
@@ -118,7 +122,7 @@ export function submissionRoutes(app: FastifyInstance, deps: SubmissionRouteDeps
     },
     async (request) => {
       const { formId, id } = request.params;
-      return setFlags({ db: deps.db, plans, now: deps.now }, tenantOf(request), clientOf(request), formId, id, request.body);
+      return setFlags({ db: deps.db, plans, now: deps.now, redaction }, tenantOf(request), clientOf(request), formId, id, request.body);
     },
   );
 

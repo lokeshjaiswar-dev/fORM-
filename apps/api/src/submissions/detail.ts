@@ -2,11 +2,14 @@ import { and, eq } from 'drizzle-orm';
 import { audit, auditActor, auditReads, formFiles, submissionKey, submissions, withTenant, type Db, type ReadClient, type SubmissionStatus, type TenantCtx } from '@form/db';
 import { ProblemError } from '../errors.ts';
 import { detailFieldsOf, maskedAnswersOf, MASK, type DetailField, type PlanLoader } from './plans.ts';
+import { mayShow, reviewerViewOf, SEES_ALL, type RedactionLoader } from './review-view.ts';
 
 export interface DetailDeps {
   db: Db;
   plans: PlanLoader;
   now: () => Date;
+  /** What a reviewer who sees only their own units may read of each version (required, so no route can forget to redact). */
+  redaction: RedactionLoader;
 }
 
 export interface Detail {
@@ -42,6 +45,9 @@ function metaOf(meta: Record<string, unknown>): Record<string, unknown> {
  * (`auditReads.detail`, C-M9). The fields are rebuilt from the answers and the version they were received on, so a page
  * cannot show a line the form never asked; encrypted and sensitive answers are masked, in `fields`, in `answers` and in
  * the file list, until a reveal exists (WP-1.11).
+ *
+ * A caller who is acting as a reviewer of the form with `own_unit` visibility (WP-2.33) gets the answers, display rows and
+ * files of the blocks of their own units and of no other: the rest is removed before the response is built, not masked.
  */
 export async function readDetail(deps: DetailDeps, tenant: TenantCtx, client: ReadClient, formId: string, id: string): Promise<Detail> {
   return withTenant(deps.db, tenant, async (tx) => {
@@ -59,7 +65,10 @@ export async function readDetail(deps: DetailDeps, tenant: TenantCtx, client: Re
       .from(formFiles)
       .where(and(eq(formFiles.formId, formId), eq(formFiles.submissionId, row.id), eq(formFiles.submissionReceivedAt, row.receivedAt)))
       .orderBy(formFiles.createdAt, formFiles.id);
+    const reviewer = await reviewerViewOf(tx, tenant, formId);
+    const visible = (reviewer.redacted ? await deps.redaction.visibility(tx, reviewer, [row.formVersionId]) : SEES_ALL).of(row.formVersionId);
     await auditReads.detail(tx, tenant, { formId, submissionId: row.id, client });
+    const answers = maskedAnswersOf(plan, row.answers);
     return {
       id: row.id,
       formId: row.formId,
@@ -73,9 +82,9 @@ export async function readDetail(deps: DetailDeps, tenant: TenantCtx, client: Re
       versionNumber: plan?.number ?? null,
       locale: localeOf(row.meta),
       meta: metaOf(row.meta),
-      fields: detailFieldsOf(plan, row.answers),
-      answers: maskedAnswersOf(plan, row.answers),
-      files: held.map((file) => {
+      fields: visible === null ? detailFieldsOf(plan, row.answers) : detailFieldsOf(plan, row.answers).filter((field) => mayShow(visible, field.id)),
+      answers: visible === null ? answers : Object.fromEntries(Object.entries(answers).filter(([id]) => mayShow(visible, id))),
+      files: held.filter((file) => mayShow(visible, file.blockId)).map((file) => {
         // A file in a protected field is listed, but neither named nor fetchable from here (WP-1.14, WP-1.11 reveal it).
         const masked = plan?.byId.get(file.blockId)?.masked ?? true;
         return masked

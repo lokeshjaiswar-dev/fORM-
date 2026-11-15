@@ -14,4 +14,7 @@ export const SUBMISSIONS_PROBLEMS = {
   // Delete forever on a response under a legal hold or inside its statutory retention period (WP-1.22 sets both).
   // The whole call is refused, as above.
   SUBMISSION_HELD: { status: 409, title: 'A response under a hold cannot be deleted' },
+  // Full-text search (`q`) by a reviewer who sees only their own review units (WP-2.33, own_unit). The search document of a
+  // response holds the text of every unit, so a hit would tell them what they may not read. The grid without `q` still works.
+  SEARCH_NOT_ALLOWED_FOR_REVIEWER: { status: 403, title: 'Search is not available while you see only your own review units' },
 } as const satisfies Record<string, ProblemSpec>;
