@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { provision } from '@form/db';
+import { provision, uuidV7Time } from '@form/db';
 import { createTestDatabase } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
 import { parseConfig } from '../src/config.ts';
@@ -66,7 +66,14 @@ const submit = (slug: string, body: Record<string, unknown>) =>
   app.inject({ method: 'POST', url: `/v1/p/${slug}/submissions`, payload: { locale: 'en-IN', fields: [], ...body } });
 
 async function rows(formId: string): Promise<Array<{ id: string; org_id: string; answers: Record<string, unknown>; locale: string }>> {
-  return (await owner.query('select id, org_id, answers, locale from form_submissions where form_id = $1', [formId])).rows;
+  return (await owner.query(`select id, org_id, answers, meta->>'locale' as locale from submissions where form_id = $1 order by seq`, [formId])).rows;
+}
+
+/** What a member sees of one stored response: the display rows rebuilt from its answers and its version's labels. */
+async function shown(formId: string, submissionId: string): Promise<{ fields: Array<{ key: string; label: string; value: string }>; locale: string }> {
+  const res = await app.inject({ url: `/v1/forms/${formId}/submissions/${submissionId}`, headers: as() });
+  expect(res.statusCode, res.body).toBe(200);
+  return res.json();
 }
 
 describe('POST /v1/p/by-form/:formId/submissions', () => {
@@ -93,6 +100,65 @@ describe('POST /v1/p/:slug/submissions', () => {
     const { rows: counts } = await owner.query('select submission_count, last_submission_at from forms where id = $1', [id]);
     expect(counts[0]).toMatchObject({ submission_count: '1' });
     expect(counts[0].last_submission_at).toBeInstanceOf(Date);
+  });
+
+  it('files the response under the live version it was validated against, with the version’s hash and a server-made UUIDv7', async () => {
+    const { id, slug, versionId } = await publish('Filed');
+    const before = Date.now();
+    const res = await submit(slug, { formVersionId: versionId, answers: { name: name('Asha') }, locale: 'en-IN' });
+    expect(res.statusCode).toBe(200);
+    const submissionId = res.json<{ id: string }>().id;
+    const { rows } = await owner.query(
+      `select s.id, s.received_at, s.org_id, s.form_id, s.form_version_id, encode(s.definition_hash, 'hex') as hash, v.content_hash, s.answer_codec_version, s.status,
+              s.computed, s.meta, s.revision, s.read, s.legal_hold, s.trashed_at, s.seq::int as seq,
+              s.delete_after = ((s.received_at at time zone 'UTC') + interval '10 years') at time zone 'UTC' as retention_placeholder
+       from submissions s join form_versions v on v.id = s.form_version_id where s.form_id = $1`,
+      [id],
+    );
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row).toMatchObject({
+      id: submissionId,
+      org_id: orgId,
+      form_id: id,
+      form_version_id: versionId,
+      answer_codec_version: 0,
+      status: 'complete',
+      computed: {},
+      meta: { locale: 'en-IN' },
+      revision: 1,
+      read: false,
+      legal_hold: false,
+      trashed_at: null,
+      retention_placeholder: true,
+    });
+    expect(row.hash).toBe(row.content_hash);
+    expect(row.seq).toBeGreaterThan(0);
+    // The id is a UUIDv7 and received_at is the moment inside it, which is when the server took the answers.
+    expect(uuidV7Time(submissionId)?.getTime()).toBe(row.received_at.getTime());
+    expect(row.received_at.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(row.received_at.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+  });
+
+  it('never takes the id, the moment or any stored column from the page', async () => {
+    const { id, slug, versionId } = await publish('Forged ids');
+    const forged = '018f0000-0000-7000-8000-000000000001';
+    const res = await submit(slug, {
+      formVersionId: versionId,
+      answers: { name: name('A') },
+      id: forged,
+      receivedAt: '2001-01-01T00:00:00Z',
+      orgId: randomUUID(),
+      status: 'spam',
+      deleteAfter: '2001-01-01T00:00:00Z',
+      legalHold: true,
+    });
+    expect(res.statusCode).toBe(200);
+    const { rows } = await owner.query('select id, received_at, org_id, status, legal_hold, delete_after > now() as in_future from submissions where form_id = $1', [id]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ org_id: orgId, status: 'complete', legal_hold: false, in_future: true });
+    expect(rows[0].id).not.toBe(forged);
+    expect(rows[0].received_at.getTime()).toBeGreaterThan(Date.UTC(2026, 0, 1));
   });
 
   it('refuses answers that break the form’s rules, with the field named, and stores nothing', async () => {
@@ -250,11 +316,21 @@ describe('what is stored of the files and the rows (SR-1, SR-2)', () => {
     const stray = await cv(f.slug, Buffer.concat([PDF, Buffer.from('% another\n')]));
     const res = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('A'), cv: { type: 'file_upload', value: [used] } } });
     expect(res.statusCode).toBe(200);
-    const held = await owner.query<{ id: string; submission_id: string | null }>('select id, submission_id from form_files where form_id = $1 order by created_at', [f.id]);
+    const held = await owner.query<{ id: string; submission_id: string | null; submission_received_at: Date | null }>(
+      'select id, submission_id, submission_received_at from form_files where form_id = $1 order by created_at',
+      [f.id],
+    );
     expect(Object.fromEntries(held.rows.map((r) => [r.id, r.submission_id]))).toEqual({ [used.fileId]: res.json<{ id: string }>().id, [stray.fileId]: null });
+    // A file is held by the whole key of the partitioned row: its id and the moment it was received.
+    const [stored] = await rows(f.id);
+    const { rows: moments } = await owner.query<{ received_at: Date }>('select received_at from submissions where id = $1', [stored!.id]);
+    expect(Object.fromEntries(held.rows.map((r) => [r.id, r.submission_received_at?.getTime() ?? null]))).toEqual({
+      [used.fileId]: moments[0]!.received_at.getTime(),
+      [stray.fileId]: null,
+    });
   });
 
-  it('stores display rows built from the validated answers and the form’s own labels, never the page’s', async () => {
+  it('shows display rows built from the validated answers and the form’s own labels, never the page’s', async () => {
     const f = await publishSigned('Rows server');
     const file = await cv(f.slug);
     const forged = [{ key: 'approval', label: 'Approved by HR', value: 'Yes - pay in full' }, { key: 'name', label: 'Name', value: 'Somebody else' }];
@@ -264,7 +340,7 @@ describe('what is stored of the files and the rows (SR-1, SR-2)', () => {
       fields: forged,
     });
     expect(res.statusCode, res.body).toBe(200);
-    const { rows: stored } = await owner.query<{ fields: Array<{ key: string; label: string; value: string }> }>('select fields from form_submissions where id = $1', [res.json<{ id: string }>().id]);
+    const stored = [await shown(f.id, res.json<{ id: string }>().id)];
     expect(stored[0]!.fields).toEqual([
       { key: 'name', label: 'name', value: 'Asha' },
       { key: 'email', label: 'email', value: 'asha@example.test' },
@@ -273,7 +349,7 @@ describe('what is stored of the files and the rows (SR-1, SR-2)', () => {
     expect(JSON.stringify(stored[0]!.fields)).not.toMatch(/Approved by HR|Somebody else|forged/);
     // No answers, no rows: a response cannot show a line the form never asked.
     const empty = await submit(f.slug, { formVersionId: f.versionId, answers: { name: name('B') }, fields: forged });
-    const { rows: only } = await owner.query<{ fields: unknown[] }>('select fields from form_submissions where id = $1', [empty.json<{ id: string }>().id]);
+    const only = [await shown(f.id, empty.json<{ id: string }>().id)];
     expect(only[0]!.fields).toEqual([{ key: 'name', label: 'name', value: 'B' }]);
   });
 

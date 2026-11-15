@@ -105,7 +105,7 @@ describe('rate limits on the anonymous writes of respondents', () => {
     expect((await submit(b.slug, b.versionId)).statusCode).toBe(429);
     expect((await submit(a.slug, a.versionId, ADDRESS_B)).statusCode).toBe(200);
     // Nothing refused was stored.
-    const { rows } = await owner.query<{ n: number }>('select count(*)::int as n from form_submissions where form_id = any ($1)', [[a.id, b.id]]);
+    const { rows } = await owner.query<{ n: number }>('select count(*)::int as n from submissions where form_id = any ($1)', [[a.id, b.id]]);
     expect(rows[0]!.n).toBe(5);
   });
 

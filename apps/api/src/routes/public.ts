@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest, RequestPayload } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
-import { formFiles, formFilesCheck, formSubmissions, formVersions, resolveFormSlug, withTenant, type Db } from '@form/db';
+import { ANSWER_CODEC_PLAIN, formFiles, formFilesCheck, formVersions, newSubmissionKey, recordSubmission, resolveFormSlug, withTenant, type Db } from '@form/db';
 import { projectForRuntime } from '@form/logic';
 import { acceptsFile } from '@form/registry';
 import type { BlockId, CompiledForm, FieldError, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
@@ -25,7 +25,6 @@ import {
   uploadBodyLimitFor,
   type FileStore,
 } from '../files.ts';
-import { displayRows } from '../display-rows.ts';
 import { storableJson, storableString } from '../text-safety.ts';
 import { WeightedCache } from '../weighted-cache.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
@@ -52,6 +51,8 @@ interface LiveForm {
   orgId: string;
   formId: string;
   versionId: string;
+  /** sha256 of the version's definition, as bytes: what `submissions.definition_hash` records. */
+  definitionHash: Buffer;
   payload: PublicPayload;
   definition: FormDefinition;
   compiled: CompiledForm;
@@ -65,6 +66,15 @@ const liveByVersion = new WeightedCache<LiveForm>(LIVE_CACHE_MAX, LIVE_CACHE_BYT
 const liveInflight = new Map<string, Promise<LiveForm>>();
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * A version's `content_hash` (the hex of the sha256 of its definition) as the 32 bytes `submissions.definition_hash`
+ * holds. A stored value that is not 64 hex digits (nothing the publish route writes) is hashed as text, as migration
+ * 0021 does for the rows it moved, so a submission is never refused over how an old version spelled its hash.
+ */
+function definitionHashBytes(contentHash: string): Buffer {
+  return /^[0-9a-f]{64}$/.test(contentHash) ? Buffer.from(contentHash, 'hex') : createHash('sha256').update(contentHash).digest();
+}
 
 /**
  * About what keeping a version costs: the pictures (a character of a data URL is a byte), and the definition, its
@@ -152,7 +162,15 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         }),
         ...(row.media ? { media: row.media } : {}),
       };
-      const live: LiveForm = { orgId: found.orgId, formId: found.formId, versionId: found.liveVersionId, payload, definition: version.definition, compiled: version.compiled };
+      const live: LiveForm = {
+        orgId: found.orgId,
+        formId: found.formId,
+        versionId: found.liveVersionId,
+        definitionHash: definitionHashBytes(row.contentHash),
+        payload,
+        definition: version.definition,
+        compiled: version.compiled,
+      };
       liveByVersion.set(found.liveVersionId, live, liveWeight(row.definition, row.compiled, row.media));
       return live;
     })().finally(() => liveInflight.delete(found.liveVersionId));
@@ -342,7 +360,8 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       if (checked.errors.length > 0) return invalid(reply, checked.errors);
       let values = checked.values;
       const uses = fileUses(values);
-      const id = randomUUID();
+      // The server makes the id (a UUIDv7) and the moment it was received; the table's CHECK ties the two together.
+      const { id, receivedAt } = newSubmissionKey(deps.now());
       const stored = await withTenant(deps.db, { orgId: live.orgId, actor: 'respondent', requestId: request.id }, async (tx) => {
         if (uses.length > 0) {
           // Every file the answers name was uploaded to this form, for the very field that holds it, and is the file
@@ -357,16 +376,23 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
           if (again.errors.length > 0) return { errors: again.errors };
           values = again.values;
         }
-        await tx.insert(formSubmissions).values({
+        await recordSubmission(tx, {
           id,
+          receivedAt,
           orgId: live.orgId,
           formId: live.formId,
+          formVersionId: live.versionId,
+          definitionHash: live.definitionHash,
+          answerCodecVersion: ANSWER_CODEC_PLAIN,
+          status: 'complete',
           answers: values,
-          // Built here from the validated answers; what the page sent along as "rows" is ignored (SR-2).
-          fields: displayRows(live.definition, values),
-          locale: request.body.locale,
+          // What the pipeline will record of the evaluation (WP-1.12); nothing yet.
+          computed: {},
+          meta: { locale: request.body.locale },
         });
-        // The form's counters and the hold on the files are kept by a trigger on this INSERT (0019): a respondent
+        // The display rows the Responses page shows are not stored: they are rebuilt from these answers and the
+        // version's own labels on every read, and what the page sent along as "rows" is ignored (SR-2). The form's
+        // counters and the hold on the files are kept by a trigger on this INSERT (0019, moved by 0021): a respondent
         // context may not write `forms` or `form_files`.
         return { errors: [] };
       });
