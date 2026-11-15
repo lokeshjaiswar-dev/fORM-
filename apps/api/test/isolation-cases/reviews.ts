@@ -12,7 +12,7 @@ import type { Fixture, IsolationCase, IsolationDomain, Res, SeedEnv } from './ty
  * API as org A's owner, with its owner as the one member, so the cases aim real ids at org B's member. Every body is
  * valid for its route, so a refusal can only be the group or the form not being visible to org B.
  *
- * The review queue task's: the queue. Org A's seed
+ * The review queue task's: the queue, the review detail of a response and the decision of one of its units. Org A's seed
  * also makes a form with two review units, assigned to that group, and a respondent's answer to it, which the review
  * puts on hold (`pending_review`). The cases aim at that response, its unit and its real answers hash, so a refusal can
  * only be the response not being visible to org B.
@@ -167,6 +167,20 @@ const cases: IsolationCase[] = [
       },
     },
     note: 'The route takes no id of org A’s, so org B’s checker gets their own org’s queue, which is empty: org A has a held response whose unit waits for its group, and none of it (not the form’s title, the unit’s name or the response’s id) is in the answer.',
+  },
+  {
+    route: 'GET /v1/forms/:formId/submissions/:id/review',
+    call: (f) => ({ url: `/v1/forms/${f.extra.reviewFormId}/submissions/${f.extra.reviewSubmissionId}/review` }),
+    note: 'Org A’s own owner gets 200 for the same request (the suite checks it): the held response with its units and answers. Org B must learn neither that it exists nor any answer, and its read leaves no `submission.viewed` record on org A’s chain.',
+  },
+  {
+    route: 'POST /v1/forms/:formId/submissions/:id/review/units/:unitId/decisions',
+    call: (f) => ({
+      url: `/v1/forms/${f.extra.reviewFormId}/submissions/${f.extra.reviewSubmissionId}/review/units/${f.extra.reviewUnitId}/decisions`,
+      body: { decision: 'approve', answersHash: f.extra.reviewUnitHash },
+      headers: { 'idempotency-key': 'isolation-decision-1' },
+    }),
+    note: 'The real unit with its real answers hash, from a checker of org B (an owner, who holds submissions.review, though without two-factor sign-in): the response is looked up first, so it answers 404 and not 403 MFA_REQUIRED, and the baseline check proves the unit is still pending, with no decision row.',
   },
 ];
 

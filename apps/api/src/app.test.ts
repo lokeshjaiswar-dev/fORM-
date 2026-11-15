@@ -786,6 +786,8 @@ describe('OpenAPI', () => {
       '/v1/forms/{formId}/submissions',
       '/v1/forms/{formId}/submissions/bulk',
       '/v1/forms/{formId}/submissions/{id}',
+      '/v1/forms/{formId}/submissions/{id}/review',
+      '/v1/forms/{formId}/submissions/{id}/review/units/{unitId}/decisions',
       '/v1/forms/{formId}/webhooks',
       '/v1/forms/{formId}/webhooks/{id}',
       '/v1/forms/{formId}/webhooks/{id}/deliveries',

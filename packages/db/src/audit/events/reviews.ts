@@ -5,9 +5,11 @@ import type { AuditEventSpec } from './spec.ts';
  * Spread into `AUDIT_EVENTS` by `../catalogue.ts`; add codes here, not there. List only codes something emits
  * (`catalogue.test.ts`), and none that another file already lists (`events.test.ts`).
  *
- * The setup writes are listed here (`review_group.*`, `review.settings_updated`) and so is `review.opened`, the first of the
- * three that follow a held response; `review.decided` and `review.finalised` come with the task that emits them. The API
- * appends them in the same transaction as the definer call; the SQL definers append nothing.
+ * The setup writes are listed here (`review_group.*`, `review.settings_updated`) and the three that follow a held response:
+ * `review.opened` (at submit), `review.decided` (a checker's decision, or a refusal of one) and `review.finalised` (the
+ * decision that made the response `complete` or `rejected`). The API appends the successes in the same transaction as the
+ * definer call and writes each refusal as a denied `review.decided` on the separate audit connection; the SQL definers
+ * append nothing.
  */
 export const REVIEWS_EVENTS = {
   'review_group.created': {
@@ -40,5 +42,17 @@ export const REVIEWS_EVENTS = {
     resourceType: 'submission',
     description:
       'A response was held for review when it was submitted (status pending_review) and its review units were opened; the metadata counts the units, how many wait for a checker and how many members the respondent’s own address kept from checking it, never an answer or an address.',
+  },
+  'review.decided': {
+    outcomes: ['success', 'denied'],
+    resourceType: 'submission',
+    description:
+      'A checker approved or rejected one review unit of a held response (success: the metadata holds the unit id, the decision, the reason code from the fixed catalogue, the round and the decision id, never an answer), or a decision was refused (denied: the reason is the refusal, such as four_eyes_violation, not_in_review_group, mfa_required, review_stale, review_order_blocked, review_closed or idempotency_key_reused).',
+  },
+  'review.finalised': {
+    outcomes: ['success'],
+    resourceType: 'submission',
+    description:
+      'A decision settled a held response: every required unit was approved (status complete, and the response is released to its notifications and webhooks) or a required unit was rejected (status rejected); the metadata holds the status, the unit and the decision that settled it.',
   },
 } as const satisfies Record<string, AuditEventSpec>;
