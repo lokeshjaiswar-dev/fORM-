@@ -5,7 +5,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import underPressure from '@fastify/under-pressure';
-import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance, type RouteOptions } from 'fastify';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { DestinationStream } from 'pino';
 import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
@@ -18,8 +18,10 @@ import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { createFileStore, type FileStore } from './files.ts';
 import { formFileRoutes } from './routes/form-files.ts';
+import { accessRoutes } from './routes/access.ts';
 import { formRoutes } from './routes/forms.ts';
 import { publicFormRoutes } from './routes/public.ts';
+import { publicUnlockRoutes } from './routes/public-unlock.ts';
 import { publishRoutes } from './routes/publish.ts';
 import { submissionRoutes } from './routes/submissions.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -57,6 +59,11 @@ export interface AppDeps {
    */
   files?: FileStore;
   now?: () => Date;
+  /**
+   * Called with every route as it is registered, including routes a test adds after `buildApp` returns (tests only). The
+   * cross-org isolation suite lists them to find an `auth: 'user'` or `'account'` route that has no isolation case.
+   */
+  onRoute?: (route: RouteOptions) => void;
 }
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -78,6 +85,8 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
       return typeof incoming === 'string' && REQUEST_ID.test(incoming) ? incoming : randomUUID();
     },
   });
+  // Before any plugin or route, so the hook sees them all.
+  if (deps.onRoute) app.addHook('onRoute', deps.onRoute);
 
   const handle =
     deps.db ??
@@ -192,8 +201,10 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   });
   formRoutes(app, { db: handle.db });
   publishRoutes(app, { db: handle.db, secret: config.auth.secret, now });
+  accessRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   const files = deps.files ?? createFileStore(path.resolve(config.filesDir ?? path.resolve(process.cwd(), '.data/files')));
   publicFormRoutes(app, { db: handle.db, config, files, throttle, now });
+  publicUnlockRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
   submissionRoutes(app, { db: handle.db });
   metaRoutes(app, { edition: config.edition });
