@@ -4,16 +4,21 @@ import type { Db } from '@form/db';
 import { scrubUrl } from '@form/observability';
 import { auditProblem, type DenialAudit } from './audit.ts';
 import { ACCESS_PROBLEMS } from './problems/access.ts';
+import { EXPORTS_PROBLEMS } from './problems/exports.ts';
 import { FORMS_PROBLEMS } from './problems/forms.ts';
+import { NOTIFICATIONS_PROBLEMS } from './problems/notifications.ts';
 import { PUBLISH_PROBLEMS } from './problems/publish.ts';
+import { REVIEWS_PROBLEMS } from './problems/reviews.ts';
 import type { ProblemSpec } from './problems/spec.ts';
 import { SUBMISSIONS_PROBLEMS } from './problems/submissions.ts';
 import { SUBMIT_PROBLEMS } from './problems/submit.ts';
+import { WEBHOOKS_PROBLEMS } from './problems/webhooks.ts';
 
 /**
  * The problem codes of auth, accounts, orgs, members and the generic HTTP failures, plus the drafts and form-lifecycle
- * codes that predate the per-domain files. Domains still being built (forms, publish, access, submit, submissions) list
- * their codes in `problems/*.ts`, so parallel work packages do not edit the same lines of this file.
+ * codes that predate the per-domain files. Domains still being built (forms, publish, access, submit, submissions,
+ * reviews, notifications, webhooks, exports) list their codes in `problems/*.ts`, so parallel work packages do not edit
+ * the same lines of this file.
  */
 export const CORE_PROBLEMS = {
   BAD_REQUEST: { status: 400, title: 'Bad request' },
@@ -66,6 +71,10 @@ export const PROBLEMS = {
   ...ACCESS_PROBLEMS,
   ...SUBMIT_PROBLEMS,
   ...SUBMISSIONS_PROBLEMS,
+  ...REVIEWS_PROBLEMS,
+  ...NOTIFICATIONS_PROBLEMS,
+  ...WEBHOOKS_PROBLEMS,
+  ...EXPORTS_PROBLEMS,
 } as const satisfies Record<string, ProblemSpec>;
 
 export type ProblemCode = keyof typeof PROBLEMS;

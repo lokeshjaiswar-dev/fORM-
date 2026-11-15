@@ -1,10 +1,16 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CORE_PROBLEMS, PROBLEMS, type ProblemCode } from '../errors.ts';
 import { ACCESS_PROBLEMS } from './access.ts';
+import { EXPORTS_PROBLEMS } from './exports.ts';
 import { FORMS_PROBLEMS } from './forms.ts';
+import { NOTIFICATIONS_PROBLEMS } from './notifications.ts';
 import { PUBLISH_PROBLEMS } from './publish.ts';
+import { REVIEWS_PROBLEMS } from './reviews.ts';
 import { SUBMISSIONS_PROBLEMS } from './submissions.ts';
 import { SUBMIT_PROBLEMS } from './submit.ts';
+import { WEBHOOKS_PROBLEMS } from './webhooks.ts';
 
 const FILES = {
   core: CORE_PROBLEMS,
@@ -13,6 +19,10 @@ const FILES = {
   access: ACCESS_PROBLEMS,
   submit: SUBMIT_PROBLEMS,
   submissions: SUBMISSIONS_PROBLEMS,
+  reviews: REVIEWS_PROBLEMS,
+  notifications: NOTIFICATIONS_PROBLEMS,
+  webhooks: WEBHOOKS_PROBLEMS,
+  exports: EXPORTS_PROBLEMS,
 } as const;
 
 /**
@@ -47,5 +57,14 @@ describe('problem files', () => {
       expect(spec.status, code).toBeLessThan(600);
       expect(spec.title.length, code).toBeGreaterThan(3);
     }
+  });
+
+  it('spread every problems/*.ts file into PROBLEMS, also one that lists no code yet (it would otherwise be silently ignored)', () => {
+    const here = fileURLToPath(new URL('.', import.meta.url));
+    const errors = readFileSync(fileURLToPath(new URL('../errors.ts', import.meta.url)), 'utf8');
+    const domains = readdirSync(here).filter((f) => /\.ts$/.test(f) && !/\.test\.ts$/.test(f) && f !== 'spec.ts');
+    // FILES holds `core` (listed in errors.ts itself) and one entry per domain file: a new file must be added there too, or its codes escape the duplicate check above.
+    expect(domains).toHaveLength(Object.keys(FILES).length - 1);
+    expect(domains.filter((f) => !errors.includes(`'./problems/${f}'`))).toEqual([]);
   });
 });
