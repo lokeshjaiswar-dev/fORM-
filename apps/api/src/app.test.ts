@@ -10,12 +10,13 @@ import type pg from 'pg';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Db, DbHandle } from '@form/db';
 import type { ClockStatus } from '@form/observability';
-import type { KeyProvider, OrgSecrets, Queue } from '@form/ports';
+import { PortError, type EgressGuard, type KeyContext, type KeyProvider, type Mailer, type OrgSecrets, type Queue, type Storage } from '@form/ports';
 import { collect, coverage, ISOLATION_CASES, type CollectedRoute } from '../test/isolation-cases/index.ts';
 import { buildApp, BODY_LIMIT, type AppDeps } from './app.ts';
 import { clientInfo } from './auth.ts';
 import { parseConfig, type ApiConfig } from './config.ts';
 import { ProblemError } from './errors.ts';
+import { createOrgMailer, type OrgSmtpSenders } from './org-mailer.ts';
 
 /**
  * The stub modules of the approvals, notifications, webhooks and exports work (WP-2.33, WP-1.16..1.18) wrapped so a test
@@ -490,6 +491,221 @@ describe('stub route modules (approvals, notifications, webhooks, exports)', () 
     expect(routes.filter((r) => /\/v1\/(org\/review-groups|forms\/[^/]+\/(review|notifications|email-log|webhooks)|email-senders|exports)/.test(r.key))).toEqual([]);
     const { missing, stale, duplicate } = coverage(routes, ISOLATION_CASES);
     expect({ missing, stale, duplicate }).toEqual({ missing: [], stale: [], duplicate: [] });
+  });
+});
+
+describe('composition deps of the notification, webhook and export modules (WP-1.16, WP-1.17, WP-1.18)', () => {
+  const fakeEgress: EgressGuard = { assertAllowed: async () => ({ pinnedIp: '203.0.113.9' }) };
+  const fakeMailer: Mailer = { send: async () => ({ messageId: '<m@form.test>', refused: [] }), verify: async () => ({ ok: true }) };
+  const fakeStorage = {} as Storage;
+  const by = () => Object.fromEntries(registered.calls.map((c) => [c.module, c.deps]));
+
+  it('starts with a fake tenant egress guard, org mailer and storage, and hands each to the module that uses it', async () => {
+    const cfg = config();
+    const orgMailer = () => fakeMailer;
+    registered.calls.length = 0;
+    const { app: a } = await app(cfg, { tenantEgress: fakeEgress, orgMailer, storage: fakeStorage });
+    await a.ready();
+    expect((await a.inject({ url: '/livez' })).statusCode).toBe(200);
+    const deps = by();
+    // The same objects, not copies: the guard is the one the composition root built, so the webhook URL check is the real one.
+    expect(deps['webhooks']?.['tenantEgress']).toBe(fakeEgress);
+    // The URL scheme rule reads EGRESS_POLICY, so the webhook routes get the edition of the config.
+    expect(deps['webhooks']?.['edition']).toBe(cfg.edition);
+    expect(deps['email-senders']?.['orgMailer']).toBe(orgMailer);
+    expect(deps['exports']?.['storage']).toBe(fakeStorage);
+    // No module gets what it does not use.
+    expect(deps['notifications']).not.toHaveProperty('tenantEgress');
+    expect(deps['notifications']).not.toHaveProperty('storage');
+    expect(deps['webhooks']).not.toHaveProperty('storage');
+    expect(deps['exports']).not.toHaveProperty('tenantEgress');
+    expect(deps['exports']).not.toHaveProperty('orgMailer');
+    expect(deps['reviews']).not.toHaveProperty('storage');
+  });
+
+  it('still starts without them: the modules get undefined, and answer 503 when they need one', async () => {
+    registered.calls.length = 0;
+    const { app: a } = await app();
+    await a.ready();
+    expect((await a.inject({ url: '/livez' })).statusCode).toBe(200);
+    const deps = by();
+    expect(deps['webhooks']?.['tenantEgress']).toBeUndefined();
+    expect(deps['email-senders']?.['orgMailer']).toBeUndefined();
+    expect(deps['exports']?.['storage']).toBeUndefined();
+    // The app never builds a port itself: only the composition root does, so the secrets are absent here too.
+    expect(deps['webhooks']?.['orgSecrets']).toBeUndefined();
+  });
+});
+
+describe('the org mailer opens only the secrets of its own org (WP-1.16)', () => {
+  const ORG_A = '0192f3a0-0000-7000-8000-00000000000a';
+  const ORG_B = '0192f3a0-0000-7000-8000-00000000000b';
+  const SECRET_A = '0192f3a0-0000-7000-8000-0000000000a1';
+  const SECRET_B = '0192f3a0-0000-7000-8000-0000000000b1';
+  const URL_A = 'smtp://org-a-user:org-a-pass@smtp.a.example:587';
+  const URL_B = 'smtp://org-b-user:org-b-pass@smtp.b.example:587';
+  const dialect = new PgDialect();
+
+  /** What a stored `enc` looks like to these fakes: the data key is wrapped under one org, and the SMTP URL is the plaintext. */
+  const sealed = (orgId: string, url: string) => ({ dek: Buffer.from(orgId).toString('base64url'), kekRef: 'fake-kms', pt: Buffer.from(url).toString('base64url') });
+  const rows = [
+    { id: SECRET_A, orgId: ORG_A, enc: sealed(ORG_A, URL_A) },
+    { id: SECRET_B, orgId: ORG_B, enc: sealed(ORG_B, URL_B) },
+  ];
+
+  /**
+   * A database that answers `secret_enc()` as the real one does (migration 0023): only a secret of the context's own org,
+   * and only for the system actor, null for any other. Every statement is recorded with the org and the actor that
+   * `withTenant` set before it.
+   */
+  function fakeDb() {
+    const seen: Array<{ statement: 'set_config' | 'secret_enc'; org: string; actor: string; secretId?: string }> = [];
+    let begun = 0;
+    const db = {
+      transaction: async <T>(fn: (tx: unknown) => Promise<T>) => {
+        begun += 1;
+        let org = '';
+        let actor = '';
+        return fn({
+          execute: async (q: SQL) => {
+            const { sql: text, params } = dialect.sqlToQuery(q);
+            if (text.includes('set_config')) {
+              org = String(params[0]);
+              actor = String(params[4]);
+              seen.push({ statement: 'set_config', org, actor });
+              return { rows: [] };
+            }
+            if (text.includes('secret_enc')) {
+              const id = String(params[0]);
+              seen.push({ statement: 'secret_enc', org, actor, secretId: id });
+              const row = rows.find((r) => r.id === id);
+              return { rows: [{ enc: row && row.orgId === org && actor === 'system' ? row.enc : null }] };
+            }
+            throw new Error(`unexpected statement: ${text}`);
+          },
+        });
+      },
+    } as unknown as Db;
+    return { db, seen, begun: () => begun };
+  }
+
+  /** A KMS that records every context it was asked to unwrap under, and refuses a data key wrapped under another org. */
+  function fakeKms() {
+    const unwraps: KeyContext[] = [];
+    const keys = {
+      unwrap: async (wrapped: Uint8Array, _kekRef: string, ctx: KeyContext) => {
+        unwraps.push({ ...ctx });
+        if (Buffer.from(wrapped).toString() !== ctx.orgId) throw new PortError('integrity', 'the data key was wrapped for another org');
+        return new Uint8Array(32);
+      },
+    } as unknown as KeyProvider;
+    const orgSecrets: OrgSecrets = {
+      seal: async () => Promise.reject(new Error('not used')),
+      open: async (ctx, stored) => {
+        const s = stored as ReturnType<typeof sealed>;
+        await keys.unwrap(Buffer.from(s.dek, 'base64url'), s.kekRef, { orgId: ctx.orgId });
+        return new Uint8Array(Buffer.from(s.pt, 'base64url'));
+      },
+    };
+    return { orgSecrets, unwraps };
+  }
+
+  function setup() {
+    const d = fakeDb();
+    const kms = fakeKms();
+    const built: OrgSmtpSenders[] = [];
+    const tenantEgress: EgressGuard = { assertAllowed: async () => ({ pinnedIp: '203.0.113.9' }) };
+    const orgMailer = createOrgMailer({
+      db: d.db,
+      orgSecrets: kms.orgSecrets,
+      tenantEgress,
+      makeSmtpMailer: (senders) => {
+        built.push(senders);
+        return { send: async () => ({ messageId: '<m@form.test>', refused: [] }), verify: async () => ({ ok: true }) };
+      },
+    });
+    return { ...d, ...kms, orgMailer, built, tenantEgress };
+  }
+
+  it('is the orgMailer the app hands to the email sender routes, and opens its own secret as a system context of its own org', async () => {
+    const t = setup();
+    registered.calls.length = 0;
+    const { app: a } = await app(config(), { orgMailer: t.orgMailer, tenantEgress: t.tenantEgress });
+    await a.ready();
+    expect(registered.calls.find((c) => c.module === 'email-senders')?.deps['orgMailer']).toBe(t.orgMailer);
+    t.orgMailer(ORG_A);
+    expect(await t.built[0]!.resolve(SECRET_A)).toBe(URL_A);
+    // One read, in a context of org A that is the worker's kind of context (`secret_enc()` answers no one else), then one unwrap.
+    expect(t.seen).toEqual([
+      { statement: 'set_config', org: ORG_A, actor: 'system' },
+      { statement: 'secret_enc', org: ORG_A, actor: 'system', secretId: SECRET_A },
+    ]);
+    expect(t.unwraps).toEqual([{ orgId: ORG_A }]);
+  });
+
+  it("never opens org B's secret for org A, whatever ref it is given, and asks the KMS under no org but A", async () => {
+    const t = setup();
+    t.orgMailer(ORG_A);
+    // The ref is another org's secret id: the database answers null for it, so nothing is unwrapped and the mailer says not_found.
+    expect(await t.built[0]!.resolve(SECRET_B)).toBeUndefined();
+    expect(t.unwraps).toEqual([]);
+    expect(await t.built[0]!.resolve(SECRET_A)).toBe(URL_A);
+    expect(t.unwraps).toEqual([{ orgId: ORG_A }]);
+    // Every statement ran for org A; org B never appears in a tenant context or in a KMS context.
+    expect(new Set(t.seen.map((s) => s.org))).toEqual(new Set([ORG_A]));
+    expect(t.unwraps.some((u) => u.orgId === ORG_B)).toBe(false);
+    // And the other way round: org B's mailer opens B's secret under B, never A's.
+    t.orgMailer(ORG_B);
+    expect(await t.built[1]!.resolve(SECRET_A)).toBeUndefined();
+    expect(await t.built[1]!.resolve(SECRET_B)).toBe(URL_B);
+    expect(t.unwraps).toEqual([{ orgId: ORG_A }, { orgId: ORG_B }]);
+  });
+
+  it("refuses a sealed value of org B even if one reached org A's context: the KMS will not unwrap it under A", async () => {
+    // A database that is wrong (or a row copied across orgs): the context is A but the row is B's. The key still does not open.
+    const t = setup();
+    const row = rows.find((r) => r.id === SECRET_B)!;
+    const original = row.orgId;
+    row.orgId = ORG_A;
+    try {
+      t.orgMailer(ORG_A);
+      await expect(t.built[0]!.resolve(SECRET_B)).rejects.toMatchObject({ code: 'integrity' });
+      expect(t.unwraps).toEqual([{ orgId: ORG_A }]);
+    } finally {
+      row.orgId = original;
+    }
+  });
+
+  it('treats a ref that is not a uuid as no sender, without touching the database or the KMS, and refuses an org that is not a uuid', async () => {
+    const t = setup();
+    t.orgMailer(ORG_A);
+    for (const ref of ['', 'not-a-uuid', `${SECRET_A}; drop table secrets`, 'zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz']) expect(await t.built[0]!.resolve(ref)).toBeUndefined();
+    expect(t.begun()).toBe(0);
+    expect(t.unwraps).toEqual([]);
+    expect(() => t.orgMailer("x'; drop table orgs; --")).toThrow(TypeError);
+    expect(t.built).toHaveLength(1);
+  });
+
+  it("holds an org's own relay to the tenant egress guard, never to the infrastructure one", () => {
+    const t = setup();
+    t.orgMailer(ORG_A);
+    expect(t.built[0]!.egress).toBe(t.tenantEgress);
+  });
+
+  it('puts no SMTP URL or credential into a failure', async () => {
+    const t = setup();
+    t.orgMailer(ORG_A);
+    const row = rows.find((r) => r.id === SECRET_A)!;
+    const original = row.enc;
+    // Org A's URL sealed under org B's key: A's context cannot open it.
+    row.enc = sealed(ORG_B, URL_A);
+    try {
+      const failure = await t.built[0]!.resolve(SECRET_A).catch((e: unknown) => e);
+      expect(failure).toBeInstanceOf(PortError);
+      expect(JSON.stringify([(failure as Error).message, (failure as Error).stack])).not.toMatch(/org-a-pass|org-a-user|smtp\.a\.example/);
+    } finally {
+      row.enc = original;
+    }
   });
 });
 

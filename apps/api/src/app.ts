@@ -10,7 +10,7 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fast
 import type { DestinationStream } from 'pino';
 import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
 import { cachedClockCheck, type ClockStatus } from '@form/observability';
-import type { KeyProvider, Mailer, OrgSecrets, Queue } from '@form/ports';
+import type { EgressGuard, KeyProvider, Mailer, OrgSecrets, Queue, Storage } from '@form/ports';
 import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
 import { createServiceLogger } from './log.ts';
@@ -56,6 +56,23 @@ export interface AppDeps {
    * adapter may be imported; routes get it as this `@form/ports` interface. Without it the routes that store a secret answer 503.
    */
   orgSecrets?: OrgSecrets;
+  /**
+   * The egress guard for destinations a tenant supplies (a webhook URL, an org's own SMTP relay): EGRESS_POLICY and
+   * EGRESS_ALLOWLIST only, with no trusted infrastructure hosts (the composition root builds it with `createTenantEgressGuard`).
+   * Without it the webhook routes cannot check a URL and answer 503.
+   */
+  tenantEgress?: EgressGuard;
+  /**
+   * The mailer of one org: its own email senders (`email_senders.smtp_secret_id`, opened under that org's key) and the
+   * platform relay when a message names no sender. Built in `org-mailer.ts` and passed by the composition root, which is
+   * the only place the SMTP adapter may be imported. Without it the test send of an email sender answers 503.
+   */
+  orgMailer?: (orgId: string) => Mailer;
+  /**
+   * The object store the export worker writes finished files to and the export routes stream them from, after the auth check
+   * and the audit record (the composition root opens it from `config.storage`). Without it the export routes answer 503.
+   */
+  storage?: Storage;
   /** Overrides the HIBP lookup that `PASSWORD_BREACH_CHECK=hibp` turns on; null turns it off. */
   breached?: BreachCheck | null;
   /** Overrides of the auth rate limits (tests). */
@@ -233,10 +250,19 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   // Approvals, notifications, webhooks and exports (WP-2.33, WP-1.16, WP-1.18, WP-1.17). Each module is registered here
   // once, empty, and its task fills its own files, so no feature task edits this list.
   registerReviewModule(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, keys: deps.keys, secret: config.auth.secret, now });
-  emailSenderRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, secret: config.auth.secret, now });
+  emailSenderRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, orgMailer: deps.orgMailer, secret: config.auth.secret, now });
   notificationRoutes(app, { db: handle.db, auditDb: auditHandle.db, secret: config.auth.secret, now });
-  webhookRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, queue: deps.queue, secret: config.auth.secret, now });
-  exportRoutes(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, secret: config.auth.secret, now });
+  webhookRoutes(app, {
+    db: handle.db,
+    auditDb: auditHandle.db,
+    orgSecrets: deps.orgSecrets,
+    queue: deps.queue,
+    tenantEgress: deps.tenantEgress,
+    edition: config.edition,
+    secret: config.auth.secret,
+    now,
+  });
+  exportRoutes(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, storage: deps.storage, secret: config.auth.secret, now });
   metaRoutes(app, { edition: config.edition });
   await cspReportRoutes(app, deps.cspReports);
   app.get('/v1/openapi.json', { config: { auth: 'none' }, schema: { hide: true } }, async () => app.swagger());

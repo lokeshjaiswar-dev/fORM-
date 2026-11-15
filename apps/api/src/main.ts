@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { createInfrastructureEgressGuard, infrastructureHosts } from '@form/adapters/egress';
-import { createKeyfileKeyProvider, openKeyProvider } from '@form/adapters/kms';
+import { createInfrastructureEgressGuard, createTenantEgressGuard, infrastructureHosts } from '@form/adapters/egress';
+import { createKeyfileKeyProvider, createOrgSecrets, openKeyProvider } from '@form/adapters/kms';
 import { createSmtpMailer, MAILPIT_SMTP_URL } from '@form/adapters/mailer';
 import { createPostgresSearchIndex } from '@form/adapters/search';
 import type { PgBossQueue } from '@form/adapters/queue';
 import { checkClock, startTelemetry } from '@form/observability';
-import type { KeyProvider } from '@form/ports';
+import type { KeyProvider, Storage } from '@form/ports';
 import { parseConfig } from './config.ts';
 
 // Composition root. Telemetry must start before fastify and pg are imported, so the app is loaded dynamically.
@@ -28,9 +28,14 @@ if (clock.status === 'failed') {
   process.exit(1);
 }
 
-// The KMS and the SMTP relay are operator configuration: trusted endpoints of the EGRESS_POLICY guard.
+// The KMS, the object store and the SMTP relay are operator configuration: trusted endpoints of the EGRESS_POLICY guard.
 const smtpUrl = config.mailer.smtpUrl ?? MAILPIT_SMTP_URL;
-const egress = createInfrastructureEgressGuard(config.edition, infrastructureHosts({ kms: config.kms, urls: config.mailer.driver === 'smtp' ? [smtpUrl] : [] }));
+const egress = createInfrastructureEgressGuard(
+  config.edition,
+  infrastructureHosts({ kms: config.kms, storage: config.storage, urls: config.mailer.driver === 'smtp' ? [smtpUrl] : [] }),
+);
+// Destinations a tenant supplies (a webhook URL, an org's own SMTP relay) get no trusted hosts: EGRESS_POLICY and EGRESS_ALLOWLIST only.
+const tenantEgress = createTenantEgressGuard(config.edition);
 
 // TOTP secrets are wrapped by the KMS. Outside production a missing keyfile means a random key for this process:
 // two-factor enrolments made now do not survive a restart.
@@ -44,6 +49,9 @@ try {
   process.exit(1);
 }
 const mailer = config.mailer.driver === 'smtp' ? createSmtpMailer({ url: smtpUrl, egress }) : undefined;
+// The secrets of an org (an email sender's SMTP URL, a webhook's signing key) are sealed and opened under that org's key
+// context. Routes get this port and never import the adapter, which only this file may do.
+const orgSecrets = createOrgSecrets(keys);
 
 // The producer queue: every stored response sends one `submission.fanout` job through the submit transaction (the
 // transactional outbox), so it runs on the API's own database, never on QUEUE_DATABASE_URL. pg-boss loads pg, so it is
@@ -73,12 +81,53 @@ if (config.jobSigningKeys) {
   process.exit(1);
 }
 
+// The object store of exports (WP-1.17): the worker writes the finished file, the API streams it after the auth check. Like the
+// worker it is opened here, after telemetry started, and only when STORAGE_DRIVER is set; without it the export routes answer 503.
+let storage: Storage | undefined;
+if (config.storage) {
+  try {
+    const { openStorage } = await import('@form/adapters/storage');
+    // The API only streams (it never signs a URL), so the development store's presign key can be this process's own.
+    storage = await openStorage(config.storage, { egress, filesystem: { publicUrl: 'http://127.0.0.1/_dev/storage', signingKey: randomBytes(32) } });
+  } catch (err) {
+    process.stderr.write(`storage: the ${config.storage.driver} object store is misconfigured (${err instanceof Error ? err.message : String(err)})\n`);
+    process.exit(1);
+  }
+}
+
+// The request pool is made here, not by buildApp, because the org mailer reads a sealed secret on it (as a system context of
+// one org) and is built before the app. Like the queue, it is closed after the app on shutdown.
+// Both modules load pg, so they are imported here, after telemetry has started.
+const [{ createDb }, { createOrgMailer }] = await Promise.all([import('@form/db'), import('./org-mailer.ts')]);
+const db = createDb(config.database.url, {
+  max: config.database.poolMax,
+  applicationName: 'fr-api',
+  onError: (err) => (queueLog ? queueLog.error({ err }, 'idle database connection failed') : process.stderr.write(`database: ${err.message}\n`)),
+});
+const orgMailer = createOrgMailer({
+  db: db.db,
+  orgSecrets,
+  tenantEgress,
+  // The platform relay for a message with no sender of the org, and the org's own relay (opened per message) behind the tenant guard.
+  makeSmtpMailer: (senders) => createSmtpMailer({ url: smtpUrl, egress, senders }),
+});
+
 const { buildApp } = await import('./app.ts');
-const app = await buildApp(config, { keys, searchIndex: createPostgresSearchIndex, ...(queue ? { queue } : {}), ...(mailer ? { mailer } : {}) });
+const app = await buildApp(config, {
+  db,
+  keys,
+  orgSecrets,
+  tenantEgress,
+  orgMailer,
+  searchIndex: createPostgresSearchIndex,
+  ...(storage ? { storage } : {}),
+  ...(queue ? { queue } : {}),
+  ...(mailer ? { mailer } : {}),
+});
 queueLog = app.log;
 for (const notice of config.edition.notices) app.log.warn({ notice }, 'edition notice');
 for (const notice of config.notices) app.log.warn({ notice }, 'config notice');
-if (devKeys) app.log.warn('KMS_KEYFILE_PATH is not set: TOTP secrets use a key that ends with this process (development only)');
+if (devKeys) app.log.warn('KMS_KEYFILE_PATH is not set: TOTP secrets and org secrets (SMTP credentials, webhook signing keys) use a key that ends with this process (development only)');
 if (!queue) app.log.warn('JOB_SIGNING_KEYS is not set: stored responses enqueue no submission.fanout job (development only)');
 
 let closing = false;
@@ -87,8 +136,9 @@ async function shutdown(signal: string): Promise<void> {
   closing = true;
   app.log.info({ signal }, 'shutting down');
   await app.close();
-  // After the app: a request still in flight sends its job on its own transaction, and the pool is only closed now.
+  // After the app: a request still in flight sends its job on its own transaction, and the pools are only closed now.
   await queue?.stop({ graceMs: 5000 });
+  await db.close();
   await telemetry?.shutdown();
   process.exit(0);
 }
