@@ -17,11 +17,23 @@ export const ORG_SPANNING_JOBS = [
 ] as const;
 export type OrgSpanningJob = (typeof ORG_SPANNING_JOBS)[number];
 
-/** `audit_chain` resolves to its own org key (the zero key for the platform chain). */
-export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft', 'audit_chain'] as const;
+/**
+ * `audit_chain` resolves to its own org key (the zero key for the platform chain). `email_message`, `webhook_delivery` and
+ * `export` (migration 0023) are the rows the fan-out's child jobs (`email.send`, `webhook.deliver`, `export.build`) name;
+ * their parents (`notification.dispatch`, `webhook.fanout`) name the form.
+ */
+export const JOB_RESOURCE_TYPES = ['org', 'form', 'form_draft', 'audit_chain', 'email_message', 'webhook_delivery', 'export'] as const;
 export type JobResourceType = (typeof JOB_RESOURCE_TYPES)[number];
 
-export const PARTITIONED_TABLES = ['audit_log', 'submission_search', 'submissions', 'submission_reviews', 'review_decisions'] as const;
+export const PARTITIONED_TABLES = [
+  'audit_log',
+  'submission_search',
+  'submissions',
+  'submission_reviews',
+  'review_decisions',
+  'email_messages',
+  'webhook_deliveries',
+] as const;
 export type PartitionedTable = (typeof PARTITIONED_TABLES)[number];
 
 export interface UserOrg {
@@ -57,6 +69,17 @@ export async function orgsDueFor(db: Executor, job: OrgSpanningJob): Promise<str
 export async function resolveJobOrg(db: Executor, type: JobResourceType, id: string): Promise<string | null> {
   const { rows } = await db.execute<{ org_id: string | null }>(sql`select resolve_job_org(${type}, ${id}::uuid) as org_id`);
   return rows[0]?.org_id ?? null;
+}
+
+/**
+ * The sealed value of a secret (migration 0023), for the code that opens it to use it: the worker sending a message or a
+ * webhook, and the API's test send inside a system context. `secrets.enc` is not selectable by fr_app; this definer answers
+ * for the context's own org and only for the `system` actor (any other actor gets "permission denied", 42501). Null for an id
+ * of another org or of no secret.
+ */
+export async function secretEnc(db: Executor, secretId: string): Promise<Record<string, unknown> | null> {
+  const { rows } = await db.execute<{ enc: Record<string, unknown> | null }>(sql`select secret_enc(${secretId}::uuid) as enc`);
+  return rows[0]?.enc ?? null;
 }
 
 export interface ResolvedFormSlug {

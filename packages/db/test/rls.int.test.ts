@@ -281,6 +281,18 @@ const TABLES: Record<string, TableSpec> = {
   form_review_settings: { scope: { by: 'org' }, select: 0, touch: 'rev', update: 0, delete: 'denied' },
   submission_reviews: { scope: { by: 'org' }, select: 0, update: 'denied', delete: 'denied', visibleTo: ['system'] },
   review_decisions: { scope: { by: 'org' }, select: 0, update: 'denied', delete: 'denied', visibleTo: ['system'] },
+  // Notifications, webhooks, exports and the disclosures ledger (WP-1.16/1.17/1.18, migration 0023). Restrictive policies
+  // gate each by permission, so only a system job sees own rows in the generated suite (its user has forms.* only); the
+  // dedicated describes below and effects.int.test.ts check each permission.
+  secrets: { scope: { by: 'org' }, select: 0, touch: 'meta', update: 0, delete: 0, visibleTo: ['system'] },
+  email_senders: { scope: { by: 'org' }, select: 0, touch: 'name', update: 0, delete: 0, visibleTo: ['user', 'api_key', 'system', 'platform'] },
+  notifications: { scope: { by: 'org' }, select: 0, touch: 'enabled', update: 0, delete: 0, visibleTo: ['user', 'api_key', 'system', 'platform'] },
+  email_messages: { scope: { by: 'org' }, select: 0, touch: 'attempts', update: 0, delete: 0, visibleTo: ['system'] },
+  webhooks: { scope: { by: 'org' }, select: 0, touch: 'enabled', update: 0, delete: 0, visibleTo: ['system'] },
+  webhook_deliveries: { scope: { by: 'org' }, select: 0, touch: 'attempt', update: 0, delete: 0, visibleTo: ['system'] },
+  exports: { scope: { by: 'org' }, select: 0, touch: 'status', update: 0, delete: 0, visibleTo: ['system'] },
+  // Append-only: fr_app has SELECT and INSERT, so UPDATE and DELETE are refused outright.
+  disclosures: { scope: { by: 'org' }, select: 0, touch: 'display_name', update: 'denied', delete: 'denied', visibleTo: ['system'] },
 };
 
 isolationSuite(TABLES, env);

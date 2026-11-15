@@ -157,4 +157,51 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     retainBasis:
       'with the submission, by the same cascade, and the statutory floor of the submission applies; append-only until then (a trigger refuses UPDATE and DELETE to all but the owner); decided_by is the checker’s id and keeps the pseudonymous id after account deletion (SOC 2 segregation-of-duties evidence, CC6.1, CC6.3)',
   },
+  // Notifications, webhooks, exports and the disclosures ledger (WP-1.16, WP-1.17, WP-1.18; migration 0023).
+  secrets: {
+    columns: ['enc', 'meta'],
+    erase: 'delete',
+    retainBasis:
+      'until the sender or webhook that uses it is removed, and with the org; sealed under the org key and never returned by the API; meta holds a host, a user name and the last four characters at most',
+  },
+  email_senders: {
+    columns: ['from_address', 'from_name', 'last_test_error'],
+    erase: 'delete',
+    retainBasis: 'until the org removes the sender, and with the org; the address is one of the org’s own mailboxes, not a respondent’s',
+  },
+  notifications: {
+    columns: ['config', 'updated_by'],
+    erase: 'pseudonymise',
+    retainBasis:
+      'with the form; config holds the recipient addresses the org chose (fixed ones belong to the org, deleted with the form) and no answers; updated_by keeps the pseudonymous user id',
+  },
+  email_messages: {
+    columns: ['submission_id', 'submission_received_at', 'to_display_masked', 'to_bidx', 'subject_hash', 'last_error'],
+    erase: 'ttl',
+    retainBasis:
+      '365 days, purged by retention.sweep (WP-1.22, not built yet), and at once with its response (the foreign key cascades); the log holds masked addresses, blind indexes and a hash of the subject, never a body',
+  },
+  webhooks: {
+    columns: ['url', 'updated_by'],
+    erase: 'pseudonymise',
+    retainBasis: 'with the form; the url is the org’s own endpoint and may name a person only if the org put one in it; updated_by keeps the pseudonymous user id',
+  },
+  webhook_deliveries: {
+    columns: ['submission_id', 'submission_received_at', 'request_hash', 'response_snippet'],
+    erase: 'ttl',
+    retainBasis:
+      'metadata 365 days, response_snippet nulled after 30 days, both by retention.sweep (WP-1.22, not built yet); deleted with its webhook; the snippet is at most 1 KB of the receiver’s answer with addresses and long digit runs scrubbed',
+  },
+  exports: {
+    columns: ['requested_by', 'scope', 'reason', 'object_key'],
+    erase: 'pseudonymise',
+    retainBasis:
+      'the file expires 24 hours after it is built (expires_at, and the exports bucket lifecycle); the row stays with the form as evidence of who exported what; requested_by keeps the pseudonymous user id; scope holds response ids and dates, never answers',
+  },
+  disclosures: {
+    columns: ['submission_id', 'submission_received_at', 'recipient_id', 'display_name', 'field_keys'],
+    erase: 'delete',
+    retainBasis:
+      'for the life of the response, and deleted with it (the foreign key cascades; fr_app has no UPDATE or DELETE); included in a data principal’s export (C-M6); holds field keys, never values',
+  },
 };

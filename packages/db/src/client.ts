@@ -50,6 +50,14 @@ import {
   userIdentities,
   userNoticeAcks,
   users,
+  secrets,
+  emailSenders,
+  notifications,
+  emailMessages,
+  webhooks,
+  webhookDeliveries,
+  exportJobs,
+  disclosures,
 } from './schema/index.ts';
 
 export const tables = {
@@ -102,6 +110,14 @@ export const tables = {
   formReviewSettings,
   submissionReviews,
   reviewDecisions,
+  secrets,
+  emailSenders,
+  notifications,
+  emailMessages,
+  webhooks,
+  webhookDeliveries,
+  exportJobs,
+  disclosures,
 };
 
 export type Tables = typeof tables;

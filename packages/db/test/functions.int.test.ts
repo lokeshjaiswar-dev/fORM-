@@ -134,6 +134,7 @@ describe('definer functions (called as fr_app, outside any tenant)', () => {
       'orgs_due_for',
       'resolve_form_slug',
       'resolve_job_org',
+      'secret_enc',
       'template_delete',
       'template_for_binding',
       'template_rows_guard',

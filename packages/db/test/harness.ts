@@ -307,6 +307,96 @@ async function seedOrgTemplates(owner: pg.Pool, s: Omit<OrgSeed, 'tpl'>, slug: s
   return tpl;
 }
 
+/**
+ * What migration 0023's tables hold for one org (`seedOrgEffects`): one row of each, for the org's first form and the
+ * response seeded for it, so every actor kind has own rows to see or not see. Read with `effectsOf(org)`.
+ */
+export interface OrgEffects {
+  /** The response the log and ledger rows are about (the first form's seeded one). */
+  submissionId: string;
+  submissionReceivedAt: Date;
+  smtpSecretId: string;
+  hookSecretId: string;
+  senderId: string;
+  notificationId: string;
+  emailMessageId: string;
+  webhookId: string;
+  deliveryId: string;
+  exportId: string;
+  disclosureId: string;
+}
+
+const EFFECTS = new Map<string, OrgEffects>();
+
+/** The migration 0023 rows seeded for an org of `seedTwoOrgs`. */
+export function effectsOf(org: Pick<OrgSeed, 'orgId'>): OrgEffects {
+  const fx = EFFECTS.get(org.orgId);
+  if (!fx) throw new Error(`harness: no effects were seeded for org ${org.orgId}`);
+  return fx;
+}
+
+async function seedOrgEffects(owner: pg.Pool, s: Pick<OrgSeed, 'orgId' | 'ownerId' | 'formIds'>): Promise<void> {
+  const { rows } = await owner.query<{ id: string; received_at: Date }>(
+    'select id, received_at from submissions where org_id = $1 and form_id = $2 order by received_at limit 1',
+    [s.orgId, s.formIds[0]],
+  );
+  const submission = rows[0];
+  if (!submission) throw new Error('harness: the first form has no seeded response');
+  const fx: OrgEffects = {
+    submissionId: submission.id,
+    submissionReceivedAt: submission.received_at,
+    smtpSecretId: randomUUID(),
+    hookSecretId: randomUUID(),
+    senderId: randomUUID(),
+    notificationId: randomUUID(),
+    emailMessageId: randomUUID(),
+    webhookId: randomUUID(),
+    deliveryId: randomUUID(),
+    exportId: randomUUID(),
+    disclosureId: randomUUID(),
+  };
+  const sealed = JSON.stringify({ v: 1, alg: 'aes-256-gcm', ct: 'c2VhbGVkLWluLXRoZS1zZWVk' });
+  await owner.query(
+    `insert into secrets (id, org_id, kind, enc, meta) values ($1, $3, 'smtp', $4, '{"host":"smtp.example.test","user":"mailer"}'), ($2, $3, 'webhook_hmac', $4, '{"last4":"c0de"}')`,
+    [fx.smtpSecretId, fx.hookSecretId, s.orgId, sealed],
+  );
+  await owner.query(`insert into email_senders (id, org_id, name, from_address, from_name, smtp_secret_id, is_default) values ($1, $2, 'Main', 'forms@example.test', 'Forms', $3, true)`, [
+    fx.senderId,
+    s.orgId,
+    fx.smtpSecretId,
+  ]);
+  await owner.query(
+    `insert into notifications (id, org_id, form_id, kind, trigger, sender_id, config, purpose_ids, updated_by) values ($1, $2, $3, 'owner', 'submitted', $4, '{"name":"Owner copy"}', '{contact}', $5)`,
+    [fx.notificationId, s.orgId, s.formIds[0], fx.senderId, s.ownerId],
+  );
+  await owner.query(
+    `insert into email_messages (id, org_id, form_id, submission_id, submission_received_at, notification_id, role, to_display_masked, subject_hash, message_id, status)
+     values ($1, $2, $3, $4, $5, $6, 'owner', '{o***@example.test}', $7, $8, 'sent')`,
+    [fx.emailMessageId, s.orgId, s.formIds[0], fx.submissionId, fx.submissionReceivedAt, fx.notificationId, HASH, `<${fx.emailMessageId}@fr.test>`],
+  );
+  await owner.query(
+    `insert into webhooks (id, org_id, form_id, url, secret_id, events, purpose_ids, updated_by) values ($1, $2, $3, 'https://hooks.example.test/in', $4, '{submission.created}', '{contact}', $5)`,
+    [fx.webhookId, s.orgId, s.formIds[0], fx.hookSecretId, s.ownerId],
+  );
+  await owner.query(
+    `insert into webhook_deliveries (id, org_id, webhook_id, event, submission_id, submission_received_at, status) values ($1, $2, $3, 'submission.created', $4, $5, 'succeeded')`,
+    [fx.deliveryId, s.orgId, fx.webhookId, fx.submissionId, fx.submissionReceivedAt],
+  );
+  await owner.query(`insert into exports (id, org_id, form_id, requested_by, format, scope, idempotency_key) values ($1, $2, $3, $4, 'csv', '{"kind":"all"}', $5)`, [
+    fx.exportId,
+    s.orgId,
+    s.formIds[0],
+    s.ownerId,
+    `seed-${fx.exportId}`,
+  ]);
+  await owner.query(
+    `insert into disclosures (id, org_id, submission_id, submission_received_at, recipient_kind, recipient_id, display_name, field_keys)
+     values ($1, $2, $3, $4, 'notification', $5, 'o***@example.test', '{name,email}')`,
+    [fx.disclosureId, s.orgId, fx.submissionId, fx.submissionReceivedAt, fx.notificationId],
+  );
+  EFFECTS.set(s.orgId, fx);
+}
+
 async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promise<OrgSeed> {
   const s: Omit<OrgSeed, 'tpl'> = {
     orgId: randomUUID(),
@@ -401,6 +491,7 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
     `insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc) values ($1, now(), $2, $3, 'en-IN', to_tsvector('simple', $4))`,
     [randomUUID(), s.orgId, s.formIds[0], `answers of ${slug}`],
   );
+  await seedOrgEffects(owner, s);
   return { ...s, tpl: await seedOrgTemplates(owner, s, slug, system) };
 }
 
