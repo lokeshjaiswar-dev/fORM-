@@ -59,6 +59,13 @@ Three candidate designs were scored. Weights: expressiveness 20%, determinism 20
 | Signatures | `SignatureValue.audit.evidenceHash` replaces a bare IP hash | C-m9 |
 | Wording | No "crypto-shred" claims: deleting a DEK is not erasure while backups hold it | C-M1, F-31 |
 
+### 1.2 Additive changes within v2 (optional-with-default only)
+
+| Area | Change | Source |
+|---|---|---|
+| Review units | `FormDefinition.review?` (units that target a page or a `section_break`), `CompiledForm.reviewUnits?`, `ReviewSettings` (server-stored), invariant I15, four publish issue codes, statuses `pending_review` and `rejected`, `SubmitResult.held: 'pending_review'`. A form without `review` is unchanged byte for byte. Rules in §2.3 | WFL-09 → WP-2.33 |
+| Section break | `section_break` (a content block that opens a named section) is part of the catalogue and §6, with the membership rule §2.3 gives it | WP-2.33, FLD-48 → WP-2.09 |
+
 ---
 
 ## 2. Final TypeScript definitions (`packages/schema/src/v2.ts`)
@@ -100,6 +107,8 @@ This is the verified file in full. In the package it is split by section (`src/v
  *      explicit `declassify` with a reason (audited).
  *  I14 In a form with a 'dpdp' consent block, that block is on a page before (or the same page
  *      as, and above) the first block whose purposes are consent-based.
+ *  I15 Review units (WP-2.33): every unit targets a page or a section_break of the form, holds at
+ *      least one block, shares no block with another unit and holds no payment block.
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -162,6 +171,13 @@ export type TemplatePackId = Brand<string, 'TemplatePackId'>;
 export type BrandKitId = Brand<string, 'BrandKitId'>;
 export type LockId = Brand<string, 'LockId'>;
 export type TemplatePartId = Brand<string, 'TemplatePartId'>;
+
+/**
+ * Review namespace (WP-2.33). A unit id is scoped to its form and never derived from text, like a rule id; a group id
+ * names an org-level review group (live, not versioned) and appears only in the server-stored `ReviewSettings`.
+ */
+export type ReviewUnitId = Brand<string, 'ReviewUnitId'>;
+export type ReviewGroupId = Brand<string, 'ReviewGroupId'>;
 
 /** Stable machine name `^[a-z][a-z0-9_]{0,63}$` (FND-07). Prefill param, CSV header, API/webhook key. */
 export type FieldKey = Brand<string, 'FieldKey'>;
@@ -494,7 +510,7 @@ export const INPUT_FIELD_TYPES = [
 export const COMPUTED_FIELD_TYPES = ['calculation', 'context', 'unique_id'] as const; // FLD-33/31/32
 /** Verified then discarded. */
 export const TRANSIENT_BLOCK_TYPES = ['captcha'] as const;                           // FLD-29
-export const CONTENT_BLOCK_TYPES = ['heading', 'paragraph', 'image', 'divider'] as const; // FLD-44..47
+export const CONTENT_BLOCK_TYPES = ['heading', 'paragraph', 'image', 'divider', 'section_break'] as const; // FLD-44..47 + named section markers
 export const CONTAINER_BLOCK_TYPES = ['section'] as const;                            // FLD-48
 
 export type InputFieldType = (typeof INPUT_FIELD_TYPES)[number];
@@ -923,6 +939,18 @@ export interface HeadingConfig { level: 1 | 2 | 3; text: InlineDoc; subheading?:
 export interface ParagraphConfig { content: RichDoc }
 export interface ImageConfig { image: AssetRef | BrandRef; widthPct: number; align: TextAlign; href?: SafeUrl }
 export interface DividerConfig { lineStyle: 'solid' | 'dashed' | 'dotted' | 'none'; color?: ColorValue; spacing: 'sm' | 'md' | 'lg' }
+/** Named section marker. Fields after it belong to this section until the next break (membership rule: §2.3). */
+export interface SectionBreakConfig {
+  name: string;
+  description?: string;
+  /** When false the section is skipped in the navigator. */
+  showInNav: boolean;
+  /** Draw the section name on the form at the break. */
+  showHeading: boolean;
+  headingAlign?: 'left' | 'center' | 'right';
+  /** How the in-form break looks: a line, a card, a pill, or a numbered badge. */
+  marker?: 'line' | 'card' | 'pill' | 'badge';
+}
 /** FLD-48. Logic target as a unit; hiding hides (and strips) descendants. Also the snippet root (TPL-15). */
 export interface SectionConfig {
   title?: InlineDoc; description?: RichDoc;
@@ -939,7 +967,7 @@ export interface BlockConfigMap {
   matrix: MatrixConfig; repeating_group: RepeatingGroupConfig; file_upload: FileUploadConfig; signature: SignatureConfig;
   hidden: HiddenConfig; consent: ConsentConfig; payment: PaymentConfig; appointment: AppointmentConfig;
   calculation: CalculationConfig; context: ContextConfig; unique_id: UniqueIdConfig; captcha: CaptchaConfig;
-  heading: HeadingConfig; paragraph: ParagraphConfig; image: ImageConfig; divider: DividerConfig; section: SectionConfig;
+  heading: HeadingConfig; paragraph: ParagraphConfig; image: ImageConfig; divider: DividerConfig; section_break: SectionBreakConfig; section: SectionConfig;
 }
 type _ExactKeys<A, B> = [Exclude<keyof A, B>, Exclude<B, keyof A>] extends [never, never] ? true : never;
 export const _configComplete: _ExactKeys<BlockConfigMap, BlockType> = true;
@@ -990,7 +1018,9 @@ export interface PublishIssue {
     | 'notice_incomplete' | 'consent_after_consent_fields' | 'sensitive_pipe_in_unsafe_context' | 'recipient_not_declared'
     | 'children_policy_incomplete' | 'data_route_not_permitted' | 'validation_bound_page_order'
     /** I5/I6: rich text outside the allowed AST (node types, limits, single-paragraph InlineDoc). */
-    | 'invalid_rich_text';
+    | 'invalid_rich_text'
+    /** WP-2.33 review units: no blocks, a block in two units, a payment block inside a unit, a target that is not in the form. */
+    | 'review_unit_empty' | 'review_unit_overlap' | 'review_unit_contains_payment' | 'review_unit_dangling_target';
   path: string;        // JSON pointer
   message: string;
   fixUrl?: string;     // e.g. '/settings/org-profile#privacy_contact'
@@ -1353,6 +1383,8 @@ export interface FormDefinition {
   theme: Theme;
   behavior: Behavior;
   i18n: I18nBundle;
+  /** Review units (WP-2.33); who reviews them is server-side `ReviewSettings`. Absent: no review. */
+  review?: FormReviewDefinition;
   x?: Extensions;
 }
 
@@ -1401,6 +1433,11 @@ export interface CompiledForm {
   dataInventory: Array<{ purposeId: PurposeId; blockIds: BlockId[]; classifications: DataClassification[] }>;
   /** I13: effective classification and purposes of every derived cell (variables, calcs, set_value targets). */
   taint: Partial<Record<string, { classification: DataClassification; purposeIds: PurposeId[] }>>;
+  /**
+   * Block ids of each valid review unit, derived at compile time (document order). Present only when the definition has
+   * `review`; a unit that fails the review checks is absent here. Server-only: the runtime projection drops it.
+   */
+  reviewUnits?: Partial<Record<ReviewUnitId, BlockId[]>>;
   definitionHash: Sha256Hex;
 }
 
@@ -1431,8 +1468,10 @@ export interface FormVersion {
 }
 
 /** Rules keep only client actions; rules left with no actions are dropped. */
-export type PublicFormDefinition = Omit<FormDefinition, 'logic'> & {
+export type PublicFormDefinition = Omit<FormDefinition, 'logic' | 'review'> & {
   logic: Omit<LogicModel, 'rules'> & { rules: Array<Rule<ClientAction>> };
+  /** Unit ids and names only: no targets, groups or visibility (the receipt names each unit, nothing more). */
+  review?: { units: Array<Pick<ReviewUnit, 'id' | 'name'>> };
 };
 
 export type RuntimeStatus =
@@ -1449,7 +1488,7 @@ export interface RuntimeFormVersion {
   versionId: FormVersionId; formId: FormId; contentHash: Sha256Hex;
   definition: PublicFormDefinition;  // notes, origin stamps, server actions stripped
   /** `reads` is kept (filtered to client steps) for incremental client evaluation (FND-13). */
-  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
+  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
   status: RuntimeStatus;
   accessToken?: string;              // short-lived, proves unlock/schedule checks
   publicConfig: {
@@ -1461,6 +1500,68 @@ export interface RuntimeFormVersion {
     branding: boolean;
     thirdPartyTrackingAllowed: boolean;
   };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * §13.1  REVIEW UNITS (WP-2.33, WFL-09): section-level maker-checker review
+ *        The units live in the definition (versioned with the form); who reviews them lives in the
+ *        server-stored ReviewSettings (live, revisioned, audited; there is no FormOps table to hold it yet).
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * What a unit covers. A `page` unit holds that page's blocks, nested children included. A `section_break` unit runs from
+ * that break up to the next `section_break` in document order, across pages (§2.3).
+ * `section` container targets wait for WP-2.09's single section model: the zod twin refuses them today.
+ */
+export type ReviewUnitTarget =
+  | { kind: 'page'; pageId: PageId }
+  | { kind: 'section_break'; blockId: BlockId };
+
+/** One part of the form that a checker approves or rejects on its own. Unit ids are unique within a form. */
+export interface ReviewUnit {
+  id: ReviewUnitId;
+  /**
+   * Shown to reviewers and, in plain words, to the respondent. Static text: the zod twin refuses answer pipes, because a
+   * name that piped an answer would carry another unit's value to a checker who may not see it.
+   */
+  name: LabelText;
+  target: ReviewUnitTarget;
+}
+
+/** `FormDefinition.review`. Absent means the form has no review units. */
+export interface FormReviewDefinition { units: ReviewUnit[] }
+
+/** Why a checker rejected a unit. A fixed catalogue: free-text notes wait for the submission key (WP-1.11). */
+export const REVIEW_REASON_CODES = ['incomplete', 'incorrect', 'missing_document', 'duplicate', 'other'] as const;
+export type ReviewReasonCode = (typeof REVIEW_REASON_CODES)[number];
+
+/**
+ * What a checker sees of the submission: only the blocks of the units assigned to their groups (`own_unit`), or all of
+ * it (`whole_submission`). `own_unit` wins when a checker holds both kinds.
+ */
+export const REVIEW_VISIBILITIES = ['own_unit', 'whole_submission'] as const;
+export type ReviewVisibility = (typeof REVIEW_VISIBILITIES)[number];
+
+/** Who reviews one unit, and how. Units with the same `order` are reviewed in parallel; a higher `order` waits for the lower ones. */
+export interface ReviewUnitAssignment {
+  unitId: ReviewUnitId;
+  groupId: ReviewGroupId;
+  /** ≥ 1. */
+  order: number;
+  /** A required unit must be approved (or not applicable) before the submission is final. */
+  required: boolean;
+  visibility: ReviewVisibility;
+}
+
+/**
+ * The live review setup of one form, stored on the server (`form_review_settings`), never in a FormVersion and not part
+ * of FormOps (there is no FormOps table). `unitId`s name units of the form's published definition.
+ */
+export interface ReviewSettings {
+  enabled: boolean;
+  /** One checker may decide at most one unit of a submission. */
+  distinctCheckers: boolean;
+  units: ReviewUnitAssignment[];
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1684,7 +1785,7 @@ export interface DraftSaveRequest { formVersionId: FormVersionId; answers: Answe
 export interface FieldError { blockId?: BlockId; path?: AnswerPath; rowId?: GroupRowId; code: ValidationErrorCode; message: string; params?: Record<string, string | number> }
 
 export type SubmitResult =
-  | { ok: true; submissionId: SubmissionId; endingId: EndingId; redirectUrl?: SafeUrl; uniqueId?: string; editToken?: string; receiptToken?: string; held?: 'pending_guardian_consent' | 'pending_scan' }
+  | { ok: true; submissionId: SubmissionId; endingId: EndingId; redirectUrl?: SafeUrl; uniqueId?: string; editToken?: string; receiptToken?: string; held?: 'pending_guardian_consent' | 'pending_scan' | 'pending_review' }
   | { ok: false; kind: 'invalid'; status: 422; errors: FieldError[] }
   | { ok: false; kind: 'payment_required'; submissionId: SubmissionId; checkout: { gateway: 'stripe' | 'razorpay'; clientSecretOrOrderId: string; amount: MinorUnits; currency: CurrencyCode } }
   | { ok: false; kind: 'closed' | 'limit_reached' | 'version_superseded' | 'rate_limited' | 'spam_rejected' | 'amount_changed' };
@@ -1720,8 +1821,12 @@ export interface PaymentRecord {
   couponCode?: string; invoiceNumber?: string; subscriptionRef?: string;
 }
 
-export type SubmissionStatus = 'complete' | 'pending_payment' | 'payment_failed' | 'pending_scan' | 'pending_guardian_consent' | 'spam' | 'archived' | 'trashed';
+export type SubmissionStatus =
+  | 'complete' | 'pending_payment' | 'payment_failed' | 'pending_scan' | 'pending_guardian_consent' | 'pending_review' | 'rejected'
+  | 'spam' | 'archived' | 'trashed';
 /* pending_guardian_consent: no notifications, webhooks, integrations, drafts or analytics; deleted when the guardian window expires. */
+/* pending_review (WP-2.33): held until every required, applicable review unit is approved; only reviewer notifications go out, the
+ * rest runs once, on finalisation. rejected: a required unit was rejected; terminal, and nothing is sent to outside systems. */
 
 export interface StoredSubmission {
   id: SubmissionId; orgId: OrgId; formId: FormId; formVersionId: FormVersionId;
@@ -2307,6 +2412,45 @@ The DB tables and RLS from the templates spec §5 map one-to-one onto `Template`
 - **Stubs.** Types that are not available yet are defined with `defineStub(type, capability, defaultConfig)` (value types) or `defineStubBlock(type, kind, capability, defaultConfig)` (plain blocks): real `configSchema` and `defaultConfig`, `palette: []`, and a `lint` that reports `missing_capability`. `compile()` treats `missing_capability` as fatal (WP-0.07).
 - **Stub capabilities.** A stub whose feature has no named `Capability` uses the extension form `x-field:<type>` (for example `x-field:full_name`), mirroring the `field:<type>` `FeatureId`.
 - **Draft defaults.** `DRAFT_DEFAULT_CONFIG_TYPES` lists the types whose `defaultConfig` is a draft that `configSchema` rejects: today only `repeating_group` (it starts with no children; the builder inserts the first). Code that validates defaults generically skips them.
+
+### 2.3 Review units and section breaks (WP-2.33)
+
+**Why.** A client wants each part of a submission approved by a checker from that part's group (maker-checker, WFL-09). The part is a *review unit*; the form says which blocks each unit holds, the server says who reviews it (`ReviewSettings`, §13.1). `@form/logic` owns the rules below (`packages/logic/src/reviewUnits.ts`), so the builder, the API and the browser agree.
+
+**The `section_break` block.** A content block (`BlockConfigMap.section_break`, §6) that opens a named section: `name`, optional `description`, and display options (`showInNav`, `showHeading`, `headingAlign`, `marker`). It holds no children and has no answer. The prototype added it in Nov 2026; this section is its contract, so it can be a review target. It is *not* the FLD-48 `section` container (one block with `children`, which nests and collapses); WP-2.09 reconciles the two into one section model, and until then a review unit cannot target a `section` (the zod twin refuses `kind: 'section'`).
+
+**Membership.** Computed from the definition, in document order (`CompiledForm.documentOrder`: pages in order, each block followed by its children, depth first):
+
+| Target | The unit holds |
+|---|---|
+| `{ kind: 'page', pageId }` | every block placed on that page, nested children (inside a `section` or `repeating_group`) included, and nothing from another page |
+| `{ kind: 'section_break', blockId }` | the break itself and every block after it in document order, **up to but not including the next `section_break` of the form** (whether or not a unit targets that break), across page boundaries; the last break runs to the end of the form |
+
+Blocks before the first break, and blocks no unit covers, belong to no unit: every checker sees them (`own_unit` hides other units' blocks, never these). A block belongs to at most one unit. A break inside a section container closes the unit before it in document order, so a container can straddle two units (WP-2.09 may tighten this).
+
+**Checks** (`reviewUnitIssues(def, mode)`, folded into `validateDefinition`; errors at publish, warnings in a draft):
+
+| Code | When |
+|---|---|
+| `review_unit_dangling_target` | the page is not in the form, or the block is missing, is not a `section_break`, or is not placed on a page |
+| `review_unit_empty` | the unit holds no block (a page with no children, or a break with nothing after it before the next break) |
+| `review_unit_overlap` | a block belongs to two units: the same page or break twice, a break whose range runs into a page that has its own unit, and so on; reported on both units |
+| `review_unit_contains_payment` | a `payment` block is among the unit's blocks: money has its own flow and is not approved by a checker |
+| `duplicate_id` | a unit id is used twice (the later unit is flagged) |
+
+**Compile.** `compile()` fills `compiled.reviewUnits` (unit id → block ids) only when the definition has `review`; units that fail a check are left out, so a draft with a bad unit still compiles and previews, with the problem as a warning. Publishing refuses it (the pipeline runs `validateDefinition(def, 'publish')`). The record is stored as jsonb, so consumers sort unit ids themselves instead of relying on key order.
+
+**Pure helpers** (all in `@form/logic`, all covered by the determinism corpus):
+
+- `applicableUnits(compiled, evalState)`: each unit is `applicable` or `not_applicable`; a unit none of whose blocks is in `EvalState.visible` (every block hidden, or its page off the respondent's path) needs no review.
+- `reviewUnitAnswersHash(compiled, unitId, answers)`: `sha256(JCS({ [blockId]: answer }))` over the unit's blocks that have a stored answer (unanswered = absent, I9). Independent of key order; an answer outside the unit does not change it. A decision records it; a decision against an older hash is stale. `null` for a unit the compiled form does not hold.
+- `visibleBlocksForReviewer(compiled, settings, callerGroupIds)`: `null` when nothing is hidden from the caller, otherwise the set of block ids they may see. `own_unit` redaction applies to anyone in a review group assigned to an `own_unit` unit of the form, whatever their role (owners and admins included); they see the blocks of the units assigned to their groups plus every block outside all units. A caller in no such group, or only in `whole_submission` units, is not redacted. `own_unit` wins when a person holds both kinds. A block the function does not know is not in the set, so callers hide it by default.
+
+**What respondents see.** `projectForRuntime` keeps `review` as `{ units: [{ id, name }] }` and drops `compiled.reviewUnits`: no targets, groups, visibility or assignments. Unit names are static text (the twin refuses answer pipes, which would carry one unit's answer to a checker who may not see it) and are shown in the default locale; unit-name translations (`review:<unitId>:name`) are not part of the first slice.
+
+**Server side, not in the definition.** `ReviewSettings` (`enabled`, `distinctCheckers`, one `ReviewUnitAssignment` per unit with `groupId`, `order` ≥ 1, `required`, `visibility`) is stored per form with a revision check and audit; reason codes are the fixed catalogue `REVIEW_REASON_CODES` (no free-text notes until WP-1.11 can encrypt them). Submissions held for review have status `pending_review`; a required reject finalises them as `rejected`. Neither status is sent to outside systems in the first slice.
+
+**Not in the first slice.** `section` container targets (WP-2.09); the return-to-respondent flow and `onReturn` (WP-2.18); unit diffs between rounds; translated unit names.
 
 ---
 
