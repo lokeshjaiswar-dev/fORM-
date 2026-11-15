@@ -416,9 +416,10 @@ describe('the public address', () => {
     // The new address is the primary one; the old one resolves to the same form and names the new one to redirect to.
     expect(await resolveFormSlug(appDb.db, 'spring-fair-2027')).toMatchObject({ formId: form.id, primarySlug: 'spring-fair-2027' });
     expect(await resolveFormSlug(appDb.db, oldSlug)).toMatchObject({ formId: form.id, primarySlug: 'spring-fair-2027' });
+    // GET on the old address answers with the new one to redirect to (WP-1.12), not with the definition.
     const viaOld = await app.inject({ url: `/v1/p/${oldSlug}` });
     expect(viaOld.statusCode).toBe(200);
-    expect(viaOld.json<{ formId: string }>().formId).toBe(form.id);
+    expect(viaOld.json()).toEqual({ redirectTo: 'spring-fair-2027' });
     expect((await app.inject({ url: '/v1/p/spring-fair-2027' })).statusCode).toBe(200);
 
     const { rows } = await owner.query<{ slug: string; is_primary: boolean }>('select slug, is_primary from form_slugs where form_id = $1 order by created_at, slug', [form.id]);
