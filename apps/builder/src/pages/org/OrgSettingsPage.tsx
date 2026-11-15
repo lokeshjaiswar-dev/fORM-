@@ -21,6 +21,8 @@ const M = defineMessages('builder', {
   'org_settings.invite_days': 'Invitations expire after (days)',
   'org_settings.review_mfa': 'Checkers must use two-factor sign-in',
   'org_settings.review_mfa_hint': 'A checker who has not turned on two-factor sign-in for their own account cannot approve or reject part of a response. Turn this off to let them decide without it.',
+  'org_settings.email_senders': 'Email senders',
+  'org_settings.email_senders_hint': 'The addresses your forms send emails from.',
   'org_settings.save': 'Save',
   'org_settings.saved': 'Saved.',
   'org_settings.denied': 'Only owners and admins can change these settings.',
@@ -136,6 +138,12 @@ export function OrgSettingsPage() {
           <Field label={t(M['org_settings.invite_days'])}>
             <Input type="number" min={1} max={30} value={form.inviteDays} onChange={(e) => set('inviteDays', Number(e.target.value))} required />
           </Field>
+          <p className="text-[13px] text-muted-foreground">
+            {t(M['org_settings.email_senders_hint'])}{' '}
+            <TextLink asChild>
+              <Link to="/org/email-senders">{t(M['org_settings.email_senders'])}</Link>
+            </TextLink>
+          </p>
           <FormError message={error} />
           <Button type="submit" className="w-full" disabled={busy}>
             {t(M['org_settings.save'])}
