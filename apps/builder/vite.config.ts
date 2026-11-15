@@ -2,11 +2,49 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { DEV_CSP_REPORT_PATH, builderSecurityHeaders } from './security/headers.ts';
 import { cspReportCollector, noInjectedStyles } from './security/vite.ts';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+
+const RADIX_VIEWPORT_CSS = 'virtual:fr-radix-viewport-styles.css';
+/** The Radix modules that render their own `<style dangerouslySetInnerHTML>` (Select and ScrollArea), as a bundled path. */
+const RADIX_STYLE_MODULES = /[\\/]node_modules[\\/]@radix-ui[\\/]react-(?:select|scroll-area)[\\/]dist[\\/]index\.mjs$/;
+/** `jsx("style", { dangerouslySetInnerHTML: { __html: `…` }, nonce })`: the whole element, with the rule it injects captured. */
+const RADIX_STYLE_ELEMENT = /\/\* @__PURE__ \*\/ jsx\(\s*"style",\s*\{\s*dangerouslySetInnerHTML: \{\s*__html: `([^`]*)`\s*\},\s*nonce\s*\}\s*\)/g;
+
+/**
+ * Production builds only. Radix Select and ScrollArea hide the native scrollbar of their viewport with a `<style>`
+ * element they write with `innerHTML` when a component mounts. The production policy refuses both halves of that
+ * (`style-src 'self'` has no inline styles, and `require-trusted-types-for 'script'` makes a string `innerHTML` throw),
+ * so any page with a Select, such as the org switcher on the forms list, stopped rendering. This takes the element out
+ * of those two modules and bundles the same rules into the stylesheet instead, so the page looks the same and the
+ * policy stays as written (docs/platform/builder-security-headers.md). A Radix release that changes the element fails
+ * the build here instead of shipping a violation. Same idea as `noInjectedStyles` for sonner (security/vite.ts).
+ */
+function radixViewportStyles(): Plugin {
+  const resolved = `\0${RADIX_VIEWPORT_CSS}`;
+  const rules = new Set<string>();
+  return {
+    name: 'fr-radix-viewport-styles',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId: (source) => (source === RADIX_VIEWPORT_CSS ? resolved : null),
+    load: (id) => (id === resolved ? [...rules].join('\n') : null),
+    transform(code, id) {
+      if (!RADIX_STYLE_MODULES.test(id.split('?')[0] ?? '')) return null;
+      let found = 0;
+      const next = code.replace(RADIX_STYLE_ELEMENT, (_element, css: string) => {
+        found += 1;
+        rules.add(css);
+        return 'null';
+      });
+      if (found !== 1) this.error(`${id}: expected one <style dangerouslySetInnerHTML> element to replace, found ${found}; review radixViewportStyles in vite.config.ts`);
+      return { code: `import ${JSON.stringify(RADIX_VIEWPORT_CSS)};\n${next}`, map: null };
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   /* VITE_API_URL: the API origin when it is not the builder's own (SaaS: api.form.example). Unset: same origin. */
@@ -19,7 +57,7 @@ export default defineConfig(({ mode }) => {
   /* Reports go to the local collector, through `report-uri` only (see BuilderHeaderOptions.reportTo). */
   const reports = { reportUri: DEV_CSP_REPORT_PATH, reportTo: false };
   return {
-    plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles()],
+    plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles(), radixViewportStyles()],
     /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
     assetsInclude: ['**/*.formpack'],
     build: {
