@@ -83,6 +83,34 @@ describe('drizzle definitions', () => {
     expect(rows.map((r) => r.name).slice(-6)).toEqual(['media', 'label', 'engine', 'draft_rev', 'template_lineage', 'variables_snapshot']);
     expect(getTableConfig(tables.formVersions).columns.map((c) => c.name)).toEqual(rows.map((r) => r.name));
   });
+
+  it('put the column migration 0022 added to org_settings after the ones 0008 made', async () => {
+    const { rows } = await t.owner.query<{ name: string }>(
+      `select a.attname as name from pg_attribute a where a.attrelid = 'public.org_settings'::regclass and a.attnum > 0 and not a.attisdropped order by a.attnum`,
+    );
+    expect(rows.map((r) => r.name)).toEqual(['org_id', 'editors_approve_notice', 'invite_days', 'updated_at', 'updated_by', 'review_checkers_mfa']);
+    expect(getTableConfig(tables.orgSettings).columns.map((c) => c.name)).toEqual(rows.map((r) => r.name));
+  });
+
+  it('cover the five tables of migration 0022, the two partitioned ones included, with the columns it made', async () => {
+    const named = (table: Parameters<typeof getTableConfig>[0]) => getTableConfig(table).columns.map((c) => c.name);
+    expect(named(tables.reviewGroups)).toEqual(['id', 'org_id', 'name', 'created_by', 'created_at', 'archived_at']);
+    expect(named(tables.reviewGroupMembers)).toEqual(['org_id', 'group_id', 'user_id', 'added_by', 'added_at']);
+    expect(named(tables.formReviewSettings)).toEqual(['form_id', 'org_id', 'rev', 'enabled', 'settings', 'updated_by', 'updated_at']);
+    expect(named(tables.submissionReviews)).toEqual([
+      'org_id', 'form_id', 'submission_id', 'submission_received_at', 'unit_id', 'round', 'state', 'required', 'review_order', 'group_id',
+      'visibility', 'maker_user_id', 'excluded_user_ids', 'last_editor_id', 'answers_hash', 'rev', 'updated_at',
+    ]);
+    expect(named(tables.reviewDecisions)).toEqual([
+      'id', 'org_id', 'form_id', 'submission_id', 'submission_received_at', 'unit_id', 'round', 'decision', 'reason_code', 'decided_by',
+      'decided_at', 'answers_hash', 'form_version_id', 'idempotency_key',
+    ]);
+    // The two partitioned parents are tables of relkind p, which the generic comparison above reads like any other.
+    const { rows } = await t.owner.query<{ relname: string; relkind: string }>(
+      `select relname, relkind from pg_class where relnamespace = 'public'::regnamespace and relname in ('submission_reviews', 'review_decisions') order by 1`,
+    );
+    expect(rows).toEqual([{ relname: 'review_decisions', relkind: 'p' }, { relname: 'submission_reviews', relkind: 'p' }]);
+  });
 });
 
 describe('migration 0020 on a database that holds forms', () => {
@@ -602,6 +630,120 @@ describe('migration 0021 on a database that holds prototype submissions', () => 
       // Its state row is live (the trigger of 0020 made it, not retired), and the legacy version's is untouched.
       expect((await m.c.query(`select 1 from form_version_state where version_id = $1 and retired_at is null and superseded_at is null`, [firstReal])).rowCount).toBe(1);
       expect((await m.c.query(`select 1 from form_version_state where version_id = $1 and retired_at is not null`, [legacyOf(withDraft).id])).rowCount).toBe(1);
+    } finally {
+      await m.c.end();
+    }
+  });
+});
+
+describe('migration 0022 on a database that holds responses and settings', () => {
+  /** A database migrated to 0021 and holding an org with its settings row, a form, a member and responses of two statuses. */
+  async function at21() {
+    const adminUrl = inject('pgAdminUrl');
+    const database = await createTestDatabase(adminUrl);
+    const admin = new pg.Client({ connectionString: adminUrl });
+    await admin.connect();
+    try {
+      await bootstrapDatabase(admin, database);
+    } finally {
+      await admin.end();
+    }
+    const c = new pg.Client({ connectionString: roleUrl(adminUrl, ROLES.migrator, TEST_PASSWORDS.migrator, database) });
+    await c.connect();
+    const files = await loadMigrations();
+    expect((await migrate(c, files.filter((m) => m.version <= 21))).version).toBe(21);
+
+    const org = randomUUID();
+    const user = randomUUID();
+    const form = randomUUID();
+    const version = randomUUID();
+    await c.query(`insert into orgs (id, slug, name) values ($1, 'reviews-22', 'Reviews 22')`, [org]);
+    await c.query(`insert into org_settings (org_id, invite_days) values ($1, 14)`, [org]);
+    await c.query(`insert into users (id, email, email_norm, password_hash) values ($1, 'o@reviews22.test', 'o@reviews22.test', 'x')`, [user]);
+    await c.query(`insert into memberships (org_id, user_id, role) values ($1, $2, 'owner')`, [org, user]);
+    await c.query('insert into forms (id, org_id, team_id, owner_user_id, title) values ($1, $2, $3, $4, $5)', [form, org, randomUUID(), user, 'Reviewed later']);
+    await c.query(
+      `insert into form_versions (id, org_id, form_id, number, schema_version, published_by, definition, compiled, content_hash) values ($1, $2, $3, 1, 2, $4, '{}', '{}', $5)`,
+      [version, org, form, user, 'ab'.repeat(32)],
+    );
+    const insert = async (status: string) => {
+      const s = newSubmissionKey(new Date());
+      await c.query(
+        `insert into submissions (id, received_at, org_id, form_id, form_version_id, definition_hash, answer_codec_version, status, answers, computed, meta)
+         values ($1, $2, $3, $4, $5, $6, 0, $7, '{}', '{}', '{}')`,
+        [s.id, s.receivedAt, org, form, version, Buffer.alloc(32), status],
+      );
+      return s.id;
+    };
+    const ids = [await insert('complete'), await insert('trashed')];
+    return { c, files, org, user, form, version, ids, insert };
+  }
+
+  it('applies on top of 0021 as the one new migration, leaves every row as it was, and widens the status check by exactly two values', async () => {
+    const m = await at21();
+    try {
+      // Before: the two values are refused, which is what makes the new migration necessary.
+      expect(pgCode(await failure(m.insert('pending_review')))).toBe('23514');
+      const before = (await m.c.query('select id, status, answers, seq from submissions order by seq')).rows;
+      expect(before).toHaveLength(2);
+
+      const result = await migrate(m.c, m.files.filter((x) => x.version <= 22));
+      expect(result).toEqual({ applied: ['0022_submission_reviews'], version: 22 });
+
+      expect((await m.c.query('select id, status, answers, seq from submissions order by seq')).rows).toEqual(before);
+      const ok = [await m.insert('pending_review'), await m.insert('rejected'), await m.insert('complete')];
+      expect((await m.c.query('select status from submissions where id = any ($1) order by seq', [ok])).rows.map((r) => r.status)).toEqual(['pending_review', 'rejected', 'complete']);
+      expect(pgCode(await failure(m.insert('approved')))).toBe('23514');
+    } finally {
+      await m.c.end();
+    }
+  });
+
+  it('gives an org that already had settings review_checkers_mfa on, with its other settings untouched, and a new row the same', async () => {
+    const m = await at21();
+    try {
+      await migrate(m.c, m.files.filter((x) => x.version <= 22));
+      expect((await m.c.query('select invite_days, review_checkers_mfa from org_settings where org_id = $1', [m.org])).rows).toEqual([{ invite_days: 14, review_checkers_mfa: true }]);
+      const other = randomUUID();
+      await m.c.query(`insert into orgs (id, slug, name) values ($1, 'reviews-22-b', 'Reviews 22 B')`, [other]);
+      await m.c.query('insert into org_settings (org_id) values ($1)', [other]);
+      expect((await m.c.query('select review_checkers_mfa from org_settings where org_id = $1', [other])).rows).toEqual([{ review_checkers_mfa: true }]);
+    } finally {
+      await m.c.end();
+    }
+  });
+
+  it('makes the review tables empty, with their partitions in schema parts and RLS forced, and a response can then be reviewed and deleted', async () => {
+    const m = await at21();
+    try {
+      await migrate(m.c, m.files.filter((x) => x.version <= 22));
+      for (const table of ['review_groups', 'review_group_members', 'form_review_settings', 'submission_reviews', 'review_decisions']) {
+        expect((await m.c.query<{ n: number }>(`select count(*)::int as n from ${table}`)).rows[0]!.n, table).toBe(0);
+      }
+      for (const table of ['submission_reviews', 'review_decisions']) {
+        const partitions = await partitionsOf(m.c, table);
+        expect(partitions, table).toHaveLength(4);
+        for (const p of partitions) expect(p, p.name).toMatchObject({ forced: true, owner: 'fr_migrator', grantees: ['fr_migrator'] });
+        expect(partitions.every((p) => p.name.startsWith(`parts.${table}_`)), table).toBe(true);
+      }
+      expect(await rlsViolations(m.c)).toEqual([]);
+
+      // A response that existed before the migration can be put under review, and its deletion takes the review with it.
+      const group = randomUUID();
+      const submission = (await m.c.query<{ id: string; received_at: Date }>('select id, received_at from submissions where id = $1', [m.ids[0]])).rows[0]!;
+      await m.c.query(`insert into review_groups (id, org_id, name, created_by) values ($1, $2, 'Checkers', $3)`, [group, m.org, m.user]);
+      await m.c.query(
+        `insert into submission_reviews (org_id, form_id, submission_id, submission_received_at, unit_id, required, review_order, group_id, visibility, answers_hash)
+         values ($1, $2, $3, $4, 'u1', true, 1, $5, 'own_unit', $6)`,
+        [m.org, m.form, submission.id, submission.received_at, group, Buffer.alloc(32)],
+      );
+      await m.c.query(
+        `insert into review_decisions (id, org_id, form_id, submission_id, submission_received_at, unit_id, round, decision, decided_by, answers_hash, form_version_id, idempotency_key)
+         values ($1, $2, $3, $4, $5, 'u1', 1, 'approve', $6, $7, $8, 'k1')`,
+        [randomUUID(), m.org, m.form, submission.id, submission.received_at, m.user, Buffer.alloc(32), m.version],
+      );
+      await m.c.query('delete from submissions where id = $1 and received_at = $2', [submission.id, submission.received_at]);
+      expect((await m.c.query<{ n: number }>('select (select count(*) from submission_reviews)::int + (select count(*) from review_decisions)::int as n')).rows[0]!.n).toBe(0);
     } finally {
       await m.c.end();
     }
