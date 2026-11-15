@@ -3,7 +3,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import pg from 'pg';
 import { inject } from 'vitest';
 import { createTestDatabase } from '@form/testkit';
-import { createDb, newSubmissionKey, provision, uuidV7Time, type DbHandle, type RoleName } from '../src/index.ts';
+import { createDb, newSubmissionKey, provision, uuidV7, uuidV7Time, type DbHandle, type RoleName } from '../src/index.ts';
 import { TEST_PASSWORDS } from './passwords.ts';
 
 export interface TestDb {
@@ -353,6 +353,7 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
         [s.orgId, formId, submission.id, submission.receivedAt, HASH, JSON.stringify({ id: submission.id })],
       );
       await owner.query(`insert into form_id_counters (form_id, block_id, period, org_id) values ($1, 'ticket', '2026', $2)`, [formId, s.orgId]);
+      await seedReviewRows(owner, s, submission);
     }
     await owner.query(
       `insert into form_files (id, org_id, form_id, block_id, name, mime, size_bytes, sha256) values ($1, $2, $3, 'upload', 'cv.pdf', 'application/pdf', 4, $4)`,
@@ -401,6 +402,52 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
     [randomUUID(), s.orgId, s.formIds[0], `answers of ${slug}`],
   );
   return { ...s, tpl: await seedOrgTemplates(owner, s, slug, system) };
+}
+
+/** The ids of the review rows `seedReviewRows` made for one org. */
+export interface OrgReviews {
+  groupId: string;
+  /** The decision on unit `u1`. */
+  decisionId: string;
+}
+
+/**
+ * The rows of section-level review (migration 0022) of an org, on its first form's seeded response: a group with the
+ * editor in it, the form's review settings, two units (`u1` approved with its decision, `u2` pending a later order), so every actor kind
+ * has own rows to see or not see. Written as the schema owner: fr_app can write none of the two review tables.
+ */
+export async function seedReviewRows(
+  owner: pg.Pool,
+  org: Pick<OrgSeed, 'orgId' | 'ownerId' | 'editorId' | 'formIds' | 'versionIds'>,
+  submission: Pick<SubmissionSeed, 'id' | 'receivedAt'>,
+): Promise<OrgReviews> {
+  const groupId = randomUUID();
+  const decisionId = uuidV7(new Date());
+  await owner.query(`insert into review_groups (id, org_id, name, created_by) values ($1, $2, 'Checkers', $3)`, [groupId, org.orgId, org.ownerId]);
+  await owner.query(`insert into review_group_members (org_id, group_id, user_id, added_by) values ($1, $2, $3, $4)`, [org.orgId, groupId, org.editorId, org.ownerId]);
+  const unit = (unitId: string, order: number) => ({ unitId, groupId, order, required: true, visibility: 'own_unit' });
+  await owner.query(`insert into form_review_settings (form_id, org_id, enabled, settings, updated_by) values ($1, $2, true, $3, $4)`, [
+    org.formIds[0],
+    org.orgId,
+    JSON.stringify({ distinctCheckers: false, units: [unit('u1', 1), unit('u2', 2)] }),
+    org.ownerId,
+  ]);
+  for (const [unitId, order, state] of [
+    ['u1', 1, 'approved'],
+    ['u2', 2, 'pending'],
+  ] as const) {
+    await owner.query(
+      `insert into submission_reviews (org_id, form_id, submission_id, submission_received_at, unit_id, state, required, review_order, group_id, visibility, answers_hash)
+       values ($1, $2, $3, $4, $5, $6, true, $7, $8, 'own_unit', $9)`,
+      [org.orgId, org.formIds[0], submission.id, submission.receivedAt, unitId, state, order, groupId, HASH],
+    );
+  }
+  await owner.query(
+    `insert into review_decisions (id, org_id, form_id, submission_id, submission_received_at, unit_id, round, decision, decided_by, answers_hash, form_version_id, idempotency_key)
+     values ($1, $2, $3, $4, $5, 'u1', 1, 'approve', $6, $7, $8, $9)`,
+    [decisionId, org.orgId, org.formIds[0], submission.id, submission.receivedAt, org.editorId, HASH, org.versionIds[0], `seed-${decisionId}`],
+  );
+  return { groupId, decisionId };
 }
 
 export async function seedTwoOrgs(owner: pg.Pool): Promise<Seed> {

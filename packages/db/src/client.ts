@@ -25,6 +25,10 @@ import {
   memberships,
   orgSettings,
   orgs,
+  formReviewSettings,
+  reviewDecisions,
+  reviewGroupMembers,
+  reviewGroups,
   sessions,
   templateCategories,
   templateCategoryLinks,
@@ -39,6 +43,7 @@ import {
   templateVersions,
   templates,
   submissionIdempotency,
+  submissionReviews,
   submissionSearch,
   submissions,
   userGrievances,
@@ -92,6 +97,11 @@ export const tables = {
   templateSearchMisses,
   captchaRedemptions,
   submissionSearch,
+  reviewGroups,
+  reviewGroupMembers,
+  formReviewSettings,
+  submissionReviews,
+  reviewDecisions,
 };
 
 export type Tables = typeof tables;

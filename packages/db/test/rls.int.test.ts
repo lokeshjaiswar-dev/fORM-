@@ -62,6 +62,9 @@ const env = () => ({ t, seed });
 /** Actor kinds `app_reads_templates()` admits: respondents read no template content. */
 const TEMPLATE_READERS = ['user', 'api_key', 'system', 'platform'] as const;
 
+/** Every actor kind but the respondent: what the review groups and their members are for (migration 0022). */
+const NOT_RESPONDENT = ['user', 'api_key', 'system', 'platform'] as const;
+
 /**
  * Every table in public, with what org B's actors may do to org A's rows (CMP-01). The suite is generated per table
  * and actor kind; a new table fails `covers every table` until it is listed here.
@@ -270,6 +273,14 @@ const TABLES: Record<string, TableSpec> = {
       sql`insert into submission_search (submission_id, received_at, org_id, form_id, locale, doc)
           values (${randomUUID()}, now(), ${s.a.orgId}, ${s.a.formIds[0]}, 'en-IN', to_tsvector('simple', 'x'))`,
   },
+  // Section-level review (WP-2.33, migration 0022; behaviour in reviews.int.test.ts). Groups and their members are for
+  // the org's members, never a respondent context. The two review tables are read with submissions.read, submissions.review
+  // or by a system job (so only `system` sees rows here) and fr_app can write neither: the definers of 0024 do.
+  review_groups: { scope: { by: 'org' }, select: 0, touch: 'name', update: 0, delete: 'denied', visibleTo: NOT_RESPONDENT },
+  review_group_members: { scope: { by: 'org' }, select: 0, update: 'denied', delete: 0, visibleTo: NOT_RESPONDENT },
+  form_review_settings: { scope: { by: 'org' }, select: 0, touch: 'rev', update: 0, delete: 'denied' },
+  submission_reviews: { scope: { by: 'org' }, select: 0, update: 'denied', delete: 'denied', visibleTo: ['system'] },
+  review_decisions: { scope: { by: 'org' }, select: 0, update: 'denied', delete: 'denied', visibleTo: ['system'] },
 };
 
 isolationSuite(TABLES, env);

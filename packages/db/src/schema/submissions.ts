@@ -13,6 +13,9 @@ export const SUBMISSION_STATUSES = [
   'spam',
   'archived',
   'trashed',
+  // WP-2.33 (migration 0022): held until every required review unit is approved; and a required unit was rejected (final).
+  'pending_review',
+  'rejected',
 ] as const;
 export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 

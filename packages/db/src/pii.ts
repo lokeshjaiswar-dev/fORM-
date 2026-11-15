@@ -129,4 +129,32 @@ export const PII_COVERAGE: Record<TableName, PiiRule> = {
     erase: 'delete',
     retainBasis: 'with the submission: answer text of non-sensitive fields, removed with the submission or its erasure (dsr.execute)',
   },
+  review_groups: {
+    columns: ['created_by'],
+    erase: 'pseudonymise',
+    retainBasis: 'org lifetime; a group is archived, never deleted, because reviews and decisions name it; created_by keeps the pseudonymous user id (WP-2.33, migration 0022)',
+  },
+  review_group_members: {
+    columns: ['user_id', 'added_by'],
+    erase: 'delete',
+    retainBasis:
+      'until the member leaves the group, the org or the account: the foreign key to memberships deletes the row with the membership; added_by is another member’s id and keeps the pseudonymous id',
+  },
+  form_review_settings: {
+    columns: ['updated_by'],
+    erase: 'pseudonymise',
+    retainBasis: 'with the form; the settings hold group and unit ids, no data of a person; updated_by keeps the pseudonymous user id',
+  },
+  submission_reviews: {
+    columns: ['maker_user_id', 'excluded_user_ids', 'last_editor_id', 'answers_hash'],
+    erase: 'delete',
+    retainBasis:
+      'with the submission: the foreign key cascades, so retention.sweep, the trash purge and dsr.execute delete the submission and these rows go with it; the user ids are members’ ids (pseudonymous after account deletion) and answers_hash is a digest of the unit’s answers',
+  },
+  review_decisions: {
+    columns: ['decided_by', 'answers_hash'],
+    erase: 'delete',
+    retainBasis:
+      'with the submission, by the same cascade, and the statutory floor of the submission applies; append-only until then (a trigger refuses UPDATE and DELETE to all but the owner); decided_by is the checker’s id and keeps the pseudonymous id after account deletion (SOC 2 segregation-of-duties evidence, CC6.1, CC6.3)',
+  },
 };

@@ -26,6 +26,8 @@ export const orgSettings = pgTable('org_settings', {
   inviteDays: integer('invite_days').notNull().default(7),
   updatedAt: ts('updated_at'),
   updatedBy: uuid('updated_by').references(() => users.id),
+  /** WP-2.33: checkers must have two-factor sign-in on to decide a review (migration 0022). Last, as 0022 added it (the migrations test compares column order). */
+  reviewCheckersMfa: boolean('review_checkers_mfa').notNull().default(true),
 });
 
 /**
