@@ -186,13 +186,48 @@ describe('orgs', () => {
     expect(renamed.json()).toMatchObject({ org: { name: 'Acme India', timeZone: 'UTC', locale: 'en-IN' } });
     expect((await as(o, 'PATCH', '/v1/org', { org: orgId, body: {} })).statusCode).toBe(400);
 
-    expect((await as(o, 'GET', '/v1/org/settings', { org: orgId })).json()).toEqual({ editorsApproveNotice: false, inviteDays: 7 });
+    expect((await as(o, 'GET', '/v1/org/settings', { org: orgId })).json()).toEqual({ editorsApproveNotice: false, inviteDays: 7, reviewCheckersMfa: true });
     expect((await as(editor, 'GET', '/v1/org', { org: orgId })).json<{ permissions: string[] }>().permissions).not.toContain('compliance.approve_notice');
-    expect((await as(o, 'PATCH', '/v1/org/settings', { org: orgId, body: { editorsApproveNotice: true } })).json()).toEqual({ editorsApproveNotice: true, inviteDays: 7 });
+    expect((await as(o, 'PATCH', '/v1/org/settings', { org: orgId, body: { editorsApproveNotice: true } })).json()).toEqual({ editorsApproveNotice: true, inviteDays: 7, reviewCheckersMfa: true });
     // CMP-24: approving notices is now granted to editors.
     expect((await as(editor, 'GET', '/v1/org', { org: orgId })).json<{ permissions: string[] }>().permissions).toContain('compliance.approve_notice');
     expect((await as(editor, 'PATCH', '/v1/org/settings', { org: orgId, body: { inviteDays: 30 } })).statusCode).toBe(403);
     expect((await pending(orgId)).map((e) => e.action)).toEqual(expect.arrayContaining(['org.updated', 'org.settings_updated']));
+  });
+
+  it('keeps "checkers must use 2FA" on by default, turns it off with org.settings only, persists it, and audits which way it went (WP-2.33)', async () => {
+    const o = await newUser();
+    const orgId = await createOrg(o);
+    const admin = await newUser();
+    const editor = await newUser();
+    await addMember(orgId, admin, 'admin');
+    await addMember(orgId, editor, 'editor');
+    const column = async () => (await owner.query<{ on: boolean }>('select review_checkers_mfa as on from org_settings where org_id = $1', [orgId])).rows.map((r) => r.on);
+
+    expect((await as(editor, 'GET', '/v1/org/settings', { org: orgId })).statusCode).toBe(403);
+    expect((await as(o, 'GET', '/v1/org/settings', { org: orgId })).json()).toMatchObject({ reviewCheckersMfa: true });
+    const refused = await as(editor, 'PATCH', '/v1/org/settings', { org: orgId, body: { reviewCheckersMfa: false } });
+    expect(refused.statusCode).toBe(403);
+    expect((await pending(orgId)).at(-1)).toMatchObject({ action: 'request.authorize', outcome: 'denied', reason: 'missing_permission:org.settings', actorId: editor.id });
+    expect((await as(o, 'GET', '/v1/org/settings', { org: orgId })).json()).toMatchObject({ reviewCheckersMfa: true });
+
+    // The API's settings route is PATCH (it already was, for the other two settings): a partial body changes only what it names.
+    const off = await as(admin, 'PATCH', '/v1/org/settings', { org: orgId, body: { reviewCheckersMfa: false } });
+    expect(off.statusCode, off.body).toBe(200);
+    expect(off.json()).toEqual({ editorsApproveNotice: false, inviteDays: 7, reviewCheckersMfa: false });
+    expect(await column()).toEqual([false]);
+    expect((await as(o, 'GET', '/v1/org/settings', { org: orgId })).json()).toEqual({ editorsApproveNotice: false, inviteDays: 7, reviewCheckersMfa: false });
+    expect((await pending(orgId)).filter((e) => e.action === 'org.settings_updated').at(-1)).toMatchObject({
+      outcome: 'success',
+      actorId: admin.id,
+      metadata: { changed: ['reviewCheckersMfa'], reviewCheckersMfa: false },
+    });
+
+    // Another setting does not bring it back on, and a wrong type is refused.
+    expect((await as(o, 'PATCH', '/v1/org/settings', { org: orgId, body: { inviteDays: 10 } })).json()).toEqual({ editorsApproveNotice: false, inviteDays: 10, reviewCheckersMfa: false });
+    expect((await as(o, 'PATCH', '/v1/org/settings', { org: orgId, body: { reviewCheckersMfa: 'no' } })).statusCode).toBe(400);
+    expect((await as(o, 'PATCH', '/v1/org/settings', { org: orgId, body: { reviewCheckersMfa: true } })).json()).toMatchObject({ inviteDays: 10, reviewCheckersMfa: true });
+    expect(await column()).toEqual([true]);
   });
 
   it('keeps every org to its members: another org’s id is refused, and its members are not found', async () => {

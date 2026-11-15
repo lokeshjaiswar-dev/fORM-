@@ -50,11 +50,17 @@ const toView = (o: OrgRow): OrgView => ({
   createdAt: o.createdAt.toISOString(),
 });
 
-const SETTINGS_DEFAULTS = { editorsApproveNotice: false, inviteDays: 7 };
+const SETTINGS_DEFAULTS = { editorsApproveNotice: false, inviteDays: 7, reviewCheckersMfa: true };
+
+const SETTINGS_COLUMNS = {
+  editorsApproveNotice: orgSettings.editorsApproveNotice,
+  inviteDays: orgSettings.inviteDays,
+  reviewCheckersMfa: orgSettings.reviewCheckersMfa,
+};
 
 /** The org's settings; an org created before `org_settings` existed has the defaults. */
 export async function settingsOf(tx: Tx): Promise<z.infer<typeof settingsView>> {
-  const [row] = await tx.select({ editorsApproveNotice: orgSettings.editorsApproveNotice, inviteDays: orgSettings.inviteDays }).from(orgSettings);
+  const [row] = await tx.select(SETTINGS_COLUMNS).from(orgSettings);
   return row ?? SETTINGS_DEFAULTS;
 }
 
@@ -242,7 +248,7 @@ export function orgRoutes(app: FastifyInstance, c: OrgModuleDeps): void {
           .insert(orgSettings)
           .values({ orgId: tenant.orgId, ...values })
           .onConflictDoUpdate({ target: orgSettings.orgId, set: values })
-          .returning({ editorsApproveNotice: orgSettings.editorsApproveNotice, inviteDays: orgSettings.inviteDays });
+          .returning(SETTINGS_COLUMNS);
         await audit.append(tx, tenant.orgId, {
           ...auditActor(tenant),
           sessionId: account.session?.id ?? null,
@@ -252,7 +258,8 @@ export function orgRoutes(app: FastifyInstance, c: OrgModuleDeps): void {
           resourceType: 'org',
           resourceId: tenant.orgId,
           outcome: 'success',
-          metadata: { changed: Object.keys(changes) },
+          // The 2FA rule for checkers is a segregation-of-duties control (SOC 2 CC6.1): the record says which way it went, not only that it changed.
+          metadata: { changed: Object.keys(changes), reviewCheckersMfa: changes.reviewCheckersMfa },
         });
         return row!;
       });

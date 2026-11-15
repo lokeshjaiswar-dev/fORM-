@@ -71,6 +71,8 @@ export const settingsView = z.object({
   editorsApproveNotice: z.boolean(),
   /** How long an invite link works, in days. */
   inviteDays: z.number().int().min(1).max(30),
+  /** WP-2.33: a checker must have two-factor sign-in on to decide a review unit. On unless an owner or admin turns it off. */
+  reviewCheckersMfa: z.boolean(),
 });
 
 export const memberView = z.object({
