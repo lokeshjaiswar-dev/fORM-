@@ -1,4 +1,4 @@
-import { checkClock, createLogger, startTelemetry } from '@form/observability';
+import { checkClock, startTelemetry } from '@form/observability';
 import { parseConfig } from './config.ts';
 
 // Composition root. Telemetry must start before pg and pg-boss are imported, so the rest is loaded dynamically.
@@ -14,7 +14,8 @@ const telemetry = await startTelemetry({
   serviceName: config.telemetry.serviceName,
   sampleRatio: config.telemetry.sampleRatio,
 });
-const log = createLogger({ level: config.logLevel, name: 'fr-worker', base: { service: config.telemetry.serviceName } });
+const { createServiceLogger } = await import('./log.ts');
+const log = createServiceLogger({ level: config.logLevel, name: 'fr-worker', base: { service: config.telemetry.serviceName } });
 
 const clock = await checkClock({ servers: config.ntp.servers, maxOffsetMs: config.ntp.maxOffsetMs });
 if (clock.status === 'failed') {

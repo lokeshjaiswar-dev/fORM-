@@ -9,10 +9,11 @@ import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } 
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { DestinationStream } from 'pino';
 import { createDb, type AuthThrottleBucket, type DbHandle } from '@form/db';
-import { cachedClockCheck, createLogger, type ClockStatus } from '@form/observability';
+import { cachedClockCheck, type ClockStatus } from '@form/observability';
 import type { KeyProvider, Mailer } from '@form/ports';
 import { clientInfo, DEV_USER_HEADER, ORG_HEADER, registerAuth } from './auth.ts';
 import type { ApiConfig } from './config.ts';
+import { createServiceLogger } from './log.ts';
 import { registerErrorHandling, sendProblem } from './errors.ts';
 import { cspReportRoutes, type CspReportDeps } from './routes/csp-reports.ts';
 import { createFileStore, type FileStore } from './files.ts';
@@ -63,7 +64,7 @@ export const BODY_LIMIT = 1024 * 1024;
 
 /** The HTTP application without listening, so tests and the OpenAPI emitter can build it. */
 export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<FastifyInstance> {
-  const logger = createLogger({ level: config.logLevel, name: 'fr-api', base: { service: config.telemetry.serviceName } }, deps.logStream);
+  const logger = createServiceLogger({ level: config.logLevel, name: 'fr-api', base: { service: config.telemetry.serviceName } }, deps.logStream);
   const { trustProxy } = config;
   const app = Fastify({
     loggerInstance: logger as FastifyBaseLogger,

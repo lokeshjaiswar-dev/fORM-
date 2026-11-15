@@ -21,12 +21,22 @@ import {
   UPLOAD_BODY_LIMIT,
   type FileStore,
 } from '../files.ts';
+import { storableJson, storableString } from '../text-safety.ts';
 import { checkAnswers, fileRefsIn } from '../validate-submission.ts';
 
-const slugParam = z.object({ slug: z.string().min(1).max(128) });
+/** What `publicSlug` makes (lower-case letters, digits, hyphens), allowing a little more; never a control character. */
+const SLUG = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/;
+const slugParam = z.object({ slug: z.string().regex(SLUG) });
 
-/** Display rows the page sends along (what Responses shows without the form): bounded, and never trusted as the answers. */
-const fieldRow = z.object({ key: z.string().max(128), label: z.string().max(1000), value: z.string().max(10_000) });
+/** A language tag's shape (`en-IN`, `hi`, `zh-Hant-TW`); which tags a form offers is checked against the form itself. */
+const LOCALE_TAG = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/;
+
+/**
+ * Display rows the page sends along. The server builds the rows it stores from the validated answers and ignores
+ * these, but they are still checked like any text that reaches the database: bounded and free of characters Postgres
+ * cannot store.
+ */
+const fieldRow = z.object({ key: storableString(128), label: storableString(1000), value: storableString(10_000) });
 
 type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
 
@@ -231,9 +241,9 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         params: slugParam,
         body: z.object({
           formVersionId: z.uuid(),
-          answers: z.record(z.string(), z.unknown()),
+          answers: storableJson(z.record(z.string(), z.unknown())),
           fields: z.array(fieldRow).max(500).default([]),
-          locale: z.string().min(2).max(35).default('en-IN'),
+          locale: z.string().min(2).max(35).regex(LOCALE_TAG).default('en-IN'),
         }),
         response: { 200: z.object({ id: z.uuid() }) },
       },
@@ -243,6 +253,10 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       const live = await loadLive(request.params.slug, request.id);
       if (request.body.formVersionId !== live.versionId) {
         throw new ProblemError('FORM_OUTDATED', 'This form was updated while you were filling it. Reload and try again.');
+      }
+      // The language is one the form offers: it is stored, and handed to Intl when the answers are checked.
+      if (!live.definition.i18n.locales.some((l) => l.locale === request.body.locale)) {
+        return sendProblem(reply, 'VALIDATION_FAILED', 'This form is not offered in that language.', [{ path: 'locale', message: 'not a language of this form' }]);
       }
       // The answers are checked against the stored version, whatever the page claims to have validated.
       const { errors, values } = checkAnswers(live, live.versionId, request.body.answers, request.body.locale, new Date());

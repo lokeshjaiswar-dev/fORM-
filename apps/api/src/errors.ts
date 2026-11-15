@@ -114,6 +114,9 @@ const BY_STATUS: Record<number, ProblemCode> = {
   503: 'SERVICE_UNAVAILABLE',
 };
 
+/** SQLSTATEs for text that cannot be stored: 22021 (invalid byte sequence for UTF-8, a NUL), 22P05 (untranslatable character, `\u0000` in jsonb). */
+const UNSTORABLE_TEXT = new Set(['22021', '22P05']);
+
 interface Outcome {
   code: ProblemCode;
   detail?: string | undefined;
@@ -131,6 +134,14 @@ function classify(err: FastifyError, request: FastifyRequest): Outcome {
   if (isResponseSerializationError(err)) {
     request.log.error({ err }, 'response did not match its schema');
     return { code: 'INTERNAL' };
+  }
+  // Text Postgres cannot store (a NUL, a byte sequence that is not UTF-8, a lone surrogate in jsonb) is the request's
+  // fault, not the server's. The routes check for it first; this is the net under any route that does not. The log
+  // line carries the SQLSTATE and the place, never the text (see `loggableError`).
+  const sqlState = (err as { cause?: { code?: unknown } }).cause?.code ?? (err as { code?: unknown }).code;
+  if (typeof sqlState === 'string' && UNSTORABLE_TEXT.has(sqlState)) {
+    request.log.warn({ err }, 'the database refused text it cannot store');
+    return { code: 'VALIDATION_FAILED', detail: 'Some of the text contains a character that cannot be stored.' };
   }
   const status = typeof err.statusCode === 'number' ? err.statusCode : 500;
   if (status >= 500) {

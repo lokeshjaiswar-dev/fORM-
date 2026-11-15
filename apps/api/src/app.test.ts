@@ -4,6 +4,7 @@ import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -131,6 +132,27 @@ describe('problem+json', () => {
     expect(res.json()).toMatchObject({ code: 'INTERNAL', title: 'Internal error' });
     expect(res.body).not.toContain('10.0.0.5');
     expect(lines.some((l) => l.msg === 'request failed' && JSON.stringify(l).includes('10.0.0.5'))).toBe(true);
+  });
+
+  it('never logs the bound parameters of a failed query, and answers 400 for text the database cannot store', async () => {
+    const { app: a, lines } = await app();
+    const failed = (code: string, message: string) => () =>
+      new DrizzleQueryError('insert into "form_submissions" ("answers") values ($1)', ['{"pan":"ABCDE1234F-SECRET-PII"}'], Object.assign(new Error(message), { severity: 'ERROR', code, where: 'JSON data: ABCDE1234F-SECRET-PII' }));
+    a.get('/nul', { config: { auth: 'none' } }, async () => {
+      throw failed('22P05', 'unsupported Unicode escape sequence')();
+    });
+    a.get('/broken', { config: { auth: 'none' } }, async () => {
+      throw failed('XX000', 'something broke')();
+    });
+    const nul = await a.inject({ url: '/nul' });
+    expect(nul.statusCode).toBe(400);
+    expect(nul.json()).toMatchObject({ code: 'VALIDATION_FAILED' });
+    const broken = await a.inject({ url: '/broken' });
+    expect(broken.statusCode).toBe(500);
+    expect(JSON.stringify(lines)).not.toMatch(/SECRET-PII|ABCDE1234F/);
+    // What an operator needs is logged: the SQLSTATE and the SQL text with its placeholders.
+    expect(lines.find((l) => l.msg === 'request failed')).toMatchObject({ err: { code: 'XX000', query: expect.stringContaining('$1') } });
+    expect(lines.find((l) => l.msg === 'the database refused text it cannot store')).toMatchObject({ err: { code: '22P05' } });
   });
 
   it('treats a database that cannot be reached like any other failure: a plain 500, no detail, and an audit record', async () => {
