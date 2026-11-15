@@ -59,13 +59,25 @@ afterAll(async () => {
 
 const as = (user: string, org = orgId) => ({ 'x-fr-dev-user': user, 'x-fr-org': org, ...BROWSER });
 
-/** A form row with a saved draft, as the builder leaves it before Publish. */
-async function savedForm(draft: (id: string) => FormDefinition = (id) => publishableDraft(id)): Promise<string> {
+/**
+ * A form row with a saved draft, as the builder leaves it before Publish. A draft the save route refuses (an unknown
+ * key, another form's id) is `planted` with SQL instead: the strict save only came with WP-1.06, so such rows exist from
+ * before it and from the prototype, and publish has to turn them away too.
+ */
+async function savedForm(draft: (id: string) => FormDefinition = (id) => publishableDraft(id), o: { planted?: boolean } = {}): Promise<string> {
   const created = await app.inject({ method: 'POST', url: '/v1/forms', headers: as(userId), payload: { title: 'Live form' } });
   expect(created.statusCode).toBe(200);
   const { id } = created.json<{ id: string }>();
+  if (o.planted) {
+    const definition = JSON.stringify(draft(id));
+    await owner.query(
+      `insert into form_drafts (form_id, org_id, draft, draft_rev, schema_version, size_bytes, updated_by) values ($1, $2, $3, 1, 2, $4, $5)`,
+      [id, orgId, definition, Buffer.byteLength(definition, 'utf8'), userId],
+    );
+    return id;
+  }
   const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(userId), 'if-match': '0' }, payload: { draft: draft(id) } });
-  expect(put.statusCode).toBe(200);
+  expect(put.statusCode, put.body).toBe(200);
   return id;
 }
 
@@ -237,9 +249,10 @@ const publish = (id: string, payload?: Record<string, unknown>, headers: Record<
   app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers, ...(payload === undefined ? {} : { payload }) });
 const validate = (id: string, headers: Record<string, string> = as(userId)) => app.inject({ method: 'POST', url: `/v1/forms/${id}/validate`, headers, payload: {} });
 
-/** Saves `draft` (as it is, whatever the schema thinks of it) and returns the revision the save made. */
+/** Saves `draft` over the revision the form is at, as the builder does, and returns the revision the save made. */
 async function saveDraft(id: string, draft: unknown): Promise<number> {
-  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(userId), payload: { draft } });
+  const { rows } = await owner.query<{ draft_rev: number }>('select draft_rev from form_drafts where form_id = $1', [id]);
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(userId), 'if-match': String(rows[0]?.draft_rev ?? 0) }, payload: { draft } });
   expect(put.statusCode, put.body).toBe(200);
   return put.json<{ draftRev: number }>().draftRev;
 }
@@ -315,7 +328,7 @@ describe('the publish checks (422 PUBLISH_BLOCKED)', () => {
   });
 
   it('refuses a saved draft that is not a v2 form (the parse is strict: an unknown key is refused, not dropped)', async () => {
-    const id = await savedForm((fid) => ({ ...publishableDraft(fid), smuggled: { note: 'kept by nobody' } }) as unknown as FormDefinition);
+    const id = await savedForm((fid) => ({ ...publishableDraft(fid), smuggled: { note: 'kept by nobody' } }) as unknown as FormDefinition, { planted: true });
     const res = await publish(id, {});
     expect(res.statusCode, res.body).toBe(422);
     const body = res.json<{ code: string; issues: Issue[] }>();
@@ -508,7 +521,7 @@ describe('versions and going live', () => {
 
   it('freezes the form id the route names, whatever id the draft carries', async () => {
     const elsewhere = randomUUID();
-    const id = await savedForm(() => publishableDraft(elsewhere));
+    const id = await savedForm(() => publishableDraft(elsewhere), { planted: true });
     expect((await publish(id, {})).statusCode).toBe(200);
     expect((await versionRows(id))[0]!.definition.formId).toBe(id);
   });
@@ -563,7 +576,7 @@ describe('POST /v1/forms/:id/validate', () => {
   });
 
   it('reports a not-v2 draft as invalid_definition, and a form with no draft as 404', async () => {
-    const id = await savedForm((fid) => ({ ...publishableDraft(fid), smuggled: 1 }) as unknown as FormDefinition);
+    const id = await savedForm((fid) => ({ ...publishableDraft(fid), smuggled: 1 }) as unknown as FormDefinition, { planted: true });
     expect((await validate(id)).json()).toMatchObject({ ok: false, issues: [expect.objectContaining({ code: 'invalid_definition' })] });
     const bare = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(userId), payload: { title: 'No draft' } })).json<{ id: string }>().id;
     expect((await validate(bare)).statusCode).toBe(404);

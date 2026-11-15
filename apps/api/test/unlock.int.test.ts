@@ -80,7 +80,8 @@ function member(method: 'GET' | 'PUT' | 'POST' | 'DELETE', url: string, body?: u
 
 async function publish(title: string): Promise<Form> {
   const { id } = (await member('POST', '/v1/forms', { title })).json<{ id: string }>();
-  expect((await member('PUT', `/v1/forms/${id}/draft`, { draft: publishableDraft(id, title) })).statusCode).toBe(200);
+  const put = await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { 'x-fr-dev-user': userId, 'x-fr-org': orgId, 'if-match': '0', ...BROWSER }, payload: { draft: publishableDraft(id, title) } });
+  expect(put.statusCode, put.body).toBe(200);
   const live = await member('POST', `/v1/forms/${id}/publish`, {});
   expect(live.statusCode).toBe(200);
   return { id, ...live.json<{ slug: string; versionId: string }>() };

@@ -101,7 +101,7 @@ async function newForm(o: { publish?: boolean; user?: string; org?: string } = {
   const created = await call('POST', '/v1/forms', { ...(o.user ? { user: o.user } : {}), ...(o.org ? { org: o.org } : {}), body: { title: 'Access form' } });
   const { id } = created.json<{ id: string }>();
   const ctx = { ...(o.user ? { user: o.user } : {}), ...(o.org ? { org: o.org } : {}) };
-  expect((await call('PUT', `/v1/forms/${id}/draft`, { ...ctx, body: { draft: publishableDraft(id) } })).statusCode).toBe(200);
+  expect((await call('PUT', `/v1/forms/${id}/draft`, { ...ctx, ifMatch: '0', body: { draft: publishableDraft(id) } })).statusCode).toBe(200);
   if (!o.publish) return { id, slug: null, versionId: null };
   const live = await call('POST', `/v1/forms/${id}/publish`, { ...ctx, body: {} });
   expect(live.statusCode).toBe(200);

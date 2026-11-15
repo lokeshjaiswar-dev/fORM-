@@ -70,7 +70,7 @@ const as = (user: string) => ({ 'x-fr-dev-user': user, 'x-fr-org': orgId, ...BRO
 async function publish(user: string, title: string): Promise<{ id: string; versionId: string }> {
   const { id } = (await app.inject({ method: 'POST', url: '/v1/forms', headers: as(user), payload: { title } })).json<{ id: string }>();
   const draft = draftWith(id, [fieldBlock('name', 'short_text'), fieldBlock('city', 'short_text')], title);
-  expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: as(user), payload: { draft } })).statusCode).toBe(200);
+  expect((await app.inject({ method: 'PUT', url: `/v1/forms/${id}/draft`, headers: { ...as(user), 'if-match': '0' }, payload: { draft } })).statusCode).toBe(200);
   const live = await app.inject({ method: 'POST', url: `/v1/forms/${id}/publish`, headers: as(user), payload: {} });
   expect(live.statusCode, live.body).toBe(200);
   return { id, versionId: live.json<{ versionId: string }>().versionId };
@@ -147,7 +147,7 @@ describe('form submissions', () => {
     const name = fieldBlock('name', 'short_text');
     const renamed = { ...name, label: { type: 'doc' as const, content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Full name' }] }] } };
     const draft = draftWith(f.id, [renamed, fieldBlock('city', 'short_text')], 'Relabelled');
-    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${f.id}/draft`, headers: as(userId), payload: { draft } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: `/v1/forms/${f.id}/draft`, headers: { ...as(userId), 'if-match': '1' }, payload: { draft } })).statusCode).toBe(200);
     const second = await app.inject({ method: 'POST', url: `/v1/forms/${f.id}/publish`, headers: as(userId), payload: {} });
     expect(second.statusCode, second.body).toBe(200);
     const onFirst = await store({ name: short('Asha'), city: short('Pune') }, { form: f.id, version: f.versionId });
