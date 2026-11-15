@@ -3,6 +3,7 @@ import { REVIEW_REASON_CODES } from '@form/db';
 import { visibleBlocksForReviewer } from '@form/logic';
 import type { CompiledForm, ReviewGroupId, ReviewSettings, ReviewUnitId } from '@form/schema';
 import { PROBLEMS } from '../../errors.ts';
+import { answersHashToken, rawHashOfToken, unmatchableHash, type AnswersTokenScope } from './answersToken.ts';
 import { assignmentsOf, canDecideHint, decisionBody, hasSecondFactor, isBlocked, redactAnswers, refusalProblem, type Refusal, type UnitRow } from './decide.ts';
 import { positionOf, QUEUE_AGES, queueScope } from './queue.ts';
 import { signCursor } from '../../cursor.ts';
@@ -219,5 +220,65 @@ describe('the queue’s cursor', () => {
     for (const values of [[at, SUBMISSION], [at, SUBMISSION, 'u_a', 1], ['yesterday', SUBMISSION, 'u_a'], ['2026-11-15', SUBMISSION, 'u_a'], [at, 'not-a-uuid', 'u_a'], [at, SUBMISSION, ''], [at, SUBMISSION, 'u'.repeat(65)], [at, SUBMISSION, 7]]) {
       expect(() => positionOf(secret, scope, signCursor(secret, scope, values)), JSON.stringify(values)).toThrow(expect.objectContaining({ code: 'INVALID_CURSOR' }));
     }
+  });
+});
+
+describe('the token of a unit’s answers hash', () => {
+  const SECRET = new Uint8Array(32).fill(9);
+  const SCOPE: AnswersTokenScope = { orgId: '0190c000-0000-7000-8000-000000000001', submissionId: '0190d000-0000-7000-8000-000000000001', unitId: 'u_applicant', round: 1 };
+  const RAW = new Uint8Array(32).fill(0xab);
+  const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
+
+  it('is 64 hex digits and is not the digest it stands for', () => {
+    const token = answersHashToken(SECRET, SCOPE, RAW);
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(token).not.toBe(hex(RAW));
+    // Stable for the same answers, so a checker's read and a later decision agree.
+    expect(answersHashToken(SECRET, SCOPE, RAW)).toBe(token);
+  });
+
+  it('depends on the key, the org, the response, the unit, the round and the digest', () => {
+    const base = answersHashToken(SECRET, SCOPE, RAW);
+    const others = [
+      answersHashToken(new Uint8Array(32).fill(8), SCOPE, RAW),
+      answersHashToken(SECRET, { ...SCOPE, orgId: '0190c000-0000-7000-8000-000000000002' }, RAW),
+      answersHashToken(SECRET, { ...SCOPE, submissionId: '0190d000-0000-7000-8000-000000000002' }, RAW),
+      answersHashToken(SECRET, { ...SCOPE, unitId: 'u_notes' }, RAW),
+      answersHashToken(SECRET, { ...SCOPE, round: 2 }, RAW),
+      answersHashToken(SECRET, SCOPE, new Uint8Array(32).fill(0xac)),
+    ];
+    expect(new Set([base, ...others]).size).toBe(others.length + 1);
+  });
+
+  it('does not confuse two units whose ids run into the next field', () => {
+    const a = answersHashToken(SECRET, { ...SCOPE, unitId: 'u1', round: 12 }, RAW);
+    const b = answersHashToken(SECRET, { ...SCOPE, unitId: 'u11', round: 2 }, RAW);
+    expect(a).not.toBe(b);
+  });
+
+  it('refuses a digest that is not 32 bytes', () => {
+    expect(() => answersHashToken(SECRET, SCOPE, new Uint8Array(31))).toThrow(TypeError);
+  });
+
+  it('gives back the digest of the candidate it was made for, in either case of hex, and nothing for any other value', () => {
+    const token = answersHashToken(SECRET, SCOPE, RAW);
+    const other = new Uint8Array(32).fill(1);
+    expect(rawHashOfToken(SECRET, SCOPE, token, [other, RAW])).toEqual(RAW);
+    expect(rawHashOfToken(SECRET, SCOPE, token.toUpperCase(), [RAW])).toEqual(RAW);
+    // The digest itself is not a token; nor is a token for another scope, key or digest, or one that is edited, short or not hex.
+    expect(rawHashOfToken(SECRET, SCOPE, hex(RAW), [RAW])).toBeNull();
+    expect(rawHashOfToken(SECRET, { ...SCOPE, unitId: 'u_notes' }, token, [RAW])).toBeNull();
+    expect(rawHashOfToken(SECRET, { ...SCOPE, round: 2 }, token, [RAW])).toBeNull();
+    expect(rawHashOfToken(new Uint8Array(32).fill(8), SCOPE, token, [RAW])).toBeNull();
+    expect(rawHashOfToken(SECRET, SCOPE, token, [other])).toBeNull();
+    expect(rawHashOfToken(SECRET, SCOPE, token, [])).toBeNull();
+    expect(rawHashOfToken(SECRET, SCOPE, `${token.slice(0, 63)}${token.endsWith('0') ? '1' : '0'}`, [RAW])).toBeNull();
+    for (const bad of ['', token.slice(0, 62), `${token}00`, 'zz'.repeat(32)]) expect(rawHashOfToken(SECRET, SCOPE, bad, [RAW]), bad).toBeNull();
+  });
+
+  it('makes a hash that is nobody’s: 32 bytes, and never the same twice', () => {
+    const a = unmatchableHash();
+    expect(a.byteLength).toBe(32);
+    expect(hex(a)).not.toBe(hex(unmatchableHash()));
   });
 });

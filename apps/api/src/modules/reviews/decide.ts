@@ -38,6 +38,7 @@ import { accountOf, memberOf, tenantOf } from '../../auth.ts';
 import { ProblemError, type ProblemCode } from '../../errors.ts';
 import { detailFieldsOf, createPlanLoader, maskedAnswersOf, MASK, type PlanLoader } from '../../submissions/plans.ts';
 import { uuidv7 } from '../../uuid7.ts';
+import { answersHashToken, rawHashOfToken, unmatchableHash } from './answersToken.ts';
 import type { ReviewModuleDeps } from './context.ts';
 import { auditClient, REVIEW_SECURITY } from './http.ts';
 import { finaliseOnDecision } from './open.ts';
@@ -69,14 +70,15 @@ const HASH_HEX = /^[0-9a-fA-F]{64}$/;
 
 /**
  * What a checker sends: the decision, the reason (from the fixed catalogue, required to reject, never given to approve) and
- * the hash of the unit's answers as they read them (`units[].answersHash` of the review detail), so the decision is about
- * exactly what they saw. Nothing else is accepted: not a user, an org, a time or an id.
+ * the token of the unit's answers as they read them (`units[].answersHash` of the review detail), so the decision is about
+ * exactly what they saw. The token is keyed (`answersToken.ts`), not the unit's sha256: the digest of answers a caller may not
+ * read would let them test guesses at them. Nothing else is accepted: not a user, an org, a time or an id.
  */
 export const decisionBody = z
   .strictObject({
     decision: z.enum(REVIEW_DECISIONS),
     reasonCode: z.enum(REVIEW_REASON_CODES).optional(),
-    answersHash: z.string().regex(HASH_HEX, 'the 64 hex digits of the unit’s answersHash'),
+    answersHash: z.string().regex(HASH_HEX, 'the 64 hex digits of the unit’s answersHash, as the review detail gave them'),
   })
   .superRefine((body, ctx) => {
     if (body.decision === 'reject' && body.reasonCode === undefined) ctx.addIssue({ code: 'custom', path: ['reasonCode'], message: 'a reject needs a reason code' });
@@ -118,7 +120,11 @@ const reviewUnitView = z.object({
   canDecide: z.boolean(),
   /** An earlier required unit is still open. */
   blocked: z.boolean(),
-  /** What a decision on this unit names (64 hex digits); null when `own_unit` hides this unit's answers from you. */
+  /**
+   * What a decision on this unit names (64 hex digits): a keyed token of the unit's answers as they stand, not their digest.
+   * It is only good for this response, unit and round, and only until the answers change. Null when `own_unit` hides this
+   * unit's answers from you.
+   */
   answersHash: z.string().nullable(),
   rev: z.number().int(),
 });
@@ -255,12 +261,54 @@ export function redactAnswers(answers: Record<string, unknown>, visible: Readonl
 interface DetailDeps {
   db: ReviewModuleDeps['db'];
   plans: PlanLoader;
+  /** Keys the `answersHash` tokens (`config.auth.secret`). */
+  secret: Uint8Array;
 }
 
 /** Whether checkers of this org must have used two-factor sign-in (`org_settings.review_checkers_mfa`); on when the org has no row. */
 async function checkersNeedMfa(tx: Tx, orgId: string): Promise<boolean> {
   const [row] = await tx.select({ on: orgSettings.reviewCheckersMfa }).from(orgSettings).where(eq(orgSettings.orgId, orgId)).limit(1);
   return row?.on ?? true;
+}
+
+/**
+ * The unit's raw answers hash that a decision's `answersHash` token stands for, to give to `review_decide()`.
+ *
+ * The token (`answersToken.ts`) is checked here, in the decision's own transaction, against the hash the unit holds now and
+ * against the one the first decision with the same Idempotency-Key named (so a retry made after the unit's answers changed is
+ * still a replay and not a "key reused"). A token that matches neither (forged, made for another unit, round or response, or
+ * for answers that have changed) gets a hash that is nobody's: `review_decide()` then makes its other checks in its own order and
+ * ends in `review_stale`, which is also what it answers for a hash that was once right and no longer is. `review_decide()` still
+ * compares the hash it is given under its lock, so a change between this read and the decision is `review_stale` as before.
+ */
+async function rawAnswersHash(
+  tx: Tx,
+  secret: Uint8Array,
+  o: { orgId: string; submissionId: string; receivedAt: Date; unitId: string; idempotencyKey: string; token: string },
+): Promise<Uint8Array> {
+  const [unit] = await tx
+    .select({ round: submissionReviews.round, answersHash: submissionReviews.answersHash })
+    .from(submissionReviews)
+    .where(and(eq(submissionReviews.submissionId, o.submissionId), eq(submissionReviews.submissionReceivedAt, o.receivedAt), eq(submissionReviews.unitId, o.unitId)))
+    .limit(1);
+  const [first] = await tx
+    .select({ round: reviewDecisions.round, answersHash: reviewDecisions.answersHash })
+    .from(reviewDecisions)
+    .where(
+      and(
+        eq(reviewDecisions.idempotencyKey, o.idempotencyKey),
+        eq(reviewDecisions.submissionId, o.submissionId),
+        eq(reviewDecisions.submissionReceivedAt, o.receivedAt),
+        eq(reviewDecisions.unitId, o.unitId),
+      ),
+    )
+    .limit(1);
+  for (const known of [unit, first]) {
+    if (!known) continue;
+    const raw = rawHashOfToken(secret, { orgId: o.orgId, submissionId: o.submissionId, unitId: o.unitId, round: known.round }, o.token, [known.answersHash]);
+    if (raw) return raw;
+  }
+  return unmatchableHash();
 }
 
 async function readReviewDetail(deps: DetailDeps, tenant: TenantCtx, client: ReadClient, formId: string, id: string): Promise<ReviewDetail> {
@@ -357,8 +405,10 @@ async function readReviewDetail(deps: DetailDeps, tenant: TenantCtx, client: Rea
         yours,
         canDecide: canDecideHint({ userId, submissionStatus: row.status, yours, blocked, distinctCheckers: distinct, decidedElsewhere }, u),
         blocked,
-        // A hash of answers the caller may not read would let them test a guess at one, so it is theirs only for their own units.
-        answersHash: visible === null || yours ? Buffer.from(u.answersHash).toString('hex') : null,
+        // The token, never the digest: the unit's answers include ones the caller sees only masked (protected fields) or not at all
+        // (a block of their own unit derived from another unit's answers), and a plain sha256 of them would let them test a guess
+        // offline. It is theirs only for their own units, since a token for answers they may not read is of no use to them either.
+        answersHash: visible === null || yours ? answersHashToken(deps.secret, { orgId: tenant.orgId, submissionId: row.id, unitId: u.unitId, round: u.round }, u.answersHash) : null,
         rev: u.rev,
       };
     });
@@ -456,7 +506,7 @@ export function registerReviewDecide(app: FastifyInstance, deps: ReviewModuleDep
       }
       const info = auditClient(deps, request);
       reply.header('cache-control', 'no-store');
-      return readReviewDetail({ db: deps.db, plans }, tenant, { sessionId: info.sessionId, actorIpHash: info.actorIpHash, actorUa: info.actorUa }, request.params.formId, request.params.id);
+      return readReviewDetail({ db: deps.db, plans, secret: deps.secret }, tenant, { sessionId: info.sessionId, actorIpHash: info.actorIpHash, actorUa: info.actorUa }, request.params.formId, request.params.id);
     },
   );
 
@@ -469,7 +519,7 @@ export function registerReviewDecide(app: FastifyInstance, deps: ReviewModuleDep
         summary: 'Approve or reject one review unit of a held response',
         description:
           '`Idempotency-Key` is required (400 without it): a retry with the same key and body returns the first decision (`Idempotent-Replayed: true`) and does nothing more; the key for another decision is 422 `IDEMPOTENCY_KEY_REUSED`. ' +
-          '`answersHash` is the hash of the unit’s answers you read (`units[].answersHash` of the review detail): if they changed, 409 `REVIEW_STALE`. A reject needs a `reasonCode` (`incomplete`, `incorrect`, `missing_document`, `duplicate`, `other`). ' +
+          '`answersHash` is the token of the unit’s answers you read, exactly as the review detail gave it (`units[].answersHash`; it is keyed to this response, unit and round, not a digest you could compute): if the answers changed since, or it is any other value, 409 `REVIEW_STALE`. A reject needs a `reasonCode` (`incomplete`, `incorrect`, `missing_document`, `duplicate`, `other`). ' +
           'Refusals: 403 `FOUR_EYES_VIOLATION` (you filled in or changed the unit, it is about you, or with distinct checkers you decided another unit), `NOT_IN_REVIEW_GROUP`, `MFA_REQUIRED` (the org requires two-factor sign-in); 409 `REVIEW_STALE`, `REVIEW_ORDER_BLOCKED`, `REVIEW_CLOSED`. Each is also a denied `review.decided` record. ' +
           'When the last required unit is approved the response becomes `complete` and is released to its notifications and webhooks once; a required reject makes it `rejected` and sends nothing.',
         security: SECURITY,
@@ -497,13 +547,15 @@ export function registerReviewDecide(app: FastifyInstance, deps: ReviewModuleDep
 
         if (session !== null && !hasSecondFactor(session.mfaLevel) && (await checkersNeedMfa(tx, tenant.orgId))) return { refused: 'mfa_required' };
 
+        // The token the checker read, turned back into the unit's own hash (or into a hash that is nobody's, which is `review_stale`).
+        const rawHash = await rawAnswersHash(tx, deps.secret, { orgId: tenant.orgId, submissionId: id, receivedAt: row.receivedAt, unitId, idempotencyKey: key, token: answersHash });
         const result = await reviewDecide(tx, {
           submissionId: id,
           receivedAt: row.receivedAt,
           unitId,
           decision,
           reasonCode: reasonCode ?? null,
-          answersHash: Buffer.from(answersHash, 'hex'),
+          answersHash: rawHash,
           idempotencyKey: key,
           decisionId,
         });

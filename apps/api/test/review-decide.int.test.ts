@@ -8,12 +8,16 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createPgBossQueue, installQueueSchema, parseJobKeyring, type PgBossQueue } from '@form/adapters/queue';
 import { createPostgresSearchIndex } from '@form/adapters/search';
 import { provision } from '@form/db';
-import type { FormDefinition } from '@form/schema';
+import { reviewUnitAnswersHash } from '@form/logic';
+import { DEFAULT_COMPLIANCE, REGISTRY } from '@form/registry';
+import type { BlockId, FormDefinition, Locale, ReviewUnitId } from '@form/schema';
 import { createTestDatabase } from '@form/testkit';
 import { buildApp } from '../src/app.ts';
 import { parseConfig } from '../src/config.ts';
 import { createFileStore } from '../src/files.ts';
 import { SESSION_COOKIE } from '../src/modules/auth/index.ts';
+import { answersHashToken } from '../src/modules/reviews/answersToken.ts';
+import { sensitive } from '../src/submissions/test-fixtures.ts';
 import { TEST_PASSWORDS } from './global-setup.ts';
 import { draftWith, fieldBlock } from './publishable-draft.ts';
 
@@ -26,6 +30,8 @@ import { draftWith, fieldBlock } from './publishable-draft.ts';
  */
 
 const BROWSER = { 'x-fr-client': 'builder', 'sec-fetch-site': 'same-origin' } as const;
+/** The API's `AUTH_SECRET`, which keys the answers-hash tokens: the tests compute the token a checker would read, as the server does. */
+const AUTH_SECRET = Buffer.alloc(32, 9);
 /** More than any test sends from one address, so the throttle never speaks. */
 const BUDGET = { max: 100_000, windowSeconds: 600 };
 const RESPONDENT = 'asha.rao@respondent.test';
@@ -199,10 +205,25 @@ interface Decision {
   formId?: string;
 }
 
-const hashOf = async (submissionId: string, unitId: string): Promise<string> =>
+/** What `submission_reviews` holds for the unit: the plain sha256 of its answers, which no response of the API may carry. */
+const rawHashOf = async (submissionId: string, unitId: string): Promise<string> =>
   (await owner.query<{ h: string }>(`select encode(answers_hash, 'hex') as h from submission_reviews where submission_id = $1 and unit_id = $2`, [submissionId, unitId])).rows[0]!.h;
 
-/** The POST of a decision. The hash is the unit's current one unless the test says otherwise (`body.answersHash`). */
+/**
+ * The `answersHash` of a unit as the review detail gives it to a checker: the keyed token of the row's current hash. Computed
+ * the way the server does, so a test need not read the detail (and leave a `submission.viewed` record) before each decision;
+ * the tests of the token itself read it from the detail.
+ */
+const hashOf = async (submissionId: string, unitId: string): Promise<string> => {
+  const { rows } = await owner.query<{ org_id: string; h: string; round: number }>(
+    `select org_id, encode(answers_hash, 'hex') as h, round from submission_reviews where submission_id = $1 and unit_id = $2`,
+    [submissionId, unitId],
+  );
+  const row = rows[0]!;
+  return answersHashToken(AUTH_SECRET, { orgId: row.org_id, submissionId, unitId, round: row.round }, Buffer.from(row.h, 'hex'));
+};
+
+/** The POST of a decision. The hash is the unit's current token unless the test says otherwise (`body.answersHash`). */
 async function decide(f: Published, submissionId: string, unitId: string, o: Decision = {}): Promise<LightMyRequestResponse> {
   const body = { decision: 'approve', answersHash: o.body?.['answersHash'] ?? (await hashOf(submissionId, unitId)), ...o.body };
   return call('POST', `/v1/forms/${o.formId ?? f.id}/submissions/${submissionId}/review/units/${unitId}/decisions`, {
@@ -299,7 +320,7 @@ beforeAll(async () => {
     await owner.query(`insert into users (id, email, email_norm, name, email_verified_at, totp_enabled_at) values ($1, $2, $2, $3, now(), ${p.totp ? 'now()' : 'null'})`, [p.id, p.email ?? `u-${p.id.slice(0, 8)}@review-decide.test`, p.name]);
     await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [p.org, p.id, p.role]);
   }
-  const parsed = parseConfig({ NODE_ENV: 'test', DEPLOYMENT_MODE: 'onprem', DATABASE_URL: urls.fr_app, AUTH_DEV_HEADERS: 'true', LOG_LEVEL: 'silent' });
+  const parsed = parseConfig({ NODE_ENV: 'test', DEPLOYMENT_MODE: 'onprem', DATABASE_URL: urls.fr_app, AUTH_DEV_HEADERS: 'true', AUTH_SECRET: AUTH_SECRET.toString('base64url'), LOG_LEVEL: 'silent' });
   if (!parsed.ok) throw new Error(parsed.errors.join('\n'));
   const keyring = parseJobKeyring(`t1:${Buffer.alloc(32, 7).toString('base64url')}`);
   // The composition root's wiring (`main.ts`): a producer queue on the app's own database, and the Postgres search index.
@@ -474,13 +495,13 @@ describe('deciding a unit', () => {
     const sub = await submit(f);
     const read = await ok<{ units: Array<{ unitId: string; answersHash: string }> }>(await detail(f, sub, { as: id.a1 }));
     const hash = read.units.find((u) => u.unitId === 'u_applicant')!.answersHash;
-    // The hash of another unit's answers, and the hash of nothing.
-    for (const wrong of [await hashOf(sub, 'u_notes'), sha('nothing').toString('hex')]) {
+    // The token of another unit's answers, the hash of nothing and the unit's own digest, which the API never gave anyone.
+    for (const wrong of [await hashOf(sub, 'u_notes'), sha('nothing').toString('hex'), await rawHashOf(sub, 'u_applicant')]) {
       const res = await decide(f, sub, 'u_applicant', { as: id.a1, body: { answersHash: wrong } });
       expect(res.statusCode, res.body).toBe(409);
       expect(res.json()).toMatchObject({ code: 'REVIEW_STALE' });
     }
-    expect(await events('review.decided', sub)).toHaveLength(2);
+    expect(await events('review.decided', sub)).toHaveLength(3);
     // The one the detail gave is the current one.
     expect((await decide(f, sub, 'u_applicant', { as: id.a1, body: { answersHash: hash.toUpperCase() } })).statusCode).toBe(200);
   });
@@ -681,7 +702,9 @@ describe('the review detail', () => {
       expect(viewed.at(-1), who).toMatchObject({ actorId: who, outcome: 'success', formId: f.id });
       // Nothing of unit A, in whatever form: not the key, not the text, not the addresses, not the hash.
       const text = res.body;
-      for (const secret of [UNIT_A_TEXT, 'Asha', RESPONDENT, BACKUP, '"id":"name"', '"id":"email"', '"id":"backup"', await hashOf(sub, 'u_applicant')]) expect(text, `${who}: ${secret}`).not.toContain(secret);
+      for (const secret of [UNIT_A_TEXT, 'Asha', RESPONDENT, BACKUP, '"id":"name"', '"id":"email"', '"id":"backup"', await hashOf(sub, 'u_applicant'), await rawHashOf(sub, 'u_applicant')]) expect(text, `${who}: ${secret}`).not.toContain(secret);
+      // No unit's digest is in the response either, only the token of the unit that is theirs.
+      for (const unit of ['u_applicant', 'u_notes']) expect(text, `${who}: the digest of ${unit}`).not.toContain(await rawHashOf(sub, unit));
       expect(body.units.map((u) => [u.unitId, u.answersHash === null])).toEqual([
         ['u_applicant', true],
         ['u_notes', false],
@@ -702,6 +725,7 @@ describe('the review detail', () => {
     expect(res.body).not.toContain(NOTE_TEXT);
     expect(res.body).not.toContain('"note"');
     expect(body.units.find((u) => u.unitId === 'u_applicant')!.answersHash).toBe(await hashOf(sub, 'u_applicant'));
+    expect(res.body).not.toContain(await rawHashOf(sub, 'u_applicant'));
     // One record per read, naming the reader.
     await ok(await detail(f, sub, { as: id.a1 }));
     await ok(await detail(f, sub, { as: id.b1 }));
@@ -830,6 +854,199 @@ describe('the review detail', () => {
     expect(body).toMatchObject({ units: [], decisions: [], redacted: false, submission: { status: 'complete' } });
     expect(Object.keys(body.answers)).toEqual(['name']);
     expect(await events('submission.viewed', submissionId)).toHaveLength(1);
+  });
+});
+
+describe('the answers hash of a unit', () => {
+  /*
+   * `submission_reviews.answers_hash` is the plain sha256 of the unit's stored answers. A checker sees some of those answers
+   * only masked (a sensitive field) or not at all (a block of their own unit worked out from another unit's answers), so a
+   * digest handed to them would let them test guesses at those values offline. The detail gives a keyed token instead.
+   */
+  const calculationOf = (blockId: string, of: string) => {
+    const type = 'calculation';
+    const defaults = DEFAULT_COMPLIANCE[type];
+    return {
+      id: blockId,
+      type,
+      key: blockId,
+      label: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: blockId }] }] },
+      required: false,
+      compliance: { ...defaults, purposeIds: defaults.classification === 'none' ? [] : ['pur_1'] },
+      config: { ...REGISTRY[type].defaultConfig('en-IN' as Locale), expr: { k: 'ref', ref: { kind: 'answer', blockId: of } }, resultType: 'number', display: 'visible' },
+    } as unknown as ReturnType<typeof fieldBlock>;
+  };
+
+  /** Unit A (page 1): a name, a sensitive PAN and an amount. Unit B (page 2): a note and a total worked out from the amount of unit A. */
+  const PAN = 'ABCDE1234F';
+  const AMOUNT = '42';
+  async function maskedForm(title: string): Promise<Published> {
+    const form = await publishDraft(title, (formId) => {
+      const base = draftWith(formId, [fieldBlock('name', 'short_text'), sensitive(fieldBlock('pan', 'short_text')), fieldBlock('amount', 'number'), fieldBlock('note', 'short_text'), calculationOf('total', 'amount')], title);
+      const pages = [
+        { ...base.pages[0]!, children: ['name', 'pan', 'amount'] },
+        { id: 'page_2', children: ['note', 'total'] },
+      ];
+      const units = [
+        { id: 'u_applicant', name: 'Applicant', target: { kind: 'page', pageId: 'page_1' } },
+        { id: 'u_notes', name: 'Notes', target: { kind: 'page', pageId: 'page_2' } },
+      ];
+      return { ...base, pages, review: { units } } as unknown as FormDefinition;
+    });
+    await saveSettings(form.id, [assign('u_applicant'), assign('u_notes', { groupId: groupB, order: 2 })]);
+    return form;
+  }
+  async function submitMasked(f: Published): Promise<string> {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/p/${f.slug}/submissions`,
+      headers: { 'idempotency-key': randomUUID() },
+      payload: { formVersionId: f.versionId, answers: { name: short('Asha'), pan: short(PAN), amount: { type: 'number', value: AMOUNT }, note: short('Fine') }, fields: [], locale: 'en-IN' },
+    });
+    const body = await ok<{ submissionId: string; held?: string }>(res);
+    expect(body.held).toBe('pending_review');
+    return body.submissionId;
+  }
+
+  interface UnitRead {
+    redacted: boolean;
+    units: Array<{ unitId: string; answersHash: string | null }>;
+    answers: Record<string, unknown>;
+    fields: Array<{ id: string; value: string; masked: boolean }>;
+  }
+  const tokenOf = (read: UnitRead, unitId: string): string => read.units.find((u) => u.unitId === unitId)!.answersHash!;
+
+  /** The digests of the unit with the value of `block` set to each guess: what a checker who can guess the hidden value would compute offline. */
+  async function guessDigests(f: Published, sub: string, unitId: string, block: string, guesses: readonly unknown[]): Promise<Map<string, unknown>> {
+    const stored = (await owner.query<{ answers: Record<string, { type: string; value: unknown }> }>('select answers from submissions where id = $1', [sub])).rows[0]!.answers;
+    const compiled = (await owner.query<{ compiled: never }>('select compiled from form_versions where id = $1', [f.versionId])).rows[0]!.compiled;
+    const out = new Map<string, unknown>();
+    for (const guess of guesses) {
+      const digest = reviewUnitAnswersHash(compiled, unitId as ReviewUnitId, { ...stored, [block as BlockId]: { ...stored[block], value: guess } });
+      if (digest !== null) out.set(digest, guess);
+    }
+    return out;
+  }
+
+  it('is not the sha256 of answers the checker sees masked: no guess at a sensitive value hashes to what the detail gives them', async () => {
+    const f = await maskedForm('Hash masked');
+    const sub = await submitMasked(f);
+    const raw = await rawHashOf(sub, 'u_applicant');
+    const res = await detail(f, sub, { as: id.a1 });
+    const read = await ok<UnitRead>(res);
+    // The PAN is masked in what the checker reads: its text is nowhere, only that it is a short text.
+    expect(read.fields.find((x) => x.id === 'pan')).toMatchObject({ masked: true });
+    expect(read.answers['pan']).toEqual({ type: 'short_text', masked: true });
+    expect(res.body).not.toContain(PAN);
+
+    // What a digest would have given away: hashing the true PAN gives the row's hash (so a guess is testable) ...
+    const guesses = ['AAAAA0000A', 'ZZZZZ9999Z', PAN, 'ABCDE1234G'];
+    const digests = await guessDigests(f, sub, 'u_applicant', 'pan', guesses);
+    expect(digests.get(raw)).toBe(PAN);
+    // ... but the token the detail gives is none of those, and neither is any digest of the response in its body.
+    const token = tokenOf(read, 'u_applicant');
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(token).not.toBe(raw);
+    expect([...digests.keys()]).not.toContain(token);
+    for (const unit of ['u_applicant', 'u_notes']) expect(res.body).not.toContain(await rawHashOf(sub, unit));
+    // The token is what a decision names; the digest the row holds is stale to the function.
+    const digestTried = await decide(f, sub, 'u_applicant', { as: id.a1, body: { answersHash: raw } });
+    expect(digestTried.statusCode, digestTried.body).toBe(409);
+    expect(digestTried.json()).toMatchObject({ code: 'REVIEW_STALE' });
+    const decided = await ok<Record<string, unknown>>(await decide(f, sub, 'u_applicant', { as: id.a1, body: { answersHash: token } }));
+    expect(decided).toMatchObject({ unitState: 'approved' });
+  });
+
+  it('is not the sha256 of a block of the checker’s own unit that is hidden because it is worked out from another unit: the amount cannot be guessed from it', async () => {
+    const f = await maskedForm('Hash derived');
+    const sub = await submitMasked(f);
+    await ok(await decide(f, sub, 'u_applicant', { as: id.a1 }));
+    const raw = await rawHashOf(sub, 'u_notes');
+    const res = await detail(f, sub, { as: id.b1 });
+    const read = await ok<UnitRead>(res);
+    // The total is in unit B (theirs) but is worked out from unit A's amount, so it is hidden from them: not in the fields, not in the answers.
+    expect(read.redacted).toBe(true);
+    expect(read.fields.map((x) => x.id)).toEqual(['note']);
+    expect(Object.keys(read.answers)).toEqual(['note']);
+    // A number a checker can guess: every amount from 0 to 99, as the total would hold it, and the true one gives the row's hash.
+    const digests = await guessDigests(f, sub, 'u_notes', 'total', Array.from({ length: 100 }, (_, i) => ({ t: 'number', v: String(i) })));
+    expect(digests.get(raw)).toEqual({ t: 'number', v: AMOUNT });
+    const token = tokenOf(read, 'u_notes');
+    expect([...digests.keys()]).not.toContain(token);
+    expect(token).not.toBe(raw);
+    expect(res.body).not.toContain(raw);
+    // Unit B can still be decided from what the detail gave, and not from the digest.
+    const digestTried = await decide(f, sub, 'u_notes', { as: id.b1, body: { answersHash: raw } });
+    expect(digestTried.json()).toMatchObject({ code: 'REVIEW_STALE' });
+    expect(digestTried.statusCode).toBe(409);
+    const decided = await ok<Record<string, unknown>>(await decide(f, sub, 'u_notes', { as: id.b1, body: { answersHash: token } }));
+    expect(decided).toMatchObject({ unitState: 'approved', submissionStatus: 'complete' });
+  });
+
+  it('gives a member in no group and a data viewer a token too, and not the digest of any unit', async () => {
+    const f = await reviewedForm('Hash for readers');
+    const sub = await submit(f);
+    for (const who of [id.owner, id.viewer, id.bystander]) {
+      const res = await detail(f, sub, { as: who });
+      const read = await ok<UnitRead>(res);
+      for (const unit of ['u_applicant', 'u_notes']) {
+        expect(tokenOf(read, unit), `${who} ${unit}`).toBe(await hashOf(sub, unit));
+        expect(res.body, `${who} ${unit}`).not.toContain(await rawHashOf(sub, unit));
+      }
+    }
+  });
+
+  it('is good for one response, one unit and one read of its answers: another response’s token, another unit’s, a forged one and an edited one are 409 REVIEW_STALE', async () => {
+    const f = await reviewedForm('Hash scope');
+    const one = await submit(f);
+    const two = await submit(f);
+    const tokenOne = tokenOf(await ok<UnitRead>(await detail(f, one, { as: id.a1 })), 'u_applicant');
+    const edited = `${tokenOne.slice(0, 63)}${tokenOne.endsWith('0') ? '1' : '0'}`;
+    for (const [what, token] of [
+      ['another response’s', tokenOne],
+      ['another unit’s', await hashOf(two, 'u_notes')],
+      ['a forged one', randomBytes(32).toString('hex')],
+      ['an edited one', edited],
+    ] as const) {
+      const res = await decide(f, two, 'u_applicant', { as: id.a1, body: { answersHash: token } });
+      expect(res.statusCode, `${what}: ${res.body}`).toBe(409);
+      expect(res.json(), what).toMatchObject({ code: 'REVIEW_STALE' });
+    }
+    // The edited token is no use on the response it was read from either; the real one is.
+    expect((await decide(f, one, 'u_applicant', { as: id.a1, body: { answersHash: edited } })).statusCode).toBe(409);
+    expect((await decide(f, one, 'u_applicant', { as: id.a1, body: { answersHash: tokenOne } })).statusCode).toBe(200);
+    expect(await decisionRows(two)).toEqual([]);
+  });
+
+  it('answers a forged token like a stale one only after the other checks: a member outside the group still gets NOT_IN_REVIEW_GROUP', async () => {
+    const f = await reviewedForm('Hash order');
+    const sub = await submit(f);
+    const forged = randomBytes(32).toString('hex');
+    const outsider = await decide(f, sub, 'u_applicant', { as: id.b1, body: { answersHash: forged } });
+    expect(outsider.statusCode, outsider.body).toBe(403);
+    expect(outsider.json()).toMatchObject({ code: 'NOT_IN_REVIEW_GROUP' });
+    const blocked = await decide(f, sub, 'u_notes', { as: id.b1, body: { answersHash: forged } });
+    expect(blocked.json()).toMatchObject({ code: 'REVIEW_ORDER_BLOCKED' });
+    expect(await decisionRows(sub)).toEqual([]);
+  });
+
+  it('keeps a replay a replay when the unit’s answers changed after the first decision: the token the first request carried still names it', async () => {
+    const f = await reviewedForm('Hash replay');
+    const sub = await submit(f);
+    const token = await hashOf(sub, 'u_applicant');
+    const key = randomUUID();
+    const first = await ok<Record<string, unknown>>(await decide(f, sub, 'u_applicant', { as: id.a1, key, body: { answersHash: token } }));
+    // A later edit of the unit (SUB-09) moves the row's hash on; a retry of the first request is still the first request.
+    await owner.query(`update submission_reviews set answers_hash = $3 where submission_id = $1 and unit_id = $2`, [sub, 'u_applicant', sha('edited later')]);
+    const retry = await decide(f, sub, 'u_applicant', { as: id.a1, key, body: { answersHash: token } });
+    expect(retry.statusCode, retry.body).toBe(200);
+    expect(retry.headers['idempotent-replayed']).toBe('true');
+    expect(retry.json()).toEqual(first);
+    expect(await decisionRows(sub)).toHaveLength(1);
+    // The same key for a decision of the new answers is another request: refused, not replayed.
+    const reused = await decide(f, sub, 'u_applicant', { as: id.a1, key, body: { answersHash: await hashOf(sub, 'u_applicant') } });
+    expect(reused.statusCode, reused.body).toBe(422);
+    expect(reused.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
   });
 });
 

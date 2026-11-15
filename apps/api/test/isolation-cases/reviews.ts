@@ -14,8 +14,8 @@ import type { Fixture, IsolationCase, IsolationDomain, Res, SeedEnv } from './ty
  *
  * The review queue task's: the queue, the review detail of a response and the decision of one of its units. Org A's seed
  * also makes a form with two review units, assigned to that group, and a respondent's answer to it, which the review
- * puts on hold (`pending_review`). The cases aim at that response, its unit and its real answers hash, so a refusal can
- * only be the response not being visible to org B.
+ * puts on hold (`pending_review`). The cases aim at that response, its unit and its real answers hash (the token org A's
+ * checker reads in the review detail), so a refusal can only be the response not being visible to org B.
  */
 
 const bodyOf = (res: Res) => res.json<Record<string, unknown>>();
@@ -91,15 +91,21 @@ async function seed(env: SeedEnv, f: Fixture): Promise<Record<string, string>> {
     'a response to the reviewed form',
   );
   if (submitted.held !== 'pending_review') throw new Error(`seed: the response was not held for review (${JSON.stringify(submitted)})`);
-  const { rows } = await env.owner.query<{ hash: string }>(`select encode(answers_hash, 'hex') as hash from submission_reviews where submission_id = $1 and unit_id = $2`, [submitted.submissionId, REVIEW_UNIT_A]);
-  if (!rows[0]) throw new Error('seed: the held response has no review row');
+  // What a checker of org A holds: the unit's answers hash as the review detail gives it (a keyed token, not the digest the row holds).
+  const read = await expectStatus<{ units: Array<{ unitId: string; answersHash: string | null }> }>(
+    await env.as(f.a.ownerId, f.a.orgId, 'GET', `/v1/forms/${form.id}/submissions/${submitted.submissionId}/review`),
+    200,
+    'the review detail of the held response',
+  );
+  const token = read.units.find((u) => u.unitId === REVIEW_UNIT_A)?.answersHash;
+  if (!token) throw new Error('seed: the review detail gave org A’s owner no answers hash for the unit');
   return {
     reviewGroupId: id,
     reviewGroupName: REVIEW_GROUP_NAME,
     reviewFormId: form.id,
     reviewSubmissionId: submitted.submissionId,
     reviewUnitId: REVIEW_UNIT_A,
-    reviewUnitHash: rows[0].hash,
+    reviewUnitHash: token,
     reviewFormTitle: REVIEW_FORM_TITLE,
     reviewUnitName: REVIEW_UNIT_A_NAME,
     reviewAnswer: REVIEW_ANSWER,
