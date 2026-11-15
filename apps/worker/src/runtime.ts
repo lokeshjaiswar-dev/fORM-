@@ -1,7 +1,7 @@
-import { withTenant, type Db } from '@form/db';
+import { withTenant, type Db, type TenantCtx, type Tx } from '@form/db';
 import type { JobName, JobRequest, Queue, ReceivedJob, SystemJobName, Worker } from '@form/ports';
 import type { Logger } from 'pino';
-import { JOB_DEFINITIONS, type AnyJobDefinition, type JobContext, type JobDefinition } from './jobs/index.ts';
+import { JOB_DEFINITIONS, type AnyJobDefinition, type InTenant, type JobContext, type JobDefinition, type ManualJobContext } from './jobs/index.ts';
 
 export interface RunDeps {
   db: Db;
@@ -12,6 +12,11 @@ export interface RunDeps {
  * One attempt. Org jobs run in `withTenant` as actor `system` with the job's perms; the tenant transaction
  * commits only if the attempt was not interrupted, so a job failed back to the queue by a shutdown leaves no
  * half-done work behind.
+ *
+ * A `transaction: 'manual'` org job gets no transaction: it gets `inTenant(fn)`, which is that same `withTenant` (same
+ * org, actor, perms and request id) for one unit of work at a time, so an SMTP or HTTP call between two units holds no
+ * database connection. Each unit commits on its own and, like the single transaction, is rolled back when the attempt
+ * was interrupted.
  */
 export async function runJob<N extends JobName>(def: JobDefinition<N>, job: ReceivedJob<N>, deps: RunDeps): Promise<void> {
   const { orgId } = job.envelope;
@@ -20,12 +25,26 @@ export async function runJob<N extends JobName>(def: JobDefinition<N>, job: Rece
   try {
     job.signal.throwIfAborted();
     if (orgId === null) {
-      await def.run({ kind: 'system', job, log, db: deps.db } as JobContext<N>);
+      // Both kinds of definition run a system job the same way: no tenant, so there is nothing to open.
+      await def.run({ kind: 'system', job, log, db: deps.db } as JobContext<N> & ManualJobContext<N>);
     } else {
-      await withTenant(deps.db, { orgId, actor: 'system', requestId: `job:${job.id}`, perms: def.perms }, async (tx) => {
-        await def.run({ kind: 'org', job, log, orgId, tx } as JobContext<N>);
-        job.signal.throwIfAborted();
-      });
+      const tenant: TenantCtx = { orgId, actor: 'system', requestId: `job:${job.id}`, perms: def.perms };
+      if (def.transaction === 'manual') {
+        const inTenant: InTenant = async (fn) => {
+          job.signal.throwIfAborted();
+          return withTenant(deps.db, tenant, async (tx: Tx) => {
+            const result = await fn(tx);
+            job.signal.throwIfAborted();
+            return result;
+          });
+        };
+        await def.run({ kind: 'org', job, log, orgId, inTenant } as ManualJobContext<N>);
+      } else {
+        await withTenant(deps.db, tenant, async (tx) => {
+          await def.run({ kind: 'org', job, log, orgId, tx } as JobContext<N>);
+          job.signal.throwIfAborted();
+        });
+      }
     }
     log.info({ ms: Math.round(performance.now() - started) }, 'job done');
   } catch (err) {

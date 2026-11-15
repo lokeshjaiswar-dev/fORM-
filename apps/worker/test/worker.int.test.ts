@@ -233,6 +233,36 @@ describe('a worker', () => {
     await queue.stop({ graceMs: 1000 });
   });
 
+  it('runs a manual org job with inTenant and no tx: each call is its own transaction as actor system with the job’s perms, and RLS shows only its org (WP-1.16, WP-1.18)', async () => {
+    const seen = deferred<Record<string, unknown>>();
+    const inspect = defineJob({
+      name: 'search.reindex',
+      perms: ['forms.read'],
+      transaction: 'manual',
+      async run(ctx) {
+        if (ctx.kind !== 'org') throw new Error('expected an org context');
+        const read = () =>
+          ctx.inTenant(async (tx) => {
+            const { rows } = await tx.execute<Record<string, unknown>>(sql`select current_setting('app.org_id') as org,
+              current_setting('app.actor_kind') as actor, current_setting('app.perms') as perms,
+              current_setting('app.request_id') as request, (select count(*)::int from forms) as forms,
+              (select count(*)::int from forms where org_id <> current_setting('app.org_id')::uuid) as foreign_forms, txid_current()::text as txid`);
+            return rows[0]!;
+          });
+        const first = await read();
+        // Between the two calls nothing is open: this is where an SMTP or HTTP call would be made.
+        const second = await read();
+        seen.resolve({ ...first, hasTx: 'tx' in ctx, separateTransactions: first['txid'] !== second['txid'] });
+      },
+    }) as AnyJobDefinition;
+    const queue = await startRuntime({ jobs: [inspect] });
+    const id = await producer.send('search.reindex', { orgId: a.id, resource: { type: 'form', id: a.form }, data: { formId: a.form, reason: 'bulk_import' } });
+    const { txid: _txid, ...result } = await seen.promise;
+    expect(result).toEqual({ org: a.id, actor: 'system', perms: '{"forms.read"}', request: `job:${id}`, forms: 1, foreign_forms: 0, hasTx: false, separateTransactions: true });
+    await settled(id!);
+    await queue.stop({ graceMs: 1000 });
+  });
+
   it('rejects and audits forged jobs without running them, and dead-letters them', async () => {
     const stranger = producerWith(parseJobKeyring(`t1:${secret()}`));
     const unknownKey = producerWith(parseJobKeyring(`zz:${secret()}`));

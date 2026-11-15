@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import type { Db } from '@form/db';
 import { JOBS, type JobHandler, type JobName, type KeyProvider, type Queue, type ReceivedJob } from '@form/ports';
 import pino from 'pino';
@@ -141,5 +142,133 @@ describe('runJob', () => {
     expect(run).not.toHaveBeenCalled();
     const failing = defineJob({ name: 'partitions.maintain', perms: [], run: async () => Promise.reject(new Error('boom')) });
     await expect(runJob(failing, received('partitions.maintain'), { db, log })).rejects.toThrow('boom');
+  });
+});
+
+/** A `Db` whose transactions run in memory: records the `set_config` parameters `withTenant` sets and how many transactions are open at once. */
+function tenantDb() {
+  const dialect = new PgDialect();
+  const settings: unknown[][] = [];
+  let open = 0;
+  const tx = {
+    execute: vi.fn(async (query: Parameters<PgDialect['sqlToQuery']>[0]) => {
+      settings.push(dialect.sqlToQuery(query).params);
+      return { rows: [] };
+    }),
+  };
+  const transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+    open += 1;
+    try {
+      return await fn(tx);
+    } finally {
+      open -= 1;
+    }
+  });
+  return { db: { transaction } as unknown as Db, transaction, tx, settings, open: () => open };
+}
+
+function receivedFor<N extends JobName>(name: N, orgId: string, signal: AbortSignal = new AbortController().signal): ReceivedJob<N> {
+  return { ...received(name, signal), envelope: { v: 1, orgId, resource: { type: 'form', id: randomUUID() }, data: {}, sig: 'k.x' } as never };
+}
+
+describe('runJob: transaction "manual" (WP-1.16, WP-1.18)', () => {
+  const orgId = randomUUID();
+
+  it('gives a manual org job inTenant and no tx, and opens no transaction until it asks for one', async () => {
+    const t = tenantDb();
+    const seen: Record<string, unknown>[] = [];
+    const def = defineJob({
+      name: 'search.reindex',
+      perms: ['forms.read'],
+      transaction: 'manual',
+      async run(ctx) {
+        seen.push({ ...ctx });
+        expect(t.transaction).not.toHaveBeenCalled();
+      },
+    });
+    const job = receivedFor('search.reindex', orgId);
+    await runJob(def, job, { db: t.db, log });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ kind: 'org', orgId, job });
+    expect(typeof seen[0]!['inTenant']).toBe('function');
+    expect('tx' in seen[0]!).toBe(false);
+    expect(t.transaction).not.toHaveBeenCalled();
+  });
+
+  it('runs each inTenant as actor system with the definition’s perms and request id job:<id>, one transaction per call, none open in between', async () => {
+    const t = tenantDb();
+    const job = receivedFor('search.reindex', orgId);
+    const between: number[] = [];
+    const def = defineJob({
+      name: 'search.reindex',
+      perms: ['forms.read', 'submissions.read'],
+      transaction: 'manual',
+      async run(ctx) {
+        if (ctx.kind !== 'org') throw new Error('expected an org context');
+        expect(await ctx.inTenant(async (tx) => (tx === (t.tx as unknown) ? 'first' : 'other'))).toBe('first');
+        between.push(t.open());
+        await ctx.inTenant(async () => {
+          expect(t.open()).toBe(1);
+        });
+        between.push(t.open());
+      },
+    });
+    await runJob(def, job, { db: t.db, log });
+    expect(t.transaction).toHaveBeenCalledTimes(2);
+    for (const params of t.settings) {
+      expect(params).toEqual([orgId, '', '{}', '{"forms.read","submissions.read"}', 'system', '{}', `job:${job.id}`]);
+    }
+    expect(between).toEqual([0, 0]);
+  });
+
+  it('keeps a "job" definition as it was: one transaction for the whole attempt, handed over as tx', async () => {
+    const t = tenantDb();
+    const run = vi.fn(async (_ctx: unknown) => {});
+    await runJob(defineJob({ name: 'search.reindex', perms: ['forms.read'], run }), receivedFor('search.reindex', orgId), { db: t.db, log });
+    expect(t.transaction).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ kind: 'org', orgId, tx: t.tx }));
+    expect(run.mock.calls[0]![0]).not.toHaveProperty('inTenant');
+  });
+
+  it('gives a manual job with no org (a scope "any" queue) the same system context as any other job', async () => {
+    const t = tenantDb();
+    const seen: unknown[] = [];
+    const def = defineJob({
+      name: 'email.send',
+      perms: [],
+      transaction: 'manual',
+      async run(ctx) {
+        seen.push(ctx.kind === 'system' ? ctx.db : ctx);
+      },
+    });
+    await runJob(def, received('email.send'), { db: t.db, log });
+    expect(seen).toEqual([t.db]);
+    expect(t.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rolls a unit back when its attempt was interrupted, and starts no new unit after that', async () => {
+    const t = tenantDb();
+    const ac = new AbortController();
+    const reason = new Error('shutting down');
+    let second: unknown;
+    const def = defineJob({
+      name: 'search.reindex',
+      perms: [],
+      transaction: 'manual',
+      async run(ctx) {
+        if (ctx.kind !== 'org') throw new Error('expected an org context');
+        const first = await ctx
+          .inTenant(async () => {
+            ac.abort(reason);
+          })
+          .catch((e: unknown) => e);
+        expect(first).toBe(reason);
+        second = await ctx.inTenant(async () => 'ran').catch((e: unknown) => e);
+      },
+    });
+    await expect(runJob(def, receivedFor('search.reindex', orgId, ac.signal), { db: t.db, log })).resolves.toBeUndefined();
+    expect(second).toBe(reason);
+    // The first unit opened a transaction (and threw inside it, which rolls it back); the second never opened one.
+    expect(t.transaction).toHaveBeenCalledTimes(1);
   });
 });
