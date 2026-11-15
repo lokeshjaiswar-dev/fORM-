@@ -82,6 +82,14 @@ export function InvitePage() {
     };
   }, [token]);
 
+  // Signed in as someone else than the invited address: the visitor must sign out first, so the token is not kept for the
+  // next sign-in on this browser, which may be a shared one (BL-235). The link in the email still works.
+  const otherAccount =
+    info?.state === 'open' && session.status === 'signed_in' && session.me.user.email.toLowerCase() !== info.email.toLowerCase();
+  useEffect(() => {
+    if (otherAccount) forgetInvite();
+  }, [otherAccount]);
+
   const accept = async () => {
     if (!token) return;
     setBusy(true);
@@ -118,12 +126,12 @@ export function InvitePage() {
           {info.state !== 'open' ? (
             <FormError message={t(CLOSED[info.state])} />
           ) : session.status === 'signed_in' ? (
-            session.me.user.email.toLowerCase() === info.email.toLowerCase() ? (
+            otherAccount ? (
+              <FormError message={t(M['invite.other_account'], { current: session.me.user.email, email: info.email })} />
+            ) : (
               <Button className="w-full" disabled={busy} onClick={() => void accept()}>
                 {busy ? t(M['invite.busy']) : t(M['invite.accept'], { org: info.orgName })}
               </Button>
-            ) : (
-              <FormError message={t(M['invite.other_account'], { current: session.me.user.email, email: info.email })} />
             )
           ) : session.status === 'signed_out' ? (
             <div className="space-y-2">
