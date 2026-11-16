@@ -229,6 +229,7 @@ function FormSession({ props, meta, base, onRestart }: {
   const [trail, setTrail] = useState<PageId[]>([]);
   const [pageId, setPageId] = useState<PageId | null>(null);
   const [finished, setFinished] = useState<Finished | null>(null);
+  const [endingMinHeight, setEndingMinHeight] = useState<number | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const advancing = useRef(false);
@@ -293,6 +294,9 @@ function FormSession({ props, meta, base, onRestart }: {
     /* Live redirects come from the server, which interpolates the URL (schema §END); preview builds it here. */
     const url = serverRedirect ?? (mode === 'preview' && ending?.kind === 'redirect' ? urlText(ending.url as PlainTemplate, { def, values, meta }) : '');
     const redirect = /^https:/i.test(url) && isSafeUrl(url) ? (url as SafeUrl) : null;
+    /* The ending keeps the height the form had, so the card does not shrink when the respondent submits. */
+    const formHeight = rootRef.current?.getBoundingClientRect().height ?? 0;
+    setEndingMinHeight(formHeight > 0 ? formHeight : undefined);
     setFinished({ endingId: ending?.id ?? endingId, redirect });
     emit({ type: 'submitted', endingId: ending?.id ?? endingId });
     /* The host navigates (the top window, a popup's opener, or nowhere in the builder), after `delayMs`. */
@@ -444,9 +448,11 @@ function FormSession({ props, meta, base, onRestart }: {
       <EndingScreen
         ending={ending}
         confetti={def.behavior.successAnimation && (ending.kind === 'message' ? ending.confetti !== false : false)}
+        confettiStyle={ending.kind === 'message' ? ending.confettiStyle : undefined}
         resolve={{ pipe: (attrs) => templateText([{ pipe: attrs }], ctx) || undefined }}
         url={(value) => urlText(value, ctx)}
         redirecting={finished.redirect !== null && mode === 'live'}
+        minHeight={endingMinHeight}
         onRestart={restart}
       />
     ) : null;

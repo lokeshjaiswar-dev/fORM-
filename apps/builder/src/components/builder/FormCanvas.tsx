@@ -205,7 +205,7 @@ export function FormCanvas() {
         {sectionNavStart && sectionSteps ? <SectionNav steps={sectionSteps.steps} nav={sectionSteps.nav} onSelect={goToSection} /> : null}
         <div className="fr-form-body">
         <div
-          className={cn('mb-8 rounded-md', activeBlockId === TITLE_INSPECTOR_ID && 'ring-2 ring-primary ring-offset-2')}
+          className="mb-8 rounded-md"
           style={titlePresent.headerStyle}
           onClick={(e) => {
             e.stopPropagation();
@@ -341,7 +341,7 @@ export function FormCanvas() {
             </div>
 
             <div
-              className={cn('fr-nav mt-6 rounded-md', activeBlockId === SUBMIT_INSPECTOR_ID && 'ring-2 ring-primary ring-offset-2')}
+              className="fr-nav mt-6 rounded-md"
               data-align={submitAlign}
               onClick={(e) => {
                 e.stopPropagation();
