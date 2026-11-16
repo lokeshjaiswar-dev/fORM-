@@ -1,3 +1,4 @@
+import { Button } from '@dmacq/ui';
 import { useEffect, useMemo } from 'react';
 import { FormProvider, useForm, type FieldValues } from 'react-hook-form';
 import { isAvailable } from '@form/registry';
@@ -6,6 +7,7 @@ import { RendererContext, useRenderer } from '../context.ts';
 import { Block } from '../fields/Field.tsx';
 import { MESSAGES } from '../messages.ts';
 import { useAnswer, type ControlProps } from './hooks.ts';
+import { RowContext } from './rowContext.ts';
 
 type GroupValue = AnswerValueMap['repeating_group'];
 
@@ -50,11 +52,13 @@ function RowFields({
 
   return (
     <RendererContext.Provider value={ctx}>
-      <FormProvider {...methods}>
-        <div className="fr-repeat-fields" onBlur={onBlur}>
-          {fields.map((child) => <Block key={child.id} block={child} />)}
-        </div>
-      </FormProvider>
+      <RowContext.Provider value={rowId}>
+        <FormProvider {...methods}>
+          <div className="fr-repeat-fields" onBlur={onBlur}>
+            {fields.map((child) => <Block key={child.id} block={child} />)}
+          </div>
+        </FormProvider>
+      </RowContext.Provider>
     </RendererContext.Provider>
   );
 }
@@ -110,17 +114,17 @@ export function RepeatingGroup({ block, field }: ControlProps<'repeating_group'>
               onBlur={answer.onBlur}
             />
             {!locked && rows.length > min ? (
-              <button type="button" className="fr-repeat-remove" aria-label={removeLabel} onClick={() => remove(index)}>
+              <Button type="button" variant="ghost" size="xs" aria-label={removeLabel} onClick={() => remove(index)}>
                 {removeLabel}
-              </button>
+              </Button>
             ) : null}
           </div>
         ))}
       </div>
       {!locked && rows.length < max ? (
-        <button type="button" className="fr-repeat-add" onClick={add} id={rows.length === 0 ? field.ids.input : undefined}>
+        <Button type="button" variant="outline" size="sm" onClick={add} id={rows.length === 0 ? field.ids.input : undefined}>
           {addLabel}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

@@ -1,0 +1,17 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
+await p.goto('http://127.0.0.1:5173/forms', { waitUntil: 'networkidle' });
+await p.getByRole('button', { name: 'New form' }).click();
+await p.getByRole('button', { name: /Blank form/ }).click();
+await p.waitForURL(/\/builder\//, { timeout: 20000 });
+await p.waitForTimeout(800);
+await p.getByRole('button', { name: 'Configurable list' }).click();
+await p.waitForTimeout(800);
+const input = p.getByPlaceholder('Your answer').first();
+await input.click({ timeout: 5000 }).catch(e => console.log('CLICKERR', e.message.slice(0,900)));
+await p.waitForTimeout(150);
+console.log('ACTIVE', await p.evaluate(() => document.activeElement?.tagName + ' ' + (document.activeElement?.getAttribute('placeholder') ?? '')));
+console.log('COUNT', await p.getByPlaceholder('Your answer').count());
+const inp = p.getByPlaceholder('Your answer').first(); await inp.click(); await p.waitForTimeout(300); console.log('ACTIVE2', await p.evaluate(() => document.activeElement?.getAttribute('placeholder'))); await inp.pressSequentially('Asha', { delay: 40 }); await p.waitForTimeout(600); console.log('VALUE', await inp.inputValue(), 'ACTIVE3', await p.evaluate(() => document.activeElement?.getAttribute('placeholder')));
+await b.close();

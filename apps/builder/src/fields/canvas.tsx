@@ -12,7 +12,7 @@ import { TILES } from '@/fields/tiles';
 import { labelString, labelStyle } from '@/fields/style';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions';
+import { addChildBlock, focusNextField, requestDeleteBlock, updateBlock } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc, isField, plainText } from '@/lib/definition';
@@ -584,9 +584,8 @@ function NumberCanvas({ block }: { block: BlockOf<'number'> }) {
 
 const CHILD_TILES = TILES.filter((tile) => tile.kind === 'block' && isRepeatableChildType(tile.choice.type));
 
-function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolean }) {
+function RepeatChild({ child, selected, onEnter }: { child: StoredBlock; selected: boolean; onEnter: () => void }) {
   const openInspector = useUiStore((s) => s.openInspector);
-  const requestInsertFocus = useUiStore((s) => s.requestInsertFocus);
   if (child.type === 'unsupported' || !isAvailable(child.type)) return null;
   const View = CANVAS[child.type] as CanvasView<AvailableType>;
   return (
@@ -615,7 +614,7 @@ function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolea
         <InlineEditor
           value={child.label}
           onChange={(label) => updateBlock(child.id, { label })}
-          onEnter={requestInsertFocus}
+          onEnter={onEnter}
           autoFocus={selected}
           fill={false}
           className="mb-1 min-h-7 w-full shrink-0 bg-transparent pr-5 text-left text-[13px] font-medium leading-7"
@@ -625,7 +624,7 @@ function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolea
       ) : isField(child) ? (
         <div className="mb-1 min-h-7 shrink-0" aria-hidden />
       ) : null}
-      <View block={child as never} focused={selected} onEnter={requestInsertFocus} />
+      <View block={child as never} focused={selected} onEnter={onEnter} />
     </div>
   );
 }
@@ -651,7 +650,7 @@ function SectionCanvas({ block }: { block: BlockOf<'section'> }) {
       </p>
       <div className="flex flex-col">
         {children.map((child) => (
-          <RepeatChild key={child.id} child={child} selected={selected === child.id} />
+          <RepeatChild key={child.id} child={child} selected={selected === child.id} onEnter={() => focusNextField(child.id)} />
         ))}
       </div>
       <div className="flex items-center gap-2 border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
@@ -680,14 +679,25 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
   const blocks = useDoc((d) => d.blocks);
   const selected = useUiStore((s) => s.activeBlockId);
   const children = block.config.children.map((id) => blocks[id]).filter((b): b is StoredBlock => !!b && b.type !== 'unsupported' && isAvailable(b.type));
+  const addPickerId = `${block.id}-add-field`;
   return (
     <div className="overflow-hidden rounded-md border" style={{ borderColor: 'var(--fr-inputBorder)' }} onClick={(e) => e.stopPropagation()}>
       <p className="border-b px-3 py-1.5 text-[12px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)' }}>
         {t(M['canvas.repeat_hint'], { min: block.config.minRows, max: block.config.maxRows })}
       </p>
       <div className="grid grid-cols-3 items-start">
-        {children.map((child) => (
-          <RepeatChild key={child.id} child={child} selected={selected === child.id} />
+        {children.map((child, index) => (
+          <RepeatChild
+            key={child.id}
+            child={child}
+            selected={selected === child.id}
+            onEnter={() => {
+              // Enter moves to the list's next field, and from the last one to the "add a field" picker.
+              const next = children[index + 1];
+              if (next) useUiStore.getState().setActiveBlock(next.id);
+              else document.getElementById(addPickerId)?.focus();
+            }}
+          />
         ))}
       </div>
       <div className="flex items-center gap-2 border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
@@ -698,7 +708,7 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
             if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
           }}
         >
-          <SelectTrigger className="h-8 min-w-[10rem]" aria-label={t(M['canvas.repeat_pick'])}>
+          <SelectTrigger id={addPickerId} className="h-8 min-w-[10rem]" aria-label={t(M['canvas.repeat_pick'])}>
             <SelectValue placeholder={t(M['canvas.repeat_pick'])} />
           </SelectTrigger>
           <SelectContent>

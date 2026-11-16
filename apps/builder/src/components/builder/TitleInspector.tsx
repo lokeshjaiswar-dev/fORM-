@@ -2,6 +2,7 @@ import { defineMessages } from '@form/i18n';
 import { FORM_TITLE_WEIGHTS, type FormTitleStyle, type FormTitleWeight, type HexColor } from '@form/schema';
 import { TITLE_SECTION_ID } from '@form/renderer';
 import { t } from '@/i18n';
+import { useDraft } from '@/lib/useDraft';
 import { setTitleStyle } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Field, SectionTitle, SelectField } from '@/components/builder/inspector/parts';
@@ -52,6 +53,44 @@ function ColorField({ label, value, fallback, onChange }: { label: string; value
   );
 }
 
+/**
+ * Typing is free: the text is only clamped to 20–72 when the respondent leaves the field or presses Enter, so clearing
+ * the box and typing a new size is not cut short by the minimum on the first keystroke.
+ */
+function TitleSizeInput({ value, onCommit }: { value: number | undefined; onCommit: (sizePx: number | undefined) => void }) {
+  const [draft, setDraft] = useDraft(value === undefined ? '' : String(value));
+  const commit = () => {
+    const raw = draft.trim();
+    if (!raw) {
+      setDraft('');
+      onCommit(undefined);
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      setDraft(value === undefined ? '' : String(value));
+      return;
+    }
+    const clamped = Math.min(72, Math.max(20, Math.round(n)));
+    setDraft(String(clamped));
+    onCommit(clamped);
+  };
+  return (
+    <Input
+      type="number"
+      min={20}
+      max={72}
+      className="h-8"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+      }}
+    />
+  );
+}
+
 const weightLabel = (weight: FormTitleWeight): string => t(M[`inspector.form_title_weight_${weight}`]);
 
 export function TitleInspector() {
@@ -64,21 +103,7 @@ export function TitleInspector() {
       <p className="text-[12px] text-muted-foreground">{t(M['inspector.form_title_theme_hint'])}</p>
       <ColorField label={t(M['inspector.form_title_text_color'])} value={style.textColor} fallback="#111111" onChange={(textColor) => set({ textColor })} />
       <Field label={t(M['inspector.form_title_size'])} hint={t(M['inspector.form_title_size_hint'])}>
-        <Input
-          type="number"
-          min={20}
-          max={72}
-          className="h-8"
-          value={style.sizePx ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value.trim();
-            if (!raw) set({ sizePx: undefined });
-            else {
-              const sizePx = Number(raw);
-              if (Number.isFinite(sizePx)) set({ sizePx: Math.min(72, Math.max(20, Math.round(sizePx))) });
-            }
-          }}
-        />
+        <TitleSizeInput value={style.sizePx} onCommit={(sizePx) => set({ sizePx })} />
       </Field>
       <Field label={t(M['inspector.form_title_align'])}>
         <ToggleGroup

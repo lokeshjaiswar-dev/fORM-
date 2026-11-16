@@ -36,6 +36,8 @@ export interface EvalState {
   hiddenOptions: Readonly<Partial<Record<BlockId, OptionId[]>>>;
   /** Answers after defaults/captures/set_value/calculations, with invisible, disabled and off-path answers removed. */
   values: Answers;
+  /** Formulas inside repeating-group rows: each row's result, keyed by the calculation's block id then the row id. Not stored as answers. */
+  rowValues?: Readonly<Partial<Record<BlockId, Readonly<Record<string, ScalarValue>>>>>;
   variables: Readonly<Partial<Record<VariableId, ScalarValue>>>;
   submitBlocks: Array<{ ruleId: RuleId; message: string; atPage?: PageId; anchorBlockId?: BlockId }>;
   nextPage(from: PageId): PageId | { end: EndingId };

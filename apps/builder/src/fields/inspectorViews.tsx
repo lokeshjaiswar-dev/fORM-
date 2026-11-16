@@ -2,7 +2,7 @@ import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
 import {
   CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS,
-  type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
+  type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
 } from '@form/schema';
 import { patternProblem, patternUnsupportedFeature } from '@form/validation';
 import { t } from '@/i18n';
@@ -11,14 +11,14 @@ import { Field, NumberField, SectionTitle, SelectField, TextField, ToggleRow } f
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
-import { formatFormula, parseFormula } from '@/lib/formula';
+import { formatFormula, markRowRefs, parseFormula } from '@/lib/formula';
 import { patchBlockConfig } from '@/fields/configSink';
 import { addChildBlock, requestDeleteBlock } from '@/state/actions';
 import { currentDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
 import { ChoiceOtherValidation, FileMinLimits } from '@/fields/validationViews';
-import { Button, Input } from '@dmacq/ui';
+import { Button, Input, TextLink } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
 
@@ -613,9 +613,9 @@ export function SectionGeneral({ block }: InspectorProps<'section'>) {
         const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
         return (
           <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
-            <button type="button" className="truncate text-left hover:underline" onClick={() => useUiStore.getState().openInspector(id)}>
+            <TextLink asChild color="neutral" size="small" className="min-w-0 truncate text-left" ><button type="button" onClick={() => useUiStore.getState().openInspector(id)}>
               {name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}
-            </button>
+            </button></TextLink>
             <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" aria-label={t(M['inspector.repeat_remove_field'])} onClick={() => requestDeleteBlock(id)}>×</Button>
           </div>
         );
@@ -854,20 +854,42 @@ function listParentOf(id: string): boolean {
   return Object.values(currentDoc().blocks).some((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never));
 }
 
+/** The repeating group a block sits directly inside, if any. */
+function groupOf(id: string): string | undefined {
+  return Object.values(currentDoc().blocks).find((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never))?.id;
+}
+
 export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const doc = currentDoc();
+  // Inside a list row, a formula works row by row, so list fields are inserted by plain key.
+  // Outside a list, a list field means the sum of all its rows.
+  const formulaInRow = listParentOf(block.id);
   const sources = Object.values(doc.blocks).flatMap((b) => {
     if (!b || b.id === block.id || !isField(b) || !CALC_SOURCES.has(b.type)) return [];
     const list = listParentOf(b.id);
-    const insert = list ? `sum(${b.key})` : b.key;
-    return [{ id: b.id, key: b.key, insert, label: list ? `sum(${plainText(b.label) || b.key})` : plainText(b.label) || b.key }];
+    const name = plainText(b.label) || b.key;
+    const useSum = list && !formulaInRow;
+    /* The chip, the formula text and the saved formula all use the field's name; the key is only used to parse. */
+    return [{ id: b.id, key: b.key, name, insert: useSum ? `sum(${name})` : name }];
   });
   const keys = new Map(sources.map((s) => [s.key, s.id]));
-  const labels = new Map(sources.map((s) => [s.id, s.key]));
-  const stored = formatFormula(block.config.expr, labels);
+  const names = new Map(sources.map((s) => [s.id, s.name]));
+  /* Field names (and sum(name)) in the formula text, mapped back to keys before parsing. Longest first; whole words only. */
+  const nameToKey = new Map<string, string>();
+  for (const s of sources) {
+    nameToKey.set(s.name, s.key);
+    nameToKey.set(`sum(${s.name})`, `sum(${s.key})`);
+  }
+  const nameAlternatives = [...nameToKey.keys()].sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const nameRegex = nameAlternatives.length > 0 ? new RegExp(`(?<![\\p{L}\\p{N}_])(${nameAlternatives.join('|')})(?![\\p{L}\\p{N}_])`, 'gu') : null;
+  const toKeys = (text: string): string => (nameRegex ? text.replace(nameRegex, (m) => nameToKey.get(m) ?? m) : text);
+  const stored = formatFormula(block.config.expr, names);
   const shown = stored === '0' && block.config.expr.k === 'lit' ? '' : stored;
   const [draft, setDraft] = useDraft(shown);
-  const parsed = parseFormula(draft, keys);
+  const parsed = parseFormula(toKeys(draft), keys);
+  const formulaGroup = groupOf(block.id);
+  /* Same-list fields are read per row: a formula inside a list works on each row's own values. */
+  const toExpr = (expr: Expr): Expr => markRowRefs(expr, (id) => formulaGroup !== undefined && groupOf(id) === formulaGroup);
   return (
     <>
       <TextField
@@ -878,8 +900,8 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
         placeholder="qty * price"
         onChange={(text) => {
           setDraft(text);
-          const next = parseFormula(text, keys);
-          if (next.ok) setConfig(block, { expr: next.expr });
+          const next = parseFormula(toKeys(text), keys);
+          if (next.ok) setConfig(block, { expr: toExpr(next.expr) });
         }}
       />
       <SectionTitle>{t(M['inspector.calc_fields'])}</SectionTitle>
@@ -896,11 +918,11 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
               onClick={() => {
                 const text = draft.trim() ? `${draft.trimEnd()} ${source.insert}` : source.insert;
                 setDraft(text);
-                const next = parseFormula(text, keys);
-                if (next.ok) setConfig(block, { expr: next.expr });
+                const next = parseFormula(toKeys(text), keys);
+                if (next.ok) setConfig(block, { expr: toExpr(next.expr) });
               }}
             >
-              {source.label}
+              {source.insert}
             </Button>
           ))}
         </div>
@@ -915,8 +937,8 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
             onClick={() => {
               const text = `${draft}${draft && !draft.endsWith(' ') ? ' ' : ''}${op} `;
               setDraft(text);
-              const next = parseFormula(text, keys);
-              if (next.ok) setConfig(block, { expr: next.expr });
+              const next = parseFormula(toKeys(text), keys);
+              if (next.ok) setConfig(block, { expr: toExpr(next.expr) });
             }}
           >
             {op}
@@ -1391,9 +1413,9 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
         const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
         return (
           <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
-            <button type="button" className="truncate text-left hover:underline" onClick={() => useUiStore.getState().openInspector(id)}>
+            <TextLink asChild color="neutral" size="small" className="min-w-0 truncate text-left" ><button type="button" onClick={() => useUiStore.getState().openInspector(id)}>
               {name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}
-            </button>
+            </button></TextLink>
             <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" aria-label={t(M['inspector.repeat_remove_field'])} onClick={() => requestDeleteBlock(id)}>×</Button>
           </div>
         );

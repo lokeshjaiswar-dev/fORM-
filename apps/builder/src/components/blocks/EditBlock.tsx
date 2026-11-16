@@ -7,7 +7,7 @@ import { t } from '@/i18n';
 import { CANVAS, type CanvasProps } from '@/fields/canvas';
 import { blockStyleVars, labelStyle } from '@/fields/style';
 import { isField, plainText } from '@/lib/definition';
-import { updateBlock } from '@/state/actions';
+import { focusNextField, updateBlock } from '@/state/actions';
 import { useUiStore } from '@/state/uiStore';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 
@@ -21,7 +21,6 @@ const M = defineMessages('builder', {
 /** One block on the canvas: the label editor of a field and its type's canvas view (FND-03). */
 export function EditBlock({ block }: { block: StoredBlock }) {
   const focused = useUiStore((s) => s.activeBlockId === block.id);
-  const requestInsertFocus = useUiStore((s) => s.requestInsertFocus);
 
   if (block.type === 'unsupported' || !isAvailable(block.type)) {
     const type = block.type === 'unsupported' ? block.originalType : block.type;
@@ -33,7 +32,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
       <EyeOff className="size-3" /> {t(M['block.hidden_until'])}
     </p>
   ) : null;
-  const props = { block, focused, onEnter: requestInsertFocus } as CanvasProps<AvailableType>;
+  const props = { block, focused, onEnter: () => focusNextField(block.id) } as CanvasProps<AvailableType>;
 
   if (!isField(block)) {
     return (
@@ -52,7 +51,7 @@ export function EditBlock({ block }: { block: StoredBlock }) {
           <InlineEditor
             value={block.label}
             onChange={(label) => updateBlock(block.id, { label })}
-            onEnter={requestInsertFocus}
+            onEnter={() => focusNextField(block.id)}
             autoFocus={focused}
             fill={false}
             editorClassName="whitespace-pre!"

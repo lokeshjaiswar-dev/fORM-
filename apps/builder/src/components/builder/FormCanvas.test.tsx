@@ -159,6 +159,16 @@ describe('FormCanvas', () => {
     expect(screen.getByRole('listbox').closest('[data-slash-menu]')).toHaveStyle({ color: 'var(--popover-foreground)' });
   });
 
+  it('Enter on the last field moves the cursor to the insert row', async () => {
+    resetStore([block('short_text', 'a', { label: 'Name' })]);
+    renderCanvas();
+    const user = userEvent.setup();
+    const label = screen.getByRole('textbox', { name: 'Type a question' });
+    label.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByPlaceholderText('Type ‘/’ to insert blocks')).toHaveFocus();
+  });
+
   it('typing text on the insert line adds a paragraph', async () => {
     renderCanvas();
     const user = userEvent.setup();

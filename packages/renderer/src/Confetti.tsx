@@ -131,7 +131,7 @@ export function Confetti({ style = 'classic' }: { style?: ConfettiStyle | undefi
     function explode(p: Particle) {
       for (let i = 0; i < 120; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = rand(1.5, 6);
+        const speed = rand(1, 3.5);
         particles.push({ ...make('spark', p.x, p.y, Math.cos(angle) * speed, Math.sin(angle) * speed, rand(3, 6), pick(colors)), life: 60 });
       }
     }
@@ -158,7 +158,7 @@ export function Confetti({ style = 'classic' }: { style?: ConfettiStyle | undefi
         for (let i = 0; i < 2; i++) particles.push(make('bubble', rand(0, w), h + 20, 0, -rand(1, 2.4), rand(6, 16)));
       }
       if (style === 'sunset' && frame < 220 && frame % 7 === 1) {
-        const rocket = make('rocket', rand(w * 0.1, w * 0.9), h + 10, rand(-2.5, 2.5), -rand(6, 9), rand(9, 13));
+        const rocket = make('rocket', rand(w * 0.1, w * 0.9), h + 10, rand(-1.5, 1.5), -rand(3.5, 5), rand(9, 13));
         rocket.target = rand(h * 0.2, h * 0.4);
         particles.push(rocket);
       }

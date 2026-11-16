@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
+import { Button, TextLink } from '@dmacq/ui';
 import { t } from '@/i18n';
 
 const M = defineMessages('builder', {
@@ -67,20 +68,20 @@ function Row({
     <div className={`rounded-sm ${active ? 'bg-state-hover' : ''}`}>
       <div className="flex min-w-0 items-center gap-1 py-0.5 pr-1 text-[12px]" style={{ paddingLeft: 8 + depth * 12 }}>
         {expandable ? (
-          <button type="button" className="flex size-5 shrink-0 items-center justify-center text-muted-foreground" aria-expanded={open} aria-label={label} onClick={onToggle}>
+          <Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" aria-expanded={open} aria-label={label} onClick={onToggle}>
             {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-          </button>
+          </Button>
         ) : (
           <span className="size-5 shrink-0" />
         )}
-        <button type="button" className="min-w-0 truncate text-left font-medium" onClick={onLabelClick ?? onToggle}>
+        <TextLink asChild color="neutral" underline={false} size="small"><button type="button" className="min-w-0 truncate text-left font-medium" onClick={onLabelClick ?? onToggle}>
           {label}
-        </button>
+        </button></TextLink>
         {hint ? <span className="shrink-0 text-muted-foreground">{hint}</span> : null}
         {value !== undefined ? (
-          <button type="button" className="ml-auto min-w-0 truncate text-left text-muted-foreground" onClick={onValueClick ?? onLabelClick ?? onToggle}>
+          <TextLink asChild color="neutral" underline={false} size="small"><button type="button" className="ml-auto min-w-0 truncate text-left text-muted-foreground" onClick={onValueClick ?? onLabelClick ?? onToggle}>
             {value}
-          </button>
+          </button></TextLink>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-1 pb-1" style={{ paddingLeft: 28 + depth * 12 }}>{actions}</div> : null}
@@ -117,12 +118,12 @@ function Node({
 
   const actions = showActions ? (
     <>
-      <button type="button" className="rounded-sm px-1.5 py-0.5 text-[11px] text-primary hover:bg-muted/60" onClick={() => onUse('label')}>
+      <Button type="button" variant="ghost" size="xs" onClick={() => onUse('label')}>
         {t(M['inspector.api_use_label'])}
-      </button>
-      <button type="button" className="rounded-sm px-1.5 py-0.5 text-[11px] text-primary hover:bg-muted/60" onClick={() => onUse('value')}>
+      </Button>
+      <Button type="button" variant="ghost" size="xs" onClick={() => onUse('value')}>
         {t(M['inspector.api_use_value'])}
-      </button>
+      </Button>
     </>
   ) : null;
 

@@ -24,8 +24,7 @@ const M = defineMessages('builder', {
   'responses.unreadable': 'Saved responses could not be read.',
   'responses.missing': 'This form is not in this browser.',
   'responses.submitted': 'Submitted {when}',
-  'responses.fields': '{n, plural, one {# field} other {# fields}}',
-  'responses.view_data': 'View data',
+  'responses.view_data': 'View',
   'responses.data_title': 'Submitted answers',
   'responses.close': 'Close',
   'responses.untitled': 'Untitled form',
@@ -49,8 +48,9 @@ function merge(local: SubmissionSummary[], remote: SubmissionSummary[] | null): 
   return [...byId.values()].sort((a, b) => (a.submittedAt < b.submittedAt ? 1 : a.submittedAt > b.submittedAt ? -1 : 0));
 }
 
-function previewFields(fields: ReadableField[], n = 3): ReadableField[] {
-  return fields.filter((field) => field.value || field.media?.length).slice(0, n);
+/** A field carries something worth showing: text or an attached file or picture. */
+function hasContent(field: ReadableField | undefined): boolean {
+  return !!field && (!!field.value.trim() || !!field.media?.length);
 }
 
 function StoredFile({ fileId, name, mime }: { fileId: string; name: string; mime?: string }) {
@@ -97,18 +97,27 @@ function FieldMedia({ media }: { media: AnswerMedia[] }) {
   );
 }
 
-function FieldValue({ field, compact }: { field: ReadableField; compact?: boolean }) {
+/** Full-size value for the detail dialog: text plus any attached files or pictures. */
+function FieldValue({ field }: { field: ReadableField }) {
   const files = field.media?.filter((item) => item.fileId) ?? [];
   const pictures = field.media?.filter((item) => item.assetId) ?? [];
   const fileNames = files.map((item) => item.name).join(', ');
   const hideFileName = files.length > 0 && (!field.value || field.value === fileNames);
   return (
     <>
-      {field.value && !hideFileName ? <span className={compact ? 'truncate' : 'whitespace-pre-wrap'}>{field.value}</span> : null}
+      {field.value && !hideFileName ? <span className="whitespace-pre-wrap">{field.value}</span> : null}
       {pictures.length ? <FieldMedia media={pictures} /> : null}
       {files.length ? <FieldMedia media={files} /> : null}
     </>
   );
+}
+
+/** Short text for a table cell; attachments are listed by name, full previews live in the dialog. */
+function cellText(field: ReadableField | undefined): string {
+  if (!field) return '';
+  const names = field.media?.map((item) => item.name).filter(Boolean) ?? [];
+  const parts = [field.value.trim(), ...names].filter((part, i, all) => part && all.indexOf(part) === i);
+  return parts.join(', ');
 }
 
 export function ResponsesPage() {
@@ -168,14 +177,29 @@ export function ResponsesPage() {
   }, [forms, id, submissions]);
 
   const rows = useMemo(
-    () => (records ?? []).map((record) => ({ record, fields: readableFields(definition, record) })),
+    () =>
+      (records ?? []).map((record) => {
+        const fields = readableFields(definition, record);
+        return { record, fields, byKey: new Map(fields.map((field) => [field.key, field])) };
+      }),
     [definition, records],
   );
 
-  const openFields = open ? readableFields(definition, open) : [];
+  /** Only fields that have an answer in at least one response, in form order. */
+  const columns = useMemo(() => {
+    const seen = new Map<string, ReadableField>();
+    for (const row of rows) {
+      for (const field of row.fields) {
+        if (!seen.has(field.key) && hasContent(field)) seen.set(field.key, field);
+      }
+    }
+    return [...seen.values()];
+  }, [rows]);
+
+  const openFields = open ? readableFields(definition, open).filter(hasContent) : [];
 
   return (
-    <main className="mx-auto w-full max-w-[720px] px-8 pb-24 pt-[72px] text-foreground">
+    <main className="mx-auto w-full max-w-[1200px] px-8 pb-24 pt-[72px] text-foreground">
       <Button variant="ghost" size="sm" asChild className="-ml-2 mb-6">
         <Link to="/forms">
           <ArrowLeft />
@@ -210,42 +234,45 @@ export function ResponsesPage() {
           <p className="mt-4 max-w-[360px] text-[15px] leading-6 text-muted-foreground">{t(M['responses.empty'])}</p>
         </div>
       ) : (
-        <ul className="mt-8 space-y-3">
-          {rows.map(({ record, fields }, index) => {
-            const preview = previewFields(fields);
-            return (
-              <li key={record.id}>
-                <div className="rounded-[12px] border border-border bg-background px-5 py-4 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[13px] font-medium text-muted-foreground">
-                        #{rows.length - index}
-                        <span className="mx-2 text-border">·</span>
-                        {t(M['responses.submitted'], { when: when(record.submittedAt) })}
-                      </p>
-                      <p className="mt-0.5 text-[13px] text-text-subtle">{t(M['responses.fields'], { n: fields.length })}</p>
-                    </div>
+        <div className="mt-8 overflow-x-auto rounded-[12px] border border-border bg-background">
+          <table className="w-full border-collapse text-left text-[14px]">
+            <thead className="bg-surface-subtle text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th scope="col" className="sticky left-0 z-10 w-12 bg-surface-subtle px-4 py-3 font-semibold">#</th>
+                <th scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">{t(M['responses.title'])}</th>
+                {columns.map((column) => (
+                  <th key={column.key} scope="col" className="min-w-[160px] px-4 py-3 font-semibold">
+                    {column.label}
+                  </th>
+                ))}
+                <th scope="col" className="px-4 py-3">
+                  <span className="sr-only">{t(M['responses.view_data'])}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map(({ record, byKey }, index) => (
+                <tr key={record.id} className="align-top transition-colors hover:bg-surface-subtle">
+                  <td className="sticky left-0 bg-background px-4 py-3 tabular-nums text-muted-foreground">{rows.length - index}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{when(record.submittedAt)}</td>
+                  {columns.map((column) => {
+                    const text = cellText(byKey.get(column.key));
+                    return (
+                      <td key={column.key} className="max-w-[280px] px-4 py-3 break-words">
+                        {text}
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3 text-right">
                     <Button variant="outline" size="sm" onClick={() => setOpen(record)}>
                       {t(M['responses.view_data'])}
                     </Button>
-                  </div>
-                  {preview.length ? (
-                    <dl className="mt-4 grid gap-3 border-t border-border pt-4">
-                      {preview.map((field) => (
-                        <div key={field.key} className="min-w-0">
-                          <dt className="text-[12px] text-muted-foreground">{field.label}</dt>
-                          <dd className="mt-0.5 text-[15px] leading-6">
-                            <FieldValue field={field} compact />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <Dialog open={open !== null} onOpenChange={(next) => !next && setOpen(null)}>
@@ -254,14 +281,13 @@ export function ResponsesPage() {
             <DialogTitle>{t(M['responses.data_title'])}</DialogTitle>
             <DialogDescription>{open ? t(M['responses.submitted'], { when: when(open.submittedAt) }) : null}</DialogDescription>
           </DialogHeader>
-          {open && openFields.length === 0 ? <p className="text-sm text-muted-foreground">{t(M['responses.empty'])}</p> : null}
           {open ? (
             <dl className="space-y-0">
               {openFields.map((field, i) => (
                 <div key={field.key} className={i === 0 ? 'pb-4' : 'border-t border-border py-4'}>
                   <dt className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{field.label}</dt>
                   <dd className="mt-1.5 text-[16px] leading-6">
-                    {field.value || field.media?.length ? <FieldValue field={field} /> : '—'}
+                    <FieldValue field={field} />
                   </dd>
                 </div>
               ))}

@@ -106,6 +106,28 @@ export function parseFormula(text: string, fields: ReadonlyMap<string, BlockId>)
   return result;
 }
 
+/**
+ * Marks references to fields in the same repeating-group row as row-scoped (`row: 'current'`), so a formula inside a
+ * list is evaluated once per row. `sameRow` says whether a referenced block sits in the formula's own row group.
+ */
+export function markRowRefs(expr: Expr, sameRow: (id: BlockId) => boolean): Expr {
+  const go = (e: Expr): Expr => {
+    switch (e.k) {
+      case 'ref':
+        return e.ref.kind === 'answer' && sameRow(e.ref.blockId) ? { ...e, ref: { ...e.ref, row: 'current' } } : e;
+      case 'unary':
+        return { ...e, arg: go(e.arg) };
+      case 'call':
+        return { ...e, args: e.args.map(go) };
+      case 'binary':
+        return { ...e, left: go(e.left), right: go(e.right) };
+      default:
+        return e;
+    }
+  };
+  return go(expr);
+}
+
 const PREC: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2 };
 
 export function formatFormula(expr: Expr, keys: ReadonlyMap<BlockId, string>): string {

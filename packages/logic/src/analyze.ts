@@ -97,7 +97,10 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     if (block.type === 'calculation') {
       const reads = new Set<string>();
       if (block.config.expr.k !== 'lit') usesExpr = true;
+      /* A formula inside a repeating group is typed per row, so same-row references are allowed here. */
+      ctx.rowGroup = (Object.values(def.blocks).find((b) => b?.type === 'repeating_group' && b.config.children.includes(blockId)) as { id: BlockId } | undefined)?.id;
       const typed = typeExpr(ctx, block.config.expr, at('expr'), reads);
+      ctx.rowGroup = undefined;
       if (typed?.list) {
         ctx.issue('expr_type_error', at('expr'), 'a formula is a number; use sum(field) to add every row of a list field');
       }

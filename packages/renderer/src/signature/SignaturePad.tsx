@@ -1,3 +1,4 @@
+import { TextLink } from '@dmacq/ui';
 import { useEffect, useRef } from 'react';
 
 type Point = { x: number; y: number };
@@ -136,9 +137,9 @@ export function SignaturePad({ disabled, onChange, penColor = 'var(--fr-text)', 
         style={{ height: `${heightPx}px` }}
       />
       {disabled ? null : (
-        <button type="button" onClick={clear} className="fr-link-button fr-signature-clear">
+        <TextLink asChild color="neutral" size="small" className="fr-signature-clear"><button type="button" onClick={clear}>
           {clearLabel}
-        </button>
+        </button></TextLink>
       )}
     </div>
   );

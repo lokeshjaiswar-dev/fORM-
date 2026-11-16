@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '@dmacq/ui';
 import { defineMessages } from '@form/i18n';
 import { REGISTRY, type AvailableType } from '@form/registry';
 import { type BlockOf, type CountryCode, type DateBound, type DateLimits, type IsoDate, type IsoTime, type SchemaLike, type Weekday } from '@form/schema';
@@ -57,9 +58,9 @@ function ConfigProblem({ block }: { block: BlockOf<AvailableType> }) {
   if (parsed.success) return null;
   const issues = (parsed.error as { issues?: Array<{ message: string }> }).issues ?? [];
   return (
-    <p role="alert" className="text-[12px] text-destructive">
-      {t(M['inspector.config_problem'], { problem: issues.map((i) => i.message).join('; ') })}
-    </p>
+    <Alert variant="negative" emphasis="subtle" role="alert">
+      <AlertDescription>{t(M['inspector.config_problem'], { problem: issues.map((i) => i.message).join('; ') })}</AlertDescription>
+    </Alert>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Button } from '@dmacq/ui';
 import { useState } from 'react';
 import { isAvailable } from '@form/registry';
 import type { StoredBlock } from '@form/schema';
@@ -29,9 +30,9 @@ export function Section({ block }: ControlProps<'section'>) {
   }
   return (
     <section className="fr-section">
-      <button type="button" className="fr-section-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <Button type="button" variant="ghost" className="fr-section-toggle h-auto w-full justify-start whitespace-normal text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <span className="fr-section-title"><RichTextView doc={c.title} inline resolve={resolve} /></span>
-      </button>
+      </Button>
       {open ? body : null}
     </section>
   );

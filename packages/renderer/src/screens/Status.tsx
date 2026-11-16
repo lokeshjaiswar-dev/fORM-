@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Button } from '@dmacq/ui';
+import { Button, Input } from '@dmacq/ui';
 import type { MessageId } from '@form/i18n';
 import type { RuntimeStatus } from '@form/schema';
 import { useRenderer } from '../context.ts';
@@ -51,7 +51,7 @@ export function StatusScreen({ status, onEvent, onUnlock }: {
           }}
         >
           <label className="fr-label" htmlFor={inputId}>{t(MESSAGES['password.label'])}</label>
-          <input id={inputId} className="fr-input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input id={inputId} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <Button type="submit">{t(MESSAGES['password.submit'])}</Button>
         </form>
       ) : null}

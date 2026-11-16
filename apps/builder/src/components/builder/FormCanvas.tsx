@@ -86,6 +86,12 @@ function parseLayout(key: string): CanvasPage[] {
   });
 }
 
+/** True for a text box, select or contenteditable area: typing there must keep its focus. */
+function isTextEntry(target: EventTarget | Element | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]') !== null;
+}
+
 export function FormCanvas() {
   const title = useDoc((d) => d.title);
   const titleStyle = useDoc((d) => d.titleStyle);
@@ -117,6 +123,7 @@ export function FormCanvas() {
   const titleRef = useRef<HTMLInputElement>(null);
   const insertRef = useRef<HTMLInputElement>(null);
   const insertFocusKey = useUiStore((s) => s.insertFocusKey);
+  const seenInsertFocus = useRef(insertFocusKey);
   const activeBlockId = useUiStore((s) => s.activeBlockId);
   const showStart = !started && ids.length === 0 && pages.length === 1;
   const photo = pagePhoto(tokens);
@@ -128,7 +135,16 @@ export function FormCanvas() {
   }, [showStart]);
 
   useEffect(() => {
-    if (!showStart && !activeBlockId) insertRef.current?.focus();
+    if (showStart) return;
+    // Enter on the last field asks for this row while the label editor is still focused.
+    const requested = insertFocusKey !== seenInsertFocus.current;
+    seenInsertFocus.current = insertFocusKey;
+    if (requested) {
+      insertRef.current?.focus();
+      return;
+    }
+    // Other clears must not steal focus from a field the author is typing in.
+    if (!activeBlockId && !isTextEntry(document.activeElement)) insertRef.current?.focus();
   }, [showStart, insertFocusKey, activeBlockId]);
 
   const closeSlash = () => {
@@ -154,7 +170,10 @@ export function FormCanvas() {
         fontFamily: 'var(--fr-font)',
         fontSize: 'var(--fr-size)',
       }}
-      onClick={() => setActiveBlock(null)}
+      onClick={(e) => {
+        // Clicks inside a field (including the rows of a configurable list) must not clear the selection.
+        if (!isTextEntry(e.target)) setActiveBlock(null);
+      }}
     >
       <div className="grid min-h-full w-full">
       {photo ? (

@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { useUiStore } from '@/state/uiStore';
+import { Button } from '@dmacq/ui';
 
 const M = defineMessages('builder', {
   'start.blank': 'Press Enter to start from scratch',
@@ -34,14 +35,15 @@ export function EmptyStart() {
 
 function StartRow({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="lg"
       onClick={onClick}
-      className="-ml-2 flex w-full items-center gap-3 rounded-[6px] px-2 py-2 text-left text-[15px] hover:bg-black/5"
-      style={{ color: 'var(--fr-muted)' }}
+      className="-ml-2 w-full justify-start gap-3 px-2 text-[15px] font-normal"
     >
       <span className="flex size-5 items-center justify-center">{icon}</span>
       {label}
-    </button>
+    </Button>
   );
 }

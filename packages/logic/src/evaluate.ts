@@ -222,6 +222,8 @@ class Session {
   /** Blocks whose answer failed its twin: they read as unanswered. */
   private readonly rejected = new Set<string>();
   private current = -1;
+  /** The repeating-group row a per-row formula is being evaluated for; null outside that evaluation. */
+  private currentRow: { groupId: string; values: Partial<Record<string, StoredAnswer>> } | null = null;
   private readonly p: Prepared;
   private readonly meta: EvalMeta;
   private readonly scope: Scope;
@@ -284,6 +286,14 @@ class Session {
       const v = this.cells.get(cell.variable(ref.varId)) as ScalarValue | undefined;
       return v ?? NULL;
     }
+    if (ref.row === 'current') {
+      /* Same-row reference: reads the row a per-row formula is being evaluated for. */
+      const block = this.p.blocks.get(ref.blockId);
+      const row = this.currentRow;
+      if (!isField(block) || row === null || this.p.parentOf[ref.blockId] !== row.groupId) return NULL;
+      const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
+      return cellAnswer ? answerScalar(block as never, cellAnswer.value as never, ref.path) : NULL;
+    }
     const block = this.p.blocks.get(ref.blockId);
     if (!isField(block) || !this.visibleEff(ref.blockId)) return NULL;
     const parentId = this.p.parentOf[ref.blockId];
@@ -293,7 +303,18 @@ class Session {
       if (!group || group.type !== 'repeating_group') return NULL;
       const items: ScalarValue[] = [];
       let of: ScalarType | undefined;
+      /* A formula inside the list keeps one result per row, outside the rows' answers; sum(...) reads those too. */
+      const rowResults = block.type === 'calculation' ? (this.cells.get(cell.value(ref.blockId)) as Record<string, ScalarValue> | undefined) : undefined;
       for (const row of group.value.rows) {
+        if (block.type === 'calculation') {
+          const result = rowResults?.[row.rowId];
+          if (!result || result.t === 'null') continue;
+          if (result.t === 'list' || result.t === 'option') return NULL;
+          if (of !== undefined && of !== result.t) return NULL;
+          of = result.t;
+          items.push(result);
+          continue;
+        }
         const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
         if (!cellAnswer) continue;
         const scalar = answerScalar(block as never, cellAnswer.value as never, ref.path);
@@ -496,9 +517,34 @@ class Session {
     }
   }
 
-  private capture(id: BlockId, previous: unknown): AnswerValue | null {
+  /** The repeating group a block sits directly inside, if any. */
+  private rowGroupOf(id: BlockId): string | undefined {
+    const parentId = this.p.parentOf[id];
+    return parentId !== undefined && this.p.blocks.get(parentId)?.type === 'repeating_group' ? parentId : undefined;
+  }
+
+  /** A formula inside a list: its result for every row, keyed by row id. Null while the list has no rows. */
+  private rowResults(id: BlockId, block: Extract<StoredBlock, { type: 'calculation' }>, previous: unknown): unknown {
+    const groupId = this.rowGroupOf(id);
+    const group = groupId === undefined ? undefined : this.answerOf(groupId as BlockId);
+    if (group?.type !== 'repeating_group') return null;
+    const out: Record<string, ScalarValue> = {};
+    try {
+      for (const row of group.value.rows) {
+        this.currentRow = { groupId: groupId as string, values: row.values };
+        out[row.rowId] = this.exprValue(block.config.expr);
+      }
+    } finally {
+      this.currentRow = null;
+    }
+    const prev = previous as Record<string, ScalarValue> | null | undefined;
+    return prev && JSON.stringify(prev) === JSON.stringify(out) ? prev : out;
+  }
+
+  private capture(id: BlockId, previous: unknown): unknown {
     const block = this.p.blocks.get(id);
     const prev = previous as AnswerValue | null | undefined;
+    if (block?.type === 'calculation' && this.rowGroupOf(id) !== undefined) return this.rowResults(id, block, previous);
     if (block?.type === 'calculation') {
       const v = this.exprValue(block.config.expr);
       if (v.t === 'null') return null;
@@ -676,8 +722,14 @@ class Session {
     const required = new Set<BlockId>();
     const disabled = new Set<BlockId>();
     const values: Answers = {};
+    const rowValues: Partial<Record<BlockId, Record<string, ScalarValue>>> = {};
     for (const block of p.fields) {
       const id = block.id;
+      if (block.type === 'calculation' && this.rowGroupOf(id) !== undefined) {
+        const results = this.cells.get(cell.value(id));
+        if (results && typeof results === 'object') rowValues[id] = results as Record<string, ScalarValue>;
+        continue;
+      }
       const enabled = this.flag(cell.enabled(id));
       if (!enabled) disabled.add(id);
       const answer = this.answerOf(id);
@@ -709,6 +761,7 @@ class Session {
     const state: EvalState = {
       visible, required, disabled, hiddenOptions: {}, values, variables: {}, submitBlocks, nextPage, path, endingId, serverEffects: this.serverEffects(),
     };
+    if (Object.keys(rowValues).length > 0) state.rowValues = rowValues;
     if (this.tracing) {
       state.trace = p.steps.map((s, i): TraceEntry => {
         const out = this.outputs[i];

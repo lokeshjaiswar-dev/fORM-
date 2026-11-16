@@ -1,7 +1,7 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Tabs, TabsList, TabsTrigger } from '@dmacq/ui';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
-import { cn } from '@/lib/utils';
 
 const M = defineMessages('builder', {
   'nav.forms': 'Forms',
@@ -11,24 +11,14 @@ const M = defineMessages('builder', {
 /** List-page tabs: saved forms and the custom field library. */
 export function WorkspaceNav() {
   const path = useLocation().pathname;
-  const items = [
-    { to: '/forms', label: t(M['nav.forms']), active: path.startsWith('/forms') },
-    { to: '/fields', label: t(M['nav.fields']), active: path.startsWith('/fields') },
-  ];
+  const navigate = useNavigate();
+  const active = path.startsWith('/fields') ? '/fields' : '/forms';
   return (
-    <nav aria-label="Workspace" className="mb-4 flex gap-1">
-      {items.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          className={cn(
-            'rounded-[6px] px-3 py-1.5 text-[14px] font-medium',
-            item.active ? 'bg-state-hover text-foreground' : 'text-muted-foreground hover:bg-state-hover hover:text-foreground',
-          )}
-        >
-          {item.label}
-        </Link>
-      ))}
-    </nav>
+    <Tabs value={active} onValueChange={(to) => navigate(to)} className="mb-4">
+      <TabsList aria-label="Workspace">
+        <TabsTrigger value="/forms">{t(M['nav.forms'])}</TabsTrigger>
+        <TabsTrigger value="/fields">{t(M['nav.fields'])}</TabsTrigger>
+      </TabsList>
+    </Tabs>
   );
 }

@@ -359,6 +359,7 @@ describe('BlockInspector form title', () => {
     expect(doc().titleStyle).toEqual({ align: 'center' });
     await user.clear(screen.getByRole('spinbutton', { name: 'Title size' }));
     await user.type(screen.getByRole('spinbutton', { name: 'Title size' }), '52');
+    await user.keyboard('{Enter}');
     expect(doc().titleStyle).toMatchObject({ align: 'center', sizePx: 52 });
     await user.click(screen.getByRole('combobox', { name: 'Weight' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Normal' }));

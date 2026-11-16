@@ -28,6 +28,8 @@ export interface Typed {
 export interface TypeContext {
   def: FormDefinition;
   registry: FieldRegistry;
+  /** The repeating group whose rows a per-row formula is typed for; same-row references are only valid inside it. */
+  rowGroup?: BlockId | undefined;
   /** Cells read by `value(b)`: the value, the visibility of b and its ancestors, and onPath of its page. */
   valueReads(blockId: BlockId): readonly string[];
   issue(code: PublishIssue['code'], path: string, message: string): void;
@@ -76,8 +78,8 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
     }
     return { kind: 'text', source: 'meta' };
   }
-  if (ref.row !== undefined) {
-    ctx.issue('missing_capability', `${path}/row`, 'row-scoped references need repeating groups, which are not available yet');
+  if (ref.row !== undefined && ref.row !== 'current') {
+    ctx.issue('missing_capability', `${path}/row`, `row '${String(ref.row)}' is not a supported row scope`);
     return null;
   }
   const block = ctx.def.blocks[ref.blockId];
@@ -95,6 +97,15 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
   }
   for (const c of ctx.valueReads(ref.blockId)) reads.add(c);
   const group = repeatingGroupOf(ctx.def, ref.blockId);
+  if (ref.row === 'current') {
+    /* Same-row reference: one value per row, so the referenced field must be a child of a repeating group. */
+    if (!group || ctx.rowGroup !== group.id) {
+      ctx.issue('expr_type_error', `${path}/row`, 'a same-row reference only works inside a formula in the same repeating group');
+      return null;
+    }
+    for (const c of ctx.valueReads(group.id)) reads.add(c);
+    return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type };
+  }
   if (group) {
     for (const c of ctx.valueReads(group.id)) reads.add(c);
     return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type, list: true };

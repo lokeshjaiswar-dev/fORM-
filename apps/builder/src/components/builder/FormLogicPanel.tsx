@@ -11,7 +11,7 @@ import { APP_IDS, blockOrder, blockText, isField, placementOf } from '@/lib/defi
 import { labelString } from '@/fields/style';
 import { removeRule, setRule } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Button, Input, Label, Switch } from '@dmacq/ui';
+import { Button, CheckboxField, Input, Label, RadioField, RadioGroup, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import {
   COUNT, UNARY, choiceOptions, compareFields, condition, firstOperator, fits, initialRight, kindOf, literal, localToday, operatorsFor, retarget,
@@ -139,14 +139,19 @@ function OperandValue({ group, source, op, right, onChange }: { group: string; s
       if (optionIds.length) onChange({ kind: 'options', blockId: source.id, optionIds });
     };
     return (
-      <fieldset className="space-y-1">
+      <fieldset className="space-y-2">
         <legend className="text-[12px] text-muted-foreground">{t(M['rules.options'])}</legend>
-        {choiceOptions(source).map((o) => (
-          <label key={o.id} className="flex items-center gap-2 text-[13px]">
-            <input type={kind === 'choice' && (op === 'eq' || op === 'neq') ? 'radio' : 'checkbox'} name={`rules-${group}`} checked={chosen.includes(o.id)} onChange={() => toggle(o.id)} />
-            {labelString(o.label)}
-          </label>
-        ))}
+        {kind === 'choice' && (op === 'eq' || op === 'neq') ? (
+          <RadioGroup name={group} value={chosen[0] ?? ''} onValueChange={(v) => toggle(v as OptionId)}>
+            {choiceOptions(source).map((o) => (
+              <RadioField key={o.id} value={o.id} label={labelString(o.label)} size="sm" />
+            ))}
+          </RadioGroup>
+        ) : (
+          choiceOptions(source).map((o) => (
+            <CheckboxField key={o.id} checked={chosen.includes(o.id)} onCheckedChange={() => toggle(o.id)} label={labelString(o.label)} size="sm" />
+          ))
+        )}
       </fieldset>
     );
   }

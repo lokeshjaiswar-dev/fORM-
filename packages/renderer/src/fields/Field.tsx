@@ -73,7 +73,7 @@ function FieldShell({ block, control }: { block: FieldBlock; control: Control<ne
   const labelText = (
     <>
       <RichTextView doc={block.label} inline resolve={resolve} />
-      {required ? <RequiredMark /> : null}
+      {required ? <>{' '}<RequiredMark /></> : null}
     </>
   );
   const labelClass = block.hideLabel ? 'fr-label fr-sr-only' : 'fr-label';

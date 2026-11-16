@@ -53,6 +53,8 @@ export function DsSelect({
   'aria-label'?: string | undefined;
 }) {
   const mapped = !value && allowEmpty ? NONE : value;
+  // The trigger text is passed explicitly: Radix's own placeholder only appears after mount, which would make the server HTML differ.
+  const shown = options.find((option) => option.value === value)?.label ?? placeholder;
   return (
     <Select value={mapped || undefined} onValueChange={(next) => onChange(next === NONE ? '' : next)} disabled={disabled}>
       <SelectTrigger
@@ -65,7 +67,7 @@ export function DsSelect({
         aria-label={ariaLabel}
         onBlur={onBlur}
       >
-        <SelectValue placeholder={placeholder} />
+        <SelectValue>{shown}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {allowEmpty ? <SelectItem value={NONE}>{placeholder}</SelectItem> : null}
