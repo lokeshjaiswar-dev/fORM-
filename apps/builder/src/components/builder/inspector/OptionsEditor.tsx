@@ -2,13 +2,16 @@ import { useRef } from 'react';
 import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { themeImageUrl } from '@form/renderer';
-import type { AssetId, BlockOf, ChoiceOption, OptionId } from '@form/schema';
+import type { AssetId, BlockId, BlockOf, ChoiceOption, ConditionId, OptionId, Rule, RuleId } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { fileToThemeImage, storeThemeImage } from '@/components/builder/design/uploads';
-import { APP_IDS } from '@/lib/definition';
+import { APP_IDS, blockText, inlineDoc } from '@/lib/definition';
 import { uid } from '@/lib/utils';
 import { patchBlockConfig } from '@/fields/configSink';
+import { placeBeside, removeRule, setRule, updateBlock } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import { Button, Input, Label } from '@dmacq/ui';
 import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSection';
 import { ToggleRow } from '@/components/builder/inspector/parts';
@@ -20,6 +23,10 @@ const M = defineMessages('builder', {
   'options.label': 'Label of option {n}',
   'options.code': 'Export code of option {n}',
   'options.code_placeholder': 'Code (optional)',
+  'options.value': 'Value of option {n}',
+  'options.value_placeholder': 'Value',
+  'options.fill': 'Fill a field from the selected option',
+  'options.fill_hint': 'The field stays empty until an option is chosen, then it shows that option’s value.',
   'options.up': 'Move option {n} up',
   'options.down': 'Move option {n} down',
   'options.remove': 'Remove option {n}',
@@ -105,9 +112,9 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
             {images ? <OptionImage opt={opt} index={i} onChange={(image) => edit(i, { image })} /> : null}
             <Input aria-label={t(M['options.label'], { n: i + 1 })} value={labelString(opt.label)} onChange={(e) => edit(i, { label: e.target.value })} />
             <Input
-              aria-label={t(M['options.code'], { n: i + 1 })}
+              aria-label={t(block.type === 'single_choice' && block.config.display === 'dropdown' ? M['options.value'] : M['options.code'], { n: i + 1 })}
               className="w-[96px] shrink-0"
-              placeholder={t(M['options.code_placeholder'])}
+              placeholder={t(block.type === 'single_choice' && block.config.display === 'dropdown' ? M['options.value_placeholder'] : M['options.code_placeholder'])}
               value={opt.code ?? ''}
               onChange={(e) => edit(i, { code: e.target.value.slice(0, 200) })}
             />
@@ -125,6 +132,7 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
         ))}
       </ul>
       <p className="text-[12px] text-muted-foreground">{t(M['options.codes_hint'])}</p>
+      {block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
       {block.type !== 'ranking' && block.type !== 'matching' && block.type !== 'constant_sum' && block.type !== 'maxdiff' ? (
         <ToggleRow
           label={t(M['options.other'])}
@@ -140,6 +148,60 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
         />
       ) : null}
     </div>
+  );
+}
+
+function fillRuleFor(rules: readonly Rule[], blockId: BlockId): Rule | undefined {
+  return rules.find((rule) => rule.then.some((action) => {
+    if (action.type !== 'set_value' || action.value.k !== 'call' || action.value.fn !== 'option_code') return false;
+    const arg = action.value.args[0];
+    return arg?.k === 'ref' && arg.ref.kind === 'answer' && arg.ref.blockId === blockId;
+  }));
+}
+
+/** Dropdown switch: one empty field, filled with the chosen option's value. */
+function FillFromOption({ block }: { block: BlockOf<'single_choice'> }) {
+  const rules = useDoc((d) => d.logic.rules);
+  const def = useDoc((d) => d);
+  const rule = fillRuleFor(rules, block.id);
+  const targetId = rule?.then[0]?.type === 'set_value' ? rule.then[0].target : undefined;
+  const target = targetId ? def.blocks[targetId] : undefined;
+  const turnOn = () => {
+    if (rule) return;
+    const name = blockText(block) || 'Option';
+    const placed = placeBeside(block.id, { choice: { type: 'short_text', configOverrides: {} } });
+    const id = placed.ok ? placed.created : undefined;
+    if (id) updateBlock(id, { label: inlineDoc(`${name} value`), readOnly: true });
+    useUiStore.setState({ activeBlockId: block.id });
+    if (!id) return;
+    setRule({
+      id: APP_IDS.newId() as RuleId,
+      enabled: true,
+      when: {
+        kind: 'group',
+        id: APP_IDS.newId() as ConditionId,
+        combinator: 'all',
+        children: [{
+          kind: 'condition',
+          id: APP_IDS.newId() as ConditionId,
+          left: { kind: 'ref', ref: { kind: 'answer', blockId: block.id } },
+          op: 'is_answered',
+        }],
+      },
+      then: [{
+        type: 'set_value',
+        target: id,
+        value: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: block.id } }] },
+      }],
+    });
+  };
+  return (
+    <ToggleRow
+      label={t(M['options.fill'])}
+      hint={rule ? `${t(M['options.fill_hint'])} ${blockText(target) || ''}`.trim() : t(M['options.fill_hint'])}
+      checked={rule !== undefined}
+      onChange={(on) => (on ? turnOn() : rule && removeRule(rule.id))}
+    />
   );
 }
 

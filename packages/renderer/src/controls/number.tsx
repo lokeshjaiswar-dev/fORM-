@@ -1,4 +1,5 @@
 import type { DecimalString } from '@form/schema';
+import { useEvaluation } from '../eval/context.ts';
 import { DsText, Slider } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 import { sanitizeDecimal } from './sanitize.ts';
@@ -6,6 +7,9 @@ import { sanitizeDecimal } from './sanitize.ts';
 /** The answer is the typed text as a decimal string; validation reports anything that is not one (not_a_number). */
 export function NumberInput({ block, field }: ControlProps<'number'>) {
   const answer = useAnswer(block);
+  const { state } = useEvaluation();
+  const filled = state.values[block.id];
+  const fromRule = field.readOnly && filled?.type === 'number' ? filled.value : undefined;
   const c = block.config;
   const stepper = c.display === 'stepper';
   const slider = stepper && c.min !== undefined && c.max !== undefined;
@@ -14,7 +18,7 @@ export function NumberInput({ block, field }: ControlProps<'number'>) {
   if (slider) {
     const min = Number(c.min);
     const max = Number(c.max);
-    const numeric = Number(answer.value ?? min);
+    const numeric = Number(fromRule ?? answer.value ?? min);
     return (
       <div className="fr-slider">
         {c.prefix ? <span className="fr-affix-text">{c.prefix}</span> : null}
@@ -44,7 +48,7 @@ export function NumberInput({ block, field }: ControlProps<'number'>) {
       min={stepper ? c.min : undefined}
       max={stepper ? c.max : undefined}
       step={stepper ? step : undefined}
-      value={answer.value ?? ''}
+      value={fromRule ?? answer.value ?? ''}
       placeholder={c.placeholder}
       prefixText={c.prefix}
       suffixText={c.suffix}

@@ -26,7 +26,7 @@ const M = defineMessages('builder', {
   'design.styles': 'Styles',
   'design.themes': 'Themes',
   'design.submit': 'Submit',
-  'design.logic': 'Logic',
+  'design.logic': 'Rules',
   'design.sections': 'Sections',
   'design.schemes': 'Color palette',
   'design.page': 'Page background',

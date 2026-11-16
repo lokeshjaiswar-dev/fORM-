@@ -7,7 +7,7 @@ import { placementOf, valueReadsOf, type Placement } from './structure.ts';
 import { checkGroup, typeExpr, type TypeContext } from './subset.ts';
 
 /** Client actions the engine runs today; every other action is `missing_capability` until WP-2.01–2.03. */
-const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit']);
+const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit', 'set_value']);
 const SERVER_ONLY: ReadonlySet<string> = new Set(SERVER_ONLY_ACTION_TYPES);
 export const isClientAction = (action: Action): action is ClientAction => !SERVER_ONLY.has(action.type);
 
@@ -148,6 +148,13 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     const branch = (list: readonly Action[] | undefined, name: 'then' | 'else') => list?.forEach((action, j) => {
       if (!P0_ACTIONS.has(action.type)) {
         ctx.issue('missing_capability', `${at}/${name}/${j}`, `'${action.type}' actions are not available yet; logic shows, hides, requires, enables and can block submit`);
+        return;
+      }
+      if (action.type === 'set_value') {
+        if (action.path) ctx.issue('missing_capability', `${at}/${name}/${j}/path`, 'setting a nested answer path is not available yet');
+        typeExpr(ctx, action.value, `${at}/${name}/${j}/value`, reads);
+        usesExpr = true;
+        if (def.blocks[action.target] !== undefined) writes.add(cell.value(action.target));
         return;
       }
       for (const [c] of actionWrites(def, action)) writes.add(c);

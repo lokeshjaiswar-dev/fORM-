@@ -27,7 +27,7 @@ describe('Form settings Logic', () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    await user.click(screen.getByRole('tab', { name: 'Logic' }));
+    await user.click(screen.getByRole('tab', { name: 'Rules' }));
     await user.click(screen.getByRole('button', { name: 'Add a check' }));
     const rule = doc().logic.rules[0];
     expect(rule?.then[0]).toMatchObject({ type: 'block_submit', anchorBlockId: 'gstin' });
@@ -40,7 +40,7 @@ describe('Form settings Logic', () => {
     const user = userEvent.setup();
     const panel = render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    await user.click(screen.getByRole('tab', { name: 'Logic' }));
+    await user.click(screen.getByRole('tab', { name: 'Rules' }));
     await user.click(screen.getByRole('button', { name: 'Add a check' }));
     panel.unmount();
     render(<FormPreview />);

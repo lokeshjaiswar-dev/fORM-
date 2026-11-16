@@ -8,9 +8,10 @@ import type {
 import { actionWrites, isClientAction } from './analyze.ts';
 import { cell, stepKey } from './cells.ts';
 import { ENGINE } from './compile.ts';
-import { formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
+import { D, formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
 import { ancestorsOf } from './structure.ts';
+import { optionValueSource } from './subset.ts';
 import { traceEntry, type TraceEntry } from './trace.ts';
 
 /*
@@ -54,6 +55,8 @@ interface Prepared {
   valueCells: ReadonlyArray<readonly [BlockId, string]>;
   /** Cells each step writes. */
   stepWrites: ReadonlyArray<readonly string[]>;
+  /** Short-text fields filled from a dropdown option value, mapped to that choice. Formulas read them as numbers. */
+  optionValues: ReadonlyMap<string, BlockId>;
 }
 
 interface BlockKeys { visible: string; value: string; enabled: string; required: string; ancestors: readonly string[]; onPath: string | null }
@@ -103,7 +106,13 @@ function prepare(version: EvaluableVersion): Prepared {
     else map.set(c, [i]);
   };
   const stepWrites = steps.map((s): string[] => {
-    if (s.kind === 'rule') return [...new Set([...s.then.keys(), ...(s.else?.keys() ?? [])])];
+    if (s.kind === 'rule') {
+      const cells = [...s.then.keys(), ...(s.else?.keys() ?? [])];
+      for (const action of [...s.rule.then, ...(s.rule.else ?? [])]) {
+        if (action.type === 'set_value' && !action.path) cells.push(cell.value(action.target));
+      }
+      return [...new Set(cells)];
+    }
     if (s.kind === 'on_path') return [cell.onPath(def.pages[s.page]?.id ?? '')];
     if (s.kind === 'capture') return [cell.value(s.blockId)];
     return [];
@@ -132,9 +141,15 @@ function prepare(version: EvaluableVersion): Prepared {
     valueCells.push([id as BlockId, cell.value(id)]);
   }
   const pageKeys = def.pages.map((pg) => ({ visible: cell.visible(pg.id), onPath: cell.onPath(pg.id), jump: cell.jump(pg.id) }));
+  const optionValues = new Map<string, BlockId>();
+  for (const [id, block] of blocks) {
+    if (block.type !== 'short_text') continue;
+    const source = optionValueSource(def, id as BlockId);
+    if (source) optionValues.set(id, source);
+  }
   const p: Prepared = {
     def, steps, writers, readers, parentOf: compiled.parentOf, blocks, fields, documentOrder: compiled.documentOrder, pageIds: def.pages.map((pg) => pg.id), pageIndex,
-    keys, pageKeys, staticCells, valueCells, stepWrites,
+    keys, pageKeys, staticCells, valueCells, stepWrites, optionValues,
   };
   prepared.set(version.compiled, p);
   return p;
@@ -292,7 +307,8 @@ class Session {
       const row = this.currentRow;
       if (!isField(block) || row === null || this.p.parentOf[ref.blockId] !== row.groupId) return NULL;
       const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
-      return cellAnswer ? answerScalar(block as never, cellAnswer.value as never, ref.path) : NULL;
+      const scalar = cellAnswer ? answerScalar(block as never, cellAnswer.value as never, ref.path) : NULL;
+      return this.filledNumber(ref.blockId, scalar, row.values);
     }
     const block = this.p.blocks.get(ref.blockId);
     if (!isField(block) || !this.visibleEff(ref.blockId)) return NULL;
@@ -316,8 +332,7 @@ class Session {
           continue;
         }
         const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
-        if (!cellAnswer) continue;
-        const scalar = answerScalar(block as never, cellAnswer.value as never, ref.path);
+        const scalar = this.filledNumber(ref.blockId, cellAnswer ? answerScalar(block as never, cellAnswer.value as never, ref.path) : NULL, row.values);
         if (scalar.t === 'null') continue;
         if (scalar.t === 'list' || scalar.t === 'option') return NULL;
         if (of !== undefined && of !== scalar.t) return NULL;
@@ -327,8 +342,60 @@ class Session {
       return { t: 'list', of: of ?? 'number', items };
     }
     const answer = this.answerOf(ref.blockId);
-    if (!answer) return NULL;
-    return answerScalar(block as never, answer.value as never, ref.path);
+    const scalar = answer ? answerScalar(block as never, answer.value as never, ref.path) : NULL;
+    return this.filledNumber(ref.blockId, scalar);
+  }
+
+  /** A dropdown's filled value is stored as text. Formulas read the option code as a number, per row when inside a list. */
+  private filledNumber(blockId: BlockId, scalar: ScalarValue, rowValues?: Partial<Record<string, StoredAnswer>>): ScalarValue {
+    const source = this.p.optionValues.get(blockId);
+    if (!source) return scalar;
+    const written = scalar.t === 'text' ? scalar.v.trim() : '';
+    const raw = written !== '' ? written : this.codeInScope(source, rowValues);
+    if (!raw) return NULL;
+    const n = formatDecimal(parseDecimal(raw) ?? D(NaN));
+    return n ? { t: 'number', v: n as never } : NULL;
+  }
+
+  /**
+   * Per-row option values for a field filled from a dropdown inside the same list.
+   * The fill rule writes one form-level value, which cannot name a row, so each row is read here.
+   */
+  private optionValueRows(target: BlockId): Record<string, ScalarValue> | undefined {
+    const source = this.p.optionValues.get(target);
+    if (!source) return undefined;
+    const groupId = this.rowGroupOf(target);
+    if (groupId === undefined || this.rowGroupOf(source) !== groupId) return undefined;
+    const group = this.answerOf(groupId as BlockId);
+    if (!group || group.type !== 'repeating_group') return undefined;
+    const choice = this.p.blocks.get(source);
+    if (!isField(choice)) return undefined;
+    const out: Record<string, ScalarValue> = {};
+    for (const row of group.value.rows) {
+      const cellAnswer = asAnswer(row.values[source], choice.type);
+      if (!cellAnswer) continue;
+      const scalar = answerScalar(choice as never, cellAnswer.value as never, undefined);
+      if (scalar.t !== 'option') continue;
+      const code = this.optionCode(source, scalar.v);
+      if (code) out[row.rowId] = text(code);
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  }
+
+  /** The chosen option's code, from the current row when the choice lives in one, otherwise from the field answer. */
+  private codeInScope(source: BlockId, rowValues?: Partial<Record<string, StoredAnswer>>): string {
+    const block = this.p.blocks.get(source);
+    if (!isField(block)) return '';
+    if (rowValues && this.p.parentOf[source] !== undefined && this.p.blocks.get(this.p.parentOf[source] as string)?.type === 'repeating_group') {
+      const cellAnswer = asAnswer(rowValues[source], block.type);
+      if (!cellAnswer) return '';
+      const scalar = answerScalar(block as never, cellAnswer.value as never, undefined);
+      return scalar.t === 'option' ? this.optionCode(source, scalar.v) : '';
+    }
+    const answer = this.answerOf(source);
+    if (!answer) return '';
+    const scalar = answerScalar(block as never, answer.value as never, undefined);
+    return scalar.t === 'option' ? this.optionCode(source, scalar.v) : '';
   }
 
   private metaValue(ref: Extract<ValueRef, { kind: 'meta' }>): ScalarValue {
@@ -379,6 +446,21 @@ class Session {
         return text === null ? NULL : { t: 'number', v: text as never };
       }
       case 'call': {
+        if (expr.fn === 'option_code' && expr.args[0] !== undefined) {
+          const chosen = this.exprValue(expr.args[0], depth + 1);
+          if (chosen.t !== 'option') return NULL;
+          const code = this.optionCode(chosen.blockId, chosen.v);
+          return code ? text(code) : NULL;
+        }
+        if (expr.fn === 'option_score' && expr.args[0] !== undefined) {
+          const chosen = this.exprValue(expr.args[0], depth + 1);
+          if (chosen.t !== 'option') return NULL;
+          const block = this.p.blocks.get(chosen.blockId);
+          const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; score?: string }> }).options : undefined;
+          const raw = options?.find((o) => o.id === chosen.v)?.score?.trim() ?? '';
+          const score = formatDecimal(parseDecimal(raw) ?? D(NaN));
+          return score ? { t: 'number', v: score as never } : NULL;
+        }
         if (expr.fn !== 'sum' || expr.args[0] === undefined) break;
         return sumNumbers(this.exprValue(expr.args[0], depth + 1));
       }
@@ -627,6 +709,21 @@ class Session {
     }
   }
 
+  /** Values a matched rule assigns with `set_value` (literals, arithmetic, option scores). */
+  private assignedValues(rule: Rule, matched: boolean): Map<string, AnswerValue> {
+    const actions = matched ? rule.then : (rule.else ?? []);
+    const out = new Map<string, AnswerValue>();
+    for (const action of actions) {
+      if (action.type !== 'set_value' || action.path) continue;
+      const block = this.p.blocks.get(action.target);
+      if (!isField(block)) continue;
+      const scalar = this.exprValue(action.value);
+      if (block.type === 'number' && scalar.t === 'number') out.set(cell.value(action.target), { type: 'number', value: scalar.v });
+      else if ((block.type === 'short_text' || block.type === 'long_text') && scalar.t === 'text') out.set(cell.value(action.target), { type: block.type, value: scalar.v });
+    }
+    return out;
+  }
+
   /** The value `step` writes to `c` given its output, on top of `current`. */
   private applyOne(i: number, c: string, current: unknown): unknown {
     const s = this.p.steps[i] as Step;
@@ -634,7 +731,12 @@ class Session {
     if (s.kind === 'rule') {
       if (out === null || out === undefined) return current;
       const writes = out ? s.then : s.else;
-      return writes?.has(c) ? writes.get(c) : current;
+      if (writes?.has(c)) return writes.get(c);
+      if (typeof out === 'boolean') {
+        const assigned = this.assignedValues(s.rule, out);
+        if (assigned.has(c)) return assigned.get(c);
+      }
+      return current;
     }
     if (s.kind === 'on_path') return out === true;
     if (s.kind === 'capture') return out ?? (s.authoritative ? undefined : current);
@@ -647,6 +749,7 @@ class Session {
     if (s.kind === 'rule') {
       if (out === null || out === undefined) return;
       for (const [c, v] of (out ? s.then : s.else) ?? []) this.cells.set(c, v);
+      if (typeof out === 'boolean') for (const [c, v] of this.assignedValues(s.rule, out)) this.cells.set(c, v);
     } else if (s.kind === 'on_path') {
       for (const c of this.p.stepWrites[i] ?? []) this.cells.set(c, out === true);
     } else if (s.kind === 'capture' && (out || s.authoritative)) {
@@ -693,8 +796,11 @@ class Session {
     for (let i = 0; i < dirty.length; i += 1) {
       if (!dirty[i]) continue;
       const out = this.run(i);
-      if (Object.is(out, this.outputs[i])) continue;
+      const same = Object.is(out, this.outputs[i]);
       this.outputs[i] = out;
+      /* A set_value rule can stay true while the value it writes changes, so its cells are recomputed whenever it is dirty. */
+      const dynamic = this.p.steps[i]?.kind === 'rule' && [...(this.p.steps[i] as RuleStep).rule.then, ...((this.p.steps[i] as RuleStep).rule.else ?? [])].some((a) => a.type === 'set_value');
+      if (same && !dynamic) continue;
       for (const c of this.p.stepWrites[i] ?? []) if (this.recompute(c)) touch(c);
     }
     this.current = -1;
@@ -729,6 +835,10 @@ class Session {
         const results = this.cells.get(cell.value(id));
         if (results && typeof results === 'object') rowValues[id] = results as Record<string, ScalarValue>;
         continue;
+      }
+      const filled = this.optionValueRows(id);
+      if (filled) {
+        rowValues[id] = filled;
       }
       const enabled = this.flag(cell.enabled(id));
       if (!enabled) disabled.add(id);

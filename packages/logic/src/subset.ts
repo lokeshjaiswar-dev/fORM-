@@ -47,6 +47,18 @@ const ARITHMETIC: ReadonlySet<string> = new Set(['+', '-', '*', '/']);
 const ORDERED: ReadonlySet<ValueKind> = new Set<ValueKind>(['number', 'money', 'date', 'time', 'datetime']);
 const COUNT = /^(0|[1-9]\d*)$/;
 
+/** The choice whose option value is copied into `target`, when a fill-from-option rule writes it. */
+export function optionValueSource(def: Pick<FormDefinition, 'logic'>, target: BlockId): BlockId | undefined {
+  for (const rule of def.logic.rules) {
+    for (const action of [...rule.then, ...(rule.else ?? [])]) {
+      if (action.type !== 'set_value' || action.target !== target || action.value.k !== 'call' || action.value.fn !== 'option_code') continue;
+      const arg = action.value.args[0];
+      if (arg?.k === 'ref' && arg.ref.kind === 'answer') return arg.ref.blockId;
+    }
+  }
+  return undefined;
+}
+
 const LITERAL_KINDS: Record<Exclude<Literal['type'], 'relative_date'>, ValueKind> = {
   text: 'text', number: 'number', money: 'money', boolean: 'boolean', date: 'date', datetime: 'datetime', time: 'time', null: 'null',
 };
@@ -85,7 +97,9 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
   const block = ctx.def.blocks[ref.blockId];
   if (!block || block.type === 'unsupported') return null; /* dangling_ref / unknown_block_type, reported by validateStructure */
   const definition = ctx.registry[block.type];
-  const kind = (definition.paths as Readonly<Record<string, ComparableKind>>)[ref.path ?? ''];
+  /* A field filled from a dropdown option value holds that code as text, and formulas read it as a number. */
+  const filledNumber = block.type === 'short_text' && (ref.path ?? '') === '' && optionValueSource(ctx.def, ref.blockId) !== undefined;
+  const kind = filledNumber ? 'number' : (definition.paths as Readonly<Record<string, ComparableKind>>)[ref.path ?? ''];
   if (kind === undefined || kind === 'none') {
     if (definition.capability !== undefined && Object.keys(definition.paths).length === 0) {
       ctx.issue('missing_capability', path, `answers of '${block.type}' blocks need '${definition.capability}', which this version does not provide yet`);
@@ -151,6 +165,21 @@ export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<
         return { kind: 'number', source: 'expr' };
       }
       case 'call': {
+        if (e.fn === 'option_code' || e.fn === 'option_score') {
+          const fn = e.fn;
+          if (e.args.length !== 1 || e.args[0] === undefined) {
+            ctx.issue('expr_type_error', at, `'${fn}' takes the choice field`);
+            return null;
+          }
+          const arg = visit(e.args[0], `${at}/args/0`, depth + 1);
+          if (!arg) return null;
+          if (arg.kind !== 'choice') {
+            ctx.issue('expr_type_error', at, `'${fn}' needs a single choice`);
+            return null;
+          }
+          /* A choice inside a list is one value per row; the fill rule still type-checks, and formulas read each row. */
+          return { kind: fn === 'option_code' ? 'text' : 'number', source: 'expr', ...(arg.list ? { list: true } : {}) };
+        }
         if (e.fn !== 'sum') break;
         if (e.args.length !== 1 || e.args[0] === undefined) {
           ctx.issue('expr_type_error', at, "'sum' takes one field");

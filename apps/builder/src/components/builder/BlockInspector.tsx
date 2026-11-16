@@ -13,7 +13,8 @@ import { isCustomFieldType, parseConfig } from '@/fields/custom/model';
 import { saveLibraryField } from '@/fields/custom/repository';
 import { cn } from '@/lib/utils';
 import { setBlockWidth, updateBlock } from '@/state/actions';
-import { currentDoc, useBlock } from '@/state/documentStore';
+import { isOptionValueField } from '@/state/commands/rules';
+import { currentDoc, useBlock, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { Tooltip } from '@/components/Tooltip';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
@@ -135,13 +136,14 @@ export function BlockInspector() {
   const titleSelected = activeBlockId === TITLE_INSPECTOR_ID;
   const chromeSelected = submitSelected || titleSelected;
   const block = useBlock(chromeSelected ? ('' as BlockId) : (activeBlockId ?? ('' as BlockId)));
+  const linkedValue = useDoc((d) => (activeBlockId && !chromeSelected ? isOptionValueField(d, activeBlockId) : false));
   const [resizing, setResizing] = useState(false);
   /* The picked tab belongs to the block it was picked on: another block opens on General. */
   const [picked, setPicked] = useState<{ id: BlockId | null; tab: Tab }>({ id: activeBlockId, tab: 'general' });
   const tab = picked.id === activeBlockId ? picked.tab : 'general';
   const setTab = (next: Tab) => setPicked({ id: activeBlockId, tab: next });
 
-  const open = inspectorOpen && (chromeSelected || (!!block && block.type !== 'unsupported'));
+  const open = inspectorOpen && !linkedValue && (chromeSelected || (!!block && block.type !== 'unsupported'));
   if (!chromeSelected && (!block || block.type === 'unsupported')) {
     return (
       <aside

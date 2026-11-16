@@ -6,8 +6,9 @@ import { defineMessages } from '@form/i18n';
 import type { BlockId } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { isOptionValueField } from '@/state/commands/rules';
 import { duplicateBlock, requestDeleteBlock, slotAfter } from '@/state/actions';
-import { useBlock } from '@/state/documentStore';
+import { useBlock, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { insertTile } from '@/components/builder/insert';
 import { EditBlock } from '@/components/blocks/EditBlock';
@@ -31,6 +32,7 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data: { type: 'block' } });
   const selected = useUiStore((s) => s.activeBlockId === id);
   const openInspector = useUiStore((s) => s.openInspector);
+  const filledFromOption = useDoc((d) => isOptionValueField(d, id));
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
   if (!block) return null;
@@ -43,7 +45,7 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
       className={cn('group min-w-0 py-1', span >= 12 ? 'w-full' : share ? 'min-w-0 flex-1' : 'w-1/2', isDragging && 'opacity-40')}
       onClick={(e) => {
         e.stopPropagation();
-        openInspector(id);
+        if (!filledFromOption) openInspector(id);
       }}
     >
       <div className="relative">
@@ -56,10 +58,12 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
           <IconBtn label={t(M['block.delete'])} danger onClick={() => requestDeleteBlock(id)}>
             <Trash2 className="size-3.5" />
           </IconBtn>
+          {filledFromOption ? null : (
           <IconBtn label={t(M['block.duplicate'])} onClick={() => duplicateBlock(id)}>
             <Copy className="size-3.5" />
           </IconBtn>
-          <div className="relative">
+          )}
+          {filledFromOption ? null : <div className="relative">
             <IconBtn
               label={t(M['block.insert'])}
               onClick={() => {
@@ -80,7 +84,7 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
                 setQuery('');
               }}
             />
-          </div>
+          </div>}
           <Tooltip content={t(M['block.drag'])} side="top">
             <button
               type="button"
@@ -90,7 +94,7 @@ export const CanvasBlock = memo(function CanvasBlock({ id, span, share }: { id: 
               {...listeners}
               onClick={(e) => {
                 e.stopPropagation();
-                openInspector(id);
+                if (!filledFromOption) openInspector(id);
               }}
             >
               <GripVertical className="size-3.5" />

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { BlockId, ChoiceOption, IsoInstant, OptionId } from '@form/schema';
+import type { BlockId, ChoiceOption, ConditionId, IsoInstant, OptionId, Rule, RuleId } from '@form/schema';
 import { BlockInspector } from '@/components/builder/BlockInspector';
 import { SUBMIT_INSPECTOR_ID } from '@/components/builder/SubmitInspector';
 import { TITLE_INSPECTOR_ID } from '@/components/builder/TitleInspector';
@@ -407,5 +407,70 @@ describe('BlockInspector look', () => {
     }
     await user.type(box, '0');
     expect(get('name')['style']).toEqual({ labelColor: '#00ff00' });
+  });
+});
+
+describe('formula fields from a filled option value', () => {
+  const fill: Rule = {
+    id: 'fill' as RuleId,
+    enabled: true,
+    when: { kind: 'group', id: 'fill_g' as ConditionId, combinator: 'all', children: [] },
+    then: [{
+      type: 'set_value',
+      target: 'price' as BlockId,
+      value: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: 'item' as BlockId } }] },
+    }],
+  };
+
+  beforeEach(() => {
+    resetStore([
+      block('repeating_group', 'items', { label: 'Items', config: { children: ['item', 'price', 'line'] as BlockId[] } }),
+      block('single_choice', 'item', {
+        label: 'Item',
+        config: { display: 'dropdown', options: [{ id: 'burger' as OptionId, label: 'Burger', code: '40' }] },
+      }),
+      block('short_text', 'price', { label: 'Price' }),
+      block('calculation', 'line', { label: 'Line' }),
+      block('number', 'tax', { label: 'Tax' }),
+      block('calculation', 'total', { label: 'Total' }),
+    ], [fill]);
+  });
+
+  it('inserts that row’s price when the formula sits inside the list', () => {
+    open('line');
+    expect(screen.getByRole('button', { name: 'Price' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'sum(Price)' })).not.toBeInTheDocument();
+  });
+
+  it('inserts the sum of every row’s price when the formula sits outside the list', () => {
+    open('total');
+    expect(screen.getByRole('button', { name: 'sum(Price)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Price' })).not.toBeInTheDocument();
+  });
+});
+
+describe('dropdown fill toggle', () => {
+  beforeEach(() => {
+    resetStore([
+      block('single_choice', 'menu', {
+        label: 'Menu',
+        config: { display: 'dropdown', options: [{ id: 'burger' as OptionId, label: 'Burger', code: '467' }] },
+      }),
+    ]);
+  });
+
+  it('turns on and adds an empty field filled from the option value', async () => {
+    const user = open('menu');
+    await user.click(screen.getByRole('tab', { name: 'Options' }));
+    const toggle = screen.getByRole('switch', { name: 'Fill a field from the selected option' });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    expect(toggle).toBeChecked();
+    expect(doc().logic.rules).toHaveLength(1);
+    expect(doc().logic.rules[0]?.then[0]).toMatchObject({ type: 'set_value', value: { k: 'call', fn: 'option_code' } });
+    const target = doc().logic.rules[0]?.then[0];
+    const valueId = target && 'target' in target ? target.target : '';
+    expect(doc().blocks['menu']?.layout).toMatchObject({ width: 'half' });
+    expect(doc().blocks[valueId]?.layout).toMatchObject({ width: 'half' });
   });
 });

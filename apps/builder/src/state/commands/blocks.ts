@@ -1,7 +1,7 @@
 import { current, isDraft } from 'immer';
 import type { Block, BlockId, BlockLayout, FormDefinition, OptionId, PageId, Purpose, StoredBlock } from '@form/schema';
 import { childrenOf, freshKey, isField, placementOf, type IdSource } from '@/lib/definition';
-import { dropTarget, pruneOptions, rulesReading, ruleReads, syncInitiallyHidden, ruleTargets } from '@/state/commands/rules';
+import { dropTarget, optionValueTargets, pruneOptions, rulesReading, ruleReads, syncInitiallyHidden, ruleTargets } from '@/state/commands/rules';
 import type { BlockPatch, BlockSource, PageSlot, RuleFate } from '@/state/commands/types';
 
 /*
@@ -95,7 +95,9 @@ export function setWidth(doc: Draft, id: BlockId, width: 'full' | 'half'): void 
  * targets of every rule. A half block that sat beside it starts its own row (BL-150).
  */
 export function deleteBlock(doc: Draft, id: BlockId, fate: RuleFate): void {
+  const linked = optionValueTargets(doc, id).filter((target) => doc.blocks[target] !== undefined);
   const gone = remove(doc, id);
+  for (const target of linked) if (!gone.includes(target)) gone.push(...remove(doc, target));
   const touched = new Set<string>();
   for (const b of gone) {
     for (const rule of rulesReading(doc, b)) ruleTargets(rule).forEach((t) => touched.add(t));

@@ -380,6 +380,74 @@ describe('evaluate', () => {
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '30' } });
   });
 
+  it('sums the option value filled into each row, and a row formula uses that row’s value', () => {
+    const fill = rule('fill', cond(ans('item'), 'is_answered'), [{
+      type: 'set_value',
+      target: bid('price'),
+      value: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('item') } }] },
+    }]);
+    const perRow: S.Expr = {
+      k: 'binary',
+      op: '*',
+      left: { k: 'ref', ref: { kind: 'answer', blockId: bid('qty'), row: 'current' } },
+      right: { k: 'ref', ref: { kind: 'answer', blockId: bid('price'), row: 'current' } },
+    };
+    const def = form(
+      [
+        field('repeating_group', 'items', { config: { children: [bid('item'), bid('price'), bid('qty'), bid('line')], minRows: 0, maxRows: 10, initialRows: 1, layout: 'stacked' } }),
+        field('single_choice', 'item', { config: { display: 'dropdown', options: [{ id: oid('burger'), label: 'Burger', code: '40' }, { id: oid('fries'), label: 'Fries', code: '15' }] } }),
+        field('short_text', 'price'),
+        field('number', 'qty'),
+        field('calculation', 'line', { config: { expr: perRow, resultType: 'number', display: 'visible' } }),
+        field('calculation', 'total', {
+          config: {
+            expr: { k: 'call', fn: 'sum', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('price') } }] },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['items', 'total'])],
+      [fill],
+    );
+    const rows = a.group([
+      { rowId: 'row_1', values: { [bid('item')]: a.single('burger'), [bid('qty')]: a.number('2') } },
+      { rowId: 'row_2', values: { [bid('item')]: a.single('fries'), [bid('qty')]: a.number('3') } },
+    ]);
+    const state = evaluate(versionOf(def), { [bid('items')]: rows }, META, 'client');
+    expect(state.rowValues?.[bid('line')]).toEqual({
+      row_1: { t: 'number', v: '80' },
+      row_2: { t: 'number', v: '45' },
+    });
+    expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '55' } });
+    expect(state.rowValues?.[bid('price')]).toEqual({
+      row_1: { t: 'text', v: '40' },
+      row_2: { t: 'text', v: '15' },
+    });
+  });
+
+  it('copies the selected option value into a text field', () => {
+    const def = form(
+      [
+        field('single_choice', 'menu', { config: { display: 'dropdown', options: [{ id: oid('burger'), label: 'Burger', code: '467' }] } }),
+        field('short_text', 'price'),
+      ],
+      [page('p1', ['menu', 'price'])],
+      [rule('fill', cond(ans('menu'), 'is_answered'), [{
+        type: 'set_value',
+        target: bid('price'),
+        value: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('menu') } }] },
+      }])],
+    );
+    const version = versionOf(def);
+    const state = evaluate(version, { [bid('menu')]: a.single('burger') }, META, 'client');
+    expect(state.values[bid('price')]).toEqual({ type: 'short_text', value: '467' });
+    const session = createEvaluator(version, META, 'client');
+    session.evaluate({});
+    const next = session.update({ [bid('menu')]: a.single('burger') }, [bid('menu')]);
+    expect(next.values[bid('price')]).toEqual({ type: 'short_text', value: '467' });
+  });
+
   it('blocks submit when a text field does not start with another field’s option code', () => {
     const def = form(
       [

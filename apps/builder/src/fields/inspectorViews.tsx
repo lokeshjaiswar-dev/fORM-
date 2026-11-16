@@ -12,6 +12,7 @@ import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
 import { formatFormula, markRowRefs, parseFormula } from '@/lib/formula';
+import { isOptionValueField } from '@/state/commands/rules';
 import { patchBlockConfig } from '@/fields/configSink';
 import { addChildBlock, requestDeleteBlock } from '@/state/actions';
 import { currentDoc } from '@/state/documentStore';
@@ -850,10 +851,6 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
 
 const CALC_SOURCES = new Set(['number', 'rating', 'linear_scale', 'nps', 'repeating_group', 'calculation']);
 
-function listParentOf(id: string): boolean {
-  return Object.values(currentDoc().blocks).some((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never));
-}
-
 /** The repeating group a block sits directly inside, if any. */
 function groupOf(id: string): string | undefined {
   return Object.values(currentDoc().blocks).find((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never))?.id;
@@ -863,12 +860,14 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const doc = currentDoc();
   // Inside a list row, a formula works row by row, so list fields are inserted by plain key.
   // Outside a list, a list field means the sum of all its rows.
-  const formulaInRow = listParentOf(block.id);
+  const formulaGroup = groupOf(block.id);
   const sources = Object.values(doc.blocks).flatMap((b) => {
-    if (!b || b.id === block.id || !isField(b) || !CALC_SOURCES.has(b.type)) return [];
-    const list = listParentOf(b.id);
+    /* A dropdown's filled value is text on the canvas and a number in a formula. */
+    const filled = b?.type === 'short_text' && isOptionValueField(doc, b.id);
+    if (!b || b.id === block.id || !isField(b) || (!CALC_SOURCES.has(b.type) && !filled)) return [];
+    const list = groupOf(b.id);
     const name = plainText(b.label) || b.key;
-    const useSum = list && !formulaInRow;
+    const useSum = list !== undefined && list !== formulaGroup;
     /* The chip, the formula text and the saved formula all use the field's name; the key is only used to parse. */
     return [{ id: b.id, key: b.key, name, insert: useSum ? `sum(${name})` : name }];
   });
@@ -887,7 +886,6 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const shown = stored === '0' && block.config.expr.k === 'lit' ? '' : stored;
   const [draft, setDraft] = useDraft(shown);
   const parsed = parseFormula(toKeys(draft), keys);
-  const formulaGroup = groupOf(block.id);
   /* Same-list fields are read per row: a formula inside a list works on each row's own values. */
   const toExpr = (expr: Expr): Expr => markRowRefs(expr, (id) => formulaGroup !== undefined && groupOf(id) === formulaGroup);
   return (
