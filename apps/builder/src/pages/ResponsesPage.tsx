@@ -86,7 +86,7 @@ function FieldMedia({ media }: { media: AnswerMedia[] }) {
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {media.map((item, i) => {
-        if (item.fileId) return <StoredFile key={item.fileId} fileId={item.fileId} name={item.name} mime={item.mime} />;
+        if (item.fileId) return <StoredFile key={item.fileId} fileId={item.fileId} name={item.name} {...(item.mime ? { mime: item.mime } : {})} />;
         if (item.assetId) {
           const src = themeImageUrl(item.assetId);
           return src ? <img key={`${item.assetId}-${i}`} src={src} alt={item.name} className="size-20 rounded-[8px] border border-border object-cover" /> : null;

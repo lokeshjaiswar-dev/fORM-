@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DEFAULT_SECTION_NAV, type BlockId } from '@form/schema';
+import { DEFAULT_SECTION_NAV, type BlockId, type HexColor } from '@form/schema';
 import { setBehavior, setTheme, updateBlock } from '@/state/actions';
 import { applyImageTemplate, IMAGE_TEMPLATES, THEME_PRESETS } from '@/components/builder/design/presets';
 import { useUiStore } from '@/state/uiStore';
@@ -62,7 +62,7 @@ describe('FormCanvas', () => {
     const user = userEvent.setup();
     const personal = screen.getByDisplayValue('Personal information');
     await user.clear(personal);
-    expect((doc().blocks.s1 as { config: { name: string } }).config.name).toBe('');
+    expect((doc().blocks['s1' as BlockId] as { config: { name: string } }).config.name).toBe('');
     expect(personal).toHaveValue('');
     await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/section break');
     await user.click(screen.getByRole('option', { name: 'Section break' }));
@@ -128,7 +128,7 @@ describe('FormCanvas', () => {
     const title = screen.getByLabelText('Form title');
     const canvas = title.closest('[data-layout]');
     expect(canvas).toHaveStyle({ '--fr-accent': '#7c3aed', '--fr-page': '#fef3c7', '--fr-text': '#111827', color: 'var(--fr-text)', backgroundColor: 'var(--fr-page)' });
-    act(() => setTitleStyle({ textColor: '#dc2626', sizePx: 36 }));
+    act(() => setTitleStyle({ textColor: '#dc2626' as HexColor, sizePx: 36 }));
     expect(title).toHaveStyle({ color: 'rgb(220, 38, 38)', fontSize: '36px' });
     expect(screen.getByRole('button', { name: 'Open submit button settings' })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
   });

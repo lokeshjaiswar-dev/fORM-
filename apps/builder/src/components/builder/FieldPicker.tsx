@@ -87,7 +87,7 @@ export function FieldPicker() {
               <div key={cat} className="mb-3">
                 <p className="mb-0.5 px-2 py-1 text-[11px] font-medium text-text-subtle">{categoryLabel(cat)}</p>
                 {items.map((tile) => (
-                  <PaletteItem key={tile.id} tile={tile} onRemove={tile.id.startsWith('custom.') ? () => setRemoving(tile) : undefined} />
+                  <PaletteItem key={tile.id} tile={tile} {...(tile.id.startsWith('custom.') ? { onRemove: () => setRemoving(tile) } : {})} />
                 ))}
               </div>
             );

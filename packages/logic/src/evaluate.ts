@@ -865,7 +865,12 @@ class Session {
       const actions = out === true ? s.rule.then : out === false ? (s.rule.else ?? []) : [];
       for (const a of actions) {
         if (a.type !== 'block_submit') continue;
-        submitBlocks.push({ ruleId: s.rule.id, message: a.message, atPage: a.atPage, anchorBlockId: a.anchorBlockId });
+        submitBlocks.push({
+          ruleId: s.rule.id,
+          message: a.message,
+          ...(a.atPage ? { atPage: a.atPage } : {}),
+          ...(a.anchorBlockId ? { anchorBlockId: a.anchorBlockId } : {}),
+        });
       }
     });
     const state: EvalState = {

@@ -1365,7 +1365,7 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
             { value: 'multi', label: t(M['inspector.matrix_mode_multi']) },
             { value: 'grid', label: t(M['inspector.matrix_mode_grid']) },
           ]}
-          onChange={setMode}
+          onChange={(value) => setMode(value as typeof mode)}
         />
       ) : null}
       <LabelList

@@ -10,6 +10,7 @@ import {
   type SafeUrl,
 } from '@form/schema';
 import { t } from '@/i18n';
+import { applyPatch } from '@/lib/applyPatch';
 import { useDraft } from '@/lib/useDraft';
 import { updateBlock } from '@/state/actions';
 import { Alert, AlertDescription, Badge, Button, Input, Label, Separator, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
@@ -42,10 +43,10 @@ const M = defineMessages('builder', {
 
 const DEFAULT_API: ApiValidation = { url: 'http://localhost:3001/verify-name' as SafeUrl, method: 'POST', parser: 'json' };
 
-function patch(block: FieldBlock, next: Partial<ApiValidation>): void {
+function patch(block: FieldBlock, next: { [K in keyof ApiValidation]?: ApiValidation[K] | undefined }): void {
   const current = block.apiValidation;
   if (!current) return;
-  const merged: ApiValidation = { ...current, ...next };
+  const merged: ApiValidation = applyPatch(current, next);
   for (const key of ['query', 'body', 'auth', 'responseKey', 'success'] as const) {
     if (merged[key] === undefined) delete merged[key];
   }

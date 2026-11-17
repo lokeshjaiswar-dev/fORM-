@@ -222,7 +222,7 @@ function mergeConfigValue(key: string, a: unknown, b: unknown, path: string): { 
       out[k] = inner.value;
       if (inner.optionMap) optionMap = inner.optionMap;
     }
-    return { ok: true, value: out, optionMap };
+    return optionMap ? { ok: true, value: out, optionMap } : { ok: true, value: out };
   }
 
   const reason = canonicalReason(path);
@@ -320,12 +320,16 @@ export function combineFields(left: FieldBlock, right: FieldBlock): CombineResul
   if (left.initiallyDisabled || right.initiallyDisabled) field.initiallyDisabled = true;
   if (left.initiallyHidden || right.initiallyHidden) field.initiallyHidden = true;
   if (left.hideLabel || right.hideLabel) field.hideLabel = true;
-  if (left.unique ?? right.unique) field.unique = left.unique ?? right.unique;
-  if (left.apiValidation ?? right.apiValidation) field.apiValidation = left.apiValidation ?? right.apiValidation;
+  const unique = left.unique ?? right.unique;
+  if (unique) field.unique = unique;
+  const apiValidation = left.apiValidation ?? right.apiValidation;
+  if (apiValidation) field.apiValidation = apiValidation;
   if (left.apiOptions) field.apiOptions = left.apiOptions;
   else if (right.apiOptions) field.apiOptions = right.apiOptions;
-  if (left.prefill ?? right.prefill) field.prefill = left.prefill ?? right.prefill;
-  if (left.description ?? right.description) field.description = left.description ?? right.description;
+  const prefill = left.prefill ?? right.prefill;
+  if (prefill) field.prefill = prefill;
+  const description = left.description ?? right.description;
+  if (description) field.description = description;
   if (messages.value) field.messages = messages.value;
 
   return { ok: true, field, optionMap: config.optionMap ?? new Map() };

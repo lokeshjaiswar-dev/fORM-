@@ -204,9 +204,11 @@ export function BlockInspector() {
     );
   }
 
-  const tabs = tabsFor(block!);
+  if (!block || block.type === 'unsupported') return null;
+
+  const tabs = tabsFor(block);
   const shown = tabs.includes(tab) ? tab : 'general';
-  const typeName = tileOf(block!.type, block!.config as Readonly<Record<string, unknown>>)?.label ?? block!.type;
+  const typeName = tileOf(block.type, block.config as Readonly<Record<string, unknown>>)?.label ?? block.type;
 
   return (
     <aside
@@ -261,11 +263,11 @@ export function BlockInspector() {
             ))}
           </TabsList>
           <TabsContent value={shown} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {shown === 'general' ? <GeneralTab block={block!} /> : null}
-            {shown === 'options' ? <Registered block={block!} section="options" /> : null}
-            {shown === 'validation' && isField(block!) ? <ValidationTab block={block!} /> : null}
-            {shown === 'logic' ? <LogicTab blockId={block!.id} /> : null}
-            {shown === 'privacy' && isField(block!) ? <PrivacySection block={block!} /> : null}
+            {shown === 'general' ? <GeneralTab block={block} /> : null}
+            {shown === 'options' ? <Registered block={block} section="options" /> : null}
+            {shown === 'validation' && isField(block) ? <ValidationTab block={block} /> : null}
+            {shown === 'logic' ? <LogicTab blockId={block.id} /> : null}
+            {shown === 'privacy' && isField(block) ? <PrivacySection block={block} /> : null}
           </TabsContent>
         </Tabs>
       </div>

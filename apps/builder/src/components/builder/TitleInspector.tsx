@@ -95,7 +95,7 @@ const weightLabel = (weight: FormTitleWeight): string => t(M[`inspector.form_tit
 
 export function TitleInspector() {
   const style = useDoc((d) => d.titleStyle) ?? {};
-  const set = (patch: Partial<FormTitleStyle>) => setTitleStyle(patch);
+  const set = (patch: { [K in keyof FormTitleStyle]?: FormTitleStyle[K] | undefined }) => setTitleStyle(patch);
 
   return (
     <div className="space-y-4">

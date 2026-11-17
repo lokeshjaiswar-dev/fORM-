@@ -105,7 +105,7 @@ export function ApiRequestFields({
   bodyHint?: string;
   urlText: string;
   onUrlText: (url: string) => void;
-  onPatch: (next: Partial<ApiRequestConfig>) => void;
+  onPatch: (next: { [K in keyof ApiRequestConfig]?: ApiRequestConfig[K] | undefined }) => void;
 }) {
   return (
     <>

@@ -5,7 +5,7 @@ import { blockOrder, isField } from '@/lib/definition';
 import type { SubmissionField } from '@/persistence/SubmissionsRepository';
 
 function isValueField(block: StoredBlock | undefined): block is FieldBlock {
-  return isField(block) && block.type !== 'unsupported';
+  return isField(block);
 }
 
 function joinReadable(value: unknown): string {

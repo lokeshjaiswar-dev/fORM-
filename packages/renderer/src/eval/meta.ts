@@ -31,7 +31,8 @@ function fromWindow(): { pageUrl?: string; referrer?: string; userAgent?: string
   if (document.referrer) env.referrer = document.referrer;
   if (typeof navigator !== 'undefined' && navigator.userAgent) env.userAgent = navigator.userAgent;
   const ancestors = window.location.ancestorOrigins;
-  if (window.parent !== window && ancestors && ancestors.length > 0) env.embedOrigin = ancestors[0];
+  const origin = ancestors?.[0];
+  if (window.parent !== window && origin) env.embedOrigin = origin;
   return env;
 }
 

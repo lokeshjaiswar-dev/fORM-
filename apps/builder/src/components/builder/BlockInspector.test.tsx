@@ -214,7 +214,7 @@ describe('BlockInspector validation', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/names' } });
     expect(get('emp_name').apiValidation).toEqual({ url: 'https://hr.example.com/names', method: 'POST', parser: 'json' });
     await user.click(screen.getByRole('radio', { name: 'GET' }));
-    expect(get('emp_name').apiValidation?.method).toBe('GET');
+    expect((get('emp_name') as { apiValidation?: { method?: string } }).apiValidation?.method).toBe('GET');
   });
 
   it('enables API validation on any answer field', async () => {
@@ -470,7 +470,7 @@ describe('dropdown fill toggle', () => {
     expect(doc().logic.rules[0]?.then[0]).toMatchObject({ type: 'set_value', value: { k: 'call', fn: 'option_code' } });
     const target = doc().logic.rules[0]?.then[0];
     const valueId = target && 'target' in target ? target.target : '';
-    expect(doc().blocks['menu']?.layout).toMatchObject({ width: 'half' });
-    expect(doc().blocks[valueId]?.layout).toMatchObject({ width: 'half' });
+    expect((doc().blocks['menu' as BlockId] as { layout?: unknown } | undefined)?.layout).toMatchObject({ width: 'half' });
+    expect(valueId ? (doc().blocks[valueId] as { layout?: unknown } | undefined)?.layout : undefined).toMatchObject({ width: 'half' });
   });
 });

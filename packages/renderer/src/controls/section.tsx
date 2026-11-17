@@ -31,7 +31,7 @@ export function Section({ block }: ControlProps<'section'>) {
   return (
     <section className="fr-section">
       <Button type="button" variant="ghost" className="fr-section-toggle h-auto w-full justify-start whitespace-normal text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="fr-section-title"><RichTextView doc={c.title} inline resolve={resolve} /></span>
+        <span className="fr-section-title">{c.title ? <RichTextView doc={c.title} inline resolve={resolve} /> : null}</span>
       </Button>
       {open ? body : null}
     </section>

@@ -136,7 +136,7 @@ function starterCheck(fields: FieldBlock[], defaults: Defaults): { conditions: C
 function checkRule(id: RuleId, name: string, enabled: boolean, whenId: ConditionId, conditions: Condition[], message: string, anchor: BlockId, atPage?: PageId): Rule {
   return {
     id,
-    name: name.trim() || undefined,
+    ...(name.trim() ? { name: name.trim() } : {}),
     enabled,
     when: { kind: 'group', id: whenId, combinator: 'all', children: conditions },
     then: [{ type: 'block_submit', message: message.trim() || 'This answer does not match.', anchorBlockId: anchor, ...(atPage ? { atPage } : {}) }],

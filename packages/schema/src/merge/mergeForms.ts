@@ -19,7 +19,7 @@ function nestedIds(def: FormDefinition): Set<string> {
     if (isContainer(block)) block.config.children.forEach(visit);
   };
   for (const block of Object.values(def.blocks)) {
-    if (block.type === 'repeating_group') block.config.children.forEach(visit);
+    if (isContainer(block) && block.type === 'repeating_group') block.config.children.forEach(visit);
   }
   return nested;
 }
@@ -221,7 +221,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
     if (defaultPurpose) for (const purpose of src.privacy.purposes) map.set(purpose.id, defaultPurpose);
 
     for (const block of Object.values(src.blocks)) {
-      if (nested.has(block.id) || !isFieldBlock(block) || block.type === 'repeating_group') continue;
+      if (!block || nested.has(block.id) || !isFieldBlock(block) || block.type === 'repeating_group') continue;
       const key = fieldMatchKey(block);
       const hit = survivors.get(key);
       if (!hit) continue;
@@ -293,7 +293,7 @@ export function mergeForms(inputs: readonly MergeFormInput[], options: MergeOpti
     }
   }
 
-  const payments = Object.values(base.blocks).filter((b) => b.type === 'payment');
+  const payments = Object.values(base.blocks).filter((b): b is NonNullable<typeof b> => b !== undefined && b.type === 'payment');
   if (payments.length > 1) {
     const sides = payments.filter(isFieldBlock).map((block) => {
       const owner = [...survivors.values()].find((v) => v.blockId === block.id);

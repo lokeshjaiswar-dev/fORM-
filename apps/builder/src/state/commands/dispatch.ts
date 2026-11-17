@@ -253,7 +253,7 @@ export function coalesceKey(command: Command, doc: FormDefinition): string | nul
     case 'set_title':
       return 'title';
     case 'set_title_style':
-      return typingKey('titleStyle', doc.titleStyle ?? {}, command.style ?? {});
+      return typingKey('titleStyle', doc.titleStyle ?? {}, (command.style ?? {}) as Plain);
     case 'set_description':
       return command.description ? 'description' : null;
     case 'set_theme':

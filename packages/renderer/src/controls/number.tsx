@@ -31,7 +31,7 @@ export function NumberInput({ block, field }: ControlProps<'number'>) {
           onValueChange={(next) => answer.set(String(next[0] ?? min) as DecimalString)}
           disabled={attrs.disabled}
           invalid={field.invalid}
-          aria-describedby={attrs['aria-describedby']}
+          {...(attrs['aria-describedby'] ? { 'aria-describedby': attrs['aria-describedby'] } : {})}
           aria-labelledby={field.ids.label}
           showValue="active"
         />

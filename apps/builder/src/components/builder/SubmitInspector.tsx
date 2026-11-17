@@ -10,6 +10,7 @@ import {
 } from '@form/schema';
 import { SUBMIT_SECTION_ID } from '@form/renderer';
 import { t } from '@/i18n';
+import { applyPatch } from '@/lib/applyPatch';
 import { useDraft } from '@/lib/useDraft';
 import { labelString } from '@/fields/style';
 import { setBehavior } from '@/state/actions';
@@ -78,14 +79,14 @@ export function SubmitInspector() {
   const submit = behavior.submit;
   const [label, setLabel] = useDraft(labelString(submit.label));
 
-  const setSubmit = (patch: Partial<Behavior['submit']>) => {
-    setBehavior({ ...behavior, submit: { ...submit, ...patch } });
+  const setSubmit = (patch: { [K in keyof Behavior['submit']]?: Behavior['submit'][K] | undefined }) => {
+    setBehavior({ ...behavior, submit: applyPatch(submit, patch) });
   };
 
-  const patchNav = (patch: Partial<NonNullable<Behavior['sectionNav']>>) => {
+  const patchNav = (patch: { [K in keyof NonNullable<Behavior['sectionNav']>]?: NonNullable<Behavior['sectionNav']>[K] | undefined }) => {
     setBehavior({
       ...behavior,
-      sectionNav: { ...DEFAULT_SECTION_NAV, ...behavior.sectionNav, ...patch },
+      sectionNav: applyPatch({ ...DEFAULT_SECTION_NAV, ...behavior.sectionNav }, patch),
     });
   };
 

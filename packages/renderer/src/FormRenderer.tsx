@@ -7,6 +7,7 @@ import {
   isSafeUrl, type Block as SchemaBlock, type EndingId, type EvalMeta, type FieldError, type IsoInstant, type PageId, type PlainTemplate,
   type PublicFormDefinition, type SafeUrl, type SubmitResult,
 } from '@form/schema';
+import type { Answers } from '@form/schema';
 import { loadRegexEngine, needsRegexEngine, type RawAnswers } from '@form/validation/lazy';
 import { startingAnswers } from './answers.ts';
 import { verifyFieldApis } from './controls/apiValidation.ts';
@@ -364,7 +365,7 @@ function FormSession({ props, meta, base, onRestart }: {
     }
     const remote = await verifyFieldApis(
       def,
-      form.getValues() as RawAnswers,
+      form.getValues() as unknown as Answers,
       evaluateNow().state.visible,
       isLast ? undefined : current,
       base.t(`system:api_failed`),

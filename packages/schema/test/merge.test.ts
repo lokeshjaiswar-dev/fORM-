@@ -15,7 +15,7 @@ function input(formId: string, title: string, patch: (def: S.FormDefinition) => 
 
 function merge(forms: S.MergeFormInput[], resolutions?: S.MergeResolution[]) {
   n = 0;
-  return S.mergeForms(forms, { newFormId: 'grouped', newId, resolutions });
+  return S.mergeForms(forms, { newFormId: 'grouped', newId, ...(resolutions ? { resolutions } : {}) });
 }
 
 function nameOf(def: S.FormDefinition): S.FieldBlockOf<'short_text'> {
@@ -36,7 +36,7 @@ describe('mergeForms matching', () => {
     const b = input('b', 'B', (def) => {
       nameOf(def).id = id('name_b');
       def.pages[0]!.children = [ids.consent, id('name_b')];
-      def.blocks[id('name_b')] = nameOf(def);
+      def.blocks[id<S.BlockId>('name_b')] = nameOf(def);
       delete def.blocks[ids.name];
     });
     const result = merge([a, b]);
@@ -95,7 +95,7 @@ describe('mergeForms matching', () => {
     const result = merge([a, b]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(Object.values(result.definition.blocks).filter((b) => b.type === 'heading')).toHaveLength(2);
+    expect(Object.values(result.definition.blocks).filter((b): b is S.StoredBlock => b !== undefined && b.type === 'heading')).toHaveLength(2);
   });
 });
 
@@ -202,11 +202,11 @@ describe('mergeForms conflicts', () => {
       config: { parts, requiredParts: ['first'] },
     });
     const a = input('a', 'Form A', (def) => {
-      def.blocks[id('fn')] = name(['prefix', 'first', 'middle', 'last'], 'fn');
+      def.blocks[id<S.BlockId>('fn')] = name(['prefix', 'first', 'middle', 'last'], 'fn');
       def.pages[0]!.children.push(id('fn'));
     });
     const b = input('b', 'Form B', (def) => {
-      def.blocks[id('fn')] = name(['first', 'last', 'suffix', 'middle'], 'fn');
+      def.blocks[id<S.BlockId>('fn')] = name(['first', 'last', 'suffix', 'middle'], 'fn');
       def.pages[0]!.children.push(id('fn'));
     });
     const result = merge([a, b]);
@@ -258,7 +258,7 @@ describe('mergeForms conflicts', () => {
 
   it('conflicts when the same label+type appears twice in one form', () => {
     const a = input('a', 'A', (def) => {
-      def.blocks[id('name2')] = { ...nameOf(def), id: id('name2'), key: id('name_2') };
+      def.blocks[id<S.BlockId>('name2')] = { ...nameOf(def), id: id('name2'), key: id('name_2') };
       def.pages[0]!.children.push(id('name2'));
     });
     const b = input('b', 'B', () => undefined);
@@ -286,11 +286,11 @@ describe('mergeForms conflicts', () => {
       },
     });
     const a = input('a', 'A', (def) => {
-      def.blocks[id('pay_a')] = pay('pay_a', 'Fee A');
+      def.blocks[id<S.BlockId>('pay_a')] = pay('pay_a', 'Fee A');
       def.pages[0]!.children.push(id('pay_a'));
     });
     const b = input('b', 'B', (def) => {
-      def.blocks[id('pay_b')] = pay('pay_b', 'Fee B');
+      def.blocks[id<S.BlockId>('pay_b')] = pay('pay_b', 'Fee B');
       def.pages[0]!.children.push(id('pay_b'));
     });
     const result = merge([a, b]);
@@ -425,7 +425,7 @@ describe('mergeForms configurable list', () => {
     const result = merge([a, b]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const lists = Object.values(result.definition.blocks).filter((block) => block.type === 'repeating_group');
+    const lists = Object.values(result.definition.blocks).filter((block): block is S.StoredBlock => block !== undefined && block.type === 'repeating_group');
     expect(lists).toHaveLength(1);
     const list = lists[0] as S.FieldBlockOf<'repeating_group'>;
     expect(list.config.children.length).toBe(1);
@@ -442,7 +442,7 @@ describe('mergeForms configurable list', () => {
     const result = merge([a, b]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const list = Object.values(result.definition.blocks).find((block) => block.type === 'repeating_group') as S.FieldBlockOf<'repeating_group'>;
+    const list = Object.values(result.definition.blocks).find((block): block is S.StoredBlock => block !== undefined && block.type === 'repeating_group') as S.FieldBlockOf<'repeating_group'>;
     expect(list.config.children).toHaveLength(1);
     expect(list.config.children[0]).not.toBe(ids.name);
   });

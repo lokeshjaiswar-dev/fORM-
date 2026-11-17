@@ -1,12 +1,12 @@
 import type { FieldBlock, StoredBlock } from '../v2/blocks.ts';
-import type { InlineDoc, LabelText } from '../v2/rich-text.ts';
+import type { InlineDoc, LabelText, RichDoc } from '../v2/rich-text.ts';
 import { toPlain } from '../richtext/toPlain.ts';
 
 export function normalizeLabel(text: string): string {
   return text.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-export function plainLabelText(value: LabelText | InlineDoc | undefined): string {
+export function plainLabelText(value: LabelText | InlineDoc | RichDoc | undefined): string {
   if (value === undefined) return '';
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) return value.filter((part): part is string => typeof part === 'string').join('');

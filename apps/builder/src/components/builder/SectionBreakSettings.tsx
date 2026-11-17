@@ -12,6 +12,7 @@ import { setBehavior } from '@/state/actions';
 import { currentDoc, useDoc } from '@/state/documentStore';
 import { Input, Label, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
+import { applyPatch } from '@/lib/applyPatch';
 import { useDraft } from '@/lib/useDraft';
 
 const M = defineMessages('builder', {
@@ -53,9 +54,9 @@ const M = defineMessages('builder', {
   'sections.align_end': 'End',
 });
 
-function patchNav(patch: Partial<SectionNav>): void {
+function patchNav(patch: { [K in keyof SectionNav]?: SectionNav[K] | undefined }): void {
   const doc = currentDoc();
-  setBehavior({ ...doc.behavior, sectionNav: { ...DEFAULT_SECTION_NAV, ...doc.behavior.sectionNav, ...patch } });
+  setBehavior({ ...doc.behavior, sectionNav: applyPatch({ ...DEFAULT_SECTION_NAV, ...doc.behavior.sectionNav }, patch) });
 }
 
 export function SectionBreakSettings() {
@@ -81,7 +82,7 @@ export function SectionBreakSettings() {
         <>
           <SelectRow
             label={t(M['sections.mode'])}
-            value={current.mode}
+            value={current.mode ?? 'scroll'}
             options={[
               ['scroll', t(M['sections.mode_scroll'])],
               ['paged', t(M['sections.mode_paged'])],

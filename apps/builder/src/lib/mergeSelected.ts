@@ -1,4 +1,4 @@
-import { mergeForms, type FormDefinition, type MergeConflict, type MergeResolution } from '@form/schema';
+import { mergeForms, type FormDefinition, type IsoInstant, type MergeConflict, type MergeResolution } from '@form/schema';
 import { uid } from '@/lib/utils';
 import { newStoredForm, openStored } from '@/persistence/openForm';
 import type { DocumentRepository, StoredForm } from '@/persistence/DocumentRepository';
@@ -11,9 +11,9 @@ export type MergeOutcome =
 /** Merge already-loaded drafts in this browser (used when the API is unreachable). */
 export function mergeLoaded(forms: Array<{ id: string; title: string; definition: FormDefinition }>, resolutions?: MergeResolution[]): MergeOutcome {
   const id = uid();
-  const result = mergeForms(forms, { newFormId: id, resolutions, newId: uid });
+  const result = mergeForms(forms, { newFormId: id, newId: uid, ...(resolutions ? { resolutions } : {}) });
   if (!result.ok) return result;
-  return { ok: true, form: newStoredForm(id, new Date().toISOString(), result.definition) };
+  return { ok: true, form: newStoredForm(id, new Date().toISOString() as IsoInstant, result.definition) };
 }
 
 export async function mergeFromRepository(
@@ -25,7 +25,7 @@ export async function mergeFromRepository(
   for (const id of ids) {
     const stored = await repo.load(id);
     if (!stored) return { ok: false, error: 'One of the selected forms could not be read.' };
-    const opened = openStored(stored, new Date().toISOString());
+    const opened = openStored(stored, new Date().toISOString() as IsoInstant);
     if (!opened.ok) return { ok: false, error: opened.error };
     loaded.push({ id, title: opened.doc.title, definition: opened.doc });
   }

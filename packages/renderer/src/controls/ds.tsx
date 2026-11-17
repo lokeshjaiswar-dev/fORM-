@@ -19,6 +19,10 @@ import type { ComponentProps } from 'react';
 
 export { Chip, FileDropzone, Input as DsInput, Slider, Textarea as DsTextarea };
 
+function present<T extends Record<string, unknown>>(value: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
 const NONE = '__fr_none__';
 
 export type DsOption = { value: string; label: string };
@@ -110,18 +114,20 @@ export function DsCombobox({
 }) {
   return (
     <Combobox
-      id={id}
-      className={className}
       options={options.map((option) => ({ value: option.value, label: option.label }))}
-      value={value || undefined}
       onValueChange={(next) => onChange(next)}
-      placeholder={placeholder}
-      searchPlaceholder={searchPlaceholder ?? placeholder}
-      disabled={disabled}
-      aria-invalid={invalid}
-      aria-describedby={describedBy}
-      aria-required={required}
-      aria-label={ariaLabel}
+      {...present({
+        id,
+        className,
+        value: value || undefined,
+        placeholder,
+        searchPlaceholder: searchPlaceholder ?? placeholder,
+        disabled,
+        'aria-invalid': invalid,
+        'aria-describedby': describedBy,
+        'aria-required': required,
+        'aria-label': ariaLabel,
+      })}
     />
   );
 }
@@ -155,18 +161,20 @@ export function DsMultiSelect({
 }) {
   return (
     <MultiSelect
-      id={id}
       options={options.map((option) => ({ value: option.value, label: option.label }))}
       value={value}
       onValueChange={onChange}
-      placeholder={placeholder}
-      searchPlaceholder={searchPlaceholder ?? placeholder}
-      disabled={disabled}
-      aria-invalid={invalid}
-      aria-describedby={describedBy}
-      aria-required={required}
-      aria-label={ariaLabel}
-      aria-labelledby={labelledBy}
+      {...present({
+        id,
+        placeholder,
+        searchPlaceholder: searchPlaceholder ?? placeholder,
+        disabled,
+        'aria-invalid': invalid,
+        'aria-describedby': describedBy,
+        'aria-required': required,
+        'aria-label': ariaLabel,
+        'aria-labelledby': labelledBy,
+      })}
     />
   );
 }

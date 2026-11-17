@@ -12,6 +12,7 @@ import {
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { patchBlockConfig } from '@/fields/configSink';
+import { applyPatch } from '@/lib/applyPatch';
 import { useDraft } from '@/lib/useDraft';
 import { updateBlock } from '@/state/actions';
 import { Alert, AlertDescription, Badge, Button, Label, Separator, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@dmacq/ui';
@@ -42,10 +43,10 @@ const DEFAULT_API: ApiOptions = { url: 'http://localhost:3001/cities' as SafeUrl
 
 type ChoiceBlock = BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'>;
 
-function patch(block: FieldBlock, next: Partial<ApiOptions>): void {
+function patch(block: FieldBlock, next: { [K in keyof ApiOptions]?: ApiOptions[K] | undefined }): void {
   const current = block.apiOptions;
   if (!current) return;
-  const merged: ApiOptions = { ...current, ...next };
+  const merged: ApiOptions = applyPatch(current, next);
   for (const key of ['query', 'body', 'auth', 'itemsPath', 'collectionKind', 'labelKey', 'valueKey'] as const) {
     if (merged[key] === undefined) delete merged[key];
   }

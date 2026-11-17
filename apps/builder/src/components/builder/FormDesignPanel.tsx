@@ -99,7 +99,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {children}
         {!open ? (
-          <Tooltip content={t(M['design.open'])} side="left" className="absolute right-5 top-5 z-20">
+          <Tooltip content={t(M['design.open'])} side="right" className="absolute right-5 top-5 z-20">
             <Button
               type="button"
               size="icon-lg"

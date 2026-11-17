@@ -49,7 +49,7 @@ export function AddressField({ block, field }: ControlProps<'address'>) {
         const id = `${field.ids.input}-${part}`;
         if (part === 'country') {
           const allowed = countryMode === 'list' ? new Set(block.config.country.allowed ?? []) : null;
-          const options = COUNTRY_OPTIONS.filter((o) => !allowed || allowed.has(o.id as CountryCode));
+          const options = COUNTRY_OPTIONS.filter((o) => !allowed || allowed.has(o.id as unknown as CountryCode));
           return (
             <label key={part} className="fr-address-part" htmlFor={id}>
               <span>{label}</span>

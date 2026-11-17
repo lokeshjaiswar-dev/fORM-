@@ -47,8 +47,8 @@ export type SectionNavMode = (typeof SECTION_NAV_MODES)[number];
 /** How named section breaks appear to the respondent (Personal information → Education → Payment → Submit). */
 export interface SectionNav {
   enabled: boolean;
-  /** `scroll`: one page, click jumps to the marker. `paged`: each marker starts a new page. */
-  mode: SectionNavMode;
+  /** `scroll`: one page, click jumps to the marker. `paged`: each marker starts a new page. Omitted means scroll. */
+  mode?: SectionNavMode;
   placement: SectionNavPlacement;
   variant: SectionNavVariant;
   currentMarker: SectionNavCurrentMarker;
@@ -100,8 +100,14 @@ export interface SubmitButtonStyle {
   shape?: SubmitButtonShape;
 }
 
+export interface BehaviorSubmit extends SubmitButtonStyle {
+  label: LabelText;
+  align: 'left' | 'center' | 'right' | 'full';
+  printButton?: boolean;
+}
+
 export interface Behavior {
-  submit: { label: LabelText; align: 'left' | 'center' | 'right' | 'full'; printButton?: boolean } & SubmitButtonStyle; // FLD-50
+  submit: BehaviorSubmit; // FLD-50
   navigation: { allowBack: boolean; showPageTitles: boolean; autoAdvance?: boolean; keyboardShortcuts?: boolean };
   /** Present when the form uses section breaks; omitted on older forms. */
   sectionNav?: SectionNav;

@@ -57,7 +57,7 @@ function Row({
   expandable?: boolean;
   onToggle?: () => void;
   label: string;
-  hint?: string;
+  hint?: string | undefined;
   value?: string;
   active?: boolean;
   actions?: ReactNode;
@@ -108,7 +108,7 @@ function Node({
   mode: 'options' | 'check';
   selected: string | undefined;
   onSelect: (path: string, part: TreePart) => void;
-  onUse?: (role: 'label' | 'value') => void;
+  onUse?: ((role: 'label' | 'value') => void) | undefined;
 }) {
   const [open, setOpen] = useState(startOpen ?? false);
   const list = Array.isArray(value);
@@ -202,9 +202,9 @@ export function ApiResponseTree({
 }: {
   data: unknown;
   mode: 'options' | 'check';
-  selected?: string;
+  selected?: string | undefined;
   onSelect: (path: string, part: TreePart) => void;
-  onUse?: (role: 'label' | 'value') => void;
+  onUse?: ((role: 'label' | 'value') => void) | undefined;
 }) {
   if (data === undefined) return null;
   return (

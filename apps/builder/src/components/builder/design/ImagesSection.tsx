@@ -52,9 +52,9 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
     <div className="space-y-5">
       <SceneRow
         label={t(M['design.backgrounds'])}
-        selected={bg}
+        {...(bg ? { selected: bg } : {})}
         onSelect={(id) => patch({ background: id ? { kind: 'image', image: ref(id), fit: tokens.background?.kind === 'image' ? tokens.background.fit : 'cover' } : { kind: 'color', color: pageColor } })}
-        onUpload={(file) => void upload(file, 'background')}
+        onUpload={(file) => { void upload(file, 'background'); }}
       />
       {tokens.background?.kind === 'image' ? (
         <div className="flex gap-2">
@@ -67,9 +67,9 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
       ) : null}
       <SceneRow
         label={t(M['design.covers'])}
-        selected={cover}
+        {...(cover ? { selected: cover } : {})}
         onSelect={(id) => (id ? patch({ cover: { image: ref(id), heightPx: tokens.cover?.heightPx ?? 220 } }) : patch({}, true))}
-        onUpload={(file) => void upload(file, 'cover')}
+        onUpload={(file) => { void upload(file, 'cover'); }}
       />
       {tokens.cover ? (
         <div className="space-y-1.5">
