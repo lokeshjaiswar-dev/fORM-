@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Condition, OptionId } from '@form/schema';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
-import { FormPreview } from '@/components/preview/PreviewPane';
 import { block, doc, resetStore } from '@/test/fixtures';
 
 const stateGstin = () => [
@@ -28,30 +27,13 @@ describe('Form settings Logic', () => {
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
     await user.click(screen.getByRole('tab', { name: 'Rules' }));
-    await user.click(screen.getByRole('button', { name: 'Add a check' }));
+    await user.click(screen.getByRole('button', { name: 'Add a rule' }));
     const rule = doc().logic.rules[0];
-    expect(rule?.then[0]).toMatchObject({ type: 'block_submit', anchorBlockId: 'gstin' });
-    const ops = (rule?.when.children as Condition[]).map((c) => c.op);
-    expect(ops).toEqual(['is_answered', 'is_answered', 'not_starts_with']);
-    expect((rule?.when.children as Condition[])[2]?.right).toEqual({ kind: 'ref', ref: { kind: 'answer', blockId: 'state' } });
-  });
-
-  it('blocks preview submit when GSTIN does not match the state code, and allows a match', async () => {
-    const user = userEvent.setup();
-    const panel = render(<FormDesignPanel />);
-    await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    await user.click(screen.getByRole('tab', { name: 'Rules' }));
-    await user.click(screen.getByRole('button', { name: 'Add a check' }));
-    panel.unmount();
-    render(<FormPreview />);
-    fireEvent.change(screen.getByRole('combobox', { name: /State/ }), { target: { value: 'mh' } });
-    const gstin = screen.getByRole('textbox', { name: /GSTIN/ });
-    await user.type(gstin, '29AAAAA0000A1Z5');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('This answer does not match.')).toBeInTheDocument();
-    await user.clear(gstin);
-    await user.type(gstin, '27AAAAA0000A1Z5');
-    await user.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('Thanks for your response!')).toBeInTheDocument();
+    expect(rule?.then[0]).toMatchObject({ type: 'show', targets: ['state'] });
+    expect(rule?.else?.[0]).toMatchObject({ type: 'hide', targets: ['state'] });
+    const [only] = rule?.when.children as Condition[];
+    expect(only?.op).toBe('eq');
+    expect(only?.left).toMatchObject({ kind: 'expr', expr: { k: 'call', fn: 'option_code' } });
+    expect(only?.right).toMatchObject({ kind: 'ref', ref: { kind: 'answer', blockId: 'gstin' } });
   });
 });

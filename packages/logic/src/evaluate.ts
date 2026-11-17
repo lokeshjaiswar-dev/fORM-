@@ -452,6 +452,15 @@ class Session {
           const code = this.optionCode(chosen.blockId, chosen.v);
           return code ? text(code) : NULL;
         }
+        if ((expr.fn === 'left' || expr.fn === 'right') && expr.args[0] !== undefined && expr.args[1] !== undefined) {
+          const src = this.exprValue(expr.args[0], depth + 1);
+          const nVal = this.exprValue(expr.args[1], depth + 1);
+          const raw = src.t === 'text' ? src.v : src.t === 'option' ? this.optionCode(src.blockId, src.v) : '';
+          const n = nVal.t === 'number' ? Math.floor(Number(nVal.v)) : 0;
+          if (!raw || !Number.isFinite(n) || n <= 0) return NULL;
+          const count = Math.min(raw.length, n);
+          return text(expr.fn === 'left' ? raw.slice(0, count) : raw.slice(-count));
+        }
         if (expr.fn === 'option_score' && expr.args[0] !== undefined) {
           const chosen = this.exprValue(expr.args[0], depth + 1);
           if (chosen.t !== 'option') return NULL;
@@ -518,7 +527,7 @@ class Session {
     const block = this.p.blocks.get(blockId as BlockId);
     const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; code?: string }> }).options : undefined;
     const code = options?.find((o) => o.id === optionId)?.code?.trim();
-    return code ?? '';
+    return code || optionId;
   }
 
   private asText(value: ScalarValue): ScalarValue {
@@ -533,11 +542,15 @@ class Session {
 
   private condition(c: Condition): boolean {
     const left = this.operandValue(c.left);
+    const right = this.operandValue(c.right);
     const textOp = c.op === 'contains' || c.op === 'not_contains' || c.op === 'starts_with' || c.op === 'not_starts_with' || c.op === 'ends_with' || c.op === 'not_ends_with';
+    const optionish = (v: ScalarValue) => v.t === 'option' || (v.t === 'list' && v.of === 'option');
+    // "is" between a dropdown and text compares the option value (its code), not the internal id.
+    const codeEq = (c.op === 'eq' || c.op === 'neq') && ((optionish(left) && right.t === 'text') || (optionish(right) && left.t === 'text'));
     return compare({
       op: c.op,
-      left: textOp ? this.asText(left) : left,
-      right: textOp ? this.asText(this.operandValue(c.right)) : this.operandValue(c.right),
+      left: textOp || codeEq ? this.asText(left) : left,
+      right: textOp || codeEq ? this.asText(right) : right,
       right2: this.operandValue(c.right2),
       caseSensitive: c.caseSensitive === true,
       answered: this.answered(c.left, left),

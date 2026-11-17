@@ -74,6 +74,8 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
     if (!open) return;
     const onDown = (event: PointerEvent) => {
       if (eventFromPanel(event, panelRef.current)) return;
+      // A portaled menu is open. This press is choosing an option; closing the panel here unmounts it.
+      if (document.querySelector('[data-slot="select-content"], [data-slot="dropdown-menu-content"], [data-slot="popover-content"]')) return;
       setOpen(false);
     };
     document.addEventListener('pointerdown', onDown, true);
@@ -331,18 +333,18 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 }
 
 function NumberField({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const [draft, setDraft] = useDraft(String(value));
   return (
     <div className="space-y-1.5">
       <Label className="text-sidebar-foreground/80">{label}</Label>
       <Input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
+        inputMode="numeric"
+        value={draft}
         className="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground"
         onChange={(e) => {
+          setDraft(e.target.value);
           const n = Number(e.target.value);
-          if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.round(n))));
+          if (e.target.value.trim() !== '' && Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.round(n))));
         }}
       />
     </div>

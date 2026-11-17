@@ -54,8 +54,8 @@ export function EditBlock({ block }: { block: StoredBlock }) {
             onEnter={() => focusNextField(block.id)}
             autoFocus={focused}
             fill={false}
-            editorClassName="whitespace-pre!"
-            className="w-max max-w-full whitespace-nowrap bg-transparent text-left text-[length:var(--fr-label-size,1em)] font-medium leading-normal text-[var(--fr-label-color,var(--fr-text))]"
+            editorClassName="min-w-40 pe-px"
+            className="min-w-40 max-w-full bg-transparent text-left text-[length:var(--fr-label-size,1em)] font-medium leading-normal text-[var(--fr-label-color,var(--fr-text))]"
             style={labelStyle(block.style)}
             placeholder={t(block.type === 'hidden' ? M['block.hidden_field'] : M['block.question'])}
           />

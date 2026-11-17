@@ -24,13 +24,21 @@ export function EditorFrame({ kind, fill = true, editorClassName, ...props }: Ri
   const empty = useMemo(() => isEmpty(props.value), [props.value]);
   return (
     <>
-      <div className={cn('relative flex min-h-8 min-w-0 items-center', fill ? 'flex-1' : 'max-w-[calc(100%-1.25rem)]')}>
+      <div
+        className={cn('relative flex min-h-8 items-center', fill ? 'min-w-0 flex-1' : 'min-w-40 max-w-[calc(100%-1.25rem)]')}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            event.preventDefault();
+            editor?.commands.focus('end');
+          }
+        }}
+      >
         {empty ? (
           <div className="pointer-events-none absolute inset-0 flex items-center whitespace-nowrap text-[#c5c4c1]" style={props.style}>
             {props.placeholder}
           </div>
         ) : null}
-        <EditorContent editor={editor} className={cn('min-w-0 pe-0.5', fill && 'w-full', props.className)} style={props.style} />
+        <EditorContent editor={editor} className={cn('min-w-40 pe-0.5', fill && 'w-full', props.className)} style={props.style} />
       </div>
       {editor ? <FormatMenu editor={editor} /> : null}
     </>

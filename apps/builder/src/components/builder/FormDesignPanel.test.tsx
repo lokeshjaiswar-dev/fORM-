@@ -63,7 +63,7 @@ describe('FormDesignPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
     expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Rules' }));
-    expect(screen.getByText(/Block submit when the answers do not match/)).toBeInTheDocument();
+    expect(screen.getByText(/Name a rule, compare two fields/)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Submit' }));
     expect(screen.getByLabelText('Password (optional)')).toHaveValue('');
     await user.click(screen.getByRole('button', { name: 'Outside' }));

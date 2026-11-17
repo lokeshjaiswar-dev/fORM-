@@ -180,6 +180,21 @@ export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<
           /* A choice inside a list is one value per row; the fill rule still type-checks, and formulas read each row. */
           return { kind: fn === 'option_code' ? 'text' : 'number', source: 'expr', ...(arg.list ? { list: true } : {}) };
         }
+        if (e.fn === 'left' || e.fn === 'right') {
+          const fn = e.fn;
+          if (e.args.length !== 2 || e.args[0] === undefined || e.args[1] === undefined) {
+            ctx.issue('expr_type_error', at, `'${fn}' takes the text and how many characters`);
+            return null;
+          }
+          const arg = visit(e.args[0], `${at}/args/0`, depth + 1);
+          const n = visit(e.args[1], `${at}/args/1`, depth + 1);
+          if (!arg || !n) return null;
+          if ((arg.kind !== 'text' && arg.kind !== 'choice') || n.kind !== 'number') {
+            ctx.issue('expr_type_error', at, `'${fn}' needs text and a number`);
+            return null;
+          }
+          return { kind: 'text', source: 'expr' };
+        }
         if (e.fn !== 'sum') break;
         if (e.args.length !== 1 || e.args[0] === undefined) {
           ctx.issue('expr_type_error', at, "'sum' takes one field");
@@ -255,6 +270,8 @@ function fits(op: LogicOperator, left: Typed, right: Typed): boolean {
   switch (base) {
     case 'eq':
     case 'neq':
+      if ((left.kind === 'choice' || left.kind === 'choices') && right.kind === 'text') return true;
+      if (left.kind === 'text' && (right.kind === 'choice' || right.kind === 'choices')) return true;
       if (left.kind === 'choice' || left.kind === 'choices') return right.kind === 'option_set' && right.blockId === left.blockId;
       return right.kind === left.kind;
     case 'contains':

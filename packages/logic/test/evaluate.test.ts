@@ -448,6 +448,26 @@ describe('evaluate', () => {
     expect(next.values[bid('price')]).toEqual({ type: 'short_text', value: '467' });
   });
 
+  it('treats “is” between an option and the first characters as the option value', () => {
+    const prefix = expr({ k: 'call', fn: 'left', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('gstin') } }, { k: 'lit', value: { type: 'number', value: '2' } }] });
+    const def = form(
+      [
+        field('single_choice', 'state', { config: { display: 'dropdown', options: [
+          { id: oid('mh'), label: 'Maharashtra', code: '27' },
+          { id: oid('ka'), label: 'Karnataka', code: '29' },
+        ] } }),
+        field('short_text', 'gstin'),
+        field('short_text', 'igst'),
+      ],
+      [page('p1', ['state', 'gstin', 'igst'])],
+      [rule('gst', cond(ans('state'), 'eq', prefix), [hide('igst')], [show('igst')])],
+    );
+    const match = evaluate(versionOf(def), { [bid('state')]: a.single('mh'), [bid('gstin')]: a.text('27AAAAA0000A1Z5') }, META, 'client');
+    expect(match.visible.has(bid('igst'))).toBe(false);
+    const mismatch = evaluate(versionOf(def), { [bid('state')]: a.single('mh'), [bid('gstin')]: a.text('29AAAAA0000A1Z5') }, META, 'client');
+    expect(mismatch.visible.has(bid('igst'))).toBe(true);
+  });
+
   it('blocks submit when a text field does not start with another field’s option code', () => {
     const def = form(
       [
