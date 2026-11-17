@@ -3,6 +3,7 @@ import { defineMessages } from '@form/i18n';
 /** Renderer chrome. Validation messages and navigation labels come from the `system` catalogue. */
 export const MESSAGES = defineMessages('renderer', {
   'field.required': '(required)',
+  'field.answer': 'Your answer',
   'errors.summary': '{count, plural, one {# answer needs attention.} other {# answers need attention.}}',
   'progress.percent': '{percent}% complete',
   'choice.other_answer': 'Your answer for {label}',

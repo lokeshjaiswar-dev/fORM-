@@ -22,6 +22,7 @@
   "ending.fill_again": "Submit another response",
   "ending.redirecting": "Taking you to the next page…",
   "errors.summary": "{count, plural, one {# answer needs attention.} other {# answers need attention.}}",
+  "field.answer": "Your answer",
   "field.required": "(required)",
   "file.failed": "{name} could not be uploaded.",
   "file.remove": "Remove {name}",

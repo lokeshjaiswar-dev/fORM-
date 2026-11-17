@@ -431,7 +431,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       </div>
     </div>
   ),
-  calculation: () => <output className="fr-input fr-computed">—</output>,
+  calculation: ({ block }) => <TextBox block={block} />,
   context: ({ block }) => {
     const extras = [...(block.config.urlParams ?? []), ...(block.config.staticFacts ?? []).map((f) => f.key)];
     const hidden = block.config.display === 'hidden';
