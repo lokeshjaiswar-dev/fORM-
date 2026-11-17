@@ -356,6 +356,38 @@ describe('evaluate', () => {
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '13.5' } });
   });
 
+  it('leaves a hidden number out of a formula: addition skips it and multiplication does not zero out', () => {
+    const ref = (name: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(name) } });
+    const total = (...parts: S.Expr[]): S.Expr => parts.slice(1).reduce<S.Expr>((left, right) => ({ k: 'binary', op: '+', left, right }), parts[0] as S.Expr);
+    const product = (...parts: S.Expr[]): S.Expr => parts.slice(1).reduce<S.Expr>((left, right) => ({ k: 'binary', op: '*', left, right }), parts[0] as S.Expr);
+    const calc = (id: string, expr: S.Expr) => field('calculation', id, { config: { expr, resultType: 'number', display: 'visible' } });
+    const def = form(
+      [
+        field('number', 'price'),
+        field('number', 'igst'),
+        field('number', 'cgst'),
+        field('number', 'sgst'),
+        field('number', 'rate'),
+        field('number', 'factor'),
+        calc('total', total(ref('price'), ref('igst'), ref('cgst'), ref('sgst'))),
+        calc('gross', product(ref('price'), ref('rate'), ref('factor'))),
+      ],
+      [page('p1', ['price', 'igst', 'cgst', 'sgst', 'rate', 'factor', 'total', 'gross'])],
+      [rule('tax', cond(ans('price'), 'is_answered'), [hide('cgst'), hide('sgst'), hide('factor')])],
+    );
+    const state = evaluate(versionOf(def), {
+      [bid('price')]: a.number('100'),
+      [bid('igst')]: a.number('18'),
+      [bid('cgst')]: a.number('9'),
+      [bid('sgst')]: a.number('9'),
+      [bid('rate')]: a.number('2'),
+      [bid('factor')]: a.number('5'),
+    }, META, 'client');
+    expect(state.visible.has(bid('cgst'))).toBe(false);
+    expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '118' } });
+    expect(state.values[bid('gross')]).toEqual({ type: 'calculation', value: { t: 'number', v: '200' } });
+  });
+
   it('a formula sums every row of a repeating-group number', () => {
     const def = form(
       [

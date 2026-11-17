@@ -190,6 +190,9 @@ function literalValue(literal: Literal): ScalarValue {
 }
 
 const text = (v: string | undefined): ScalarValue => (v === undefined ? NULL : { t: 'text', v });
+const ZERO: ScalarValue = { t: 'number', v: '0' as never };
+const ONE: ScalarValue = { t: 'number', v: '1' as never };
+const NUMERIC_FIELD = new Set(['number', 'calculation', 'rating', 'linear_scale', 'nps']);
 
 function arithmetic(a: ScalarValue, b: ScalarValue, op: '+' | '-' | '*' | '/'): ScalarValue {
   if (a.t !== 'number' || b.t !== 'number') return NULL;
@@ -429,6 +432,21 @@ class Session {
     }
   }
 
+  /**
+   * A hidden number is left out of a formula. Addition and subtraction use 0 for it; multiplication and
+   * division use 1, so a hidden factor does not wipe the product and a hidden divisor does not divide by zero.
+   */
+  private skippedNumber(expr: Expr): boolean {
+    if (expr.k === 'ref' && expr.ref.kind === 'answer' && (expr.ref.path ?? '') === '' && expr.ref.row !== 'current') {
+      const block = this.p.blocks.get(expr.ref.blockId);
+      return isField(block) && NUMERIC_FIELD.has(block.type) && !this.visibleEff(expr.ref.blockId);
+    }
+    if (expr.k === 'binary' && (expr.op === '+' || expr.op === '-' || expr.op === '*' || expr.op === '/')) {
+      return this.skippedNumber(expr.left) && this.skippedNumber(expr.right);
+    }
+    return false;
+  }
+
   private exprValue(expr: Expr, depth = 0): ScalarValue {
     if (depth > 64) return NULL;
     switch (expr.k) {
@@ -476,8 +494,9 @@ class Session {
       case 'binary': {
         const op = expr.op;
         if (op === '+' || op === '-' || op === '*' || op === '/') {
-          const a = this.exprValue(expr.left, depth + 1);
-          const b = this.exprValue(expr.right, depth + 1);
+          const identity = op === '*' || op === '/' ? ONE : ZERO;
+          const a = this.skippedNumber(expr.left) ? identity : this.exprValue(expr.left, depth + 1);
+          const b = this.skippedNumber(expr.right) ? identity : this.exprValue(expr.right, depth + 1);
           return arithmetic(a, b, op);
         }
         if (op !== '==' && op !== '!=' && op !== '<' && op !== '<=' && op !== '>' && op !== '>=') break;
