@@ -405,7 +405,10 @@ function valueText(right: Operand | undefined, field: FieldBlock, fields: FieldB
     const chosen = right.optionIds;
     return choiceOptions(field).filter((o) => chosen.includes(o.id)).map((o) => labelString(o.label)).join(', ');
   }
-  if (right.kind === 'ref' && right.ref.kind === 'answer') return fieldName(fields.find((f) => f.id === right.ref.blockId));
+  if (right.kind === 'ref') {
+    const ref = right.ref;
+    if (ref.kind === 'answer') return fieldName(fields.find((f) => f.id === ref.blockId));
+  }
   if (right.kind === 'literal' && 'value' in right.value) return String(right.value.value);
   return '';
 }

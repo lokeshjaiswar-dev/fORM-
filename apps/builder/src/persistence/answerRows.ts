@@ -98,8 +98,8 @@ function plainLabel(label: unknown): string {
   return (label as LabelLike & unknown[])
     .map((part) => {
       if (typeof part === 'string') return part;
-      if (part && typeof part === 'object' && 'pipe' in part) return part.pipe.fallback ?? '';
-      if (part && typeof part === 'object' && 'var' in part) return part.var.fallback ?? '';
+      if (part && typeof part === 'object' && 'pipe' in part) return (part as { pipe: { fallback?: string } }).pipe.fallback ?? '';
+      if (part && typeof part === 'object' && 'var' in part) return (part as { var: { fallback?: string } }).var.fallback ?? '';
       return '';
     })
     .join('');
@@ -141,8 +141,7 @@ function structuredFor(block: FieldBlock, answer: unknown): { table?: AnswerTabl
     return { table: { headers, rows } };
   }
 
-  // Dynamic table fields are stored with type `il` (see packages/schema answers: { rows: [{ rowId, cells }], addedColumns? }).
-  if (block.type === 'il') {
+  if (block.type === 'dynamic_table') {
     const config = block.config as unknown as { columns: Array<{ id: string; label: unknown }> };
     const added = (value.addedColumns as Array<{ id: string; label: string }> | undefined) ?? [];
     const columns = [
@@ -268,5 +267,11 @@ export function readableFields(definition: FormDefinition | null, record: { answ
   }
   return record.fields
     .filter((field) => field.label || field.value)
-    .map((field) => ({ ...field, value: decodeStoredValue(field.value) }));
+    .map((field) => ({
+      key: field.key,
+      label: field.label,
+      value: decodeStoredValue(field.value),
+      ...(field.table ? { table: field.table } : {}),
+      ...(field.choices ? { choices: field.choices } : {}),
+    }));
 }

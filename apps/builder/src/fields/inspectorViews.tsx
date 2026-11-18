@@ -2,7 +2,7 @@ import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
 import {
   CONTEXT_SOURCES, DATE_PATTERNS, DYNAMIC_COLUMN_INPUTS, NAME_PARTS,
-  type BlockOf, type CardBucketId, type DynamicColumnId, type DynamicColumnInput, type DynamicSummary, type DynamicTableColumn, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
+  type BlockId, type BlockOf, type CardBucketId, type DynamicColumnId, type DynamicColumnInput, type DynamicSummary, type DynamicTableColumn, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
 } from '@form/schema';
 import { patternProblem, patternUnsupportedFeature } from '@form/validation';
 import { t } from '@/i18n';
@@ -924,7 +924,7 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
     }),
     ...summaries,
   ];
-  const keys = new Map(sources.map((s) => [s.key, s.id]));
+  const keys = new Map(sources.map((s) => [s.key as string, s.id as BlockId]));
   const names = new Map<string, string>([
     ...sources.filter((s) => !('path' in s)).map((s) => [s.id, s.name] as const),
     ...summaries.map((s) => [`${s.tableId}|${s.path}`, s.name] as const),
@@ -941,7 +941,7 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const stored = formatFormula(block.config.expr, names);
   const shown = stored === '0' && block.config.expr.k === 'lit' ? '' : stored;
   const [draft, setDraft] = useDraft(shown);
-  const parsed = parseFormula(toKeys(draft), keys as never);
+  const parsed = parseFormula(toKeys(draft), keys);
   const summaryById = new Map(summaries.map((s) => [s.id, s]));
   /* A summary chip parses as its own id, then becomes a path on the dynamic table. */
   const bindSummaries = (expr: Expr): Expr => {
@@ -1604,8 +1604,7 @@ export function DynamicTableGeneral({ block }: InspectorProps<'dynamic_table'>) 
                 const numeric = col.summary === 'sum' || col.summary === 'average' || col.summary === 'min' || col.summary === 'max';
                 // Numeric summaries only make sense on number columns; `count` works on any column.
                 const keep = numeric && next !== 'number' && next !== 'formula' ? undefined : col.summary;
-                const formula = next === 'formula' ? col.formula : undefined;
-                updateColumn(index, keep === undefined ? { input: next, summary: 'none', formula } : { input: next, summary: keep, formula });
+                updateColumn(index, keep === undefined ? { input: next, summary: 'none' } : { input: next, summary: keep });
               }}
             />
             {col.input === 'formula' ? <ColumnFormula columns={c.columns} column={col} onChange={(formula) => updateColumn(index, { formula })} /> : null}
@@ -1647,7 +1646,7 @@ export function DynamicTableGeneral({ block }: InspectorProps<'dynamic_table'>) 
             <ToggleRow
               key={type}
               label={t(M[DT_TYPE_KEYS[type]])}
-              hint={i === 0 ? t(M['inspector.dtable_addable_hint']) : undefined}
+              {...(i === 0 ? { hint: t(M['inspector.dtable_addable_hint']) } : {})}
               checked={c.addableInputs.includes(type)}
               onChange={(on) => setAddable(type, on)}
             />

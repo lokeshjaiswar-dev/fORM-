@@ -1,4 +1,4 @@
-import type { DecimalString, DynamicColumnId, DynamicTableColumn, DynamicTableValue } from '@form/schema';
+import type { DecimalString, DynamicColumnId, DynamicSummary, DynamicTableColumn, DynamicTableValue } from '@form/schema';
 import { defineField, headerOf, isBlank } from '../define.ts';
 import { PALETTE_LABELS } from '../messages.ts';
 import { NUMBER_OPS } from '../operators.ts';
@@ -212,7 +212,7 @@ export const dynamicTable = defineField({
     if (isRootPath(path) || path === 'count') return countScalar(value.rows.length);
     const summary = /^summary\.(sum|average|min|max|count)\.(.+)$/.exec(path ?? '');
     if (!summary) return NULL;
-    const result = summarize(value.rows, { id: summary[2] as DynamicColumnId, label: '', input: 'number', summary: summary[1] as DynamicTableColumn['summary'] });
+    const result = summarize(value.rows, { id: summary[2] as DynamicColumnId, label: '', input: 'number', summary: summary[1] as DynamicSummary });
     if (result === undefined) return NULL;
     const rounded = Math.round(result * 1e10) / 1e10;
     return { t: 'number', v: String(rounded) as DecimalString };
