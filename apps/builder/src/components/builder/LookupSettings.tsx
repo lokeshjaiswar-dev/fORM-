@@ -163,7 +163,7 @@ function LookupAccordion({
   onRemove: () => void;
 }) {
   const [draft, setDraft] = useState(source);
-  const [urlText, setUrlText] = useDraft(draft.url);
+  const [urlText, setUrlText] = useDraft<string>(draft.url);
   const [status, setStatus] = useState<'idle' | 'testing' | 'fail' | 'parse' | 'empty' | 'ok'>('idle');
   const [data, setData] = useState<unknown>();
   const [notice, setNotice] = useState('');
