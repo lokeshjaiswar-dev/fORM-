@@ -28,6 +28,7 @@ export type CardItemId = Brand<string, 'CardItemId'>;
 export type CardBucketId = Brand<string, 'CardBucketId'>;
 export type SemanticPairId = Brand<string, 'SemanticPairId'>;
 export type GroupRowId = Brand<string, 'GroupRowId'>;
+export type DynamicColumnId = Brand<string, 'DynamicColumnId'>;
 export type ProductId = Brand<string, 'ProductId'>;
 export type ProductOptionId = Brand<string, 'ProductOptionId'>;
 export type ConsentItemId = Brand<string, 'ConsentItemId'>;

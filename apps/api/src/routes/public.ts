@@ -14,7 +14,13 @@ import { ProblemError } from '../errors.ts';
 
 const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
-const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string() });
+const fieldRow = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string(),
+  table: z.object({ headers: z.array(z.string()), rows: z.array(z.array(z.string())) }).optional(),
+  choices: z.array(z.string()).optional(),
+});
 
 type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
 
@@ -34,7 +40,7 @@ type DiskSubmission = {
   submittedAt: string;
   locale: string;
   answers: Record<string, unknown>;
-  fields: Array<{ key: string; label: string; value: string }>;
+  fields: Array<{ key: string; label: string; value: string; table?: { headers: string[]; rows: string[][] } | undefined; choices?: string[] | undefined }>;
 };
 
 function livePath(slug: string): string {

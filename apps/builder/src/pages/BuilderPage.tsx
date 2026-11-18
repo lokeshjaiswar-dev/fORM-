@@ -53,7 +53,7 @@ function Builder() {
           <BuilderHeader />
           <SessionBanners />
           <div className="flex min-h-0 flex-1">
-            <FormDesignPanel>
+            <FormDesignPanel showTrigger={false}>
               {mode === 'edit' ? (
                 <ErrorBoundary key="edit" label="canvas">
                   <FormCanvas />

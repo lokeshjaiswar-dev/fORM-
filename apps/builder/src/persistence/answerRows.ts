@@ -79,7 +79,102 @@ function asFileRef(value: unknown): FileRef | null {
 
 export type AnswerMedia = { fileId?: string; assetId?: string; name: string; mime?: string };
 
-export type ReadableField = SubmissionField & { media?: AnswerMedia[] };
+/** A structured answer shown as a grid: first row is headers. */
+export type AnswerTable = { headers: string[]; rows: string[][] };
+
+export type ReadableField = SubmissionField & {
+  media?: AnswerMedia[];
+  /** Matrix and input-table answers, kept as rows and columns instead of flattened text. */
+  table?: AnswerTable;
+  /** Selected choice labels, shown as separate chips (dropdown, radio, checkbox). */
+  choices?: string[];
+};
+
+type LabelLike = string | ReadonlyArray<string | { pipe: { fallback?: string } } | { var: { fallback?: string } }>;
+
+function plainLabel(label: unknown): string {
+  if (typeof label === 'string') return label;
+  if (!Array.isArray(label)) return '';
+  return (label as LabelLike & unknown[])
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (part && typeof part === 'object' && 'pipe' in part) return part.pipe.fallback ?? '';
+      if (part && typeof part === 'object' && 'var' in part) return part.var.fallback ?? '';
+      return '';
+    })
+    .join('');
+}
+
+function cellValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.map(String).join(', ');
+  return String(value);
+}
+
+/** Structured view for answers that read better as a grid or chips; undefined for everything else. */
+function structuredFor(block: FieldBlock, answer: unknown): { table?: AnswerTable; choices?: string[] } | undefined {
+  const value = answerValue(answer) as Record<string, unknown> | null;
+  if (!value || typeof value !== 'object') return undefined;
+
+  if (block.type === 'matrix') {
+    const config = block.config as unknown as {
+      rows: Array<{ id: string; label: unknown }>;
+      columns: Array<{ id: string; label: unknown }>;
+    };
+    const cells = (value.rows ?? {}) as Record<string, unknown>;
+    const colLabel = (id: string) => plainLabel(config.columns.find((c) => c.id === id)?.label) || id;
+    const headers = ['', ...config.columns.map((c) => plainLabel(c.label) || c.id)];
+    const rows = config.rows.map((row) => {
+      const cell = cells[row.id];
+      const rowCells = config.columns.map((col) => {
+        if (cell === undefined) return '';
+        if (Array.isArray(cell)) return cell.map((id) => colLabel(String(id))).join(', ');
+        if (cell && typeof cell === 'object') {
+          const raw = (cell as Record<string, unknown>)[col.id];
+          return cellValue(raw);
+        }
+        return cell === col.id ? '✓' : '';
+      });
+      return [plainLabel(row.label) || row.id, ...rowCells];
+    });
+    return { table: { headers, rows } };
+  }
+
+  // Dynamic table fields are stored with type `il` (see packages/schema answers: { rows: [{ rowId, cells }], addedColumns? }).
+  if (block.type === 'il') {
+    const config = block.config as unknown as { columns: Array<{ id: string; label: unknown }> };
+    const added = (value.addedColumns as Array<{ id: string; label: string }> | undefined) ?? [];
+    const columns = [
+      ...config.columns.map((c) => ({ id: c.id, label: plainLabel(c.label) || c.id })),
+      ...added.map((c) => ({ id: c.id, label: c.label || c.id })),
+    ];
+    const rowsRaw = (value.rows as Array<{ cells?: Record<string, unknown> }> | undefined) ?? [];
+    return {
+      table: {
+        headers: columns.map((c) => c.label),
+        rows: rowsRaw.map((row) => columns.map((c) => cellValue(row.cells?.[c.id]))),
+      },
+    };
+  }
+
+  if (block.type === 'single_choice' || block.type === 'multi_choice') {
+    const options = (block.config as unknown as { options: Array<{ id: string; label: unknown }> }).options;
+    const labelOf = (id: string) => plainLabel(options.find((o) => o.id === id)?.label) || id;
+    if (block.type === 'single_choice') {
+      const optionId = value.optionId;
+      const other = typeof value.other === 'string' ? value.other : '';
+      const picked = typeof optionId === 'string' ? labelOf(optionId) : other;
+      return picked ? { choices: [picked] } : undefined;
+    }
+    const ids = Array.isArray(value.optionIds) ? (value.optionIds as unknown[]).map(String) : [];
+    const choices = ids.map(labelOf);
+    if (typeof value.other === 'string' && value.other) choices.push(value.other);
+    return choices.length ? { choices } : undefined;
+  }
+
+  return undefined;
+}
 
 function mediaFor(block: FieldBlock, answer: unknown): AnswerMedia[] {
   const value = answerValue(answer);
@@ -143,7 +238,15 @@ export function answerRows(definition: FormDefinition, answers: Answers): Readab
     const answer = answers[block.id];
     if (!answer) continue;
     const media = mediaFor(block, answer);
-    rows.push({ key: block.key, label: fieldLabel(block), value: displayAnswer(block, answer), ...(media.length ? { media } : {}) });
+    const structured = structuredFor(block, answer);
+    rows.push({
+      key: block.key,
+      label: fieldLabel(block),
+      value: displayAnswer(block, answer),
+      ...(media.length ? { media } : {}),
+      ...(structured?.table ? { table: structured.table } : {}),
+      ...(structured?.choices ? { choices: structured.choices } : {}),
+    });
   }
   return rows;
 }

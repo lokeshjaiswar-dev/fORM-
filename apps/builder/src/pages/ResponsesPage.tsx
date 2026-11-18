@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Inbox } from 'lucide-react';
+import { Inbox, Pencil } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { rememberThemeImage, themeImageUrl } from '@form/renderer';
 import type { FormDefinition, IsoInstant } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
+import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
+import { PageHeader } from '@dmacq/ui/patterns';
+import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
+import { SortableHead, TablePagination, useTableView } from '@/components/workspace/tableView';
 import { builderPath } from '@/pages/useBuilderMode';
-import { readableFields, type AnswerMedia, type ReadableField } from '@/persistence/answerRows';
+import { readableFields, type AnswerMedia, type AnswerTable, type ReadableField } from '@/persistence/answerRows';
 import { loadSubmissionFile } from '@/persistence/filesApi';
 import { getRemoteSubmission, listRemoteSubmissions } from '@/persistence/submissionsApi';
 import { useRepository } from '@/persistence/repository';
@@ -97,15 +100,73 @@ function FieldMedia({ media }: { media: AnswerMedia[] }) {
   );
 }
 
+/** Grid view for matrix and dynamic-table answers: sticky header, row count, and a clear empty state. */
+function AnswerGrid({ table }: { table: AnswerTable }) {
+  const count = table.rows.length;
+  return (
+    <div className="overflow-hidden rounded-[8px] border border-border">
+      <div className="ws-scroll-table max-h-[320px] overflow-auto">
+        <table className="w-full min-w-max border-collapse text-left text-[14px]">
+          <caption className="sr-only">{count === 1 ? '1 row' : `${count} rows`}</caption>
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <tr>
+              {table.headers.map((header, i) => (
+                <th key={`${header}-${i}`} scope="col" className="whitespace-nowrap px-3 py-2 font-semibold">
+                  {header || '\u00a0'}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {count === 0 ? (
+              <tr>
+                <td colSpan={Math.max(table.headers.length, 1)} className="px-3 py-3 text-center text-muted-foreground">
+                  No rows
+                </td>
+              </tr>
+            ) : (
+              table.rows.map((row, r) => (
+                <tr key={r} className="align-top transition-colors hover:bg-surface-subtle">
+                  {row.map((cell, c) => (
+                    <td key={c} className="px-3 py-2 whitespace-pre-wrap break-words">
+                      {cell || <span className="text-muted-foreground">—</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      {count > 0 ? (
+        <div className="border-t border-border bg-surface-subtle px-3 py-1.5 text-[12px] text-muted-foreground">
+          {count === 1 ? '1 row' : `${count} rows`}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Full-size value for the detail dialog: text plus any attached files or pictures. */
 function FieldValue({ field }: { field: ReadableField }) {
   const files = field.media?.filter((item) => item.fileId) ?? [];
   const pictures = field.media?.filter((item) => item.assetId) ?? [];
   const fileNames = files.map((item) => item.name).join(', ');
   const hideFileName = files.length > 0 && (!field.value || field.value === fileNames);
+  const showText = !!field.value && !hideFileName && !field.table && !field.choices;
   return (
     <>
-      {field.value && !hideFileName ? <span className="whitespace-pre-wrap">{field.value}</span> : null}
+      {showText ? <span className="whitespace-pre-wrap">{field.value}</span> : null}
+      {field.choices ? (
+        <ul className="flex flex-wrap gap-2" aria-label="Selected">
+          {field.choices.map((choice, i) => (
+            <li key={`${choice}-${i}`} className="rounded-full border border-border bg-surface-subtle px-3 py-1 text-[14px]">
+              {choice}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {field.table ? <AnswerGrid table={field.table} /> : null}
       {pictures.length ? <FieldMedia media={pictures} /> : null}
       {files.length ? <FieldMedia media={files} /> : null}
     </>
@@ -196,29 +257,44 @@ export function ResponsesPage() {
     return [...seen.values()];
   }, [rows]);
 
+  const sortAccessors = useMemo(() => {
+    const accessors: Record<string, (row: (typeof rows)[number]) => string | number> = {
+      submitted: (row) => new Date(row.record.submittedAt).getTime(),
+    };
+    for (const column of columns) {
+      accessors[column.key] = (row) => cellText(row.byKey.get(column.key));
+    }
+    return accessors;
+  }, [columns, rows]);
+
+  const view = useTableView<(typeof rows)[number], string>(rows, sortAccessors, { key: 'submitted', dir: 'desc' });
+  // The # column keeps each response's place in the order it was received, whatever the sort.
+  const numberOf = useMemo(() => new Map(rows.map((row, i) => [row.record.id, rows.length - i])), [rows]);
+
   const openFields = open ? readableFields(definition, open).filter(hasContent) : [];
 
   return (
-    <main className="mx-auto w-full max-w-[1200px] px-8 pb-24 pt-[72px] text-foreground">
-      <Button variant="ghost" size="sm" asChild className="-ml-2 mb-6">
-        <Link to="/forms">
-          <ArrowLeft />
-          {t(M['responses.back'])}
-        </Link>
-      </Button>
-
-      <p className="text-[13px] font-medium uppercase tracking-[0.04em] text-muted-foreground">{t(M['responses.title'])}</p>
-      <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[32px] font-bold leading-[1.15] tracking-[-0.02em]">{title ?? t(M['responses.title'])}</h1>
-        {id ? (
+    <WorkspaceShell
+      crumb={title ?? t(M['responses.title'])}
+      actions={
+        id ? (
           <Button variant="outline" size="sm" asChild>
-            <Link to={builderPath(id)}>Open form</Link>
+            <Link to={builderPath(id)}>
+              <Pencil />
+              Open form
+            </Link>
           </Button>
-        ) : null}
-      </div>
-      <p className="mt-2 text-[15px] text-muted-foreground">
-        {records === null ? 'Loading…' : responseCount(records.length)}
-      </p>
+        ) : null
+      }
+    >
+      <PageHeader
+        title={title ?? t(M['responses.title'])}
+        titleLevel={1}
+        backHref="/forms"
+        backLabel={t(M['responses.back'])}
+        description={records === null ? 'Loading…' : responseCount(records.length)}
+        status={<Badge variant="secondary">{t(M['responses.title'])}</Badge>}
+      />
 
       {error ? (
         <p role="alert" className="mt-4 text-[14px] text-destructive">
@@ -234,16 +310,30 @@ export function ResponsesPage() {
           <p className="mt-4 max-w-[360px] text-[15px] leading-6 text-muted-foreground">{t(M['responses.empty'])}</p>
         </div>
       ) : (
-        <div className="mt-8 overflow-x-auto rounded-[12px] border border-border bg-background">
+        <div className="ws-enter mt-6 overflow-hidden rounded-[12px] border border-border bg-background shadow-sm">
+          <div className="ws-scroll-table overflow-auto">
           <table className="w-full border-collapse text-left text-[14px]">
             <thead className="bg-surface-subtle text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th scope="col" className="sticky left-0 z-10 w-12 bg-surface-subtle px-4 py-3 font-semibold">#</th>
-                <th scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">{t(M['responses.title'])}</th>
+                <SortableHead
+                  className="whitespace-nowrap"
+                  label="Submitted"
+                  sortKey="submitted"
+                  active={view.sortKey}
+                  dir={view.sortDir}
+                  onSort={view.toggleSort}
+                />
                 {columns.map((column) => (
-                  <th key={column.key} scope="col" className="min-w-[160px] px-4 py-3 font-semibold">
-                    {column.label}
-                  </th>
+                  <SortableHead
+                    key={column.key}
+                    className="min-w-[160px]"
+                    label={column.label}
+                    sortKey={column.key}
+                    active={view.sortKey}
+                    dir={view.sortDir}
+                    onSort={view.toggleSort}
+                  />
                 ))}
                 <th scope="col" className="px-4 py-3">
                   <span className="sr-only">{t(M['responses.view_data'])}</span>
@@ -251,9 +341,9 @@ export function ResponsesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map(({ record, byKey }, index) => (
+              {view.pageItems.map(({ record, byKey }) => (
                 <tr key={record.id} className="align-top transition-colors hover:bg-surface-subtle">
-                  <td className="sticky left-0 bg-background px-4 py-3 tabular-nums text-muted-foreground">{rows.length - index}</td>
+                  <td className="sticky left-0 bg-background px-4 py-3 tabular-nums text-muted-foreground">{numberOf.get(record.id)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{when(record.submittedAt)}</td>
                   {columns.map((column) => {
                     const text = cellText(byKey.get(column.key));
@@ -272,32 +362,44 @@ export function ResponsesPage() {
               ))}
             </tbody>
           </table>
+          </div>
+          <TablePagination
+            page={view.page}
+            pageCount={view.pageCount}
+            total={view.total}
+            pageSize={view.pageSize}
+            onPage={view.setPage}
+            onPageSize={view.setPageSize}
+            noun="responses"
+          />
         </div>
       )}
 
       <Dialog open={open !== null} onOpenChange={(next) => !next && setOpen(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[520px]">
-          <DialogHeader>
+        <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto p-0 sm:max-w-[640px]">
+          <DialogHeader className="border-b border-border px-6 py-5">
             <DialogTitle>{t(M['responses.data_title'])}</DialogTitle>
             <DialogDescription>{open ? t(M['responses.submitted'], { when: when(open.submittedAt) }) : null}</DialogDescription>
           </DialogHeader>
           {open ? (
-            <dl className="space-y-0">
-              {openFields.map((field, i) => (
-                <div key={field.key} className={i === 0 ? 'pb-4' : 'border-t border-border py-4'}>
+            <dl className="divide-y divide-border px-6">
+              {openFields.map((field) => (
+                <div key={field.key} className="grid gap-1.5 py-4 sm:grid-cols-[180px_1fr] sm:gap-6">
                   <dt className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{field.label}</dt>
-                  <dd className="mt-1.5 text-[16px] leading-6">
+                  <dd className="text-[15px] leading-6">
                     <FieldValue field={field} />
                   </dd>
                 </div>
               ))}
             </dl>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => setOpen(null)}>
-            {t(M['responses.close'])}
-          </Button>
+          <div className="flex justify-end border-t border-border bg-surface-subtle px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => setOpen(null)}>
+              {t(M['responses.close'])}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
-    </main>
+    </WorkspaceShell>
   );
 }

@@ -1,8 +1,8 @@
 import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
 import {
-  CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS,
-  type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
+  CONTEXT_SOURCES, DATE_PATTERNS, DYNAMIC_COLUMN_INPUTS, NAME_PARTS,
+  type BlockOf, type CardBucketId, type DynamicColumnId, type DynamicColumnInput, type DynamicSummary, type DynamicTableColumn, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
 } from '@form/schema';
 import { patternProblem, patternUnsupportedFeature } from '@form/validation';
 import { t } from '@/i18n';
@@ -119,6 +119,37 @@ const M = defineMessages('builder', {
   'inspector.matrix_add_row': 'Add row',
   'inspector.matrix_add_column': 'Add column',
   'inspector.matrix_row_n': 'Row {n}',
+  'inspector.dtable_columns': 'Columns',
+  'inspector.dtable_add_column': 'Add column',
+  'inspector.dtable_column_n': 'Column {n}',
+  'inspector.dtable_column_label': 'Column name',
+  'inspector.dtable_type': 'Type',
+  'inspector.dtable_type_text': 'Text',
+  'inspector.dtable_type_number': 'Number',
+  'inspector.dtable_type_date': 'Date',
+  'inspector.dtable_type_email': 'Email',
+  'inspector.dtable_type_url': 'URL',
+  'inspector.dtable_type_phone': 'Phone',
+  'inspector.dtable_type_long_text': 'Long text',
+  'inspector.dtable_type_datetime': 'Date and time',
+  'inspector.dtable_type_time': 'Time',
+  'inspector.dtable_type_formula': 'Formula',
+  'inspector.dtable_formula': 'Formula',
+  'inspector.dtable_formula_hint': 'Uses the other columns in this row. Click a column to insert it. Example: qty * price',
+  'inspector.dtable_summary_label': 'Footer label',
+  'inspector.dtable_summary': 'Footer summary',
+  'inspector.dtable_summary_none': 'None',
+  'inspector.dtable_summary_sum': 'Sum',
+  'inspector.dtable_summary_average': 'Average',
+  'inspector.dtable_summary_min': 'Minimum',
+  'inspector.dtable_summary_max': 'Maximum',
+  'inspector.dtable_summary_count': 'Count filled cells',
+  'inspector.dtable_remove_column': 'Remove column',
+  'inspector.dtable_allow_add': 'Let respondents add columns',
+  'inspector.dtable_allow_add_hint': 'When on, the respondent can add text or number columns while filling the form.',
+  'inspector.dtable_max_columns': 'Maximum columns (including added)',
+  'inspector.dtable_addable': 'Column types a respondent can add',
+  'inspector.dtable_addable_hint': 'Only the types ticked here appear when the respondent adds a column.',
   'inspector.matrix_column_n': 'Column {n}',
   'inspector.allow_same_day': 'Allow the same start and end date',
   'inspector.min_span': 'Minimum span (days)',
@@ -851,6 +882,24 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
 
 const CALC_SOURCES = new Set(['number', 'rating', 'linear_scale', 'nps', 'repeating_group', 'calculation']);
 
+/** Footer summaries on dynamic tables, offered to formulas that sit outside the table. */
+function summarySources(doc: ReturnType<typeof currentDoc>): Array<{ id: string; key: string; name: string; insert: string; tableId: string; path: string }> {
+  const out: Array<{ id: string; key: string; name: string; insert: string; tableId: string; path: string }> = [];
+  for (const b of Object.values(doc.blocks)) {
+    if (b?.type !== 'dynamic_table') continue;
+    const tableName = plainText(b.label) || b.key;
+    b.config.columns.forEach((col, index) => {
+      if (!col.summary || col.summary === 'none') return;
+      const what = col.summaryLabel?.trim() || `${col.label} ${col.summary}`;
+      const name = `${tableName}: ${what}`;
+      const path = `summary.${col.summary}.${col.id}`;
+      const key = `summ_${b.key}_${index}`;
+      out.push({ id: `${b.id}|${path}`, key, name, insert: name, tableId: b.id, path });
+    });
+  }
+  return out;
+}
+
 /** The repeating group a block sits directly inside, if any. */
 function groupOf(id: string): string | undefined {
   return Object.values(currentDoc().blocks).find((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never))?.id;
@@ -861,18 +910,25 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   // Inside a list row, a formula works row by row, so list fields are inserted by plain key.
   // Outside a list, a list field means the sum of all its rows.
   const formulaGroup = groupOf(block.id);
-  const sources = Object.values(doc.blocks).flatMap((b) => {
-    /* A dropdown's filled value is text on the canvas and a number in a formula. */
-    const filled = b?.type === 'short_text' && isOptionValueField(doc, b.id);
-    if (!b || b.id === block.id || !isField(b) || (!CALC_SOURCES.has(b.type) && !filled)) return [];
-    const list = groupOf(b.id);
-    const name = plainText(b.label) || b.key;
-    const useSum = list !== undefined && list !== formulaGroup;
-    /* The chip, the formula text and the saved formula all use the field's name; the key is only used to parse. */
-    return [{ id: b.id, key: b.key, name, insert: useSum ? `sum(${name})` : name }];
-  });
+  const summaries = summarySources(doc);
+  const sources = [
+    ...Object.values(doc.blocks).flatMap((b) => {
+      /* A dropdown's filled value is text on the canvas and a number in a formula. */
+      const filled = b?.type === 'short_text' && isOptionValueField(doc, b.id);
+      if (!b || b.id === block.id || !isField(b) || (!CALC_SOURCES.has(b.type) && !filled)) return [];
+      const list = groupOf(b.id);
+      const name = plainText(b.label) || b.key;
+      const useSum = list !== undefined && list !== formulaGroup;
+      /* The chip, the formula text and the saved formula all use the field's name; the key is only used to parse. */
+      return [{ id: b.id as string, key: b.key, name, insert: useSum ? `sum(${name})` : name }];
+    }),
+    ...summaries,
+  ];
   const keys = new Map(sources.map((s) => [s.key, s.id]));
-  const names = new Map(sources.map((s) => [s.id, s.name]));
+  const names = new Map<string, string>([
+    ...sources.filter((s) => !('path' in s)).map((s) => [s.id, s.name] as const),
+    ...summaries.map((s) => [`${s.tableId}|${s.path}`, s.name] as const),
+  ]);
   /* Field names (and sum(name)) in the formula text, mapped back to keys before parsing. Longest first; whole words only. */
   const nameToKey = new Map<string, string>();
   for (const s of sources) {
@@ -885,9 +941,24 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const stored = formatFormula(block.config.expr, names);
   const shown = stored === '0' && block.config.expr.k === 'lit' ? '' : stored;
   const [draft, setDraft] = useDraft(shown);
-  const parsed = parseFormula(toKeys(draft), keys);
+  const parsed = parseFormula(toKeys(draft), keys as never);
+  const summaryById = new Map(summaries.map((s) => [s.id, s]));
+  /* A summary chip parses as its own id, then becomes a path on the dynamic table. */
+  const bindSummaries = (expr: Expr): Expr => {
+    const go = (e: Expr): Expr => {
+      if (e.k === 'ref' && e.ref.kind === 'answer') {
+        const hit = summaryById.get(e.ref.blockId);
+        return hit ? { k: 'ref', ref: { kind: 'answer', blockId: hit.tableId as never, path: hit.path } } : e;
+      }
+      if (e.k === 'unary') return { ...e, arg: go(e.arg) };
+      if (e.k === 'call') return { ...e, args: e.args.map(go) };
+      if (e.k === 'binary') return { ...e, left: go(e.left), right: go(e.right) };
+      return e;
+    };
+    return go(expr);
+  };
   /* Same-list fields are read per row: a formula inside a list works on each row's own values. */
-  const toExpr = (expr: Expr): Expr => markRowRefs(expr, (id) => formulaGroup !== undefined && groupOf(id) === formulaGroup);
+  const toExpr = (expr: Expr): Expr => markRowRefs(bindSummaries(expr), (id) => formulaGroup !== undefined && groupOf(id) === formulaGroup);
   return (
     <>
       <TextField
@@ -1428,6 +1499,161 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
           if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
         }}
       />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+const DT_TYPE_KEYS = {
+  text: 'inspector.dtable_type_text',
+  number: 'inspector.dtable_type_number',
+  date: 'inspector.dtable_type_date',
+  email: 'inspector.dtable_type_email',
+  url: 'inspector.dtable_type_url',
+  phone: 'inspector.dtable_type_phone',
+  long_text: 'inspector.dtable_type_long_text',
+  datetime: 'inspector.dtable_type_datetime',
+  time: 'inspector.dtable_type_time',
+  formula: 'inspector.dtable_type_formula',
+} as const;
+
+const DT_SUMMARY_KEYS = {
+  none: 'inspector.dtable_summary_none',
+  sum: 'inspector.dtable_summary_sum',
+  average: 'inspector.dtable_summary_average',
+  min: 'inspector.dtable_summary_min',
+  max: 'inspector.dtable_summary_max',
+  count: 'inspector.dtable_summary_count',
+} as const;
+
+/** A row formula: the other columns in this table, inserted by label. */
+function ColumnFormula({ columns, column, onChange }: { columns: DynamicTableColumn[]; column: DynamicTableColumn; onChange: (formula: string) => void }) {
+  const [draft, setDraft] = useDraft(column.formula ?? '');
+  const others = columns.filter((col) => col.id !== column.id && col.label.trim() !== '');
+  const insert = (label: string) => {
+    const text = draft.trim() ? `${draft.trimEnd()} ${label}` : label;
+    setDraft(text);
+    onChange(text);
+  };
+  return (
+    <>
+      <TextField
+        label={t(M['inspector.dtable_formula'])}
+        hint={t(M['inspector.dtable_formula_hint'])}
+        value={draft}
+        placeholder="qty * price"
+        onChange={(text) => {
+          setDraft(text);
+          onChange(text);
+        }}
+      />
+      {others.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {others.map((col) => (
+            <Button key={col.id} type="button" variant="outline" size="sm" onClick={() => insert(col.label)}>
+              {col.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Column settings for the dynamic table: label, type, and (number columns, or count on any column) a footer summary. */
+export function DynamicTableGeneral({ block }: InspectorProps<'dynamic_table'>) {
+  const c = block.config;
+  const setColumns = (columns: DynamicTableColumn[]) => setConfig(block, { columns });
+  const updateColumn = (index: number, patch: Partial<DynamicTableColumn>) =>
+    setColumns(c.columns.map((col, i) => {
+      if (i !== index) return col;
+      const next = { ...col, ...patch };
+      if (next.formula === undefined || next.formula === '') delete next.formula;
+      if (next.input !== 'formula') delete next.formula;
+      return next;
+    }));
+  const addColumn = () => {
+    if (c.columns.length >= 20) return;
+    let n = c.columns.length + 1;
+    while (c.columns.some((col) => col.id === `column_${n}`)) n += 1;
+    setColumns([...c.columns, { id: `column_${n}` as DynamicColumnId, label: t(M['inspector.dtable_column_n'], { n }), input: 'text' }]);
+  };
+  const removeColumn = (index: number) => {
+    if (c.columns.length <= 1) return;
+    setColumns(c.columns.filter((_, i) => i !== index));
+  };
+  const setAddable = (type: DynamicColumnInput, on: boolean) => {
+    const next = on ? [...c.addableInputs.filter((x) => x !== type), type] : c.addableInputs.filter((x) => x !== type);
+    setConfig(block, { addableInputs: next });
+  };
+  const typeOptions = DYNAMIC_COLUMN_INPUTS.map((type) => ({ value: type, label: t(M[DT_TYPE_KEYS[type]]) }));
+  return (
+    <>
+      <SectionTitle>{t(M['inspector.dtable_columns'])}</SectionTitle>
+      {c.columns.map((col, index) => {
+        const summaries = col.input === 'number' || col.input === 'formula' ? (['none', 'sum', 'average', 'min', 'max', 'count'] as const) : (['none', 'count'] as const);
+        return (
+          <div key={col.id} className="flex flex-col gap-2 rounded-md border p-2" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+            <TextField label={t(M['inspector.dtable_column_label'])} value={col.label} onChange={(label) => updateColumn(index, { label: label ?? '' })} />
+            <SelectField
+              label={t(M['inspector.dtable_type'])}
+              value={col.input}
+              options={typeOptions}
+              onChange={(input) => {
+                const next = input as DynamicTableColumn['input'];
+                const numeric = col.summary === 'sum' || col.summary === 'average' || col.summary === 'min' || col.summary === 'max';
+                // Numeric summaries only make sense on number columns; `count` works on any column.
+                const keep = numeric && next !== 'number' && next !== 'formula' ? undefined : col.summary;
+                const formula = next === 'formula' ? col.formula : undefined;
+                updateColumn(index, keep === undefined ? { input: next, summary: 'none', formula } : { input: next, summary: keep, formula });
+              }}
+            />
+            {col.input === 'formula' ? <ColumnFormula columns={c.columns} column={col} onChange={(formula) => updateColumn(index, { formula })} /> : null}
+            <TextField
+              label={t(M['inspector.dtable_summary_label'])}
+              value={col.summaryLabel ?? ''}
+              onChange={(summaryLabel) => updateColumn(index, { summaryLabel: summaryLabel ?? '' })}
+            />
+            <SelectField
+              label={t(M['inspector.dtable_summary'])}
+              value={col.summary ?? 'none'}
+              options={summaries.map((s) => ({ value: s, label: t(M[DT_SUMMARY_KEYS[s]]) }))}
+              onChange={(summary) => updateColumn(index, { summary: summary as DynamicSummary })}
+            />
+            <Button type="button" variant="ghost" size="xs" className="self-end text-destructive" onClick={() => removeColumn(index)} disabled={c.columns.length <= 1}>
+              {t(M['inspector.dtable_remove_column'])}
+            </Button>
+          </div>
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" onClick={addColumn} disabled={c.columns.length >= 20}>
+        {t(M['inspector.dtable_add_column'])}
+      </Button>
+      <SectionTitle>{t(M['inspector.repeat_fields'])}</SectionTitle>
+      <NumberField label={t(M['inspector.repeat_min'])} value={c.minRows} parse={parseInteger(0, 200)} onChange={(minRows) => minRows !== undefined && setConfig(block, { minRows })} />
+      <NumberField label={t(M['inspector.repeat_max'])} value={c.maxRows} parse={parseInteger(1, 200)} onChange={(maxRows) => maxRows !== undefined && setConfig(block, { maxRows })} />
+      <NumberField label={t(M['inspector.repeat_initial'])} value={c.initialRows} parse={parseInteger(0, 200)} onChange={(initialRows) => setConfig(block, { initialRows })} />
+      <ToggleRow
+        label={t(M['inspector.dtable_allow_add'])}
+        hint={t(M['inspector.dtable_allow_add_hint'])}
+        checked={c.allowAddColumns}
+        onChange={(allowAddColumns) => setConfig(block, { allowAddColumns })}
+      />
+      <NumberField label={t(M['inspector.dtable_max_columns'])} value={c.maxColumns} parse={parseInteger(1, 30)} onChange={(maxColumns) => maxColumns !== undefined && setConfig(block, { maxColumns })} />
+      {c.allowAddColumns ? (
+        <>
+          <SectionTitle>{t(M['inspector.dtable_addable'])}</SectionTitle>
+          {DYNAMIC_COLUMN_INPUTS.map((type, i) => (
+            <ToggleRow
+              key={type}
+              label={t(M[DT_TYPE_KEYS[type]])}
+              hint={i === 0 ? t(M['inspector.dtable_addable_hint']) : undefined}
+              checked={c.addableInputs.includes(type)}
+              onChange={(on) => setAddable(type, on)}
+            />
+          ))}
+        </>
+      ) : null}
       <ConfigProblem block={block} />
     </>
   );

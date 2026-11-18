@@ -37,6 +37,9 @@ export interface UiState {
   closeInspector: () => void;
   setInspectorWidth: (width: number) => void;
   setSidebarOpen: (open: boolean) => void;
+  /** Form settings panel open (shared by the top bar button and the panel). */
+  designOpen: boolean;
+  setDesignOpen: (open: boolean) => void;
   startBlank: () => void;
   requestInsertFocus: () => void;
   setPendingDelete: (id: BlockId | null) => void;
@@ -65,6 +68,8 @@ export const useUiStore = create<UiState>()((set) => ({
   closeInspector: () => set({ inspectorOpen: false }),
   setInspectorWidth: (width) => set({ inspectorWidth: Math.min(640, Math.max(280, width)) }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+  designOpen: false,
+  setDesignOpen: (designOpen) => set({ designOpen }),
   startBlank: () => set((s) => ({ started: true, activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),
   requestInsertFocus: () => set((s) => ({ activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),
   setPendingDelete: (pendingDelete) => set({ pendingDelete }),

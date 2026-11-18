@@ -117,6 +117,26 @@ exports[`export headers > match the snapshot 1`] = `
       "header": "My context / embed_origin",
       "suffix": ".embed_origin",
     },
+    {
+      "header": "My context / utm_source",
+      "suffix": ".utm_source",
+    },
+    {
+      "header": "My context / utm_medium",
+      "suffix": ".utm_medium",
+    },
+    {
+      "header": "My context / utm_campaign",
+      "suffix": ".utm_campaign",
+    },
+    {
+      "header": "My context / utm_term",
+      "suffix": ".utm_term",
+    },
+    {
+      "header": "My context / utm_content",
+      "suffix": ".utm_content",
+    },
   ],
   "date": [
     {
@@ -138,6 +158,16 @@ exports[`export headers > match the snapshot 1`] = `
     {
       "header": "My datetime",
       "suffix": "",
+    },
+  ],
+  "dynamic_table": [
+    {
+      "header": "My dynamic table / Item",
+      "suffix": ".column_1",
+    },
+    {
+      "header": "My dynamic table / Amount",
+      "suffix": ".column_2",
     },
   ],
   "email": [
@@ -570,6 +600,11 @@ exports[`operator matrix > matches the snapshot 1`] = `
       "submitted_at": "text",
       "time_zone": "text",
       "user_agent": "text",
+      "utm_campaign": "text",
+      "utm_content": "text",
+      "utm_medium": "text",
+      "utm_source": "text",
+      "utm_term": "text",
     },
   },
   "date": {
@@ -626,6 +661,25 @@ exports[`operator matrix > matches the snapshot 1`] = `
     },
     "paths": {
       "": "datetime",
+    },
+  },
+  "dynamic_table": {
+    "operators": {
+      "number": [
+        "is_answered",
+        "is_not_answered",
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "between",
+      ],
+    },
+    "paths": {
+      "": "number",
+      "count": "number",
     },
   },
   "email": {

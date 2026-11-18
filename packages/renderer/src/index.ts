@@ -3,6 +3,8 @@ export type {
   FormRendererProps, PartialSave, RendererEvent, RendererSession, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
 } from './types.ts';
 export { CONTROLS } from './controls/index.ts';
+export { DynamicCellInput, DynamicTableFrame } from './controls/dynamic_table_frame.tsx';
+export type { DynamicTableFrameProps, FrameColumn, FrameRow } from './controls/dynamic_table_frame.tsx';
 export {
   buildApiRequest, callFieldApi, defaultSuccess, getAtPath, matchSuccessRule, parseApiBody, postFieldApi,
 } from './controls/apiValidation.ts';

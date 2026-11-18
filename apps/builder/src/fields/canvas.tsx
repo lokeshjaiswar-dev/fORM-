@@ -2,11 +2,11 @@ import type { ComponentType } from 'react';
 import { Trash2 } from 'lucide-react';
 import { defineMessages, formatDate, formatTime, type MessageId } from '@form/i18n';
 import { callingCodeOf, formatUniqueId, isAvailable, isRepeatableChildType, type AvailableType } from '@form/registry';
-import { slotsOf } from '@form/renderer';
+import { DynamicCellInput, DynamicTableFrame, slotsOf } from '@form/renderer';
 import type { AddressPart, BlockOf, NamePart, StoredBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { CheckboxField, Select as DsSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@dmacq/ui';
+import { Button, CheckboxField, Select as DsSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@dmacq/ui';
 import { CanvasCheck, CanvasDate, CanvasDateTime, CanvasRadio, CanvasTime, Chip, FileDropzone, MultiSelectBox, OptionList, Points, RankingList, Select, Slider, TextBox } from '@/fields/canvasParts';
 import { TILES } from '@/fields/tiles';
 import { labelString, labelStyle } from '@/fields/style';
@@ -32,6 +32,8 @@ export interface CanvasProps<T extends AvailableType> {
 export type CanvasView<T extends AvailableType> = ComponentType<CanvasProps<T>>;
 
 const M = defineMessages('builder', {
+  'canvas.dtable_add_column': 'Add column',
+  'canvas.dtable_add_row': 'Add row',
   'canvas.hidden': 'Hidden from respondents · filled from the URL parameter ‘{name}’',
   'canvas.hidden_utm': 'Hidden from respondents · filled from utm_{param}',
   'canvas.hidden_other': 'Hidden from respondents',
@@ -382,6 +384,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   repeating_group: ({ block }) => <RepeatingGroupCanvas block={block} />,
+  dynamic_table: ({ block }) => <DynamicTableCanvas block={block} />,
   matrix: ({ block }) => (
     <div className="fr-matrix-wrap pointer-events-none">
       <table className="fr-matrix">
@@ -718,6 +721,27 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
           </SelectContent>
         </DsSelect>
       </div>
+    </div>
+  );
+}
+
+/* The builder preview of a dynamic table: the same frame and rows the respondent sees, with inert inputs. */
+function DynamicTableCanvas({ block }: { block: BlockOf<'dynamic_table'> }) {
+  const c = block.config;
+  const rowCount = c.initialRows ?? Math.max(c.minRows, 1);
+  const hasSummary = c.columns.some((col) => col.summary && col.summary !== 'none');
+  return (
+    <div className="pointer-events-none">
+      <DynamicTableFrame
+        columns={c.columns.map((col) => ({ key: col.id, label: col.label }))}
+        rows={Array.from({ length: rowCount }, (_, i) => ({
+          key: `preview_${i}`,
+          cells: c.columns.map((col) => <DynamicCellInput key={col.id} type={col.input} label={col.label} value="" readOnly />),
+        }))}
+        footer={hasSummary ? c.columns.map((col) => (col.summary && col.summary !== 'none' ? (col.summaryLabel?.trim() || col.summary) : null)) : null}
+        toolbar={c.allowAddColumns && c.addableInputs.length > 0 ? <Button type="button" variant="outline" size="sm">{t(M['canvas.dtable_add_column'])}</Button> : undefined}
+        belowRows={<Button type="button" variant="ghost" size="sm">{t(M['canvas.dtable_add_row'])}</Button>}
+      />
     </div>
   );
 }

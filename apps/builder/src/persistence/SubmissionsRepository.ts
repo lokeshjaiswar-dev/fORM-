@@ -4,6 +4,8 @@ export const submissionFieldSchema = z.object({
   key: z.string(),
   label: z.string(),
   value: z.string(),
+  table: z.object({ headers: z.array(z.string()), rows: z.array(z.array(z.string())) }).optional(),
+  choices: z.array(z.string()).optional(),
 });
 export type SubmissionField = z.infer<typeof submissionFieldSchema>;
 

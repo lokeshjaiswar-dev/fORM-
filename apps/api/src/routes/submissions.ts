@@ -7,7 +7,13 @@ import { z } from 'zod';
 import { tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
 
-const fieldRow = z.object({ key: z.string(), label: z.string(), value: z.string() });
+const fieldRow = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string(),
+  table: z.object({ headers: z.array(z.string()), rows: z.array(z.array(z.string())) }).optional(),
+  choices: z.array(z.string()).optional(),
+});
 
 export const submissionSummary = z.object({
   id: z.uuid(),

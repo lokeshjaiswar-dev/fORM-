@@ -66,7 +66,6 @@ describe('routes', () => {
     renderApp(repo, '/forms');
     await screen.findByText(/No forms yet/, {}, OPENS);
     fireEvent.click(screen.getByRole('button', { name: 'New form' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Blank form/ }, OPENS));
     expect(await screen.findByRole('button', { name: 'Press Enter to start from scratch' }, OPENS)).toBeInTheDocument();
     const id = path()?.replace('/builder/', '') ?? '';
     expect(id).not.toBe('demo');
@@ -77,7 +76,7 @@ describe('routes', () => {
     const repo = new MemoryRepository();
     renderApp(repo, '/forms');
     await screen.findByText(/No forms yet/);
-    fireEvent.click(screen.getByRole('button', { name: 'New form' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Browse templates' }, OPENS));
     fireEvent.click(await screen.findByRole('button', { name: /^Contact us/ }, OPENS));
     fireEvent.click(screen.getByRole('button', { name: 'Use template' }));
     expect(await screen.findByDisplayValue('Contact us', {}, OPENS)).toBeInTheDocument();
@@ -122,7 +121,8 @@ describe('routes', () => {
     const repo = new MemoryRepository();
     await repo.save(stored('f1', 'Feedback'));
     renderApp(repo, '/forms');
-    fireEvent.click(await screen.findByRole('link', { name: /Feedback/ }));
+    // The sidebar's recent list repeats the name, so take the first link (the table row).
+    fireEvent.click((await screen.findAllByRole('link', { name: /Feedback/ }))[0]!);
     expect(await screen.findByDisplayValue('Feedback', {}, OPENS)).toBeInTheDocument();
     expect(path()).toBe('/builder/f1');
   });
@@ -170,7 +170,6 @@ describe('routes', () => {
     renderApp(repo, '/forms');
     await screen.findByText(/No forms yet/);
     fireEvent.click(screen.getByRole('button', { name: 'New form' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Blank form/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be saved in this browser');
     expect(path()).toBe('/forms');
   });
@@ -180,7 +179,7 @@ describe('routes', () => {
     await repo.save(stored('one', 'Alpha'));
     await repo.save(stored('two', 'Beta'));
     renderApp(repo, '/forms');
-    expect(await screen.findByText('Alpha', {}, OPENS)).toBeInTheDocument();
+    expect((await screen.findAllByText('Alpha', {}, OPENS))[0]).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta' }));
     fireEvent.click(screen.getByRole('button', { name: 'Merge selected' }));
@@ -193,7 +192,8 @@ describe('routes', () => {
     await repo.save(newStoredForm('one', NOW, formWith([block('short_text', 'n1', { label: 'Code', config: { pattern: { source: '^[A-Z]+$' } } })])));
     await repo.save(newStoredForm('two', NOW, formWith([block('short_text', 'n2', { label: 'Code', config: { pattern: { source: '^[0-9]+$' } } })])));
     renderApp(repo, '/forms');
-    expect(await screen.findAllByText('Test form', {}, OPENS)).toHaveLength(2);
+    // The table row and the sidebar's recent list both show each form, so expect at least one label per form.
+    expect((await screen.findAllByText('Test form', {}, OPENS)).length).toBeGreaterThanOrEqual(2);
     const checkboxes = await screen.findAllByRole('checkbox');
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);

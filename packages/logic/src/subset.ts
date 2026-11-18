@@ -99,7 +99,8 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
   const definition = ctx.registry[block.type];
   /* A field filled from a dropdown option value holds that code as text, and formulas read it as a number. */
   const filledNumber = block.type === 'short_text' && (ref.path ?? '') === '' && optionValueSource(ctx.def, ref.blockId) !== undefined;
-  const kind = filledNumber ? 'number' : (definition.paths as Readonly<Record<string, ComparableKind>>)[ref.path ?? ''];
+  const summaryNumber = block.type === 'dynamic_table' && /^summary\.(sum|average|min|max|count)\..+$/.test(ref.path ?? '');
+  const kind = filledNumber || summaryNumber ? 'number' : (definition.paths as Readonly<Record<string, ComparableKind>>)[ref.path ?? ''];
   if (kind === undefined || kind === 'none') {
     if (definition.capability !== undefined && Object.keys(definition.paths).length === 0) {
       ctx.issue('missing_capability', path, `answers of '${block.type}' blocks need '${definition.capability}', which this version does not provide yet`);

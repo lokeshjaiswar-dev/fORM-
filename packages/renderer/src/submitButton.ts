@@ -7,7 +7,7 @@ type Submit = Behavior['submit'];
 export function submitButtonPresentation(submit: Submit, fullWidth?: boolean): { className: string; style: CSSProperties; 'data-submit-size'?: Submit['size']; 'data-submit-shape': Submit['shape'] | 'rounded' } {
   const style: CSSProperties = {};
   if (submit.bgColor) style.background = submit.bgColor;
-  if (submit.textColor) style.color = submit.textColor;
+  style.color = submit.textColor ?? '#ffffff';
   const shape = submit.shape ?? 'rounded';
   if (shape === 'square') style.borderRadius = 0;
   else if (shape === 'pill') style.borderRadius = 9999;

@@ -14,7 +14,7 @@ const LIVE_KEY = (id: string) => `fr.live.${id}`;
 
 export function rememberedSlug(id: string): string | null {
   try {
-    return globalThis.sessionStorage?.getItem(LIVE_KEY(id)) ?? null;
+    return globalThis.localStorage?.getItem(LIVE_KEY(id)) ?? null;
   } catch {
     return null;
   }
@@ -22,7 +22,7 @@ export function rememberedSlug(id: string): string | null {
 
 function rememberSlug(id: string, slug: string): void {
   try {
-    globalThis.sessionStorage?.setItem(LIVE_KEY(id), slug);
+    globalThis.localStorage?.setItem(LIVE_KEY(id), slug);
   } catch {
     /* Private browsing. */
   }

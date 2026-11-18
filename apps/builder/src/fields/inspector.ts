@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
   AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, FullNameGeneral, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionBreakGeneral, SectionGeneral, SemanticDifferentialGeneral,
-  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
+  DynamicTableGeneral, LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
 import {
@@ -57,6 +57,7 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   schedule_grid: { general: ScheduleGridGeneral },
   matrix: { general: MatrixGeneral },
   repeating_group: { general: RepeatingGroupGeneral },
+  dynamic_table: { general: DynamicTableGeneral },
   file_upload: { validation: FileValidation },
   signature: { general: SignatureGeneral },
   hidden: { general: HiddenGeneral },

@@ -33,12 +33,12 @@
   color: var(--fr-input-color, var(--fr-inputText, currentColor));
 }
 
+/* Match the respondent preview (FLD-35): the field name stacks above the date and times, not beside them. */
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) {
-  display: grid;
-  grid-template-columns: auto minmax(10rem, 1fr);
-  column-gap: 12px;
-  row-gap: 8px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) > [data-canvas-label] {
@@ -46,11 +46,7 @@
 }
 
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) > .fr-appointment {
-  display: contents;
-}
-
-.fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) .fr-appointment-slots {
-  grid-column: 1 / -1;
+  display: flex;
 }
 
 [data-slash-menu] .ds-menu-search,

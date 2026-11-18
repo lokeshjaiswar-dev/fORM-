@@ -413,6 +413,19 @@ const CASES: Case[] = [
     },
   },
   {
+    name: 'dynamic_table',
+    block: field('dynamic_table', 'q', { required: true, config: {
+      columns: [{ id: 'column_1', label: 'Item', input: 'text' }, { id: 'column_2', label: 'Amount', input: 'number', summary: 'sum' }] as never,
+      minRows: 0, maxRows: 5, initialRows: 1, allowAddColumns: false, addableInputs: [], maxColumns: 5,
+    } }),
+    answer: (user) => user.type(screen.getByRole('textbox', { name: /item 1/i }), 'Pen'),
+    clear: (user) => user.clear(screen.getByRole('textbox', { name: /item 1/i })),
+    expected: (answer) => {
+      expect(answer.type).toBe('dynamic_table');
+      expect((answer.value as { rows: Array<{ cells: unknown }> }).rows[0]?.cells).toEqual({ column_1: 'Pen' });
+    },
+  },
+  {
     name: 'matrix',
     block: field('matrix', 'q', { required: true }),
     answer: async (user) => {

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft } from 'lucide-react';
+import { ChevronRight, Download, Redo2, Undo2, LayoutTemplate, PanelLeft, Paintbrush } from 'lucide-react';
 import { toast } from 'sonner';
 import { runtimeEdition } from '@form/config';
 import type { IsoInstant } from '@form/schema';
@@ -16,13 +16,17 @@ import { previewVersion } from '@/lib/preview';
 import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
 import { copyText } from '@/lib/copyText';
+import { downloadFormJson } from '@/lib/formJson';
 import { fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
+import '@/components/workspace/workspace.css';
 
 export function BuilderHeader() {
   const { id = '' } = useParams();
   const title = useDoc((d) => d.title);
   const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const designOpen = useUiStore((s) => s.designOpen);
+  const setDesignOpen = useUiStore((s) => s.setDesignOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const save = useUiStore((s) => s.save);
   const canUndo = useCanUndo();
@@ -75,6 +79,18 @@ export function BuilderHeader() {
     }
   }
 
+  /** Saves the open form as a JSON file that the Forms page can import. */
+  async function onExport() {
+    setError(null);
+    try {
+      await flushAutosave();
+      downloadFormJson(currentDoc());
+      toast.success('Form exported');
+    } catch {
+      toast.error('The form could not be exported.');
+    }
+  }
+
   async function copyLink() {
     if (!link) return;
     try {
@@ -102,7 +118,12 @@ export function BuilderHeader() {
           <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-foreground hover:bg-state-hover">
             <span className="truncate">{title || 'Form title'}</span>
           </span>
-          <span role="status" title={save.state === 'error' ? save.message : undefined} className="ml-1 shrink-0 text-[13px] text-text-subtle">
+          <span
+            role="status"
+            title={save.state === 'error' ? save.message : undefined}
+            className="ml-1 flex shrink-0 items-center gap-1.5 text-[13px] text-text-subtle"
+          >
+            <SaveDot state={save.state} />
             {saveLabel(save)}
           </span>
         </div>
@@ -121,11 +142,18 @@ export function BuilderHeader() {
         <Ghost disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
           <Redo2 className="size-4" />
         </Ghost>
+        <Ghost onClick={() => setDesignOpen(!designOpen)} label={designOpen ? 'Close form settings' : 'Form settings'}>
+          <Paintbrush className="size-4" />
+        </Ghost>
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>
         <Button type="button" size="sm" className="ml-1" disabled={busy || !id} onClick={() => void onPublish()}>
           {busy ? 'Publishing…' : 'Publish'}
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="ml-1" onClick={() => void onExport()}>
+          <Download />
+          Export
         </Button>
         {link ? (
           <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
@@ -160,6 +188,17 @@ export function BuilderHeader() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Animated status dot: a soft pulse while saving, solid green when saved, red when the save failed. */
+function SaveDot({ state }: { state: SaveState['state'] }) {
+  const color = state === 'error' ? 'bg-destructive' : state === 'saved' ? 'bg-primary' : 'bg-text-subtle';
+  return (
+    <span className="relative flex size-2 shrink-0" aria-hidden>
+      {state === 'saving' ? <span className={`ws-live absolute inline-flex size-full rounded-full ${color}`} /> : null}
+      <span className={`relative inline-flex size-2 rounded-full transition-colors duration-300 ${color}`} />
+    </span>
   );
 }
 

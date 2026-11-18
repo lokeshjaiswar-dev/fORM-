@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
-import { ArrowRight, GripVertical, Plus, Trash2, X } from 'lucide-react';
+import { GripVertical, Plus, Trash2, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { coverPhoto, formTitlePresentation, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, submitButtonPresentation, themeCssVars, type FormSection } from '@form/renderer';
 import type { BlockId, BlockLayout, FormDefinition, PageId, SectionNav as SectionNavConfig } from '@form/schema';
@@ -371,15 +371,11 @@ export function FormCanvas() {
                 type="button"
                 aria-label={t(M['canvas.submit_settings'])}
                 className={cn(submitPresent.className, 'inline-flex items-center gap-2 font-medium', submitAlign === 'full' && 'justify-center')}
-                style={{
-                  ...submitPresent.style,
-                  background: submitPresent.style.background ?? 'var(--fr-accent)',
-                  color: submitPresent.style.color ?? 'var(--fr-accentText)',
-                }}
+                style={submitPresent.style}
                 data-submit-size={submitPresent['data-submit-size']}
                 data-submit-shape={submitPresent['data-submit-shape']}
               >
-                {submitLabel || t(M['canvas.submit'])} <ArrowRight className="size-4" />
+                {submitLabel || t(M['canvas.submit'])}
               </button>
             </div>
           </>

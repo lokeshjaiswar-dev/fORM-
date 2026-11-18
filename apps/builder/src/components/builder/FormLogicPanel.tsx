@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import type { ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable } from '@form/registry';
 import type {
@@ -11,7 +11,7 @@ import { APP_IDS, blockOrder, blockText, isField } from '@/lib/definition';
 import { labelString } from '@/fields/style';
 import { removeRule, setRule } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Button, Input, RadioField, RadioGroup, Switch } from '@dmacq/ui';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button, Input, Label, RadioField, RadioGroup, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import {
   choiceOptions, firstOperator, kindOf, literal, localToday, operatorsFor, retarget,
@@ -19,12 +19,20 @@ import {
 } from '@/components/builder/inspector/conditions';
 
 const M = defineMessages('builder', {
-  'rules.intro': 'Name a rule, compare two fields, then say what happens if it matches and if it does not.',
+  'rules.intro': 'Each check has a name, conditions, and what happens when they match or do not match.',
   'rules.add': 'Add a rule',
   'rules.empty': 'No checks yet.',
   'rules.no_fields': 'Add questions to the form before writing a check.',
-  'rules.name': 'Name',
-  'rules.name_placeholder': 'Untitled check',
+  'rules.name': 'Check name',
+  'rules.name_placeholder': 'e.g. Inter-state GST applies',
+  'rules.untitled_check': 'Untitled check',
+  'rules.new_intro': 'Name the check, then choose the question its first condition reads.',
+  'rules.new_question': 'First question',
+  'rules.cancel_new': 'Cancel new rule',
+  'rules.need_third': 'Add at least three questions to write a check that reads two and shows a third.',
+  'rules.status_on': 'On',
+  'rules.status_off': 'Off',
+  'rules.and': 'And',
   'rules.enabled': 'This check is on',
   'rules.remove': 'Remove this check',
   'rules.when': 'When all of these are true',
@@ -63,8 +71,8 @@ const M = defineMessages('builder', {
   'rules.source_placeholder': 'Select a question',
   'op.is_answered': 'is answered',
   'op.is_not_answered': 'is not answered',
-  'op.eq': 'is',
-  'op.neq': 'is not',
+  'op.eq': 'equals',
+  'op.neq': 'does not equal',
   'op.contains': 'contains',
   'op.not_contains': 'does not contain',
   'op.starts_with': 'starts with',
@@ -377,6 +385,31 @@ function EffectBlock({
   );
 }
 
+/** One line that says what a check does, shown in the collapsed header. */
+function summaryOf(rule: Rule, fields: FieldBlock[]): string {
+  return rule.when.children
+    .flatMap((c) => {
+      if (c.kind !== 'condition') return [];
+      const left = readSide(c.left, fields);
+      const field = fields.find((f) => f.id === left?.fieldId);
+      if (!field) return [];
+      const value = valueText(c.right, field, fields);
+      return [`${fieldName(field)} ${opLabel(c.op)}${value ? ` ${value}` : ''}`];
+    })
+    .join(' · ');
+}
+
+function valueText(right: Operand | undefined, field: FieldBlock, fields: FieldBlock[]): string {
+  if (!right) return '';
+  if (right.kind === 'options') {
+    const chosen = right.optionIds;
+    return choiceOptions(field).filter((o) => chosen.includes(o.id)).map((o) => labelString(o.label)).join(', ');
+  }
+  if (right.kind === 'ref' && right.ref.kind === 'answer') return fieldName(fields.find((f) => f.id === right.ref.blockId));
+  if (right.kind === 'literal' && 'value' in right.value) return String(right.value.value);
+  return '';
+}
+
 function RuleCard({ rule, fields }: { rule: Rule; fields: FieldBlock[] }) {
   const conditions = rule.when.children.filter((c): c is Condition => c.kind === 'condition');
   const write = (patch: { name?: string; enabled?: boolean; conditions?: Condition[]; then?: Action[]; else?: Action[] }) => {
@@ -394,54 +427,81 @@ function RuleCard({ rule, fields }: { rule: Rule; fields: FieldBlock[] }) {
     });
   };
   return (
-    <li className="space-y-3 rounded-md border border-border p-3">
-      <div className="flex items-center gap-2">
-        <Input aria-label={t(M['rules.name'])} placeholder={t(M['rules.name_placeholder'])} value={rule.name ?? ''} onChange={(e) => write({ name: e.target.value })} />
+    <AccordionItem value={rule.id} className="rounded-lg border border-border bg-background">
+      <div className="flex items-center gap-2 pr-3">
+        <AccordionTrigger className="min-w-0 flex-1 px-3 py-3 hover:no-underline">
+          <span className="flex min-w-0 flex-col items-start gap-0.5 text-left">
+            <span className="truncate text-[13px] font-medium text-foreground">{rule.name?.trim() || t(M['rules.untitled_check'])}</span>
+            <span className="truncate text-[12px] font-normal text-muted-foreground">{summaryOf(rule, fields)}</span>
+          </span>
+        </AccordionTrigger>
+        <Badge variant={rule.enabled ? 'secondary' : 'outline'}>{rule.enabled ? t(M['rules.status_on']) : t(M['rules.status_off'])}</Badge>
         <Switch checked={rule.enabled} onCheckedChange={(enabled) => write({ enabled })} aria-label={t(M['rules.enabled'])} />
         <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['rules.remove'])} onClick={() => removeRule(rule.id)}><Trash2 className="size-3.5" /></Button>
       </div>
-      <div className="space-y-2 rounded-md border border-border p-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[12px] font-medium text-muted-foreground">{t(M['rules.when'])}</p>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['rules.add_when'])} onClick={() => {
-            const source = fields[0];
-            const other = fields[1];
-            if (!source) return;
-            const part = partsFor(source)[0] ?? 'whole';
-            const extra = emptyCondition(source, { today: localToday(new Date()) });
-            const next = other
-              ? { ...extra, left: sideOperand(source, part === 'option' ? 'code' : part, '2'), op: 'eq' as const, right: sideOperand(other, (partsFor(other)[0] === 'option' ? 'code' : partsFor(other)[0]) ?? 'whole', '2') }
-              : extra;
-            write({ conditions: [...conditions, next] });
-          }}>
-            <Plus className="size-3.5" />
-          </Button>
+      <AccordionContent className="space-y-4 border-t border-border px-3 pb-4 pt-3">
+        <div className="space-y-1">
+          <Label htmlFor={`${rule.id}-name`} className="text-[12px] text-muted-foreground">{t(M['rules.name'])}</Label>
+          <Input id={`${rule.id}-name`} placeholder={t(M['rules.name_placeholder'])} value={rule.name ?? ''} onChange={(e) => write({ name: e.target.value })} />
         </div>
-        {conditions.map((cond) => (
-          <ComparisonRow key={cond.id} cond={cond} fields={fields} canRemove={conditions.length > 1} onChange={(next) => write({ conditions: conditions.map((c) => (c.id === next.id ? next : c)) })} onRemove={() => write({ conditions: conditions.filter((c) => c.id !== cond.id) })} />
-        ))}
-      </div>
-      <EffectBlock title={t(M['rules.then_action'])} actions={rule.then} fields={fields} onChange={(then) => write({ then })} />
-      <EffectBlock title={t(M['rules.else_action'])} actions={rule.else ?? []} fields={fields} onChange={(otherwise) => write({ else: otherwise })} />
-    </li>
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-medium text-muted-foreground">{t(M['rules.when'])}</p>
+            <Button type="button" variant="ghost" size="sm" aria-label={t(M['rules.add_when'])} onClick={() => {
+              const source = fields[0];
+              const other = fields[1];
+              if (!source) return;
+              const part = partsFor(source)[0] ?? 'whole';
+              const extra = emptyCondition(source, { today: localToday(new Date()) });
+              const next = other
+                ? { ...extra, left: sideOperand(source, part === 'option' ? 'code' : part, '2'), op: 'eq' as const, right: sideOperand(other, (partsFor(other)[0] === 'option' ? 'code' : partsFor(other)[0]) ?? 'whole', '2') }
+                : extra;
+              write({ conditions: [...conditions, next] });
+            }}>
+              <Plus className="size-3.5" /> {t(M['rules.add_when'])}
+            </Button>
+          </div>
+          {conditions.map((cond, i) => (
+            <div key={cond.id} className="space-y-2">
+              {i > 0 ? <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t(M['rules.and'])}</p> : null}
+              <ComparisonRow cond={cond} fields={fields} canRemove={conditions.length > 1} onChange={(next) => write({ conditions: conditions.map((c) => (c.id === next.id ? next : c)) })} onRemove={() => write({ conditions: conditions.filter((c) => c.id !== cond.id) })} />
+            </div>
+          ))}
+        </section>
+        <EffectBlock title={t(M['rules.then_action'])} actions={rule.then} fields={fields} onChange={(then) => write({ then })} />
+        <EffectBlock title={t(M['rules.else_action'])} actions={rule.else ?? []} fields={fields} onChange={(otherwise) => write({ else: otherwise })} />
+      </AccordionContent>
+    </AccordionItem>
   );
 }
 
-/** When / Then checks for Form settings → Rules. */
+/** When / Then checks for Form settings → Rules. Each check is a collapsible item named in its header. */
 export function FormLogicChecks() {
   const def = useDoc((d) => d);
   const rules = useDoc((d) => d.logic.rules);
   const fields = fieldsOf(def);
-  const add = () => {
-    const left = fields[0];
-    const right = fields[1];
-    if (!left) return;
+  const [drafting, setDrafting] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [open, setOpen] = useState<string[]>([]);
+  const cancelDraft = () => {
+    setDrafting(false);
+    setDraftName('');
+  };
+  // A new check is written only once its first question is chosen, so nothing is copied from an earlier rule.
+  const commitFrom = (left: FieldBlock) => {
+    const right = fields.find((f) => f.id !== left.id);
+    // The action must write a different question than the ones the check reads, or the rule forms a logic cycle.
+    const target = fields.find((f) => f.id !== left.id && f.id !== right?.id);
+    if (!target) return;
+    const id = newId() as RuleId;
+    const name = draftName.trim();
     const leftPart = (partsFor(left)[0] === 'option' ? 'code' : partsFor(left)[0]) ?? 'whole';
     const rightPart = right ? ((partsFor(right)[0] === 'option' ? 'code' : partsFor(right)[0]) ?? 'whole') : 'whole';
     const textPair = kindOf(left) === 'text' && right && kindOf(right) === 'text';
     setRule({
-      id: newId() as RuleId,
+      id,
       enabled: true,
+      ...(name ? { name } : {}),
       when: {
         kind: 'group',
         id: newId() as ConditionId,
@@ -454,19 +514,51 @@ export function FormLogicChecks() {
           ...(right ? { right: sideOperand(right, textPair ? 'first' : rightPart, '2') } : {}),
         }],
       },
-      then: [{ type: 'show', targets: [left.id] }],
-      else: [{ type: 'hide', targets: [left.id] }],
+      then: [{ type: 'show', targets: [target.id] }],
+      else: [{ type: 'hide', targets: [target.id] }],
     });
+    setDrafting(false);
+    setDraftName('');
+    setOpen((current) => [...current, id]);
   };
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <p className="text-[13px] leading-relaxed text-sidebar-muted">{t(M['rules.intro'])}</p>
       {fields.length === 0 ? <p className="text-[13px] text-sidebar-muted">{t(M['rules.no_fields'])}</p> : null}
-      <ul className="space-y-3">
+      {rules.length === 0 && !drafting ? <p className="text-[13px] text-muted-foreground">{t(M['rules.empty'])}</p> : null}
+      <Accordion type="multiple" value={open} onValueChange={setOpen} className="space-y-2">
         {rules.map((rule) => <RuleCard key={rule.id} rule={rule} fields={fields} />)}
-      </ul>
+      </Accordion>
+      {drafting ? (
+        <section className="space-y-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[13px] text-muted-foreground">{fields.length < 3 ? t(M['rules.need_third']) : t(M['rules.new_intro'])}</p>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['rules.cancel_new'])} onClick={cancelDraft}>
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="new-check-name" className="text-[12px] text-muted-foreground">{t(M['rules.name'])}</Label>
+            <Input id="new-check-name" autoFocus placeholder={t(M['rules.name_placeholder'])} value={draftName} onChange={(e) => setDraftName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[12px] text-muted-foreground">{t(M['rules.new_question'])}</Label>
+            <NiceSelect
+              size="sm"
+              aria-label={t(M['rules.question'])}
+              value=""
+              onChange={(id) => {
+                const field = fields.find((f) => f.id === id);
+                if (field) commitFrom(field);
+              }}
+              placeholder={t(M['rules.source_placeholder'])}
+              options={fields.map((f) => ({ value: f.id, label: fieldName(f) }))}
+            />
+          </div>
+        </section>
+      ) : null}
       {fields.length ? (
-        <Button type="button" variant="ghost" size="sm" onClick={add}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setDrafting(true)}>
           <Plus className="size-3.5" /> {t(M['rules.add'])}
         </Button>
       ) : null}

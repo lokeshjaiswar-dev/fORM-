@@ -84,7 +84,7 @@ export const formSubmissions = pgTable(
     orgId: uuid('org_id').notNull(),
     formId: uuid('form_id').notNull(),
     answers: jsonb('answers').$type<Record<string, unknown>>().notNull(),
-    fields: jsonb('fields').$type<Array<{ key: string; label: string; value: string }>>().notNull(),
+    fields: jsonb('fields').$type<Array<{ key: string; label: string; value: string; table?: { headers: string[]; rows: string[][] } | undefined; choices?: string[] | undefined }>>().notNull(),
     locale: text('locale').notNull().default('en-IN'),
     submittedAt: ts('submitted_at'),
   },

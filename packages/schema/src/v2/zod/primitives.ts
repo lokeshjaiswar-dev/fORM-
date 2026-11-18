@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { keyed } from './_util.ts';
 import type {
   AssetId, BlockId, BrandKitId, ConditionId, ConnectionId, ConsentItemId, CountryCode, CurrencyCode, DecimalString,
-  EmailAddress, EndingId, FieldKey, FileId, FontId, FormId, FormVersionId, GroupRowId, HexColor, HolidayCalendarId,
+  EmailAddress, EndingId, FieldKey, DynamicColumnId, FileId, FontId, FormId, FormVersionId, GroupRowId, HexColor, HolidayCalendarId,
   CardBucketId, CardItemId, IntegrationId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, LikertStatementId, Locale, LockId, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, SemanticPairId,
   NotificationId, NotificationVariantId, OptionId, OrgId, PageId, PdfTemplateId, ProductId, ProductOptionId, PurposeId, RuleGroupId,
   RuleId, SafeHref, SafeUrl, SenderId, Sha256Hex, SubmissionId, TeamId, TemplateBindingId, TemplateCategoryId, TemplateId,
@@ -39,6 +39,7 @@ export const CardItemIdSchema = id<CardItemId>('CardItemId');
 export const CardBucketIdSchema = id<CardBucketId>('CardBucketId');
 export const SemanticPairIdSchema = id<SemanticPairId>('SemanticPairId');
 export const GroupRowIdSchema = id<GroupRowId>('GroupRowId');
+export const DynamicColumnIdSchema = id<DynamicColumnId>('DynamicColumnId');
 export const ProductIdSchema = id<ProductId>('ProductId');
 export const ProductOptionIdSchema = id<ProductOptionId>('ProductOptionId');
 export const ConsentItemIdSchema = id<ConsentItemId>('ConsentItemId');

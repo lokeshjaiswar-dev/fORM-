@@ -19,7 +19,7 @@ const detailSchema = z.object({
   submittedAt: z.string(),
   locale: z.string().optional(),
   answers: z.record(z.string(), z.unknown()),
-  fields: z.array(z.object({ key: z.string(), label: z.string(), value: z.string() })),
+  fields: z.array(z.object({ key: z.string(), label: z.string(), value: z.string(), table: z.object({ headers: z.array(z.string()), rows: z.array(z.array(z.string())) }).optional(), choices: z.array(z.string()).optional() })),
 });
 
 /** Best-effort API calls: signed-out or unreachable servers are ignored. */

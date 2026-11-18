@@ -13,6 +13,7 @@ import { Tooltip } from '@/components/Tooltip';
 import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
 import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
+import { useUiStore } from '@/state/uiStore';
 import { SectionBreakSettings } from '@/components/builder/SectionBreakSettings';
 import { ImagesSection } from '@/components/builder/design/ImagesSection';
 import { applyImageTemplate, applyPreset, applyScheme, COLOR_SCHEMES, IMAGE_TEMPLATES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
@@ -62,8 +63,9 @@ function hexOf(value: unknown, fallback: string): string {
   return typeof value === 'string' && HEX.test(value) ? value : fallback;
 }
 
-export function FormDesignPanel({ children }: { children?: ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function FormDesignPanel({ children, showTrigger = true }: { children?: ReactNode; showTrigger?: boolean }) {
+  const open = useUiStore((s) => s.designOpen);
+  const setOpen = useUiStore((s) => s.setDesignOpen);
   const [tab, setTab] = useState<Tab>('colors');
   const [query, setQuery] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
@@ -100,7 +102,7 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
     <div className="flex min-h-0 min-w-0 flex-1">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {children}
-        {!open ? (
+        {!open && showTrigger ? (
           <Tooltip content={t(M['design.open'])} side="right" className="absolute right-5 top-5 z-20">
             <Button
               type="button"
@@ -114,13 +116,13 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
           </Tooltip>
         ) : null}
       </div>
-      <aside className={cn('min-h-0 shrink-0 overflow-hidden transition-[width] duration-300 ease-out', open ? 'w-[min(100%,380px)]' : 'w-0')}>
+      <aside className={cn('min-h-0 shrink-0 overflow-hidden transition-[width] duration-300 ease-out', open ? 'w-[min(100%,760px)]' : 'w-0')}>
         {open ? (
           <div
             ref={panelRef}
             role="dialog"
             aria-label={t(M['design.title'])}
-            className="ov-theme-dark flex h-full w-[380px] max-w-[100vw] flex-col bg-sidebar text-sidebar-foreground shadow-2xl"
+            className="ov-theme-dark flex h-full w-[760px] max-w-[100vw] flex-col bg-sidebar text-sidebar-foreground shadow-2xl"
           >
             <div className="flex items-center justify-between px-4 pt-4">
               <h2 className="text-[16px] font-semibold">{t(M['design.title'])}</h2>

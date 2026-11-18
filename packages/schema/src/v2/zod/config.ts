@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { DYNAMIC_COLUMN_INPUTS } from '../config.ts';
 import { keyed } from './_util.ts';
 import { ADDRESS_PARTS, CONTEXT_SOURCES, NAME_PARTS, OPTION_PRESETS, TEXT_PRESETS } from '../config.ts';
 import { ExprSchema, ExprTypeSchema } from './logic.ts';
 import {
   AssetRefSchema, BlockIdSchema, BrandRefSchema, ConnectionIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema,
-  CardBucketIdSchema, CardItemIdSchema, DecimalStringSchema, HolidayCalendarIdSchema, IsoDateSchema, IsoTimeSchema, LikertStatementIdSchema, LocaleSchema, MatchingPromptIdSchema, MatrixColumnIdSchema, MatrixRowIdSchema, SemanticPairIdSchema,
+  CardBucketIdSchema, CardItemIdSchema, DecimalStringSchema, HolidayCalendarIdSchema, IsoDateSchema, IsoTimeSchema, LikertStatementIdSchema, LocaleSchema, DynamicColumnIdSchema, MatchingPromptIdSchema, MatrixColumnIdSchema, MatrixRowIdSchema, SemanticPairIdSchema,
   MinorUnitsSchema, OptionIdSchema, OriginSchema, ProductIdSchema, ProductOptionIdSchema, PurposeIdSchema, SafeUrlSchema,
   TextAlignSchema, TimeZoneSchema, WeekdaySchema,
 } from './primitives.ts';
@@ -285,6 +286,24 @@ export const RepeatingGroupConfigSchema = z.strictObject({
   layout: z.enum(['stacked', 'table']),
 });
 
+export const DynamicTableColumnSchema = z.strictObject({
+  id: DynamicColumnIdSchema,
+  label,
+  input: z.enum(DYNAMIC_COLUMN_INPUTS),
+  summary: z.enum(['none', 'sum', 'average', 'min', 'max', 'count']).exactOptional(),
+  summaryLabel: label.exactOptional(),
+  formula: z.string().max(500).exactOptional(),
+});
+export const DynamicTableConfigSchema = z.strictObject({
+  columns: z.array(DynamicTableColumnSchema).min(1).max(20),
+  minRows: count.max(200),
+  maxRows: z.number().int().min(1).max(200),
+  initialRows: count.max(200).exactOptional(),
+  allowAddColumns: z.boolean(),
+  addableInputs: z.array(z.enum(DYNAMIC_COLUMN_INPUTS)).max(DYNAMIC_COLUMN_INPUTS.length),
+  maxColumns: z.number().int().min(1).max(30),
+});
+
 const GIB = 1024 ** 3;
 export const FileUploadConfigSchema = z.strictObject({
   minFiles: count.max(20).exactOptional(),
@@ -497,7 +516,7 @@ export const BLOCK_CONFIG_SCHEMAS = {
   time: TimeConfigSchema, rating: RatingConfigSchema, linear_scale: LinearScaleConfigSchema, nps: NpsConfigSchema, ranking: RankingConfigSchema,
   matching: MatchingConfigSchema, likert: LikertConfigSchema, constant_sum: ConstantSumConfigSchema, maxdiff: MaxDiffConfigSchema, card_sort: CardSortConfigSchema,
   semantic_differential: SemanticDifferentialConfigSchema, number_range: NumberRangeConfigSchema, schedule_grid: ScheduleGridConfigSchema,
-  matrix: MatrixConfigSchema, repeating_group: RepeatingGroupConfigSchema, file_upload: FileUploadConfigSchema, signature: SignatureConfigSchema,
+  matrix: MatrixConfigSchema, repeating_group: RepeatingGroupConfigSchema, dynamic_table: DynamicTableConfigSchema, file_upload: FileUploadConfigSchema, signature: SignatureConfigSchema,
   hidden: HiddenConfigSchema, consent: ConsentConfigSchema, payment: PaymentConfigSchema, appointment: AppointmentConfigSchema,
   calculation: CalculationConfigSchema, context: ContextConfigSchema, unique_id: UniqueIdConfigSchema, captcha: CaptchaConfigSchema,
   heading: HeadingConfigSchema, paragraph: ParagraphConfigSchema, image: ImageConfigSchema, divider: DividerConfigSchema, section_break: SectionBreakConfigSchema, section: SectionConfigSchema,

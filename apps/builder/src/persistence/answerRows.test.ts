@@ -31,7 +31,7 @@ describe('answerRows', () => {
       answerRows(definition, {
         ['color' as BlockId]: { type: 'single_choice', value: { optionId: 'red' as OptionId } },
       } as Answers),
-    ).toEqual([{ key: 'color', label: 'Colour', value: 'Red' }]);
+    ).toEqual([{ key: 'color', label: 'Colour', value: 'Red', choices: ['Red'] }]);
   });
 
   it('shows matching and card sort as label - value lines', () => {

@@ -130,10 +130,13 @@ export function markRowRefs(expr: Expr, sameRow: (id: BlockId) => boolean): Expr
 
 const PREC: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2 };
 
-export function formatFormula(expr: Expr, keys: ReadonlyMap<BlockId, string>): string {
+export function formatFormula(expr: Expr, keys: ReadonlyMap<string, string>): string {
   const go = (e: Expr, parent: number): string => {
     if (e.k === 'lit' && e.value.type === 'number') return e.value.value;
-    if (e.k === 'ref' && e.ref.kind === 'answer') return keys.get(e.ref.blockId) ?? '';
+    if (e.k === 'ref' && e.ref.kind === 'answer') {
+      const key = e.ref.path ? `${e.ref.blockId}|${e.ref.path}` : e.ref.blockId;
+      return keys.get(key) ?? '';
+    }
     if (e.k === 'call' && e.fn === 'sum' && e.args[0]) return `sum(${go(e.args[0], 0)})`;
     if (e.k === 'unary' && e.op === 'neg') return `-${go(e.arg, 3)}`;
     if (e.k === 'binary' && PREC[e.op] !== undefined) {
