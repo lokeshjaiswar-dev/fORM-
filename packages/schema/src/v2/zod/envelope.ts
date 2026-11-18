@@ -59,6 +59,20 @@ export const ApiOptionsSchema = z.strictObject({
   labelKey: z.string().max(256).exactOptional(),
   valueKey: z.string().max(256).exactOptional(),
 });
+export const ApiLookupMappingSchema = z.strictObject({
+  key: z.string().min(1).max(128),
+  fieldId: BlockIdSchema.exactOptional(),
+});
+export const ApiLookupSchema = z.strictObject({
+  ...apiRequest,
+  id: z.string().min(1).max(64).exactOptional(),
+  name: z.string().min(1).max(80).exactOptional(),
+  enabled: z.boolean().exactOptional(),
+  itemsPath: z.string().max(256).exactOptional(),
+  pickerFieldId: BlockIdSchema.exactOptional(),
+  pickerKey: z.string().max(128).exactOptional(),
+  mappings: z.array(ApiLookupMappingSchema).max(32).exactOptional(),
+});
 
 /** Shape of BlockBase<T>. */
 export const blockBase = <T extends string>(type: T) => ({

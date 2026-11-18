@@ -5,6 +5,8 @@
  *
  * Validate: POST http://localhost:3001/verify-name
  *           POST http://localhost:3001/verify-name.xml
+ * Lookup:   GET  http://localhost:3001/employees
+ *           GET  http://localhost:3001/directory
  * Options:  GET  http://localhost:3001/cities
  *           GET  http://localhost:3001/cities.xml
  *           GET  http://localhost:3001/cities-map
@@ -17,6 +19,44 @@ import http from 'node:http';
 
 const PORT = Number(process.env.DEMO_VALIDATE_PORT ?? 3001);
 const NAMES = new Set(['lokesh', 'asha rao', 'jayesh']);
+const EMPLOYEES = [
+  { empId: 'E1', name: 'Lokesh', designation: 'Engineer', email: 'lokesh@example.com', department: 'Product' },
+  { empId: 'E2', name: 'Jayesh', designation: 'Manager', email: 'jayesh@example.com', department: 'People' },
+  { empId: 'E3', name: 'Asha Rao', designation: 'Designer', email: 'asha@example.com', department: 'Design' },
+];
+const DIRECTORY = {
+  company: { name: 'dMACQ', code: 'DMQ' },
+  data: {
+    employees: [
+      {
+        empId: 'E1',
+        name: 'Lokesh',
+        job: { title: 'Engineer', grade: 'L4', department: { code: 'PRD', name: 'Product' } },
+        contact: { email: 'lokesh@example.com', phone: '9000000001' },
+        address: { city: 'Mumbai', line: 'Bandra West', pin: '400050' },
+      },
+      {
+        empId: 'E2',
+        name: 'Jayesh',
+        job: { title: 'Manager', grade: 'L6', department: { code: 'PPL', name: 'People' } },
+        contact: { email: 'jayesh@example.com', phone: '9000000002' },
+        address: { city: 'Delhi', line: 'Connaught Place', pin: '110001' },
+      },
+      {
+        empId: 'E3',
+        name: 'Asha Rao',
+        job: { title: 'Designer', grade: 'L5', department: { code: 'DSN', name: 'Design' } },
+        contact: { email: 'asha@example.com', phone: '9000000003' },
+        address: { city: 'Bengaluru', line: 'Indiranagar', pin: '560038' },
+      },
+    ],
+    offices: [
+      { code: 'MUM', city: 'Mumbai', floors: 6, head: { name: 'Lokesh', empId: 'E1' } },
+      { code: 'DEL', city: 'Delhi', floors: 4, head: { name: 'Jayesh', empId: 'E2' } },
+      { code: 'BLR', city: 'Bengaluru', floors: 8, head: { name: 'Asha Rao', empId: 'E3' } },
+    ],
+  },
+};
 const CITIES = [
   { id: 'mum', name: 'Mumbai' },
   { id: 'del', name: 'Delhi' },
@@ -111,6 +151,14 @@ const server = http.createServer(async (req, res) => {
 
   const path = req.url?.split('?')[0] ?? '';
 
+  if (req.method === 'GET' && path === '/directory') {
+    json(res, 200, DIRECTORY);
+    return;
+  }
+  if (req.method === 'GET' && path === '/employees') {
+    json(res, 200, { data: { employees: EMPLOYEES } });
+    return;
+  }
   if (req.method === 'GET' && path === '/cities') {
     json(res, 200, { data: { cities: CITIES } });
     return;
@@ -169,5 +217,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  process.stdout.write(`Demo API http://localhost:${PORT}/verify-name (POST JSON), /verify-name.xml (POST XML), /cities (GET JSON), /cities.xml (GET XML)\n`);
+  process.stdout.write(`Demo API http://localhost:${PORT}/verify-name (POST JSON), /verify-name.xml (POST XML), /cities (GET JSON), /employees (GET JSON)\n`);
 });

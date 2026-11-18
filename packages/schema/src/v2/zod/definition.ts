@@ -15,6 +15,7 @@ import {
 } from './primitives.ts';
 import { RichDocSchema } from './rich-text.ts';
 import { FORM_TITLE_WEIGHTS } from '../definition.ts';
+import { ApiLookupSchema } from './envelope.ts';
 import { BehaviorSchema, ThemeSchema } from './theme.ts';
 
 export const FormTitleStyleSchema = z.strictObject({
@@ -40,6 +41,8 @@ export const FormDefinitionSchema = z.strictObject({
   privacy: PrivacyConfigSchema,
   theme: ThemeSchema,
   behavior: BehaviorSchema,
+  lookup: ApiLookupSchema.exactOptional(),
+  lookups: z.array(ApiLookupSchema).max(8).exactOptional(),
   i18n: I18nBundleSchema,
   x: ExtensionsSchema.exactOptional(),
 });

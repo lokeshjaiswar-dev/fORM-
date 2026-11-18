@@ -11,6 +11,7 @@ import type { Answers } from '@form/schema';
 import { loadRegexEngine, needsRegexEngine, type RawAnswers } from '@form/validation/lazy';
 import { startingAnswers } from './answers.ts';
 import { verifyFieldApis } from './controls/apiValidation.ts';
+import { LookupProvider } from './controls/lookupContext.tsx';
 import { RendererContext, useRenderer, type RendererContextValue } from './context.ts';
 import { usePipes } from './controls/hooks.ts';
 import { useEvalSession, useEvaluation } from './eval/context.ts';
@@ -495,7 +496,7 @@ function FormSession({ props, meta, base, onRestart }: {
   return (
     <RendererContext.Provider value={context}>
       <FormProvider {...form}>
-        {screen}
+        <LookupProvider def={def}>{screen}</LookupProvider>
         <div className="fr-sr-only" role="status" aria-live={def.behavior.a11y.announceErrors}>{announcement}</div>
       </FormProvider>
     </RendererContext.Provider>

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
-  BehaviorSchema, BlockIdSchema, BlockSchema, DocumentOpSchema, EndingIdSchema, EndingSchema, FormDefinitionSchema, FormTitleStyleSchema, PageIdSchema, PurposeSchema,
+  ApiLookupSchema, BehaviorSchema, BlockIdSchema, BlockSchema, DocumentOpSchema, EndingIdSchema, EndingSchema, FormDefinitionSchema, FormTitleStyleSchema, PageIdSchema, PurposeSchema,
   RichDocSchema, RuleIdSchema, RuleSchema, ThemeSchema,
-  type Behavior, type Block, type BlockId, type DocumentOp, type Ending, type EndingId, type FormDefinition, type FormTitleStyle, type PageId, type Purpose,
+  type ApiLookup, type Behavior, type Block, type BlockId, type DocumentOp, type Ending, type EndingId, type FormDefinition, type FormTitleStyle, type PageId, type Purpose,
   type RichDoc, type Rule, type RuleId, type Theme,
 } from '@form/schema';
 
@@ -35,6 +35,7 @@ export type Command =
   | { type: 'set_description'; description: RichDoc | null }
   | { type: 'set_theme'; theme: Theme }
   | { type: 'set_behavior'; behavior: Behavior }
+  | { type: 'set_lookups'; lookups: ApiLookup[] }
   | { type: 'set_endings'; endings: Ending[]; defaultEndingId: EndingId; behavior?: Behavior }
   | { type: 'apply_ops'; ops: DocumentOp[] }
   | { type: 'update_block'; id: BlockId; patch: BlockPatch }
@@ -60,6 +61,7 @@ export const CommandSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('set_description'), description: RichDocSchema.nullable() }),
   z.strictObject({ type: z.literal('set_theme'), theme: ThemeSchema }),
   z.strictObject({ type: z.literal('set_behavior'), behavior: BehaviorSchema }),
+  z.strictObject({ type: z.literal('set_lookups'), lookups: z.array(ApiLookupSchema).max(8) }),
   z.strictObject({ type: z.literal('set_endings'), endings: z.array(EndingSchema).min(1), defaultEndingId: EndingIdSchema, behavior: BehaviorSchema.optional() }),
   z.strictObject({ type: z.literal('apply_ops'), ops: z.array(DocumentOpSchema).min(1) }),
   z.strictObject({ type: z.literal('update_block'), id: BlockIdSchema, patch: z.record(z.string(), z.unknown()) }),

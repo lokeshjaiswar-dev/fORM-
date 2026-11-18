@@ -95,16 +95,16 @@ function SceneRow({ label, selected, onSelect, onUpload }: { label: string; sele
   return (
     <section>
       <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{label}</p>
-      <div className="grid grid-cols-4 gap-2">
-        <Button type="button" variant="outline" size="default" aria-pressed={!selected} pressed={!selected} onClick={() => onSelect(null)} className="aspect-[4/3] h-auto w-full flex-col">
+      <div className="grid grid-cols-[repeat(auto-fill,7.5rem)] gap-2">
+        <Button type="button" variant="outline" size="default" aria-pressed={!selected} pressed={!selected} onClick={() => onSelect(null)} className="h-16 w-[7.5rem] flex-col">
           {t(M['design.none'])}
         </Button>
         {THEME_SCENES.map((scene) => (
-          <Button key={scene.id} type="button" variant="outline" aria-label={scene.name} pressed={selected === scene.id} onClick={() => onSelect(scene.id)} className="aspect-[4/3] h-auto w-full overflow-hidden p-0">
+          <Button key={scene.id} type="button" variant="outline" aria-label={scene.name} pressed={selected === scene.id} onClick={() => onSelect(scene.id)} className="h-16 w-[7.5rem] overflow-hidden p-0">
             <img alt="" src={scene.url} className="h-full w-full object-cover" />
           </Button>
         ))}
-        <Button type="button" variant="outline" aria-label={t(M['design.upload'])} onClick={() => input.current?.click()} className="aspect-[4/3] h-auto w-full flex-col gap-1 border-dashed">
+        <Button type="button" variant="outline" aria-label={t(M['design.upload'])} onClick={() => input.current?.click()} className="h-16 w-[7.5rem] flex-col gap-1 border-dashed">
           <ImagePlus className="size-4" />
           {t(M['design.upload'])}
         </Button>

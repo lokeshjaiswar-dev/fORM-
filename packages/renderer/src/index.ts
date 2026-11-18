@@ -10,6 +10,7 @@ export {
 } from './controls/apiValidation.ts';
 export type { ApiCheckResult, ApiCollection, ApiParseResult, ApiResponseLeaf } from './controls/apiValidation.ts';
 export { collectionLabel, displayOptionPath, fetchApiOptions, guessMapping, mapApiOptions, pickFromTree } from './controls/apiOptions.ts';
+export { lookupRows } from './controls/apiLookup.ts';
 export type { TreePick } from './controls/apiOptions.ts';
 export { slotsOf, toWallDateTime } from './controls/appointmentSlots.ts';
 export type { AppointmentSlot } from './controls/appointmentSlots.ts';

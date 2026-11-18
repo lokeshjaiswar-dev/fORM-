@@ -31,6 +31,7 @@ const M = defineMessages('builder', {
 /** The sidebar palette: every registry palette entry (FND-03), searchable, draggable onto the canvas. */
 export function FieldPicker() {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const designOpen = useUiStore((s) => s.designOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const title = useDoc((d) => d.title);
   const [q, setQ] = useState('');
@@ -41,7 +42,7 @@ export function FieldPicker() {
   const [removing, setRemoving] = useState<Tile | null>(null);
 
   return (
-    <aside className={cn('min-h-0 shrink-0 overflow-hidden border-r border-border bg-surface-subtle transition-[width] duration-300 ease-out', sidebarOpen ? 'w-[252px]' : 'w-0')}>
+    <aside className={cn('min-h-0 shrink-0 overflow-hidden border-r border-border bg-surface-subtle transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]', sidebarOpen && !designOpen ? 'w-[252px]' : 'w-0')}>
       <div className="flex h-full min-h-0 w-[252px] flex-col">
         <div className="flex items-center gap-1 px-2 pt-2.5">
           <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-[6px] px-1.5 py-1">

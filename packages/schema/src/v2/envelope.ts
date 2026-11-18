@@ -111,6 +111,29 @@ export interface ApiOptions extends ApiRequestConfig {
   valueKey?: string;
 }
 
+/** One response key written into a form field when the filler picks a lookup row. */
+export interface ApiLookupMapping {
+  key: string;
+  /** Empty until the author chooses a form field for this key. */
+  fieldId?: BlockId;
+}
+
+/**
+ * Form-level master list. `itemsPath` is the array of records. `pickerFieldId` is the
+ * field that becomes the dropdown; `pickerKey` is the label on each row (usually name).
+ */
+export interface ApiLookup extends ApiRequestConfig {
+  /** Stable id so several lookups on one form stay distinct. */
+  id?: string;
+  name?: string;
+  /** When true, the live form loads this list and fills mapped fields. */
+  enabled?: boolean;
+  itemsPath?: string;
+  pickerFieldId?: BlockId;
+  pickerKey?: string;
+  mappings?: ApiLookupMapping[];
+}
+
 export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   key: FieldKey;
   label: InlineDoc;

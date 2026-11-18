@@ -47,11 +47,12 @@ export interface UiState {
   dismissConflict: () => void;
 }
 
-export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save'> = {
+export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save' | 'designOpen'> = {
   activeBlockId: null,
   inspectorOpen: false,
   inspectorWidth: 400,
   sidebarOpen: true,
+  designOpen: false,
   started: false,
   insertFocusKey: 0,
   pendingDelete: null,
@@ -68,7 +69,6 @@ export const useUiStore = create<UiState>()((set) => ({
   closeInspector: () => set({ inspectorOpen: false }),
   setInspectorWidth: (width) => set({ inspectorWidth: Math.min(640, Math.max(280, width)) }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
-  designOpen: false,
   setDesignOpen: (designOpen) => set({ designOpen }),
   startBlank: () => set((s) => ({ started: true, activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),
   requestInsertFocus: () => set((s) => ({ activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),

@@ -155,6 +155,11 @@ export function applyCommand(doc: FormDefinition, input: Command, ids: IdSource 
       case 'set_behavior':
         draft.behavior = command.behavior;
         break;
+      case 'set_lookups':
+        if (command.lookups.length) draft.lookups = command.lookups;
+        else delete draft.lookups;
+        delete draft.lookup;
+        break;
       case 'set_endings':
         draft.endings = command.endings;
         draft.defaultEndingId = command.defaultEndingId;
@@ -260,6 +265,8 @@ export function coalesceKey(command: Command, doc: FormDefinition): string | nul
       return typingKey('theme', doc.theme, command.theme as unknown as Plain);
     case 'set_behavior':
       return typingKey('behavior', doc.behavior, command.behavior as unknown as Plain);
+    case 'set_lookups':
+      return typingKey('lookups', doc.lookups ?? [], command.lookups as unknown as Plain);
     case 'set_endings':
       if (command.behavior) return null;
       return typingKey('endings', { endings: doc.endings, defaultEndingId: doc.defaultEndingId }, { endings: command.endings, defaultEndingId: command.defaultEndingId });

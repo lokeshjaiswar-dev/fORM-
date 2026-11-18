@@ -1,6 +1,6 @@
 import { REGISTRY, isAvailable, type AvailableType } from '@form/registry';
 import type {
-  Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, FormTitleStyle, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
+  ApiLookup, Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, FormTitleStyle, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
 } from '@form/schema';
 import { applyPatch } from '@/lib/applyPatch';
 import { APP_IDS, blankDefinition, blockOrder, createBlock, inlineDoc, isField, placementOf, richDoc } from '@/lib/definition';
@@ -55,6 +55,10 @@ export function setTheme(theme: Theme): CommandResult {
 
 export function setBehavior(behavior: Behavior): CommandResult {
   return dispatch({ type: 'set_behavior', behavior });
+}
+
+export function setLookups(lookups: ApiLookup[]): CommandResult {
+  return dispatch({ type: 'set_lookups', lookups });
 }
 
 /** Sets the endings, and the behaviour that goes with them (the confetti switch) in the same step. */

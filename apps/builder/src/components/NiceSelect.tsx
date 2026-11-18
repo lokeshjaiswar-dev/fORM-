@@ -1,6 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@dmacq/ui';
 
-export type SelectOption = { value: string; label: string };
+export type SelectOption = { value: string; label: string; disabled?: boolean };
 
 /** Single-value dMACQ Select with an options list. */
 export function NiceSelect({
@@ -29,7 +29,7 @@ export function NiceSelect({
       </SelectTrigger>
       <SelectContent data-nice-select="">
         {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
+          <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}
           </SelectItem>
         ))}
