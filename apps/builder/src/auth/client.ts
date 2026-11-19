@@ -10,9 +10,13 @@ import { API_BASE } from '@/edition/edition';
 
 export const CLIENT_HEADERS = { 'x-fr-client': 'builder' } as const;
 
-/** Local Vite only: the seeded demo user so Publish works without Mailpit sign-up (`AUTH_DEV_HEADERS`). */
-export const DEV_USER_HEADERS =
-  import.meta.env.MODE === 'development' ? { 'x-fr-dev-user': '01970000-0000-7000-8000-000000000002' } : {};
+/*
+ * No-login mode: every builder call acts as the seeded demo user in the seeded demo org (the API must run with
+ * AUTH_DEV_HEADERS=true). Forms are stored in that one org. Intended for local or internal deployments only.
+ */
+export const OPEN_USER_ID = '01970000-0000-7000-8000-000000000002';
+export const OPEN_ORG_ID = '01970000-0000-7000-8000-000000000001';
+export const DEV_USER_HEADERS = { 'x-fr-dev-user': OPEN_USER_ID } as const;
 
 export const meUserSchema = z.object({
   id: z.string(),
@@ -140,7 +144,8 @@ export const useActiveOrg = (): UserOrg | null => useSessionStore((s) => (s.stat
 /** A call in the active org. */
 export function orgApi<T>(method: Method, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
   const s = useSessionStore.getState();
-  return api(method, path, schema, body, { org: s.status === 'signed_in' ? (activeOrgOf(s.me)?.id ?? null) : null });
+  const org = s.status === 'signed_in' ? (activeOrgOf(s.me)?.id ?? OPEN_ORG_ID) : OPEN_ORG_ID;
+  return api(method, path, schema, body, { org });
 }
 
 /** The org switcher: the session remembers the choice (`PUT /v1/me/active-org`). */

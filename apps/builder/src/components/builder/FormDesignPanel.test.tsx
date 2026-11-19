@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { doc, resetStore } from '@/test/fixtures';
@@ -52,7 +52,7 @@ describe('FormDesignPanel', () => {
     expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
   });
 
-  it('stays open when clicking outside and returns from Back to form builder', async () => {
+  it('stays open when clicking outside and closes with the X button', async () => {
     const user = userEvent.setup();
     render(
       <div>
@@ -68,8 +68,8 @@ describe('FormDesignPanel', () => {
     expect(screen.getByLabelText('Password (optional)')).toHaveValue('');
     await user.click(screen.getByRole('button', { name: 'Outside' }));
     expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Back to form builder' }));
-    expect(screen.queryByRole('region', { name: 'Form settings' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Form settings' })).not.toBeInTheDocument());
   });
 
   it('enables section breaks from the tab after Logic and stores colour', async () => {

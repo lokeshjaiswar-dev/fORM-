@@ -86,6 +86,8 @@ export const formSubmissions = pgTable(
     answers: jsonb('answers').$type<Record<string, unknown>>().notNull(),
     fields: jsonb('fields').$type<Array<{ key: string; label: string; value: string; table?: { headers: string[]; rows: string[][] } | undefined; choices?: string[] | undefined }>>().notNull(),
     locale: text('locale').notNull().default('en-IN'),
+    /** Live form version the respondent answered. Null for rows written before versions were linked. */
+    versionId: uuid('version_id'),
     submittedAt: ts('submitted_at'),
   },
   (t) => [

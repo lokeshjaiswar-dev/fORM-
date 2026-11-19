@@ -54,3 +54,6 @@ playwright-report
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# local secrets for deploy
+deploy/docker/secrets/

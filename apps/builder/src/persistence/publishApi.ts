@@ -36,7 +36,9 @@ export function fillUrl(slug: string): string {
  * Freezes the current draft as a public fill link. Does not send X-FR-Org; nobody needs to be signed in.
  */
 export async function publishLive(id: string, draft: unknown, _title: string): Promise<LiveForm> {
-  const live = await api('POST', '/v1/p/publish', liveSchema, { id, draft, media: themeMediaForDraft(draft) });
+  const media = themeMediaForDraft(draft);
+  const withMedia = draft && typeof draft === 'object' ? { ...(draft as Record<string, unknown>), media } : draft;
+  const live = await api('POST', '/v1/p/publish', liveSchema, { id, draft: withMedia, media });
   rememberSlug(id, live.slug);
   return live;
 }

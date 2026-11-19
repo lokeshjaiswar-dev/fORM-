@@ -69,6 +69,8 @@ export const apiEnvSchema = z
     NTP_MAX_OFFSET_MS: z.coerce.number().int().min(1).default(1000),
     /** Header authentication (`X-FR-Dev-User`) for tests and local development, next to sessions. */
     AUTH_DEV_HEADERS: flag.default(false),
+    /** Internal deployments only: allow AUTH_DEV_HEADERS when NODE_ENV=production. Anyone who can reach the API can read and write every form. */
+    ALLOW_OPEN_ACCESS: flag.default(false),
     /** The API's own origin: OAuth redirect URIs (`<url>/v1/auth/oauth/<provider>/callback`). */
     PUBLIC_API_URL: z.url().optional(),
     /** At least 32 random bytes, base64url: the daily IP-hash salt, account throttle keys and the OAuth transaction cookie. */
@@ -104,7 +106,7 @@ export const apiEnvSchema = z
   .superRefine((env, ctx) => {
     const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
     const production = env.NODE_ENV === 'production';
-    if (env.AUTH_DEV_HEADERS && production) issue('AUTH_DEV_HEADERS', 'is refused when NODE_ENV=production');
+    if (env.AUTH_DEV_HEADERS && production && !env.ALLOW_OPEN_ACCESS) issue('AUTH_DEV_HEADERS', 'is refused when NODE_ENV=production unless ALLOW_OPEN_ACCESS=true');
     if (production && !env.AUTH_SECRET) issue('AUTH_SECRET', 'is required in production');
     if (production && env.KMS_DRIVER === 'keyfile' && !env.KMS_KEYFILE_PATH) issue('KMS_KEYFILE_PATH', 'is required in production: TOTP secrets are encrypted');
     if (production && !env.PUBLIC_BUILDER_URL) issue('PUBLIC_BUILDER_URL', 'is required in production: sign-in emails link to the builder');

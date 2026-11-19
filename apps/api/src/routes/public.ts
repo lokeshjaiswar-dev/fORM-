@@ -5,7 +5,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
-import { formSubmissions, formVersions, forms, resolveFormSlug, withTenant, type Db } from '@form/db';
+import { formDrafts, formSubmissions, formVersions, forms, resolveFormSlug, withTenant, type Db } from '@form/db';
 import { projectForRuntime } from '@form/logic';
 import type { CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
 import { z } from 'zod';
@@ -145,11 +145,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
   async function loadLive(slug: string, requestId: string): Promise<PublicPayload> {
     const cached = liveCache.get(slug);
     if (cached && Date.now() - cached.at < LIVE_TTL_MS) return cached.body;
-    const fromDisk = await readPublishedFile(slug);
-    if (fromDisk) {
-      liveCache.set(slug, { at: Date.now(), body: fromDisk });
-      return fromDisk;
-    }
+    // The database is the source of truth. The disk copy only covers forms published before it was.
     const pending = liveInflight.get(slug);
     if (pending) return pending;
     const load = (async () => {
@@ -189,9 +185,18 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         templateLineage: [],
         variablesSnapshot: { variables: {} },
       };
+      const drafts = await withTenant(deps.db, { orgId: found.orgId, actor: 'system', requestId, readOnly: true }, (tx) =>
+        tx.select({ draft: formDrafts.draft }).from(formDrafts).where(eq(formDrafts.formId, found.formId)).limit(1),
+      );
+      const storedMedia = drafts[0]?.draft?.media;
+      const media =
+        storedMedia && typeof storedMedia === 'object' && !Array.isArray(storedMedia)
+          ? Object.fromEntries(Object.entries(storedMedia as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+          : undefined;
       const body: PublicPayload = {
         slug,
         formId: found.formId,
+        ...(media && Object.keys(media).length ? { media } : {}),
         version: projectForRuntime(version, { state: 'open' }, {
           edition,
           upload: { presignUrl: '', maxFileBytes: 10 * 1024 * 1024 },
@@ -423,6 +428,7 @@ async function persistSubmissionToDb(db: Db, slug: string, requestId: string, ro
       answers: row.answers,
       fields: row.fields,
       locale: row.locale,
+      versionId: found.liveVersionId,
     });
     await tx
       .update(forms)

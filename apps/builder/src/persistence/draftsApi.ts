@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { MergeConflict, MergeResolution } from '@form/schema';
-import { ApiProblem, ApiUnreachable, CLIENT_HEADERS, DEV_USER_HEADERS, ORG_HEADER, activeOrgOf, orgApi, useSessionStore } from '@/auth/client';
+import { ApiProblem, ApiUnreachable, CLIENT_HEADERS, DEV_USER_HEADERS, OPEN_ORG_ID, ORG_HEADER, orgApi } from '@/auth/client';
 import { API_BASE } from '@/edition/edition';
 
 const created = z.object({ id: z.string() });
@@ -25,8 +25,9 @@ const savedSchema = z.object({ draftRev: z.number(), updatedAt: z.string() });
 export type RemoteForm = { id: string; title: string; updatedAt: string };
 export type RemoteDraft = { draftRev: number; schemaVersion: number; draft: Record<string, unknown>; updatedAt: string };
 
+/** No-login mode: the builder always talks to the API as the demo user (see OPEN_ORG_ID in auth/client). */
 function signedIn(): boolean {
-  return useSessionStore.getState().status === 'signed_in';
+  return true;
 }
 
 async function optional<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -93,8 +94,7 @@ export async function mergeRemoteForms(
   title?: string,
 ): Promise<MergeRemoteResult | null> {
   if (!signedIn()) return null;
-  const session = useSessionStore.getState();
-  const org = session.status === 'signed_in' ? activeOrgOf(session.me)?.id : null;
+  const org = OPEN_ORG_ID;
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/v1/forms/merge`, {

@@ -1,4 +1,5 @@
 import { DOCUMENT_FORMAT, newestFirst, summarize, type DocumentRepository, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
+import { hydrateThemeImages, themeMediaForDraft } from '@/components/builder/design/uploads';
 import { getRemoteDraft, listRemoteForms, putRemoteDraft } from '@/persistence/draftsApi';
 
 /**
@@ -51,6 +52,8 @@ export class CachingApiRepository implements DocumentRepository {
       doc: remote.draft,
       ops: local?.ops,
     };
+    const media = remote.draft.media;
+    if (media && typeof media === 'object') hydrateThemeImages(media as Record<string, string>);
     await this.cache.save(stored);
     return stored;
   }
@@ -59,7 +62,8 @@ export class CachingApiRepository implements DocumentRepository {
     await this.cache.save(form);
     const title = summarize(form).title;
     try {
-      await putRemoteDraft(form.id, form.doc, title);
+      const doc = form.doc && typeof form.doc === 'object' ? { ...(form.doc as Record<string, unknown>), media: themeMediaForDraft(form.doc) } : form.doc;
+      await putRemoteDraft(form.id, doc, title);
     } catch {
       /* Local save is enough; org/API refusals must not block creating a form in this browser. */
     }

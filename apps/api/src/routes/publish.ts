@@ -37,7 +37,9 @@ function publicSlug(title: string, formId: string): string {
 }
 
 function parsedDefinition(draft: unknown, formId: string): FormDefinition {
-  const parsed = FormDefinitionSchema.safeParse(draft);
+  const source = draft && typeof draft === 'object' && !Array.isArray(draft) ? { ...(draft as Record<string, unknown>) } : draft;
+  if (source && typeof source === 'object' && !Array.isArray(source)) delete (source as Record<string, unknown>).media;
+  const parsed = FormDefinitionSchema.safeParse(source);
   if (!parsed.success) {
     throw new ProblemError('VALIDATION_FAILED', parsed.error.issues[0]?.message ?? 'The draft is not a valid v2 form.');
   }

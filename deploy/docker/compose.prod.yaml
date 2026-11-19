@@ -1,0 +1,58 @@
+# Internal deploy. Forms are stored as the seeded demo user. Set ALLOW_OPEN_ACCESS only on a private network.
+#   docker compose -f deploy/docker/compose.prod.yaml up -d --build
+# First boot, from the repo, with the database reachable:
+#   NODE_ENV=development DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:5432/form pnpm dev:setup
+# The master key lives in deploy/docker/secrets/form-master.key (git-ignored). Back it up: losing it makes 2FA secrets unreadable.
+name: form
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: form
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d form]
+      interval: 2s
+      retries: 30
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+    environment:
+      NODE_ENV: production
+      DEPLOYMENT_MODE: onprem
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://fr_app:fr_app_dev@postgres:5432/form
+      AUTH_DEV_HEADERS: "true"
+      ALLOW_OPEN_ACCESS: "true"
+      AUTH_SECRET: ${AUTH_SECRET:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+      KMS_DRIVER: keyfile
+      KMS_KEYFILE_PATH: /run/secrets/form-master.key
+      PUBLIC_BUILDER_URL: http://localhost:8088
+      PUBLIC_API_URL: http://localhost:8088
+      PRIVACY_CONTACT_EMAIL: privacy@form.local
+      MAILER_DRIVER: log
+    volumes:
+      - apidata:/app/apps/api/.data
+      - ./secrets/form-master.key:/run/secrets/form-master.key:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  builder:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.builder
+    ports:
+      - 127.0.0.1:8088:80
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  apidata:
