@@ -142,9 +142,20 @@ export function BuilderHeader() {
         <Ghost disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
           <Redo2 className="size-4" />
         </Ghost>
-        <Ghost onClick={() => setDesignOpen(!designOpen)} label={designOpen ? 'Close form settings' : 'Form settings'}>
-          <Paintbrush className="size-4" />
-        </Ghost>
+        <Tooltip content={designOpen ? 'Close form settings' : 'Form settings'}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            pressed={designOpen}
+            aria-label={designOpen ? 'Close form settings' : 'Form settings'}
+            onClick={() => setDesignOpen(!designOpen)}
+            className="mx-1 border-primary/40 bg-primary/10 font-semibold text-primary hover:bg-primary/20"
+          >
+            <Paintbrush className="size-4" />
+            Form settings
+          </Button>
+        </Tooltip>
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>

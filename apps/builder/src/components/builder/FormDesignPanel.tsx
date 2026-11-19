@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Paintbrush } from 'lucide-react';
+import { Paintbrush, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { DEFAULT_COLORS } from '@form/renderer';
 import type { FontId, HexColor, Theme, ThemeColorToken, ThemeTokens } from '@form/schema';
@@ -81,6 +81,26 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
     setSwitchMark((n) => n + 1);
   }, [open]);
 
+  // Keep the panel mounted while it slides back out to the right, then unmount it.
+  const [visible, setVisible] = useState(open);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
+      setLeaving(false);
+      return;
+    }
+    if (!visible) return;
+    setLeaving(true);
+    const id = window.setTimeout(() => {
+      setVisible(false);
+      setLeaving(false);
+    }, 450);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const showPanel = open || visible;
+
   const patch = (next: Theme) => setTheme(next);
   const patchTokens = (partial: Partial<ThemeTokens>) => patch({ ...theme, tokens: { ...tokens, ...partial } });
   const setColor = (token: ThemeColorToken, value: string) => {
@@ -104,11 +124,11 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
     : id === 'lookup' ? t(M['design.lookup'])
     : t(M['design.submit']);
 
-  if (!open) {
-    return (
-      <div className={cn('relative flex min-h-0 min-w-0 flex-1 flex-col', switchMark > 0 && 'design-view-back')}>
+  return (
+    <div className="relative flex min-h-0 min-w-0 flex-1">
+      <div className={cn('relative flex min-h-0 min-w-0 flex-col', showPanel ? 'w-1/2 shrink-0 overflow-hidden' : 'flex-1')}>
         {children}
-        {showTrigger ? (
+        {!open && showTrigger ? (
           <Tooltip content={t(M['design.open'])} side="right" className="absolute right-5 top-5 z-20">
             <Button
               type="button"
@@ -122,23 +142,16 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
           </Tooltip>
         ) : null}
       </div>
-    );
-  }
-
-  return (
-    <div className={cn('ov-theme-dark relative flex min-h-0 min-w-0 flex-1 bg-sidebar text-sidebar-foreground', switchMark > 0 && 'design-view-in')}>
+      {showPanel ? (
+    <div className={cn('ov-theme-dark relative flex min-h-0 min-w-0 w-1/2 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground', leaving ? 'design-view-out' : switchMark > 0 && 'design-view-in')}>
       <svg aria-hidden viewBox="0 0 100 2" preserveAspectRatio="none" className="design-switch-rule pointer-events-none absolute inset-x-0 top-0 z-20 h-0.5 w-full text-sidebar-primary">
         <path d="M0 1h100" fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
       </svg>
-      <nav aria-label={t(M['design.title'])} className="flex w-[252px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      <nav aria-label={t(M['design.title'])} className="flex w-full shrink-0 flex-col border-b border-sidebar-border bg-sidebar">
         <div className="px-3 pt-4">
-          <Button type="button" variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground" onClick={() => setOpen(false)}>
-            <ArrowLeft className="size-4" />
-            {t(M['design.back'])}
-          </Button>
           <h2 className="px-2 pb-2 pt-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">{t(M['design.title'])}</h2>
         </div>
-        <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-0.5 px-2">
+        <div role="tablist" aria-orientation="horizontal" className="flex flex-row flex-wrap gap-1 px-2 pb-2">
           {TABS.map((id) => (
             <button
               key={id}
@@ -147,7 +160,7 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
               aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={cn(
-                'rounded-md border-l-2 px-3 py-2 text-left text-[14px]',
+                'rounded-md border-b-2 px-3 py-2 text-left text-[14px] whitespace-nowrap',
                 tab === id
                   ? 'border-sidebar-primary bg-sidebar-accent font-medium text-sidebar-foreground'
                   : 'border-transparent text-sidebar-muted hover:bg-sidebar-accent/40',
@@ -158,6 +171,16 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
           ))}
         </div>
       </nav>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={t(M['design.close'])}
+        onClick={() => setOpen(false)}
+        className="absolute right-4 top-4 z-30 text-sidebar-foreground"
+      >
+        <X className="size-5" />
+      </Button>
       <div role="region" aria-label={t(M['design.title'])} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-sidebar">
         <div key={tab} className="design-tab-in w-full px-6 py-6">
           <h2 className="mb-5 text-[22px] font-semibold text-sidebar-foreground">{tabLabel(tab)}</h2>
@@ -246,28 +269,6 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
                       aria-label={t(M['design.search'])}
                     />
                   </div>
-                  <p className="text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.image_themes'])}</p>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
-                    {IMAGE_TEMPLATES.filter((template) => template.name.toLowerCase().includes(query.trim().toLowerCase())).map((template) => {
-                      const selected = presetId === template.id;
-                      const preview = themeImageUrl(template.scene);
-                      return (
-                        <button
-                          key={template.id}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => patch(applyImageTemplate(theme, template))}
-                          className={cn('flex w-full flex-col overflow-hidden rounded-xl border-2 text-left', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
-                        >
-                          <div className="relative h-24 w-full">
-                            {preview ? <img alt="" src={preview} className="absolute inset-0 h-full w-full object-cover" /> : null}
-                            <div className="absolute inset-x-3 bottom-3 h-10 rounded-md bg-white/90 shadow-sm" />
-                          </div>
-                          <p className="bg-sidebar-accent/50 px-3 py-2 text-[12px] font-medium leading-5">{template.name}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
                     {themes.map((preset) => {
                       const page = hexOf(preset.tokens.colors.page, DEFAULT_COLORS.page);
@@ -298,6 +299,28 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
                       );
                     })}
                   </div>
+                  <p className="text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.image_themes'])}</p>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+                    {IMAGE_TEMPLATES.filter((template) => template.name.toLowerCase().includes(query.trim().toLowerCase())).map((template) => {
+                      const selected = presetId === template.id;
+                      const preview = themeImageUrl(template.scene);
+                      return (
+                        <button
+                          key={template.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => patch(applyImageTemplate(theme, template))}
+                          className={cn('flex w-full flex-col overflow-hidden rounded-xl border-2 text-left', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
+                        >
+                          <div className="relative h-24 w-full">
+                            {preview ? <img alt="" src={preview} className="absolute inset-0 h-full w-full object-cover" /> : null}
+                            <div className="absolute inset-x-3 bottom-3 h-10 rounded-md bg-white/90 shadow-sm" />
+                          </div>
+                          <p className="bg-sidebar-accent/50 px-3 py-2 text-[12px] font-medium leading-5">{template.name}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </SettingCard>
                 </div>
               ) : null}
@@ -310,6 +333,8 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
               {tab === 'submit' ? <SettingCard><SubmissionSettings dark /></SettingCard> : null}
         </div>
       </div>
+    </div>
+      ) : null}
     </div>
   );
 }

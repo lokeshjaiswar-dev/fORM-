@@ -22,6 +22,7 @@ import { NiceSelect } from '@/components/NiceSelect';
 const M = defineMessages('builder', {
   'lookup.add': 'Add an API',
   'lookup.api_key': 'API key',
+  'lookup.configure_first': 'Configure this API first: map at least one response key to a form field before turning it on.',
   'lookup.empty': 'The response had no list to use.',
   'lookup.fail': 'The request could not be sent. Check the URL and that the API allows this origin.',
   'lookup.field': 'Form field',
@@ -257,6 +258,10 @@ function LookupAccordion({
             aria-label={t(M['lookup.on'])}
             onCheckedChange={(on) => {
               if (on) {
+                if (!(draft.mappings ?? []).some((row) => row.fieldId)) {
+                  setConflict(t(M['lookup.configure_first']));
+                  return;
+                }
                 const ids = new Set<string>();
                 for (const row of draft.mappings ?? []) if (row.fieldId) ids.add(row.fieldId);
                 if (draft.pickerFieldId) ids.add(draft.pickerFieldId);

@@ -813,6 +813,7 @@
   "lookup.save": "Save",
   "lookup.test": "Test",
   "lookup.testing": "Testing…",
+  "lookup.configure_first": "Configure this API first: map at least one response key to a form field before turning it on.",
   "lookup.turn_off": "{fields} are already used in {name}. Turn {name} off before turning this API on.",
   "lookup.used": "Used in {name}",
   "members.access_link": "Sign-in link",

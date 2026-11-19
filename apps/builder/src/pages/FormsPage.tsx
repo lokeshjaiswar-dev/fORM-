@@ -23,7 +23,6 @@ import {
 import { EmptyState, PageHeader, StatCard } from '@dmacq/ui/patterns';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { SortableHead, TablePagination, useTableView } from '@/components/workspace/tableView';
-import { FormsHero } from '@/components/workspace/FormsHero';
 import { GalleryFallback } from '@/components/templates/TemplateDialog';
 import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
 import { mergeFromRepository } from '@/lib/mergeSelected';
@@ -320,8 +319,6 @@ export function FormsPage() {
       }
     >
       <div className="space-y-6">
-        <FormsHero />
-
         <PageHeader
           title={t(M['forms.title'])}
           description="Create, share and merge the forms you build. Select two or more forms to merge them into one."
