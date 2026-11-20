@@ -21,6 +21,14 @@ export class IndexedDbSubmissions implements SubmissionsRepository {
     return this.store;
   }
 
+  async recordsByForm(formId: string): Promise<StoredSubmission[]> {
+    const records = await values(this.db());
+    return records.flatMap((record) => {
+      const parsed = storedSubmissionSchema.safeParse(record);
+      return parsed.success && parsed.data.formId === formId ? [parsed.data] : [];
+    });
+  }
+
   async listByForm(formId: string): Promise<SubmissionSummary[]> {
     const records = await values(this.db());
     return records

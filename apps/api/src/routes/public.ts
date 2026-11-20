@@ -7,10 +7,10 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { editionSummary, runtimeEdition, type RuntimeEdition } from '@form/config';
 import { formDrafts, formSubmissions, formVersions, forms, resolveFormSlug, withTenant, type Db } from '@form/db';
 import { projectForRuntime } from '@form/logic';
-import type { CompiledForm, FormDefinition, FormId, FormVersion, FormVersionId, IsoInstant, OrgId, Sha256Hex, UserId } from '@form/schema';
+import { uniqueFieldErrors, type CompiledForm, type FormDefinition, type FormId, type FormVersion, type FormVersionId, type IsoInstant, type OrgId, type PublicFormDefinition, type Sha256Hex, type UserId } from '@form/schema';
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
-import { ProblemError } from '../errors.ts';
+import { ProblemError, sendProblem } from '../errors.ts';
 
 const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
@@ -302,12 +302,21 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         response: { 200: z.object({ id: z.uuid() }) },
       },
     },
-    async (request) => {
+    async (request, reply) => {
       const live = (await peekLive(request.params.slug)) ?? (await loadLive(request.params.slug, request.id).catch(() => null));
       if (!live) throw new ProblemError('NOT_FOUND', 'This form is not published.');
       const expected = versionIdOf(live.version);
       if (expected && request.body.formVersionId !== expected) {
         throw new ProblemError('NOTICE_OUTDATED', 'This form was updated. Reload and try again.');
+      }
+      const taken = await uniqueAgainstDb(deps.db, request.params.slug, request.id, live.version, request.body.answers);
+      if (taken.length) {
+        return sendProblem(
+          reply,
+          'VALIDATION_FAILED',
+          taken[0]?.message ?? 'This value has already been used.',
+          taken.map((error) => ({ path: error.blockId, message: error.message })),
+        );
       }
       const id = randomUUID();
       const row: DiskSubmission = {
@@ -415,6 +424,24 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       return row;
     },
   );
+}
+
+async function uniqueAgainstDb(db: Db, slug: string, requestId: string, version: unknown, answers: Record<string, unknown>) {
+  const definition = definitionOf(version);
+  if (!definition) return [];
+  const found = await resolveFormSlug(db, slug);
+  if (!found) return [];
+  const rows = await withTenant(db, { orgId: found.orgId, actor: 'system', requestId, readOnly: true }, (tx) =>
+    tx.select({ answers: formSubmissions.answers }).from(formSubmissions).where(eq(formSubmissions.formId, found.formId)),
+  );
+  return uniqueFieldErrors(definition.blocks, answers, rows.map((row) => row.answers));
+}
+
+function definitionOf(version: unknown): PublicFormDefinition | null {
+  if (typeof version !== 'object' || version === null || !('definition' in version)) return null;
+  const definition = (version as { definition: unknown }).definition;
+  if (typeof definition !== 'object' || definition === null || !('blocks' in definition)) return null;
+  return definition as PublicFormDefinition;
 }
 
 async function persistSubmissionToDb(db: Db, slug: string, requestId: string, row: DiskSubmission): Promise<void> {

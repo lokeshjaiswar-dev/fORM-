@@ -42,6 +42,7 @@ const NO_TWIN: Record<string, string> = {
   SectionNavChrome: 'enum field of SectionNav',
   SectionNavMode: 'enum field of SectionNav',
   DiffTemplate: 'function signature',
+  UniqueFieldError: 'derived at submit time from UniqueConstraint; not a stored document',
 };
 
 const fileUrl = import.meta.url;

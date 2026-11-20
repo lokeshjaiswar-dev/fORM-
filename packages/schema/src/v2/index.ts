@@ -49,6 +49,7 @@ export * from './definition.ts';
 export * from './ops.ts';
 export * from './answers.ts';
 export * from './submissions.ts';
+export * from './unique.ts';
 export * from './templates.ts';
 export * from './migration.ts';
 export * from './entry-points.ts';

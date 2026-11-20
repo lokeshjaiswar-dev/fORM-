@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { z } from 'zod';
 import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
-import { RuntimeFormVersionSchema, type IsoInstant, type RuntimeFormVersion } from '@form/schema';
+import { RuntimeFormVersionSchema, type BlockId, type IsoInstant, type RuntimeFormVersion } from '@form/schema';
 import { API_BASE } from '@/edition/edition';
 import { hydrateThemeImages } from '@/components/builder/design/uploads';
 import { previewUploader } from '@/lib/preview';
@@ -84,7 +84,14 @@ export function PublicFillPage() {
               locale: payload.locale,
             }),
           });
-          if (!res.ok) throw new Error('submit failed');
+          if (!res.ok) {
+            const problem = (await res.json().catch(() => null)) as { errors?: Array<{ path?: string; message?: string }> } | null;
+            const errors = (problem?.errors ?? []).flatMap((error) =>
+              error.path && error.message ? [{ blockId: error.path as BlockId, code: 'not_unique' as const, message: error.message }] : [],
+            );
+            if (res.status === 400 && errors.length) return { ok: false as const, kind: 'invalid' as const, status: 422 as const, errors };
+            throw new Error('submit failed');
+          }
         }}
       />
     </main>

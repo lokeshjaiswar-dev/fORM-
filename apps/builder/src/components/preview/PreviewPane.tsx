@@ -5,7 +5,7 @@ import { runtimeEdition } from '@form/config';
 import { defineMessages } from '@form/i18n';
 import { FormRenderer, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
-import type { FormDefinition, IsoInstant, RuntimeStatus } from '@form/schema';
+import { uniqueFieldErrors, type FormDefinition, type IsoInstant, type RuntimeStatus } from '@form/schema';
 import { BUILDER_LOCALE, t } from '@/i18n';
 import { Alert, AlertDescription, Button, TextLink } from '@dmacq/ui';
 import { Tooltip } from '@/components/Tooltip';
@@ -67,13 +67,16 @@ export function PreviewPane({ definition, status = OPEN, password }: { definitio
       locale={BUILDER_LOCALE}
       uploader={previewUploader}
       session={session}
-      onSubmit={(payload: SubmitPayload) => {
+      onSubmit={async (payload: SubmitPayload) => {
+        if (submissions) {
+          const prior = await submissions.recordsByForm(definition.formId);
+          const errors = uniqueFieldErrors(definition.blocks, payload.answers, prior.map((row) => row.answers));
+          if (errors.length) return { ok: false, kind: 'invalid', status: 422, errors };
+        }
         window.dispatchEvent(new CustomEvent('form-preview-submit', { detail: payload }));
         if (!submissions) return;
-        void recordSubmission(submissions, definition, payload.answers, payload.locale).then(
-          () => toast.success(t(M['preview.saved_response'])),
-          () => undefined,
-        );
+        await recordSubmission(submissions, definition, payload.answers, payload.locale);
+        toast.success(t(M['preview.saved_response']));
       }}
       onUnlock={(attempt) => {
         if (attempt === password) setUnlocked(true);

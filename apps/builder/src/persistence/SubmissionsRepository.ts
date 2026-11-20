@@ -23,6 +23,8 @@ export type SubmissionSummary = Pick<StoredSubmission, 'id' | 'formId' | 'submit
 
 export interface SubmissionsRepository {
   listByForm(formId: string): Promise<SubmissionSummary[]>;
+  /** Full rows for this form, used to reject a repeated unique answer in preview. */
+  recordsByForm(formId: string): Promise<StoredSubmission[]>;
   get(formId: string, id: string): Promise<StoredSubmission | null>;
   create(record: StoredSubmission): Promise<void>;
   removeByForm(formId: string): Promise<StoredSubmission[]>;

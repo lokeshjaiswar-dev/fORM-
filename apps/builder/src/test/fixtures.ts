@@ -110,6 +110,10 @@ export class MemoryRepository implements DocumentRepository {
 export class MemorySubmissions implements SubmissionsRepository {
   readonly records = new Map<string, StoredSubmission>();
 
+  async recordsByForm(formId: string): Promise<StoredSubmission[]> {
+    return [...this.records.values()].filter((row) => row.formId === formId).map((row) => structuredClone(row));
+  }
+
   async listByForm(formId: string): Promise<SubmissionSummary[]> {
     return [...this.records.values()]
       .filter((row) => row.formId === formId)
