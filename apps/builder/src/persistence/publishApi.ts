@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { api } from '@/auth/client';
 import { themeMediaForDraft } from '@/components/builder/design/uploads';
+import { currentOps } from '@/state/opsStore';
 
 const liveSchema = z.object({
   slug: z.string(),
@@ -38,7 +39,7 @@ export function fillUrl(slug: string): string {
 export async function publishLive(id: string, draft: unknown, _title: string): Promise<LiveForm> {
   const media = themeMediaForDraft(draft);
   const withMedia = draft && typeof draft === 'object' ? { ...(draft as Record<string, unknown>), media } : draft;
-  const live = await api('POST', '/v1/p/publish', liveSchema, { id, draft: withMedia, media });
+  const live = await api('POST', '/v1/p/publish', liveSchema, { id, draft: withMedia, media, submissionApi: currentOps().submissionApi });
   rememberSlug(id, live.slug);
   return live;
 }

@@ -22,6 +22,7 @@ lerna-debug.log*
 
 # Development keyfiles and the filesystem object store (pnpm dev:setup)
 .data
+tools/submission-server/inbox
 
 # Test / coverage
 coverage

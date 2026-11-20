@@ -21,6 +21,7 @@ import {
 import { z } from 'zod';
 import { accountOf, tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
+import { submissionApiSchema } from '../submissionDelivery.ts';
 import { savePublished } from './public.ts';
 
 const published = z.object({
@@ -147,6 +148,7 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
           id: z.uuid(),
           draft: z.record(z.string(), z.unknown()),
           media: z.record(z.string(), z.string()).optional(),
+          submissionApi: submissionApiSchema.optional(),
         }),
         response: { 200: published },
       },
@@ -209,6 +211,7 @@ export function publishRoutes(app: FastifyInstance, deps: { db: Db }): void {
           thirdPartyTrackingAllowed: false,
         }),
         media: request.body.media,
+        ...(request.body.submissionApi ? { submissionApi: request.body.submissionApi } : {}),
       });
       return published;
     },

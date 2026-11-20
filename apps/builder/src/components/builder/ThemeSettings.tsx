@@ -4,11 +4,12 @@ import { isSafeUrl, type ConfettiStyle, type Ending, type EndingId, type FormDef
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { labelString } from '@/fields/style';
-import { APP_IDS, blankDefinition, richDoc } from '@/lib/definition';
+import { APP_IDS, blankDefinition, isField, richDoc } from '@/lib/definition';
+import { payloadPreview } from '@/lib/payloadBody';
 import { setBehavior, setEndings } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { updateOps, useOpsStore } from '@/state/opsStore';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Switch } from '@dmacq/ui';
+import { updateOps, useOpsStore, type SubmissionApi, type SubmissionApiKey } from '@/state/opsStore';
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Switch } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { cn } from '@/lib/utils';
 import { NiceSelect } from '@/components/NiceSelect';
@@ -40,6 +41,25 @@ const M = defineMessages('builder', {
   'settings.closed_message': 'Closed message',
   'settings.password': 'Password (optional)',
   'settings.password_hint': 'Kept in this browser for the preview; the server hashes it when forms are saved there.',
+  'settings.api': 'Send answers to an API',
+  'settings.api_url': 'API URL',
+  'settings.api_format': 'Body format',
+  'settings.api_format_json': 'JSON',
+  'settings.api_format_xml': 'XML',
+  'settings.api_path': 'API path',
+  'settings.api_field': 'Form field',
+  'settings.api_add': 'Add key',
+  'settings.api_remove': 'Remove',
+  'settings.api_hint': 'Type the path the API expects. Dots nest objects. lines[].item repeats once per table row.',
+  'settings.api_part': 'Part',
+  'settings.api_whole': 'Whole field',
+  'settings.api_column': 'Column {name}',
+  'settings.api_summary': 'Summary {name}',
+  'settings.api_first': 'First name',
+  'settings.api_last': 'Last name',
+  'settings.api_preview': 'Body this typing creates',
+  'settings.api_invalid': 'These paths are not valid: {paths}',
+  'settings.api_none': 'No field',
   'form.submit_label': 'Submit',
 });
 
@@ -182,8 +202,126 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
         <Input id="password" type="password" autoComplete="new-password" className={field} value={ops.password} placeholder="" onChange={(e) => updateOps({ password: e.target.value.slice(0, 200) })} />
         <p className="text-[12px] text-muted-foreground">{t(M['settings.password_hint'])}</p>
       </div>
+      <SubmissionApiSettings dark={dark} field={field} labelCls={labelCls} />
     </div>
   );
+}
+
+/** URL, JSON or XML, and a live body built from the paths as they are typed. */
+function SubmissionApiSettings({ dark, field, labelCls }: { dark: boolean; field: string | undefined; labelCls: string | undefined }) {
+  const def = useDoc((d) => d);
+  const api = useOpsStore((s) => s.submissionApi);
+  const setApi = (patch: Partial<SubmissionApi>) => updateOps({ submissionApi: { ...api, ...patch } });
+  const fields = Object.values(def.blocks).flatMap((block) => {
+    if (!isField(block)) return [];
+    const text = typeof block.label === 'string' || Array.isArray(block.label) ? labelString(block.label) : '';
+    const parts: Array<{ value: string; label: string }> = [{ value: '', label: t(M['settings.api_whole']) }];
+    if (block.type === 'dynamic_table') {
+      const columns = (block.config as { columns?: Array<{ label?: unknown; summary?: string; summaryLabel?: string }> }).columns ?? [];
+      for (const column of columns) {
+        const name = (typeof column.label === 'string' ? column.label : '') || 'Column';
+        parts.push({ value: `column:${name}`, label: t(M['settings.api_column'], { name }) });
+        if (column.summary && column.summary !== 'none') {
+          const summary = column.summaryLabel?.trim() || `${name} ${column.summary}`;
+          parts.push({ value: `summary:${summary}`, label: t(M['settings.api_summary'], { name: summary }) });
+        }
+      }
+    }
+    if (block.type === 'full_name') {
+      parts.push({ value: 'name:first', label: t(M['settings.api_first']) }, { value: 'name:last', label: t(M['settings.api_last']) });
+    }
+    return [{ value: block.key, label: text || block.key, type: block.type, parts }];
+  });
+  const preview = payloadPreview(
+    api.format,
+    api.keys.map((key) => {
+      const field = fields.find((item) => item.value === key.fieldKey);
+      return { path: key.path, sample: previewSample(field, key.part) };
+    }),
+  );
+
+  const setKey = (index: number, patch: Partial<SubmissionApiKey>) => {
+    const keys = api.keys.map((key, i) => (i === index ? { ...key, ...patch } : key));
+    setApi({ keys });
+  };
+
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <Toggle dark={dark} id="submission-api" label={t(M['settings.api'])} checked={api.enabled} onChange={(enabled) => setApi({ enabled })} />
+      <div className="space-y-1.5">
+        <Label htmlFor="api-url" className={labelCls}>{t(M['settings.api_url'])}</Label>
+        <Input id="api-url" className={field} value={api.url} placeholder="https://…" onChange={(e) => setApi({ url: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>{t(M['settings.api_format'])}</Label>
+        <NiceSelect
+          value={api.format}
+          onChange={(format) => setApi({ format: format === 'xml' ? 'xml' : 'json' })}
+          options={[
+            { value: 'json', label: t(M['settings.api_format_json']) },
+            { value: 'xml', label: t(M['settings.api_format_xml']) },
+          ]}
+          aria-label={t(M['settings.api_format'])}
+        />
+      </div>
+      <p className="text-[12px] text-muted-foreground">{t(M['settings.api_hint'])}</p>
+      {api.keys.map((key, index) => (
+        <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <Input
+            aria-label={t(M['settings.api_path'])}
+            className={field}
+            value={key.path}
+            placeholder="customer.name"
+            onChange={(e) => setKey(index, { path: e.target.value })}
+          />
+          <NiceSelect
+            value={key.fieldKey}
+            onChange={(fieldKey) => setKey(index, { fieldKey, part: '' })}
+            options={[{ value: '', label: t(M['settings.api_none']) }, ...fields]}
+            aria-label={t(M['settings.api_field'])}
+          />
+          {(fields.find((item) => item.value === key.fieldKey)?.parts.length ?? 0) > 1 ? (
+            <NiceSelect
+              value={key.part}
+              onChange={(part) => setKey(index, { part })}
+              options={fields.find((item) => item.value === key.fieldKey)?.parts ?? []}
+              aria-label={t(M['settings.api_part'])}
+            />
+          ) : null}
+          <Button type="button" variant="outline" size="sm" onClick={() => setApi({ keys: api.keys.filter((_, i) => i !== index) })}>
+            {t(M['settings.api_remove'])}
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => setApi({ keys: [...api.keys, { path: '', fieldKey: '', part: '', required: true }] })}>
+        {t(M['settings.api_add'])}
+      </Button>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>{t(M['settings.api_preview'])}</Label>
+        <pre className={cn('overflow-x-auto rounded-md border p-2 text-[12px] leading-5', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border bg-muted/40')}>{preview.text}</pre>
+        {preview.invalid.length ? <p className="text-[12px] text-destructive">{t(M['settings.api_invalid'], { paths: preview.invalid.join(', ') })}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function previewSample(field: { label: string; type: string; parts: Array<{ value: string; label: string }> } | undefined, part: string): unknown {
+  if (!field) return '…';
+  if (field.type === 'dynamic_table') {
+    const columns = field.parts.filter((item) => item.value.startsWith('column:')).map((item) => item.value.slice('column:'.length));
+    const summaries = field.parts.filter((item) => item.value.startsWith('summary:')).map((item) => item.value.slice('summary:'.length));
+    const row = (first: string, second: string) => Object.fromEntries(columns.map((name, index) => [name, index === 0 ? first : second]));
+    const whole = {
+      rows: [row('Pen', '10'), row('Book', '20')],
+      ...(summaries.length ? { summary: Object.fromEntries(summaries.map((name) => [name, 30])) } : {}),
+    };
+    if (part.startsWith('column:')) return whole.rows.map((item) => item[part.slice('column:'.length)] ?? '');
+    if (part.startsWith('summary:')) return whole.summary?.[part.slice('summary:'.length)] ?? '';
+    return whole;
+  }
+  if (part === 'name:first') return 'Lokesh';
+  if (part === 'name:last') return 'K';
+  return field.label || '…';
 }
 
 function Toggle({ id, label, checked, onChange, dark }: { id: string; label: string; checked: boolean; onChange: (on: boolean) => void; dark?: boolean }) {

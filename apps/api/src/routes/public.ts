@@ -11,6 +11,7 @@ import { uniqueFieldErrors, type CompiledForm, type FormDefinition, type FormId,
 import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
 import { ProblemError, sendProblem } from '../errors.ts';
+import { deliverSubmission, deliveryFields, type SubmissionApiConfig } from '../submissionDelivery.ts';
 
 const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
@@ -22,7 +23,7 @@ const fieldRow = z.object({
   choices: z.array(z.string()).optional(),
 });
 
-type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string> };
+type PublicPayload = { slug: string; formId: string; version: unknown; media?: Record<string, string>; submissionApi?: SubmissionApiConfig };
 
 const LIVE_DIR = path.resolve(process.cwd(), '.data/published');
 const SUB_DIR = path.resolve(process.cwd(), '.data/submissions');
@@ -229,7 +230,10 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         },
       },
     },
-    async (request) => loadLive(request.params.slug, request.id),
+    async (request) => {
+      const { submissionApi: _hidden, ...body } = await loadLive(request.params.slug, request.id);
+      return body;
+    },
   );
 
   r.post(
@@ -309,7 +313,12 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       if (expected && request.body.formVersionId !== expected) {
         throw new ProblemError('NOTICE_OUTDATED', 'This form was updated. Reload and try again.');
       }
-      const taken = await uniqueAgainstDb(deps.db, request.params.slug, request.id, live.version, request.body.answers);
+      let taken: Awaited<ReturnType<typeof uniqueAgainstDb>> = [];
+      try {
+        taken = await uniqueAgainstDb(deps.db, request.params.slug, request.id, live.version, request.body.answers);
+      } catch {
+        taken = [];
+      }
       if (taken.length) {
         return sendProblem(
           reply,
@@ -329,6 +338,12 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       };
       await saveSubmission(row);
       void persistSubmissionToDb(deps.db, request.params.slug, request.id, row).catch(() => undefined);
+      const definition = definitionOf(live.version);
+      const delivery = await deliverSubmission(
+        live.submissionApi,
+        deliveryFields(definition?.blocks as Record<string, unknown> | undefined, request.body.answers, request.body.fields),
+      );
+      if (delivery.error) request.log.warn({ err: delivery.error, slug: request.params.slug }, 'submission delivery failed');
       return { id };
     },
   );

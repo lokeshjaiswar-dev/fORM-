@@ -68,4 +68,12 @@ describe('ThemeSettings', () => {
     expect(useOpsStore.getState().password).toBe('hunter2');
     expect(JSON.stringify(doc())).not.toContain('hunter2');
   });
+
+  it('typing a dotted path shows the nested body', async () => {
+    const user = open();
+    await user.click(screen.getByRole('button', { name: 'Add key' }));
+    await user.type(screen.getByRole('textbox', { name: 'API path' }), 'customer.name');
+    expect(screen.getByText('Body this typing creates').parentElement?.querySelector('pre')?.textContent).toContain('"customer"');
+    expect(screen.getByText('Body this typing creates').parentElement?.querySelector('pre')?.textContent).toContain('"name"');
+  });
 });
