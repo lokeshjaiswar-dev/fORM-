@@ -9,6 +9,10 @@ import { STACK_PORTS } from './e2e/stack-ports.ts';
  */
 const { builder: port, api: apiPort } = STACK_PORTS;
 
+/* Video and trace record only on reruns of failures: CI's retry (on-first-retry), or locally
+ * `PW_VIDEO=1 pnpm exec playwright test --last-failed`. First runs record nothing. */
+const rerun = !!process.env['PW_VIDEO'];
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: /\.stack\.spec\.ts$/,
@@ -19,7 +23,9 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${port}`,
-    trace: 'retain-on-failure',
+    trace: rerun ? 'on' : 'on-first-retry',
+    video: rerun ? 'on' : 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   /* The API stack starts here rather than as a webServer, so it can stop its containers itself (e2e/stack-setup.ts). */
