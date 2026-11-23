@@ -38,6 +38,7 @@ export const ShortTextConfigSchema = z.strictObject({
   preset: TextPresetSchema.exactOptional(),
   pattern: SafePatternSchema.exactOptional(),
   mask: InputMaskSchema.exactOptional(),
+  characters: z.strictObject({ numbers: z.boolean(), special: z.boolean() }).exactOptional(),
 });
 export const LongTextConfigSchema = z.strictObject({
   placeholder: z.string().max(200).exactOptional(),
@@ -109,6 +110,7 @@ export const ChoiceOptionSchema = z.strictObject({
   score: DecimalStringSchema.exactOptional(),
   correct: z.boolean().exactOptional(),
   origin: OriginSchema.exactOptional(),
+  parentOptionIds: z.array(OptionIdSchema).max(5000).exactOptional(),
 });
 export const OptionPresetSchema = z.enum(OPTION_PRESETS);
 export const OtherOptionSchema = z.strictObject({
@@ -126,6 +128,7 @@ const choiceCommon = {
   columns: z.literal([1, 2, 3, 4]).exactOptional(),
   searchable: z.boolean().exactOptional(),
   placeholder: label.exactOptional(),
+  dependsOn: BlockIdSchema.exactOptional(),
 };
 export const SingleChoiceConfigSchema = z.strictObject({
   ...choiceCommon,

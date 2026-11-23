@@ -57,6 +57,34 @@ export function InspectorSection({ title, collapsible, children }: { title?: str
   );
 }
 
+/**
+ * Settings folded behind one heading row inside a section, in the same style as a collapsible section heading. It
+ * opens on its own when one of its settings is in use, so nothing switched on is ever out of sight.
+ */
+export function Disclosure({ title, inUse = false, children }: { title: string; inUse?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(inUse);
+  const bodyId = useId();
+  return (
+    <div className="!mt-5 border-t border-dashed border-border pt-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(HEADING, 'flex w-full items-center justify-between rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring')}
+      >
+        {title}
+        <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-150', open && 'rotate-180')} />
+      </button>
+      {open ? (
+        <div id={bodyId} className="mt-4 space-y-4">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** A sub-group inside a section: a divider and a heading, for the groups a field type's own settings define. */
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <h4 className={cn(HEADING, '!mt-5 border-t border-dashed border-border pt-4 first:!mt-0 first:border-t-0 first:pt-0')}>{children}</h4>;
@@ -112,13 +140,13 @@ export function NumberField<T>({ label, value, onChange, parse, format = String,
   );
 }
 
-export function ToggleRow({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (checked: boolean) => void; hint?: string }) {
+export function ToggleRow({ label, checked, onChange, hint, disabled }: { label: string; checked: boolean; onChange: (checked: boolean) => void; hint?: string | undefined; disabled?: boolean }) {
   const id = useId();
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-3">
         <Label htmlFor={id}>{label}</Label>
-        <Switch id={id} checked={checked} onCheckedChange={onChange} />
+        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
       </div>
       {hint ? <p className="text-[12px] text-muted-foreground">{hint}</p> : null}
     </div>

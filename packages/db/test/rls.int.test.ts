@@ -84,6 +84,16 @@ const TABLES: Record<string, TableSpec> = {
       sql`insert into form_submissions (id, org_id, form_id, answers, fields)
           values (${randomUUID()}, ${s.a.orgId}, ${s.a.formIds[0]}, '{}', '[]')`,
   },
+  form_serial_counters: {
+    scope: { by: 'org' },
+    select: 0,
+    touch: 'last_value',
+    update: 0,
+    delete: 0,
+    insertForeign: (s) =>
+      sql`insert into form_serial_counters (org_id, form_id, block_id, period, last_value)
+          values (${s.a.orgId}, ${s.a.formIds[0]}, 'blk_rls', '', 1)`,
+  },
   audit_log: { scope: { by: 'org' }, select: 0, touch: 'reason', update: 'denied', delete: 'denied' },
   audit_pending: { scope: { by: 'org', column: 'org_key' }, select: 'denied', touch: 'event', update: 'denied', delete: 'denied' },
   audit_heads: { scope: { by: 'org', column: 'org_key' }, select: 0, touch: 'seq', update: 'denied', delete: 'denied' },

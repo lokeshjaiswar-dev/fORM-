@@ -32,6 +32,11 @@ export interface ShortTextConfig extends TextChrome {
   defaultValue?: DefaultText;
   minLength?: number; maxLength?: number; // hard cap 10_000
   preset?: TextPreset; pattern?: SafePattern; mask?: InputMask;
+  /**
+   * Which characters an answer may hold besides letters and spaces (always allowed). Absent means any character.
+   * `numbers` allows digits; `special` allows everything else (punctuation, symbols).
+   */
+  characters?: { numbers: boolean; special: boolean };
 }
 export interface LongTextConfig {
   placeholder?: string; defaultValue?: DefaultText; rows?: number;
@@ -98,6 +103,11 @@ export interface ChoiceOption {
   score?: DecimalString;             // PROP-13 calculation value / quiz score
   correct?: boolean;                 // LOG-24
   origin?: Origin;
+  /**
+   * Dependent options: when the block `dependsOn` another choice, this option is offered only while the parent's
+   * answer includes one of these parent options. Without it the option is always offered (e.g. "Other").
+   */
+  parentOptionIds?: OptionId[];
 }
 
 /** PROP-10. Materialised into options at insert (ids = official codes) so versions are self-contained. */
@@ -115,6 +125,11 @@ interface ChoiceCommon {
   columns?: 1 | 2 | 3 | 4;
   searchable?: boolean;              // FLD-14 (dropdown display)
   placeholder?: string;
+  /**
+   * Dependent (cascading) options: an earlier single or multi choice whose answer filters these options through each
+   * option's `parentOptionIds`. Until the parent has an answer this block is disabled.
+   */
+  dependsOn?: BlockId;
 }
 export interface SingleChoiceConfig extends ChoiceCommon {
   display: 'radio' | 'dropdown' | 'image';

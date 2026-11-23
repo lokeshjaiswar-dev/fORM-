@@ -32,7 +32,7 @@ import { StatusScreen } from './screens/Status.tsx';
 import { templateText, urlText } from './text.ts';
 import { themeCssVars } from './theme/cssVars.ts';
 import { coverPhoto, pagePhoto } from './theme/media.ts';
-import type { FormRendererProps, RendererEvent, RendererSession, SubmitPayload } from './types.ts';
+import type { FormRendererProps, RendererEvent, RendererSession, SubmitAccepted, SubmitPayload } from './types.ts';
 
 const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]';
 
@@ -208,7 +208,25 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
   );
 }
 
-interface Finished { endingId: EndingId; redirect: SafeUrl | null }
+/** `unique_id` values the server issued on submit; the form only ever showed previews. */
+interface Issued { uniqueId: string | null; uniqueIds: Readonly<Record<string, string>> }
+
+interface Finished { endingId: EndingId; redirect: SafeUrl | null; issued: Issued }
+
+const NOTHING_ISSUED: Issued = { uniqueId: null, uniqueIds: {} };
+
+/** Answers with the issued values in place of the previews, for the ending's pipes. Only `unique_id` blocks change. */
+function withIssued<V extends Readonly<Record<string, unknown>>>(values: V, blocks: Readonly<Record<string, { type: string } | undefined>>, issued: Issued): V {
+  const entries = Object.entries(issued.uniqueIds).filter(([id]) => blocks[id]?.type === 'unique_id');
+  if (!entries.length) return values;
+  return { ...values, ...Object.fromEntries(entries.map(([id, value]) => [id, { type: 'unique_id', value }])) };
+}
+
+function issuedBy(result: SubmitResult | SubmitAccepted | void): Issued {
+  if (!result || !result.ok) return NOTHING_ISSUED;
+  const uniqueIds = 'uniqueIds' in result && result.uniqueIds ? result.uniqueIds : {};
+  return { uniqueId: result.uniqueId?.trim() || null, uniqueIds };
+}
 
 /** One respondent session: answers in react-hook-form, logic in an EvalSession, paging, submit and the ending. */
 function FormSession({ props, meta, base, onRestart }: {
@@ -292,7 +310,7 @@ function FormSession({ props, meta, base, onRestart }: {
     });
   };
 
-  const finish = (endingId: EndingId, serverRedirect: SafeUrl | undefined, values: ReturnType<typeof evaluateNow>['state']['values']) => {
+  const finish = (endingId: EndingId, serverRedirect: SafeUrl | undefined, values: ReturnType<typeof evaluateNow>['state']['values'], issued: Issued) => {
     const ending = def.endings.find((e) => e.id === endingId) ?? def.endings.find((e) => e.id === def.defaultEndingId) ?? def.endings[0];
     /* Live redirects come from the server, which interpolates the URL (schema §END); preview builds it here. */
     const url = serverRedirect ?? (mode === 'preview' && ending?.kind === 'redirect' ? urlText(ending.url as PlainTemplate, { def, values, meta }) : '');
@@ -300,7 +318,7 @@ function FormSession({ props, meta, base, onRestart }: {
     /* The ending keeps the height the form had, so the card does not shrink when the respondent submits. */
     const formHeight = rootRef.current?.getBoundingClientRect().height ?? 0;
     setEndingMinHeight(formHeight > 0 ? formHeight : undefined);
-    setFinished({ endingId: ending?.id ?? endingId, redirect });
+    setFinished({ endingId: ending?.id ?? endingId, redirect, issued });
     emit({ type: 'submitted', endingId: ending?.id ?? endingId });
     /* The host navigates (the top window, a popup's opener, or nowhere in the builder), after `delayMs`. */
     if (redirect) emit({ type: 'redirect', url: redirect, delayMs: ending?.kind === 'redirect' ? (ending.delayMs ?? 0) : 0 });
@@ -317,7 +335,7 @@ function FormSession({ props, meta, base, onRestart }: {
     const payload: SubmitPayload = { formVersionId: version.versionId, locale, answers: state.values, pageTrail: [...trail, current], client };
     setSending(true);
     setFailure(null);
-    let result: SubmitResult | void;
+    let result: SubmitResult | SubmitAccepted | void;
     try {
       result = await onSubmit(payload);
     } catch {
@@ -328,7 +346,8 @@ function FormSession({ props, meta, base, onRestart }: {
     }
     setSending(false);
     if (!result || result.ok) {
-      finish(result?.endingId ?? state.endingId, result?.redirectUrl, state.values);
+      const chosen = result && 'endingId' in result ? result : undefined;
+      finish(chosen?.endingId ?? state.endingId, chosen?.redirectUrl, state.values, issuedBy(result));
       return;
     }
     emit({ type: 'submit_failed', result });
@@ -446,10 +465,11 @@ function FormSession({ props, meta, base, onRestart }: {
   if (finished) {
     const ending = def.endings.find((e) => e.id === finished.endingId);
     const { state } = evaluateNow();
-    const ctx = { def, values: state.values, meta };
+    const ctx = { def, values: withIssued(state.values, def.blocks, finished.issued), meta };
     screen = ending ? (
       <EndingScreen
         ending={ending}
+        uniqueId={finished.issued.uniqueId}
         confetti={def.behavior.successAnimation && (ending.kind === 'message' ? ending.confetti !== false : false)}
         confettiStyle={ending.kind === 'message' ? ending.confettiStyle : undefined}
         resolve={{ pipe: (attrs) => templateText([{ pipe: attrs }], ctx) || undefined }}

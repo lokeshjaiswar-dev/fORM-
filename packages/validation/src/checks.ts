@@ -2,7 +2,7 @@ import { nfc } from '@form/logic';
 import type { AnswerValue, DateBound, EvalMeta, EvalState, FieldBlock, IsoDate } from '@form/schema';
 import { addDays, ageOn, relativeDate } from './dates.ts';
 import type { Issue } from './errors.ts';
-import { matchesMask, matchesPreset } from './formats.ts';
+import { matchesCharacters, matchesMask, matchesPreset } from './formats.ts';
 import { compilePattern, withinBudget } from './pattern.ts';
 
 /*
@@ -23,10 +23,11 @@ export interface CheckContext {
  * length is over `PATTERN_COST_BUDGET` is not run, and the value fails it.
  */
 function textIssues(block: Extract<FieldBlock, { type: 'short_text' }>, value: string): Issue[] {
-  const { preset, pattern, mask } = block.config;
+  const { preset, pattern, mask, characters } = block.config;
   const text = nfc(value);
   const issues: Issue[] = [];
   if (preset !== undefined && !matchesPreset(preset, text)) issues.push({ code: 'preset', path: [] });
+  if (characters !== undefined && !matchesCharacters(characters, text)) issues.push({ code: 'preset', path: [] });
   if (pattern !== undefined) {
     /* An unusable pattern is ignored here (B12) and refused at publish (VAL-04). */
     const compiled = compilePattern(pattern);

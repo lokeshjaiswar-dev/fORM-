@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { formSubmissions, forms, withTenant, type Db } from '@form/db';
+import { formDrafts, formSubmissions, formVersions, forms, withTenant, type Db, type Tx } from '@form/db';
 import { z } from 'zod';
 import { tenantOf } from '../auth.ts';
 import { ProblemError } from '../errors.ts';
+import { formTimeZone, issueSerials, serialFields, serialResponse, submitResponse, withSerials } from '../uniqueIds.ts';
 
 const fieldRow = z.object({
   key: z.string(),
@@ -120,22 +121,31 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
         security: [{ session: [], org: [] }, { devUser: [], org: [] }],
         params: z.object({ formId: z.uuid() }),
         body: createBody,
-        response: { 200: z.object({ id: z.uuid() }) },
+        response: { 200: submitResponse },
       },
     },
     async (request) => {
       const { formId } = request.params;
       const id = randomUUID();
       const tenant = tenantOf(request);
-      await withTenant(deps.db, tenant, async (tx) => {
-        const found = await tx.select({ id: forms.id }).from(forms).where(eq(forms.id, formId)).limit(1);
+      const issued = await withTenant(deps.db, tenant, async (tx) => {
+        const found = await tx.select({ id: forms.id, liveVersionId: forms.liveVersionId }).from(forms).where(eq(forms.id, formId)).limit(1);
         if (!found[0]) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
+        const definition = await currentDefinition(tx, formId, found[0].liveVersionId);
+        const serials = await issueSerials(tx, {
+          orgId: tenant.orgId,
+          formId,
+          fields: serialFields(definition?.['blocks']),
+          timeZone: formTimeZone(definition),
+          at: new Date(),
+        });
+        const stored = withSerials(request.body.answers, request.body.fields, serials);
         await tx.insert(formSubmissions).values({
           id,
           orgId: tenant.orgId,
           formId,
-          answers: request.body.answers,
-          fields: request.body.fields,
+          answers: stored.answers,
+          fields: stored.fields,
           locale: request.body.locale,
         });
         await tx
@@ -145,8 +155,23 @@ export function submissionRoutes(app: FastifyInstance, deps: { db: Db }): void {
             lastSubmissionAt: new Date(),
           })
           .where(eq(forms.id, formId));
+        return serials;
       });
-      return { id };
+      return { id, ...serialResponse(issued) };
     },
   );
+}
+
+/** The live version's definition, or the draft for a form that was never published. */
+async function currentDefinition(tx: Tx, formId: string, liveVersionId: string | null): Promise<Record<string, unknown> | null> {
+  if (liveVersionId) {
+    const live = await tx
+      .select({ definition: formVersions.definition })
+      .from(formVersions)
+      .where(and(eq(formVersions.id, liveVersionId), eq(formVersions.formId, formId)))
+      .limit(1);
+    if (live[0]) return live[0].definition;
+  }
+  const draft = await tx.select({ draft: formDrafts.draft }).from(formDrafts).where(eq(formDrafts.formId, formId)).limit(1);
+  return draft[0]?.draft ?? null;
 }

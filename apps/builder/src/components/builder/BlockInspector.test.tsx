@@ -126,6 +126,10 @@ describe('BlockInspector options', () => {
   it('B15: the export code is edited on its own and never derived from the label', async () => {
     const user = open('color');
     await tab(user);
+    /* Codes are hidden from the rows until asked for under More options. */
+    expect(screen.queryByRole('textbox', { name: 'Export code of option 2' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    await user.click(screen.getByRole('switch', { name: 'Show option codes' }));
     const code = screen.getByRole('textbox', { name: 'Export code of option 2' });
     await user.clear(code);
     await user.type(code, 'GRN');
@@ -146,6 +150,7 @@ describe('BlockInspector options', () => {
   it('enables API options with a GET URL', async () => {
     const user = open('color');
     await tab(user);
+    await user.click(screen.getByRole('button', { name: 'More options' }));
     await user.click(screen.getByRole('switch', { name: 'Load options from an API' }));
     expect(get('color').apiOptions).toEqual({ url: 'http://localhost:3001/cities', method: 'GET', parser: 'json' });
     fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/cities' } });
@@ -497,6 +502,7 @@ describe('dropdown fill toggle', () => {
 
   it('turns on and adds an empty field filled from the option value', async () => {
     const user = open('menu');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
     const toggle = screen.getByRole('switch', { name: 'Fill a field from the selected option' });
     expect(toggle).not.toBeChecked();
     await user.click(toggle);
@@ -507,5 +513,191 @@ describe('dropdown fill toggle', () => {
     const valueId = target && 'target' in target ? target.target : '';
     expect((doc().blocks['menu' as BlockId] as { layout?: unknown } | undefined)?.layout).toMatchObject({ width: 'half' });
     expect(valueId ? (doc().blocks[valueId] as { layout?: unknown } | undefined)?.layout : undefined).toMatchObject({ width: 'half' });
+  });
+});
+
+describe('BlockInspector linked options', () => {
+  const country = () =>
+    block('single_choice', 'country', {
+      label: 'Country',
+      config: { display: 'dropdown', options: [{ id: 'in' as OptionId, label: 'India' }, { id: 'us' as OptionId, label: 'USA' }] },
+    });
+  const state = (extra: Record<string, unknown> = {}) =>
+    block('single_choice', 'state', { label: 'State', config: { display: 'dropdown', options: [{ id: 's1' as OptionId, label: 'Option 1' }], ...extra } });
+  const stateOptions = () => get('state').config['options'] as ChoiceOption[];
+  const linkedState = (options: unknown[]) => state({ dependsOn: 'country', options });
+  const group = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) });
+
+  it('is off by default; turning it on links an earlier question and groups the options by its answers', async () => {
+    resetStore([country(), state(), block('single_choice', 'later', { label: 'Later' })]);
+    const user = open('state');
+    const toggle = screen.getByRole('switch', { name: 'Link to an earlier question' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByRole('combobox', { name: 'Linked to' })).not.toBeInTheDocument();
+    await user.click(toggle);
+    await user.click(screen.getByRole('combobox', { name: 'Linked to' }));
+    expect(screen.getByRole('option', { name: 'Country' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Later' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'Country' }));
+    expect(get('state').config['dependsOn']).toBe('country');
+    expect(group('India')).toHaveTextContent('0 options');
+    expect(group('USA')).toHaveTextContent('0 options');
+    expect(group('Shown for every Country')).toHaveTextContent('1 option');
+  });
+
+  it('sorts options the block already has into a group with Add existing, without retyping them', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Maharashtra' }, { id: 's2', label: 'Karnataka' }, { id: 's3', label: 'Texas' }])]);
+    const user = open('state');
+    expect(screen.getByText(/3 options are shown for every Country\. Open a Country answer and use Add existing/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add existing options to India' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Maharashtra' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Karnataka' }));
+    await user.click(screen.getByRole('button', { name: 'Add 2 options' }));
+    expect(stateOptions()).toEqual([
+      { id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] },
+      { id: 's2', label: 'Karnataka', parentOptionIds: ['in'] },
+      { id: 's3', label: 'Texas' },
+    ]);
+    expect(group('India')).toHaveTextContent('2 options');
+    expect(group('Shown for every Country')).toHaveTextContent('1 option');
+    expect(screen.queryByText(/shown for every Country\. Open a Country answer/)).not.toBeInTheDocument();
+  });
+
+  it('adds an option inside a group, linked to that answer', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Not listed' }])]);
+    const user = open('state');
+    await user.click(screen.getByRole('button', { name: 'Add an option to India' }));
+    expect(stateOptions()[1]).toMatchObject({ label: 'Option 1', parentOptionIds: ['in'] });
+    expect(group('India')).toHaveTextContent('1 option');
+  });
+
+  it('pastes a list into one group, one option per line, commas kept', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Texas', parentOptionIds: ['us'] }])]);
+    const user = open('state');
+    await user.click(screen.getByRole('button', { name: 'Paste a list into India' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Rows' }), { target: { value: 'Delhi, NCR\nTexas' } });
+    await user.click(screen.getByRole('button', { name: 'Add options' }));
+    expect(stateOptions().map((o) => [o.label, o.parentOptionIds])).toEqual([
+      ['Texas', ['us', 'in']],
+      ['Delhi, NCR', ['in']],
+    ]);
+  });
+
+  it('imports parent and option pairs, and says which parent answers it did not know', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Not listed' }])]);
+    const user = open('state');
+    await user.click(screen.getByRole('button', { name: 'Import pairs' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Rows' }), { target: { value: 'India\tMaharashtra\nJapan, Tokyo' } });
+    await user.click(screen.getByRole('button', { name: 'Add options' }));
+    expect(stateOptions().map((o) => o.label)).toEqual(['Not listed', 'Maharashtra']);
+    expect(screen.getByText(/Country has no answer named “Japan”/)).toBeInTheDocument();
+  });
+
+  it('removing from a group only unlinks an option another group still holds', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Both', parentOptionIds: ['in', 'us'] }, { id: 's2', label: 'Goa', parentOptionIds: ['in'] }])]);
+    const user = open('state');
+    await user.click(screen.getByRole('button', { name: 'Remove Both from India' }));
+    expect(stateOptions()).toEqual([{ id: 's1', label: 'Both', parentOptionIds: ['us'] }, { id: 's2', label: 'Goa', parentOptionIds: ['in'] }]);
+    await user.click(screen.getByRole('button', { name: 'Remove Goa from India' }));
+    expect(stateOptions().map((o) => o.id)).toEqual(['s1']);
+  });
+
+  it('turning the switch off unlinks the question but keeps every option link, so turning it back on restores the groups', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] }])]);
+    const user = open('state');
+    const toggle = screen.getByRole('switch', { name: 'Link to an earlier question' });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    expect(get('state').config).not.toHaveProperty('dependsOn');
+    expect(stateOptions()[0]).toEqual({ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] });
+    expect(screen.getByRole('textbox', { name: 'Label of option 1' })).toHaveValue('Maharashtra');
+    await user.click(toggle);
+    await pick(user, 'Linked to', 'Country');
+    expect(group('India')).toHaveTextContent('1 option');
+  });
+
+  it('linking a different question keeps only the links that name its answers', async () => {
+    resetStore([
+      country(),
+      block('single_choice', 'region', { label: 'Region', config: { display: 'dropdown', options: [{ id: 'in' as OptionId, label: 'North' }, { id: 'eu' as OptionId, label: 'Europe' }] } }),
+      linkedState([{ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] }, { id: 's2', label: 'Texas', parentOptionIds: ['us'] }]),
+    ]);
+    const user = open('state');
+    await pick(user, 'Linked to', 'Region');
+    expect(get('state').config['dependsOn']).toBe('region');
+    expect(stateOptions()).toEqual([{ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] }, { id: 's2', label: 'Texas' }]);
+  });
+
+  it('with no earlier choice question, the switch explains what to add first', async () => {
+    resetStore([state()]);
+    const user = open('state');
+    await user.click(screen.getByRole('switch', { name: 'Link to an earlier question' }));
+    expect(screen.getByText(/Add a choice question above this one first/)).toBeInTheDocument();
+  });
+
+  it('removing a parent answer unlinks it from the linked options', async () => {
+    resetStore([country(), linkedState([{ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] }, { id: 's2', label: 'Both', parentOptionIds: ['in', 'us'] }])]);
+    const user = open('country');
+    await user.click(screen.getByRole('button', { name: 'Remove option 1' }));
+    expect(stateOptions()).toEqual([{ id: 's1', label: 'Maharashtra' }, { id: 's2', label: 'Both', parentOptionIds: ['us'] }]);
+  });
+
+  it('keeps Fill a field and Load from an API folded under More options until one is in use', async () => {
+    resetStore([country()]);
+    const user = open('country');
+    expect(screen.queryByRole('switch', { name: 'Load options from an API' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('switch', { name: 'Load options from an API' })).toBeInTheDocument();
+  });
+});
+
+describe('BlockInspector DMS master settings', () => {
+  it('a primary key is required and unique, moves from any other field, and keeps unique on while set', async () => {
+    resetStore([block('email', 'mail', { label: 'Email', primaryKey: true, required: true, unique: { normalize: 'trim_lower' } }), block('short_text', 'code', { label: 'Code' })]);
+    const user = open('code');
+    expect(screen.getByText(/moves the primary key from Email/)).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Primary key' }));
+    expect(get('code')).toMatchObject({ primaryKey: true, required: true, unique: { normalize: 'trim_lower' } });
+    expect(get('mail')).not.toHaveProperty('primaryKey');
+    expect(screen.getByRole('switch', { name: 'Must be unique on this form' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Required' }));
+    expect(get('code')['required']).toBe(true);
+  });
+
+  it('offers the primary key only on text, number, email and phone', () => {
+    resetStore([block('long_text', 'bio')]);
+    open('bio');
+    expect(screen.queryByRole('switch', { name: 'Primary key' })).not.toBeInTheDocument();
+  });
+
+  it('text characters: both allowed stores nothing; turning one off stores the rule', async () => {
+    resetStore([block('short_text', 'name')]);
+    const user = open('name');
+    expect(screen.getByRole('switch', { name: 'Allow numbers' })).toBeChecked();
+    await user.click(screen.getByRole('switch', { name: 'Allow numbers' }));
+    expect(get('name').config['characters']).toEqual({ numbers: false, special: true });
+    await user.click(screen.getByRole('switch', { name: 'Allow numbers' }));
+    expect(get('name').config).not.toHaveProperty('characters');
+  });
+
+  it('a date can default to today', async () => {
+    resetStore([block('date', 'joined')]);
+    const user = open('joined');
+    await user.click(screen.getByRole('switch', { name: 'Default to today' }));
+    expect(get('joined').config['defaultValue']).toEqual({ kind: 'today' });
+    await user.click(screen.getByRole('switch', { name: 'Default to today' }));
+    expect(get('joined').config).not.toHaveProperty('defaultValue');
+  });
+
+  it('auto increment turns a number into a serial and back, keeping its key and label, with settings still open', async () => {
+    resetStore([block('number', 'ref', { label: 'Reference', required: true })]);
+    const user = open('ref');
+    await user.click(screen.getByRole('switch', { name: 'Auto increment' }));
+    expect(get('ref')).toMatchObject({ type: 'unique_id', key: 'ref', required: false, config: { prefix: [], padTo: 1, startAt: 1 } });
+    render(<BlockInspector />);
+    const on = screen.getAllByRole('switch', { name: 'Auto increment' }).at(-1)!;
+    expect(on).toBeChecked();
+    await user.click(on);
+    expect(get('ref')).toMatchObject({ type: 'number', key: 'ref' });
   });
 });

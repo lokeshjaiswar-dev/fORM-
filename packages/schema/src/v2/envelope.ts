@@ -152,6 +152,11 @@ export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   compliance: FieldCompliance;
   prefill?: PrefillConfig;
   unique?: UniqueConstraint;
+  /**
+   * The field that identifies each submission (a master's primary key). At most one per form; it is always required
+   * and unique (the builder sets both when it is turned on).
+   */
+  primaryKey?: boolean;
   apiValidation?: ApiValidation;
   apiOptions?: ApiOptions;
 }

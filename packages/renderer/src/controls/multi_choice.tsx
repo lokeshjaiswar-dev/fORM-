@@ -5,7 +5,7 @@ import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { ChoicePicture } from './choicePicture.tsx';
 import { DsMultiSelect } from './ds.tsx';
-import { useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
+import { useAnswer, useDependentChoice, useOptions, usePipes, type ControlProps } from './hooks.ts';
 
 const OTHER = '__other__';
 
@@ -16,6 +16,9 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   const answer = useAnswer(block);
   const c = block.config;
   const options = useOptions(block.id, c.options, c.shuffle, block.apiOptions);
+  const { waitingFor } = useDependentChoice(block, options, field.disabled);
+  const waitHint = waitingFor === undefined ? undefined : waitingFor ? t(MESSAGES['choice.choose_first'], { question: waitingFor }) : t(MESSAGES['choice.answer_above_first']);
+  const hint = waitHint ? <p className="fr-hint fr-choice-wait">{waitHint}</p> : null;
   const other = c.other?.enabled ? c.other : undefined;
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const ids = answer.value?.optionIds ?? [];
@@ -43,7 +46,9 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
 
   if (c.display === 'image') {
     return (
-      <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
+      <>
+        {hint}
+        <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
           {options.map((o, i) => (
             <label key={o.id} className="fr-image-choice" data-selected={ids.includes(o.id) ? 'true' : undefined}>
               <CheckboxField
@@ -60,6 +65,7 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
             </label>
           ))}
       </div>
+      </>
     );
   }
 
@@ -76,7 +82,7 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
           value={selected}
           onChange={applyIds}
           options={items}
-          placeholder={c.placeholder?.trim() || t('system:select.placeholder')}
+          placeholder={waitHint ?? (c.placeholder?.trim() || t('system:select.placeholder'))}
           disabled={locked}
           aria-invalid={field.invalid || undefined}
           aria-describedby={field.ids.describedBy}
@@ -101,7 +107,9 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   }
 
   return (
-    <div className="fr-choices" style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
+    <>
+      {hint}
+      <div className="fr-choices" style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
       {options.map((o, i) => (
         <CheckboxField
           key={o.id}
@@ -137,5 +145,6 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
         />
       ) : null}
     </div>
+    </>
   );
 }

@@ -12,6 +12,7 @@ import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
 import { formatFormula, markRowRefs, parseFormula } from '@/lib/formula';
+import { switchFieldType } from '@/lib/switchFieldType';
 import { isOptionValueField } from '@/state/commands/rules';
 import { patchBlockConfig } from '@/fields/configSink';
 import { addChildBlock, requestDeleteBlock } from '@/state/actions';
@@ -176,6 +177,14 @@ const M = defineMessages('builder', {
   'inspector.semantic_left': 'Left pole',
   'inspector.semantic_right': 'Right pole',
   'inspector.semantic_left_n': 'Left pole of pair {n}',
+  'inspector.allow_numbers': 'Allow numbers',
+  'inspector.allow_special': 'Allow special characters',
+  'inspector.characters_hint': 'Letters and spaces are always allowed. Anything turned off is removed as the respondent types.',
+  'inspector.default_today': 'Default to today',
+  'inspector.default_today_hint': 'The date starts as the day the form is opened; respondents can still change it.',
+  'inspector.auto_increment': 'Auto increment',
+  'inspector.auto_increment_hint': 'Numbers each submission for you (1, 2, 3 …), so respondents do not type it.',
+  'inspector.auto_increment_on_hint': 'Each submission gets the next number. Turn off to let respondents type a number instead.',
   'inspector.semantic_right_n': 'Right pole of pair {n}',
   'inspector.list_item': '{list}: item {n}',
   'inspector.matching_options': 'Matches',
@@ -412,10 +421,30 @@ function shortTextPatternError(source: string): string | null {
   return feature ? t(M[PATTERN_FEATURE_MESSAGE[feature]]) : t(M['inspector.pattern_invalid'], { problem });
 }
 
+/** Text presets that fix the format themselves (PAN, PIN code …): the character switches would only contradict them. */
+const FORMAT_PRESETS = new Set(['numeric', 'in_pan', 'in_gstin', 'in_pincode', 'in_ifsc', 'in_vehicle_reg', 'in_aadhaar_last4']);
+
+/**
+ * Allow numbers / Allow special characters. Both on (the default) stores nothing, so existing fields keep accepting
+ * any character; letters and spaces are always allowed.
+ */
+function CharacterSwitches({ block }: InspectorProps<'short_text'>) {
+  if (block.config.preset !== undefined && FORMAT_PRESETS.has(block.config.preset)) return null;
+  const now = block.config.characters ?? { numbers: true, special: true };
+  const write = (next: { numbers: boolean; special: boolean }) => setConfig(block, { characters: next.numbers && next.special ? undefined : next });
+  return (
+    <div className="space-y-3">
+      <ToggleRow label={t(M['inspector.allow_numbers'])} checked={now.numbers} onChange={(numbers) => write({ ...now, numbers })} />
+      <ToggleRow label={t(M['inspector.allow_special'])} hint={t(M['inspector.characters_hint'])} checked={now.special} onChange={(special) => write({ ...now, special })} />
+    </div>
+  );
+}
+
 export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
   const pattern = block.config.pattern?.source ?? '';
   return (
     <>
+      <CharacterSwitches block={block} />
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t(M['inspector.min_length'])} value={block.config.minLength} parse={count(SHORT_TEXT_MAX)} onChange={(minLength) => setConfig(block, { minLength })} />
         <NumberField label={t(M['inspector.max_length'])} value={block.config.maxLength} parse={count(SHORT_TEXT_MAX)} onChange={(maxLength) => setConfig(block, { maxLength })} />
@@ -489,6 +518,7 @@ export function PhoneGeneral({ block }: InspectorProps<'phone'>) {
 export function NumberGeneral({ block }: InspectorProps<'number'>) {
   return (
     <>
+      <ToggleRow label={t(M['inspector.auto_increment'])} hint={t(M['inspector.auto_increment_hint'])} checked={false} onChange={(on) => on && switchFieldType(block.id, 'unique_id')} />
       <ChromeGeneral block={block} />
       <SelectField
         label={t(M['inspector.display'])}
@@ -682,6 +712,7 @@ export function UniqueIdGeneral({ block }: InspectorProps<'unique_id'>) {
   const prefix = block.config.prefix.map((part) => (typeof part === 'string' ? part : '')).join('');
   return (
     <>
+      <ToggleRow label={t(M['inspector.auto_increment'])} hint={t(M['inspector.auto_increment_on_hint'])} checked onChange={(on) => !on && switchFieldType(block.id, 'number')} />
       <TextField label={t(M['inspector.unique_prefix'])} value={prefix} onChange={(value) => setConfig(block, { prefix: value ? [value] : [] })} />
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t(M['inspector.unique_pad'])} value={block.config.padTo} parse={parseInteger(1, 20)} onChange={(padTo) => padTo !== undefined && setConfig(block, { padTo })} />
@@ -702,8 +733,18 @@ export function UniqueIdGeneral({ block }: InspectorProps<'unique_id'>) {
 }
 
 export function DateGeneral({ block }: InspectorProps<'date'>) {
+  const today = block.config.defaultValue?.kind === 'today';
   return (
     <>
+      <ToggleRow
+        label={t(M['inspector.default_today'])}
+        hint={t(M['inspector.default_today_hint'])}
+        checked={today}
+        onChange={(on) => {
+          if (on) setConfig(block, { defaultValue: { kind: 'today' } });
+          else if (today) setConfig(block, { defaultValue: undefined });
+        }}
+      />
       <SelectField label={t(M['inspector.date_pattern'])} value={block.config.pattern} options={DATE_PATTERNS.map((p) => ({ value: p, label: p }))} onChange={(pattern) => setConfig(block, { pattern })} />
       <SelectField
         label={t(M['inspector.picker'])}

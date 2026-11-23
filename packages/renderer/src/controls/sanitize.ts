@@ -43,3 +43,12 @@ export function sanitizePreset(raw: string, preset: TextPreset | undefined, maxL
   }
   return maxLength !== undefined ? [...next].slice(0, maxLength).join('') : next;
 }
+/**
+ * Drops characters a short text does not allow as they are typed: letters, marks and spaces always stay; digits only
+ * when `numbers`; anything else only when `special`. Validation applies the same rule to what reaches the server.
+ */
+export function sanitizeCharacters(raw: string, characters: { numbers: boolean; special: boolean } | undefined): string {
+  if (!characters || (characters.numbers && characters.special)) return raw;
+  if (characters.special) return raw.replace(/\p{Nd}/gu, '');
+  return raw.replace(characters.numbers ? /[^\p{L}\p{M}\p{Nd}\s]/gu : /[^\p{L}\p{M}\s]/gu, '');
+}

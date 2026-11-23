@@ -7,6 +7,7 @@ import type {
 } from '@form/schema';
 import { actionWrites, isClientAction } from './analyze.ts';
 import { cell, stepKey } from './cells.ts';
+import { admittedAnswers, dependentBlockIds, dependentOptions } from './dependentOptions.ts';
 import { ENGINE } from './compile.ts';
 import { D, formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
@@ -798,8 +799,15 @@ class Session {
     return changed;
   }
 
+  /** Blocks whose options depend on another block: a change anywhere upstream can admit or drop their answers. */
+  private dependants: readonly BlockId[] | undefined;
+
+  private admit(answers: Answers): Answers {
+    return admittedAnswers(this.p.documentOrder, this.p.blocks, answers);
+  }
+
   full(answers: Answers): void {
-    this.answers = answers;
+    this.answers = this.admit(answers);
     this.current = -1;
     this.cells = new Map(this.p.staticCells);
     for (const [id, c] of this.p.valueCells) this.cells.set(c, this.answerCell(id));
@@ -812,13 +820,16 @@ class Session {
 
   /** Re-runs only the steps downstream of the changed answers (§3.3.14); the result equals a full pass. */
   update(answers: Answers, changed: Iterable<BlockId>): void {
-    this.answers = answers;
+    this.answers = this.admit(answers);
     this.current = -1;
+    this.dependants ??= dependentBlockIds(this.p.documentOrder, this.p.blocks);
+    const ids = new Set(changed);
+    if (this.dependants.length && ids.size) for (const id of this.dependants) ids.add(id);
     const dirty = new Uint8Array(this.p.steps.length);
     const touch = (c: string) => {
       for (const r of this.p.readers.get(c) ?? []) dirty[r] = 1;
     };
-    for (const id of changed) {
+    for (const id of ids) {
       const c = cell.value(id);
       if (!this.p.blocks.has(id)) continue;
       /* An answer going between absent and invalid leaves the cell undefined but changes the readers' diagnostics. */
@@ -879,6 +890,13 @@ class Session {
       if (shown && enabled && answer) values[id] = answer;
       if (this.flag(cell.required(id)) && shown && enabled && !(block.readOnly === true && !answer)) required.add(id);
     }
+    /* Dependent options: a block waiting for its parent's answer is disabled, so it is neither answered nor required. */
+    const dependent = dependentOptions(p.documentOrder, p.blocks, values);
+    for (const id of dependent.waiting) {
+      disabled.add(id);
+      required.delete(id);
+      delete values[id];
+    }
     const endingId = (this.cells.get(cell.ending()) as EndingId | undefined) ?? p.def.defaultEndingId;
     const last = p.pageIds.length - 1;
     const path: PageId[] = [];
@@ -906,7 +924,7 @@ class Session {
       }
     });
     const state: EvalState = {
-      visible, required, disabled, hiddenOptions: {}, values, variables: {}, submitBlocks, nextPage, path, endingId, serverEffects: this.serverEffects(),
+      visible, required, disabled, hiddenOptions: dependent.hiddenOptions, values, variables: {}, submitBlocks, nextPage, path, endingId, serverEffects: this.serverEffects(),
     };
     if (Object.keys(rowValues).length > 0) state.rowValues = rowValues;
     if (this.tracing) {
