@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, foreignKey, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { bytea, ts, tsNull } from './columns.ts';
 import { orgs } from './identity.ts';
 
@@ -73,6 +73,26 @@ export const formVersions = pgTable(
   (t) => [
     foreignKey({ name: 'form_versions_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
     unique('form_versions_form_number_key').on(t.orgId, t.formId, t.number),
+  ],
+);
+
+/**
+ * Last serial issued to a `unique_id` field, per reset period ('' never, 'YYYY', 'YYYY-MM'). Written only through
+ * `nextSerial`. RLS: `form_serial_counters_tenant`.
+ */
+export const formSerialCounters = pgTable(
+  'form_serial_counters',
+  {
+    orgId: uuid('org_id').notNull(),
+    formId: uuid('form_id').notNull(),
+    blockId: text('block_id').notNull(),
+    period: text('period').notNull(),
+    lastValue: bigint('last_value', { mode: 'number' }).notNull(),
+    updatedAt: ts('updated_at'),
+  },
+  (t) => [
+    primaryKey({ name: 'form_serial_counters_pkey', columns: [t.orgId, t.formId, t.blockId, t.period] }),
+    foreignKey({ name: 'form_serial_counters_form_fkey', columns: [t.orgId, t.formId], foreignColumns: [forms.orgId, forms.id] }),
   ],
 );
 

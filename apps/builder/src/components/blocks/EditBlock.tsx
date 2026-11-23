@@ -1,14 +1,15 @@
 import type { ComponentType } from 'react';
-import { EyeOff } from 'lucide-react';
+import { EyeOff, GitBranch, KeyRound } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { isAvailable, type AvailableType } from '@form/registry';
 import type { StoredBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { CANVAS, type CanvasProps } from '@/fields/canvas';
 import { blockStyleVars, labelStyle } from '@/fields/style';
-import { isField, plainText } from '@/lib/definition';
+import { blockText, isField, plainText } from '@/lib/definition';
 import { cn } from '@/lib/utils';
 import { focusNextField, updateBlock } from '@/state/actions';
+import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 
@@ -18,11 +19,16 @@ const M = defineMessages('builder', {
   'block.unavailable': 'This {type} block cannot be edited in this builder yet; it is kept as it is.',
   'block.hidden_until': 'Hidden until a rule shows it',
   'block.concealed': 'Hidden from respondents',
+  'block.depends_on': 'Linked to {parent}',
+  'block.primary_key': 'Primary key',
 });
 
 /** One block on the canvas: the label editor of a field and its type's canvas view (FND-03). */
 export function EditBlock({ block }: { block: StoredBlock }) {
   const focused = useUiStore((s) => s.activeBlockId === block.id);
+  /* Dependent options: name the question this block's options follow, so the link shows without opening settings. */
+  const parentId = (block.type === 'single_choice' || block.type === 'multi_choice') ? block.config.dependsOn : undefined;
+  const parentName = useDoc((d) => (parentId ? blockText(d.blocks[parentId]) : ''));
 
   if (block.type === 'unsupported' || !isAvailable(block.type)) {
     const type = block.type === 'unsupported' ? block.originalType : block.type;
@@ -55,11 +61,21 @@ export function EditBlock({ block }: { block: StoredBlock }) {
    */
   return (
     <div className="w-full" data-canvas-field="" style={blockStyleVars(block.style)}>
-      {hidden || concealed ? (
+      {hidden || concealed || parentId || block.primaryKey ? (
         <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           {concealed ? (
             <p className="inline-flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground" data-canvas-concealed="">
               <EyeOff aria-hidden className="size-3" /> {t(M['block.concealed'])}
+            </p>
+          ) : null}
+          {block.primaryKey ? (
+            <p className="inline-flex items-center gap-1 rounded-sm bg-amber-50 px-1.5 py-0.5 text-[12px] font-medium text-amber-800" data-canvas-primary-key="">
+              <KeyRound aria-hidden className="size-3" /> {t(M['block.primary_key'])}
+            </p>
+          ) : null}
+          {parentId ? (
+            <p className="inline-flex items-center gap-1 rounded-sm bg-primary-faded px-1.5 py-0.5 text-[12px] font-medium text-primary-text" data-canvas-depends="">
+              <GitBranch aria-hidden className="size-3" /> {t(M['block.depends_on'], { parent: parentName || '…' })}
             </p>
           ) : null}
           {hidden}

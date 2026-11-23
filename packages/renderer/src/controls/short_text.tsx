@@ -4,7 +4,7 @@ import { DsSelect, DsText } from './ds.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 import { useLookup } from './lookupContext.tsx';
 import { RowContext } from './rowContext.ts';
-import { sanitizePreset } from './sanitize.ts';
+import { sanitizeCharacters, sanitizePreset } from './sanitize.ts';
 
 function isFillBlank(placeholder: string | undefined): boolean {
   return placeholder === '_____';
@@ -48,7 +48,7 @@ export function ShortText({ block, field }: ControlProps<'short_text'>) {
   const attrs = {
     id: field.ids.input,
     value: fromRule || answer.value || '',
-    onChange: (e: { target: { value: string } }) => answer.set(sanitizePreset(e.target.value, c.preset, c.maxLength)),
+    onChange: (e: { target: { value: string } }) => answer.set(sanitizePreset(sanitizeCharacters(e.target.value, c.characters), c.preset, c.maxLength)),
     onBlur: answer.onBlur,
     ...inputAttrs(field),
   };

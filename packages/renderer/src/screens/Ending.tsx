@@ -28,8 +28,11 @@ export function EndingScreen({
   redirecting,
   minHeight,
   onRestart,
+  uniqueId = null,
 }: {
   ending: Ending;
+  /** The reference number the server issued (a `unique_id` field with `showOnEnding`); null shows nothing. */
+  uniqueId?: string | null | undefined;
   confetti: boolean;
   confettiStyle?: ConfettiStyle | undefined;
   resolve: RichTextResolvers;
@@ -51,6 +54,11 @@ export function EndingScreen({
         <svg viewBox="0 0 24 24" focusable="false"><path d="M20 6 9 17l-5-5" /></svg>
       </div>
       {content ? <Content doc={content} resolve={resolve} /> : null}
+      {uniqueId ? (
+        <p className="fr-ending-reference">
+          {t(MESSAGES['ending.reference'])} <strong>{uniqueId}</strong>
+        </p>
+      ) : null}
       {redirecting ? <p className="fr-hint" role="status">{t(MESSAGES['ending.redirecting'])}</p> : null}
       {ending.kind === 'message'
         ? ending.actions.map((action, i) => {

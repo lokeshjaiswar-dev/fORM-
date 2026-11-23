@@ -297,6 +297,10 @@ async function seedOrg(owner: pg.Pool, slug: string, system: SystemSeed): Promis
       `insert into form_submissions (id, org_id, form_id, answers, fields) values ($1, $2, $3, '{}', '[]')`,
       [randomUUID(), s.orgId, formId],
     );
+    await owner.query(
+      `insert into form_serial_counters (org_id, form_id, block_id, period, last_value) values ($1, $2, 'blk_seed', '', 1)`,
+      [s.orgId, formId],
+    );
   }
   await owner.query(
     `insert into sessions (id, token_hash, user_id, mfa_level, idle_expires_at, absolute_expires_at)

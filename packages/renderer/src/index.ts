@@ -1,6 +1,6 @@
 export { FormRenderer } from './FormRenderer.tsx';
 export type {
-  FormRendererProps, PartialSave, RendererEvent, RendererSession, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
+  FormRendererProps, PartialSave, RendererEvent, RendererSession, SubmitAccepted, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
 } from './types.ts';
 export { CONTROLS } from './controls/index.ts';
 export { DynamicCellInput, DynamicTableFrame } from './controls/dynamic_table_frame.tsx';

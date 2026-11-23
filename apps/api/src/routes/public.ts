@@ -12,6 +12,17 @@ import { z } from 'zod';
 import type { ApiConfig } from '../config.ts';
 import { ProblemError, sendProblem } from '../errors.ts';
 import { deliverSubmission, deliveryFields, type SubmissionApiConfig } from '../submissionDelivery.ts';
+import {
+  formTimeZone,
+  issueSerials,
+  serialFields,
+  serialResponse,
+  submitResponse,
+  withSerials,
+  withoutSerialBlocks,
+  type IssuedSerial,
+  type SerialField,
+} from '../uniqueIds.ts';
 
 const slugParam = z.object({ slug: z.string().min(1).max(128) });
 
@@ -303,7 +314,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
           fields: z.array(fieldRow).default([]),
           locale: z.string().min(2).max(35).default('en-IN'),
         }),
-        response: { 200: z.object({ id: z.uuid() }) },
+        response: { 200: submitResponse },
       },
     },
     async (request, reply) => {
@@ -313,6 +324,8 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
       if (expected && request.body.formVersionId !== expected) {
         throw new ProblemError('NOTICE_OUTDATED', 'This form was updated. Reload and try again.');
       }
+      const definition = definitionOf(live.version);
+      const serials = serialFields(definition?.blocks);
       let taken: Awaited<ReturnType<typeof uniqueAgainstDb>> = [];
       try {
         taken = await uniqueAgainstDb(deps.db, request.params.slug, request.id, live.version, request.body.answers);
@@ -328,7 +341,7 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         );
       }
       const id = randomUUID();
-      const row: DiskSubmission = {
+      const received: DiskSubmission = {
         id,
         formId: live.formId,
         submittedAt: new Date().toISOString(),
@@ -336,15 +349,29 @@ export function publicFormRoutes(app: FastifyInstance, deps: { db: Db; config: A
         answers: request.body.answers,
         fields: request.body.fields,
       };
-      await saveSubmission(row);
-      void persistSubmissionToDb(deps.db, request.params.slug, request.id, row).catch(() => undefined);
-      const definition = definitionOf(live.version);
+      let row = received;
+      let issued: IssuedSerial[] = [];
+      if (serials.length) {
+        // Serials come from the database, so the row is committed there with its numbers before the disk copy.
+        try {
+          ({ row, issued } = await persistWithSerials(deps.db, request.params.slug, request.id, received, serials, formTimeZone(definition)));
+        } catch (err) {
+          if (err instanceof ProblemError) throw err;
+          request.log.error({ err, slug: request.params.slug }, 'could not issue unique ids');
+          throw new ProblemError('SERVICE_UNAVAILABLE', 'This form could not be submitted right now. Try again in a moment.');
+        }
+        // Committed already: a failed disk copy must not make the respondent retry and draw a second number.
+        await saveSubmission(row).catch((err: unknown) => request.log.warn({ err, slug: request.params.slug }, 'disk copy of submission failed'));
+      } else {
+        await saveSubmission(row);
+        void persistSubmissionToDb(deps.db, request.params.slug, request.id, row).catch(() => undefined);
+      }
       const delivery = await deliverSubmission(
         live.submissionApi,
-        deliveryFields(definition?.blocks as Record<string, unknown> | undefined, request.body.answers, request.body.fields),
+        deliveryFields(definition?.blocks as Record<string, unknown> | undefined, row.answers, row.fields),
       );
       if (delivery.error) request.log.warn({ err: delivery.error, slug: request.params.slug }, 'submission delivery failed');
-      return { id };
+      return { id, ...serialResponse(issued) };
     },
   );
 
@@ -449,7 +476,7 @@ async function uniqueAgainstDb(db: Db, slug: string, requestId: string, version:
   const rows = await withTenant(db, { orgId: found.orgId, actor: 'system', requestId, readOnly: true }, (tx) =>
     tx.select({ answers: formSubmissions.answers }).from(formSubmissions).where(eq(formSubmissions.formId, found.formId)),
   );
-  return uniqueFieldErrors(definition.blocks, answers, rows.map((row) => row.answers));
+  return uniqueFieldErrors(withoutSerialBlocks(definition.blocks), answers, rows.map((row) => row.answers));
 }
 
 function definitionOf(version: unknown): PublicFormDefinition | null {
@@ -457,6 +484,40 @@ function definitionOf(version: unknown): PublicFormDefinition | null {
   const definition = (version as { definition: unknown }).definition;
   if (typeof definition !== 'object' || definition === null || !('blocks' in definition)) return null;
   return definition as PublicFormDefinition;
+}
+
+/**
+ * Issues the form's `unique_id` values and stores the submission in one transaction, so a failed insert never
+ * burns a number and two respondents never share one.
+ */
+async function persistWithSerials(
+  db: Db,
+  slug: string,
+  requestId: string,
+  received: DiskSubmission,
+  serials: readonly SerialField[],
+  timeZone: string,
+): Promise<{ row: DiskSubmission; issued: IssuedSerial[] }> {
+  const found = await resolveFormSlug(db, slug);
+  if (!found) throw new ProblemError('SERVICE_UNAVAILABLE', 'This form cannot issue reference numbers yet. Publish it again and retry.');
+  return withTenant(db, { orgId: found.orgId, actor: 'system', requestId }, async (tx) => {
+    const issued = await issueSerials(tx, { orgId: found.orgId, formId: found.formId, fields: serials, timeZone, at: new Date(received.submittedAt) });
+    const row = { ...received, ...withSerials(received.answers, received.fields, issued) };
+    await tx.insert(formSubmissions).values({
+      id: row.id,
+      orgId: found.orgId,
+      formId: found.formId,
+      answers: row.answers,
+      fields: row.fields,
+      locale: row.locale,
+      versionId: found.liveVersionId,
+    });
+    await tx
+      .update(forms)
+      .set({ submissionCount: sql`${forms.submissionCount} + 1`, lastSubmissionAt: new Date() })
+      .where(eq(forms.id, found.formId));
+    return { row, issued };
+  });
 }
 
 async function persistSubmissionToDb(db: Db, slug: string, requestId: string, row: DiskSubmission): Promise<void> {

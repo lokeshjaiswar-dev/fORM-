@@ -17,7 +17,13 @@ const payloadSchema = z.object({
   media: z.record(z.string(), z.string()).optional(),
 });
 
-type Load = { status: 'loading' } | { status: 'missing' } | { status: 'error'; message: string } | { status: 'ready'; version: RuntimeFormVersion; slug: string };
+const acceptedSchema = z.object({
+  id: z.string(),
+  uniqueId: z.string().optional(),
+  uniqueIds: z.record(z.string(), z.string()).optional(),
+});
+
+type Load ={ status: 'loading' } | { status: 'missing' } | { status: 'error'; message: string } | { status: 'ready'; version: RuntimeFormVersion; slug: string };
 
 export function PublicFillPage() {
   const { slug = '' } = useParams();
@@ -92,6 +98,9 @@ export function PublicFillPage() {
             if (res.status === 400 && errors.length) return { ok: false as const, kind: 'invalid' as const, status: 422 as const, errors };
             throw new Error('submit failed');
           }
+          // The server issues unique_id values; the form only showed previews.
+          const accepted = acceptedSchema.safeParse(await res.json().catch(() => null));
+          return accepted.success ? { ok: true as const, uniqueId: accepted.data.uniqueId, uniqueIds: accepted.data.uniqueIds } : undefined;
         }}
       />
     </main>

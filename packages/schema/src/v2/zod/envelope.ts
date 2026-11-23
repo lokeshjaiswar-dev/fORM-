@@ -103,6 +103,7 @@ export const fieldBase = <T extends string>(type: T) => ({
   compliance: FieldComplianceSchema,
   prefill: PrefillConfigSchema.exactOptional(),
   unique: UniqueConstraintSchema.exactOptional(),
+  primaryKey: z.boolean().exactOptional(),
   apiValidation: ApiValidationSchema.exactOptional(),
   apiOptions: ApiOptionsSchema.exactOptional(),
 });

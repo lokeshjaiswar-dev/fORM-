@@ -24,6 +24,24 @@ export const PRESET_SOURCES: Readonly<Record<TextPreset, string>> = {
 };
 
 /**
+ * The RE2 source for a short text's allowed characters: letters, marks and spaces always; digits when `numbers`;
+ * any other character when `special`. Both on means anything, so there is nothing to check.
+ */
+export function charactersSource(characters: { numbers: boolean; special: boolean }): string | null {
+  if (characters.numbers && characters.special) return null;
+  if (characters.special) return '^[^\\p{Nd}]*$';
+  return `^[\\p{L}\\p{M}${SPACE}${characters.numbers ? '\\p{Nd}' : ''}]*$`;
+}
+
+/** Whether `value` uses only the characters a short text allows. A fixed class: linear in the value, like a preset. */
+export function matchesCharacters(characters: { numbers: boolean; special: boolean }, value: string): boolean {
+  const source = charactersSource(characters);
+  if (source === null) return true;
+  const compiled = compileBuiltIn(source);
+  return compiled.ok && compiled.test(value);
+}
+
+/**
  * Presets are not held to `PATTERN_COST_BUDGET`: they are fixed here, anchored at both ends and under 50
  * instructions, and each is one repeated class or a short bounded sequence, so RE2 keeps one or two threads
  * alive and the cost is linear in the value with a small constant (200,000 code units take about 10 ms).

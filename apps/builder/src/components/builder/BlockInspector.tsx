@@ -81,6 +81,10 @@ const M = defineMessages('builder', {
   'inspector.required_message_placeholder': 'This field is required.',
   'inspector.format_message': 'Message when the answer is invalid',
   'inspector.unique': 'Must be unique on this form',
+  'inspector.primary_key': 'Primary key',
+  'inspector.primary_key_hint': 'Identifies each submission. Turning it on also makes the field required and unique. Only one field per form can be the primary key.',
+  'inspector.primary_key_moved': 'Turning this on moves the primary key from {field}.',
+  'inspector.primary_key_locked': 'Kept on while this field is the primary key.',
   'inspector.unique_hint': 'The same value cannot be submitted twice. Checked when the form is submitted.',
   'inspector.unique_normalize': 'Compare as',
   'inspector.unique_exact': 'Exactly as typed',
@@ -99,6 +103,8 @@ const M = defineMessages('builder', {
 });
 
 const UNIQUE_TYPES = new Set<FieldBlock['type']>(['short_text', 'email', 'phone', 'url', 'number']);
+/** The fields that can identify a submission, as in a DMS master: text, number, email and phone. */
+const PRIMARY_KEY_TYPES = new Set<FieldBlock['type']>(['short_text', 'number', 'email', 'phone']);
 /**
  * The answers an external API can sensibly check: typed values and picked options. Widgets such as a signature, a
  * file or a card sort have no value an API could verify; a block that already has a check keeps showing it.
@@ -268,7 +274,7 @@ export function BlockInspector() {
               </TabsTrigger>
             ))}
           </TabsList>
-          <TabsContent value={shown} className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+          <TabsContent key={block.id} value={shown} className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
             {shown === 'general' ? <GeneralTab block={block} /> : null}
             {shown === 'design' ? <DesignTab block={block} /> : null}
             {shown === 'logic' ? (
@@ -468,7 +474,7 @@ function FieldTypeToggles({ block }: { block: FieldBlock }) {
         value={on}
         onValueChange={(next: string[]) =>
           updateBlock(block.id, {
-            required: next.includes('required'),
+            required: next.includes('required') || block.primaryKey === true,
             readOnly: next.includes('readOnly') || undefined,
             concealed: next.includes('concealed') || undefined,
           })
@@ -537,6 +543,7 @@ function GeneralTab({ block }: { block: ShownBlock }) {
       {field ? (
         <InspectorSection title={t(M['inspector.section.validation'])}>
           <Registered block={block} section="validation" />
+          <PrimaryKeySetting block={block} />
           <UniqueSetting block={block} />
           {API_CHECK_TYPES.has(block.type) || block.apiValidation ? <ApiValidationSection block={block} /> : null}
         </InspectorSection>
@@ -750,13 +757,40 @@ function ErrorMessages({ block }: { block: FieldBlock }) {
 }
 
 /** The unique-answer rule, for the types whose answers can be compared as text. */
+/**
+ * The one field that identifies a submission. Turning it on makes the field required and unique (and takes the role
+ * from any other field); turning it off leaves required and unique as they are, so nothing changes by surprise.
+ */
+function PrimaryKeySetting({ block }: { block: FieldBlock }) {
+  const holder = useDoc((d) => Object.values(d.blocks).find((b): b is FieldBlock => !!b && b.id !== block.id && isField(b) && b.primaryKey === true));
+  if (!PRIMARY_KEY_TYPES.has(block.type)) return null;
+  const on = block.primaryKey === true;
+  return (
+    <ToggleRow
+      label={t(M['inspector.primary_key'])}
+      hint={!on && holder ? `${t(M['inspector.primary_key_hint'])} ${t(M['inspector.primary_key_moved'], { field: blockText(holder) || holder.key })}` : t(M['inspector.primary_key_hint'])}
+      checked={on}
+      onChange={(next) => {
+        if (!next) {
+          updateBlock(block.id, { primaryKey: undefined });
+          return;
+        }
+        if (holder) updateBlock(holder.id, { primaryKey: undefined });
+        updateBlock(block.id, { primaryKey: true, required: true, unique: block.unique ?? { normalize: defaultNormalize(block.type) } });
+      }}
+    />
+  );
+}
+
 function UniqueSetting({ block }: { block: FieldBlock }) {
   if (!UNIQUE_TYPES.has(block.type)) return null;
+  const locked = block.primaryKey === true;
   return (
     <>
       <ToggleRow
         label={t(M['inspector.unique'])}
-        hint={t(M['inspector.unique_hint'])}
+        hint={locked ? t(M['inspector.primary_key_locked']) : t(M['inspector.unique_hint'])}
+        disabled={locked}
         checked={block.unique !== undefined}
         onChange={(on) => updateBlock(block.id, { unique: on ? { normalize: defaultNormalize(block.type) } : undefined })}
       />

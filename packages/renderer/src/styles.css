@@ -644,8 +644,19 @@
   transition: border-color 120ms ease;
 }
 
+/*
+ * A field that cannot be used yet (waiting on an earlier answer, or disabled by a rule) reads as inactive at a glance:
+ * a tinted, dashed box with muted text, not only an unresponsive one.
+ */
+:where(.fr-root) .fr-field .ds-field:has(:is(button, input, textarea):disabled) {
+  background-color: color-mix(in srgb, var(--fr-text) 4%, var(--fr-input-bg, var(--field-bg, #fff)));
+  border-style: dashed;
+  color: var(--fr-muted);
+  cursor: not-allowed;
+}
+
 /* The light border darkens a step under the pointer, so a field still reads as something to click. */
-:where(.fr-root) .fr-field .ds-field:hover:not(:focus-within, [data-readonly], [data-disabled]) {
+:where(.fr-root) .fr-field .ds-field:hover:not(:focus-within, [data-readonly], [data-disabled], :has(:disabled)) {
   border-color: var(--fr-input-border, color-mix(in srgb, var(--fr-inputBorder) 70%, var(--fr-text)));
 }
 
