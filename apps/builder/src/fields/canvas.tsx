@@ -17,8 +17,8 @@ import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc, isField, plainText } from '@/lib/definition';
 
-function staticText(value: { kind: string; value: string } | undefined): string | undefined {
-  return value?.kind === 'static' ? value.value : undefined;
+function staticText(value: { kind: string; value: string | readonly unknown[] } | undefined): string | undefined {
+  return value?.kind === 'static' && typeof value.value === 'string' ? value.value : undefined;
 }
 
 /*

@@ -3,7 +3,7 @@ import { FormDefinitionSchema, NOTE_MEANINGS, type FormDefinition, type FormId, 
 import { t } from '@/i18n';
 import { blankDefinition } from '@/lib/definition';
 import { migrateDraft, readV1, type V1Read } from '@/lib/migrate';
-import { LocalOpsSchema, defaultOps, type LocalOps } from '@/state/opsStore';
+import { LocalOpsSchema, defaultOps, defaultSubmissionApi, type LocalOps } from '@/state/opsStore';
 import type { LoadNote } from '@/state/uiStore';
 import { DOCUMENT_FORMAT, LEGACY_FORMAT, type StoredForm } from '@/persistence/DocumentRepository';
 
@@ -68,7 +68,7 @@ function fromV1(read: V1Read, id: string, now: IsoInstant): Opened {
   const notes = result.notes.filter((n) => !routine(n)).map((n): LoadNote => ({ code: n.code, path: n.path, detail: `${NOTE_MEANINGS[n.code]}: ${n.detail}` }));
   const access = result.ops.access;
   const password = result.plaintextPasswordToHash ?? '';
-  const ops: LocalOps = { open: access.enabled, closedMessage: access.screens.closed?.content ?? (access.enabled ? defaultOps().closedMessage : EMPTY), password };
+  const ops: LocalOps = { open: access.enabled, closedMessage: access.screens.closed?.content ?? (access.enabled ? defaultOps().closedMessage : EMPTY), password, submissionApi: defaultSubmissionApi() };
   if (password) notes.push({ code: 'password_kept', path: '/settings/password', detail: t(M['load.password_kept']) });
   return { ok: true, doc: { ...result.definition, formId: id as FormId }, ops, notes: [...repairNotes(read.repairs), ...notes], migrated: true };
 }

@@ -32,13 +32,13 @@ export function uniqueComparable(normalize: UniqueConstraint['normalize'], answe
  * `blocks` is a form definition's block map (draft or published).
  */
 export function uniqueFieldErrors(
-  blocks: Readonly<Record<string, { unique?: UniqueConstraint | undefined } | undefined>>,
+  blocks: object,
   answers: Readonly<Record<string, unknown>>,
   previous: ReadonlyArray<Readonly<Record<string, unknown>>>,
 ): UniqueFieldError[] {
   const errors: UniqueFieldError[] = [];
   for (const [id, block] of Object.entries(blocks)) {
-    const unique = block?.unique;
+    const unique = (block as { unique?: UniqueConstraint } | null | undefined)?.unique;
     if (!unique) continue;
     const next = uniqueComparable(unique.normalize, answers[id]);
     if (next === null) continue;

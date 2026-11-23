@@ -173,7 +173,7 @@ function readSide(operand: Operand | undefined, _fields: FieldBlock[]): { fieldI
   if (operand.kind === 'ref' && operand.ref.kind === 'answer') {
     const id = operand.ref.blockId;
     const part: Part = 'whole';
-    return { fieldId: id, part, n: '2', key: operand.ref.path };
+    return { fieldId: id, part, n: '2', ...(operand.ref.path !== undefined ? { key: operand.ref.path } : {}) };
   }
   if (operand.kind !== 'expr') return null;
   const expr = operand.expr;
@@ -183,7 +183,7 @@ function readSide(operand: Operand | undefined, _fields: FieldBlock[]): { fieldI
   if (expr.k === 'call' && (expr.fn === 'left' || expr.fn === 'right')) {
     const n = expr.args[1]?.k === 'lit' && expr.args[1].value.type === 'number' ? expr.args[1].value.value : '2';
     const inner = expr.args[0];
-    if (inner?.k === 'ref' && inner.ref.kind === 'answer') return { fieldId: inner.ref.blockId, part: expr.fn === 'left' ? 'first' : 'last', n, key: inner.ref.path };
+    if (inner?.k === 'ref' && inner.ref.kind === 'answer') return { fieldId: inner.ref.blockId, part: expr.fn === 'left' ? 'first' : 'last', n: String(n), ...(inner.ref.path !== undefined ? { key: inner.ref.path } : {}) };
     if (inner?.k === 'call' && inner.fn === 'option_code' && inner.args[0]?.k === 'ref' && inner.args[0].ref.kind === 'answer') {
       return { fieldId: inner.args[0].ref.blockId, part: expr.fn === 'left' ? 'first' : 'last', n };
     }

@@ -135,8 +135,7 @@ describe('registry views (FND-03)', () => {
 
   it('a dynamic table names its summary row in words, as the published table does', () => {
     const base = block('dynamic_table', 'tbl');
-    const config = base.config as { columns: Array<{ summary?: string; summaryLabel?: string }> };
-    const item = { ...base, config: { ...config, columns: config.columns.map((col, i) => ({ ...col, summary: i === 0 ? 'sum' : 'none', summaryLabel: undefined })) } } as typeof base;
+    const item = { ...base, config: { ...base.config, columns: base.config.columns.map((col, i) => ({ ...col, summary: i === 0 ? 'sum' as const : 'none' as const })) } };
     resetStore([item]);
     render(<EditBlock block={item} />);
     expect(screen.getByText('Sum')).toBeInTheDocument();

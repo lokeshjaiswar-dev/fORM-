@@ -7,6 +7,7 @@ import { type BlockId, type BlockOf, type BlockStyle, type DecimalString, type F
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
+import { labelString } from '@/fields/style';
 import { tileOf } from '@/fields/tiles';
 import { KEY_PATTERN, blockText, isField, placementOf, plainText, richDoc, takenKeys } from '@/lib/definition';
 import { patchBlockConfig } from '@/fields/configSink';
@@ -718,7 +719,7 @@ function ReadOnlyValue({ block }: { block: FieldBlock }) {
       <SelectField
         label={label}
         value={block.config.defaultOptionId ?? ''}
-        options={[{ value: '', label: '—' }, ...block.config.options.map((option) => ({ value: option.id, label: option.label }))]}
+        options={[{ value: '', label: '—' }, ...block.config.options.map((option) => ({ value: option.id, label: labelString(option.label) }))]}
         onChange={(id) => patchBlockConfig(block, { defaultOptionId: id ? (id as OptionId) : undefined })}
       />
     );
