@@ -53,6 +53,24 @@ services:
     depends_on:
       - api
 
+  demo-validate-api:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    command: ["node", "tools/demo-validate-api/server.mjs"]
+    volumes:
+      - ../..:/app:ro
+    ports:
+      - 3001:3001
+
+  submission-server:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    command: ["node", "tools/submission-server/server.mjs"]
+    volumes:
+      - ../..:/app
+    ports:
+      - 4090:4090
+
 volumes:
   pgdata:
   apidata:

@@ -4,6 +4,7 @@
  *   node tools/submission-server/server.mjs
  *
  * POST http://127.0.0.1:4090/hooks
+ * From another container: POST http://submission-server:4090/hooks
  * GET  http://127.0.0.1:4090/          every saved body
  *
  * Files land in tools/submission-server/inbox/.
@@ -38,7 +39,7 @@ createServer(async (req, res) => {
   }
   res.writeHead(404);
   res.end();
-}).listen(port, '127.0.0.1', () => {
-  console.log(`listening on http://127.0.0.1:${port}/hooks`);
+}).listen(port, '0.0.0.0', () => {
+  console.log(`listening on http://0.0.0.0:${port}/hooks`);
   console.log(`saved files in ${dir}`);
 });

@@ -96,12 +96,12 @@ function xmlNode(value: unknown, indent: string): string {
   return escapeXml(JSON.stringify(value));
 }
 
-/** https, or http only when the host is this machine (local testing). */
+/** https, or http only for this machine and the Compose submission catcher. */
 export function allowedDeliveryUrl(raw: string): URL | null {
   try {
     const url = new URL(raw);
     if (url.protocol === 'https:') return url;
-    if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) return url;
+    if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === 'submission-server' || url.hostname === '192.168.1.121')) return url;
   } catch {
     /* Not a URL. */
   }
@@ -130,7 +130,7 @@ export function renderDelivery(config: SubmissionApiConfig, fields: DeliveryFiel
 export async function deliverSubmission(config: SubmissionApiConfig | undefined, fields: DeliveryField[]): Promise<{ sent: boolean; status?: number; error?: string }> {
   if (!config?.enabled) return { sent: false };
   const url = allowedDeliveryUrl(config.url);
-  if (!url) return { sent: false, error: 'destination URL must be https, or http on localhost' };
+  if (!url) return { sent: false, error: 'destination URL must be https, or http on localhost or submission-server' };
   const rendered = renderDelivery(config, fields);
   if ('error' in rendered) return { sent: false, error: rendered.error };
   try {
