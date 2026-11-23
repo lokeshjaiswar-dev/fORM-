@@ -38,6 +38,11 @@ export type CanvasView<T extends AvailableType> = ComponentType<CanvasProps<T>>;
 const M = defineMessages('builder', {
   'canvas.dtable_add_column': 'Add column',
   'canvas.dtable_add_row': 'Add row',
+  'canvas.dtable_sum': 'Sum',
+  'canvas.dtable_average': 'Average',
+  'canvas.dtable_min': 'Min',
+  'canvas.dtable_max': 'Max',
+  'canvas.dtable_count': 'Count',
   'canvas.hidden': 'Hidden from respondents · filled from the URL parameter ‘{name}’',
   'canvas.hidden_utm': 'Hidden from respondents · filled from utm_{param}',
   'canvas.hidden_other': 'Hidden from respondents',
@@ -115,14 +120,14 @@ const DAY_LABEL = {
 } as const;
 
 const headingSize = { 1: 'text-[32px]', 2: 'text-[24px]', 3: 'text-[20px]' } as const;
-const NAME_PART: Record<NamePart, MessageId<'builder'>> = {
+export const NAME_PART: Record<NamePart, MessageId<'builder'>> = {
   prefix: M['canvas.name.prefix'],
   first: M['canvas.name.first'],
   middle: M['canvas.name.middle'],
   last: M['canvas.name.last'],
   suffix: M['canvas.name.suffix'],
 };
-const ADDRESS_PART: Record<AddressPart, MessageId<'builder'>> = {
+export const ADDRESS_PART: Record<AddressPart, MessageId<'builder'>> = {
   line1: M['canvas.address.line1'],
   line2: M['canvas.address.line2'],
   city: M['canvas.address.city'],
@@ -426,8 +431,8 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   file_upload: ({ block }) => (
-    <div className="fr-files pointer-events-none">
-      <FileDropzone disabled size="compact" multiple={block.config.maxFiles > 1} />
+    <div className="fr-files" inert>
+      <FileDropzone size="compact" multiple={block.config.maxFiles > 1} />
     </div>
   ),
   signature: ({ block }) => (
@@ -480,12 +485,11 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     );
   },
   consent: ({ block }) => (
-    <div className="fr-consent pointer-events-none">
+    <div className="fr-consent" inert>
       {block.config.items.map((item) => (
         <CheckboxField
           key={item.id}
-          className="fr-consent-item pointer-events-none"
-          disabled
+          className="fr-consent-item"
           label={plainText(item.label) || t(M['canvas.consent'])}
         />
       ))}
@@ -493,8 +497,8 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   ),
   appointment: ({ block }) => <AppointmentCanvas block={block} />,
   captcha: () => (
-    <div className="fr-captcha pointer-events-none">
-      <CheckboxField className="fr-captcha-box pointer-events-none" disabled label={t(M['canvas.captcha'])} />
+    <div className="fr-captcha" inert>
+      <CheckboxField className="fr-captcha-box" label={t(M['canvas.captcha'])} />
     </div>
   ),
   section: ({ block }) => <SectionCanvas block={block} />,
@@ -573,14 +577,14 @@ function AppointmentCanvas({ block }: { block: BlockOf<'appointment'> }) {
   const shown = slots.filter((s) => s.day === days[0]);
   const dayLabel = days[0] ? formatDate(days[0], 'D MMM YYYY') : t(M['canvas.appointment_day']);
   return (
-    <div className="fr-appointment pointer-events-none">
+    <div className="fr-appointment" inert>
       <label className="fr-appointment-date">
         <span className="fr-appointment-caption">{t(M['canvas.appointment_day'])}</span>
         <Select block={block} placeholder={dayLabel} />
       </label>
       <div className="fr-appointment-slots" role="list">
         {shown.map((slot) => (
-          <Chip key={slot.start} kind="filter" size="md" color="primary" disabled role="listitem">{formatTime(slot.time, 'h12')}</Chip>
+          <Chip key={slot.start} kind="filter" size="md" color="primary" role="listitem">{formatTime(slot.time, 'h12')}</Chip>
         ))}
       </div>
     </div>
@@ -592,9 +596,9 @@ function NumberCanvas({ block }: { block: BlockOf<'number'> }) {
   const slider = c.display === 'stepper' && c.min !== undefined && c.max !== undefined;
   if (!slider) return <TextBox block={block} placeholder={c.placeholder} prefix={c.prefix} suffix={c.suffix} value={c.defaultValue} />;
   const control = (
-    <div className="fr-slider pointer-events-none">
+    <div className="fr-slider" inert>
       <span className="fr-slider-edge">{c.min}</span>
-      <Slider min={Number(c.min)} max={Number(c.max)} step={Number(c.step ?? 1) || 1} defaultValue={[Number(c.min)]} disabled aria-hidden />
+      <Slider min={Number(c.min)} max={Number(c.max)} step={Number(c.step ?? 1) || 1} defaultValue={[Number(c.min)]} aria-hidden />
       <span className="fr-slider-edge">{c.max}</span>
     </div>
   );
@@ -749,6 +753,15 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
 }
 
 /* The builder preview of a dynamic table: the same frame and rows the respondent sees, with inert inputs. */
+/** The summary row's default wording, as the published table shows it. */
+const SUMMARY_LABEL = {
+  sum: 'canvas.dtable_sum',
+  average: 'canvas.dtable_average',
+  min: 'canvas.dtable_min',
+  max: 'canvas.dtable_max',
+  count: 'canvas.dtable_count',
+} as const;
+
 function DynamicTableCanvas({ block }: { block: BlockOf<'dynamic_table'> }) {
   const c = block.config;
   const rowCount = c.initialRows ?? Math.max(c.minRows, 1);
@@ -761,7 +774,7 @@ function DynamicTableCanvas({ block }: { block: BlockOf<'dynamic_table'> }) {
           key: `preview_${i}`,
           cells: c.columns.map((col) => <DynamicCellInput key={col.id} type={col.input} label={col.label} value="" readOnly />),
         }))}
-        footer={hasSummary ? c.columns.map((col) => (col.summary && col.summary !== 'none' ? (col.summaryLabel?.trim() || col.summary) : null)) : null}
+        footer={hasSummary ? c.columns.map((col) => (col.summary && col.summary !== 'none' ? (col.summaryLabel?.trim() || t(M[SUMMARY_LABEL[col.summary]])) : null)) : null}
         toolbar={c.allowAddColumns && c.addableInputs.length > 0 ? <Button type="button" variant="outline" size="sm">{t(M['canvas.dtable_add_column'])}</Button> : undefined}
         belowRows={<Button type="button" variant="ghost" size="sm">{t(M['canvas.dtable_add_row'])}</Button>}
       />

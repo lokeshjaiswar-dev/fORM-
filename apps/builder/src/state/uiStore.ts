@@ -50,7 +50,7 @@ export interface UiState {
 export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'save' | 'designOpen'> = {
   activeBlockId: null,
   inspectorOpen: false,
-  inspectorWidth: 400,
+  inspectorWidth: 360,
   sidebarOpen: true,
   designOpen: false,
   started: false,

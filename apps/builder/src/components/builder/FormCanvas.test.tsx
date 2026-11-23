@@ -34,6 +34,20 @@ describe('FormCanvas', () => {
     expect(doc().blocks[added as BlockId]).toMatchObject({ type: 'single_choice', config: { display: 'dropdown' } });
   });
 
+  it("a block's + opens its menu as an overlay outside the canvas and inserts right after that block", async () => {
+    const { container } = renderCanvas();
+    const user = userEvent.setup();
+    const insert = within(container.querySelector('[data-block-id="a"]') as HTMLElement).getByRole('button', { name: 'Insert block' });
+    await user.click(insert);
+    const menu = screen.getByRole('listbox').closest('[data-slash-menu]') as HTMLElement;
+    expect(container).not.toContainElement(menu);
+    expect(screen.getByPlaceholderText('Filter…')).toHaveFocus();
+    await user.keyboard('date');
+    await user.click(within(menu).getByRole('option', { name: 'Date' }));
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(doc().blocks[blockIds()[1] as BlockId]).toMatchObject({ type: 'date' });
+  });
+
   it('puts the caret at the end of the new field label', async () => {
     renderCanvas();
     const user = userEvent.setup();

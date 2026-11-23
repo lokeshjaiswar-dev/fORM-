@@ -619,10 +619,11 @@
   text-align: end;
 }
 
+/* Flush against the last word of the label: the asterisk reads as part of the label, not as a separate mark. */
 :where(.fr-root) .fr-required {
   display: inline-block;
-  margin-inline-start: 0.2em;
-  color: var(--fr-error);
+  margin-inline-start: 0;
+  color: var(--fr-required, var(--fr-error));
   font-size: 0.85em;
   font-weight: 800;
   line-height: 1;
@@ -638,8 +639,14 @@
 /* Block look colours are variables on the field. The design-system box otherwise keeps the theme tokens. */
 :where(.fr-root) .fr-field .ds-field {
   background-color: var(--fr-input-bg, var(--field-bg));
-  border-color: var(--fr-input-border, var(--border-control));
+  border-color: var(--fr-input-border, var(--fr-inputBorder, var(--border-control)));
   color: var(--fr-input-color, var(--text-normal));
+  transition: border-color 120ms ease;
+}
+
+/* The light border darkens a step under the pointer, so a field still reads as something to click. */
+:where(.fr-root) .fr-field .ds-field:hover:not(:focus-within, [data-readonly], [data-disabled]) {
+  border-color: var(--fr-input-border, color-mix(in srgb, var(--fr-inputBorder) 70%, var(--fr-text)));
 }
 
 :where(.fr-root) .fr-field .ds-field-input::placeholder,
@@ -647,6 +654,24 @@
 :where(.fr-root) .fr-field input.ds-field::placeholder {
   color: var(--fr-placeholder, var(--text-muted));
   opacity: 1;
+}
+
+/*
+ * Choice, checkbox and consent labels read as answers: the form's text colour (not the design system's fixed ink, so
+ * they follow dark themes) and one step under the question, larger than the system's compact 13px.
+ */
+:where(.fr-root) :is([data-slot='radio-field'], [data-slot='checkbox-field']) > label > span:first-child {
+  color: var(--fr-input-color, var(--fr-text));
+  font-size: 0.9375em;
+  line-height: 1.4;
+}
+
+/*
+ * An empty select shows its placeholder in the placeholder colour, as text inputs do. The phone country and the
+ * appointment day always hold a value on the published form, so their preview text keeps the answer colour.
+ */
+:where(.fr-root) [data-slot='select-trigger'][data-placeholder]:not(:is(.fr-phone-country, .fr-appointment-date) *) {
+  color: var(--fr-placeholder, var(--text-muted));
 }
 
 :where(.fr-root) .fr-field [data-slot='input-prefix'],
@@ -658,6 +683,14 @@
   margin: -2px 0 8px;
   color: var(--fr-muted);
   font-size: 0.875em;
+}
+
+/*
+ * With the label on top, the description sits directly under it (no gap: they read as one unit) and the 8px step
+ * comes before the control. Side labels keep their grid alignment, and a visually hidden label leaves no gap to close.
+ */
+.fr-root:not([data-label-align='left'], [data-label-align='right']) .fr-label:not(.fr-sr-only) + .fr-description {
+  margin-top: -6px;
 }
 
 :where(.fr-root) .fr-error {
@@ -1285,6 +1318,25 @@
 :where(.fr-root) .fr-matching-row {
   display: grid;
   gap: 0.25rem;
+}
+
+/*
+ * Labels inside a control (a matching prompt, a card, Start / End) sit one step below the question: regular weight,
+ * a touch smaller, close to their own input. They never take the question's custom label size or weight, so the
+ * question always reads first.
+ */
+:where(.fr-root) :is(.fr-matching-row, .fr-sum-row, .fr-cardsort-row) > .fr-label {
+  margin: 0;
+  color: var(--fr-text);
+  font-size: 0.9375em;
+  font-weight: 400;
+}
+
+:where(.fr-root) :is(.fr-date-range, .fr-number-range) > .fr-label {
+  margin: 0;
+  color: var(--fr-muted);
+  font-size: 0.875em;
+  font-weight: 400;
 }
 
 :where(.fr-root) .fr-likert-wrap {

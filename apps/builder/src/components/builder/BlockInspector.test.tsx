@@ -41,20 +41,40 @@ beforeEach(() => {
 });
 
 describe('BlockInspector sections', () => {
-  it('shows the registry sections a block has: General, Options, Validation, Logic, Privacy', async () => {
+  it('has three tabs, General, Design and Logic, with the options, validation and privacy on General', () => {
     open('color');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Options', 'Validation', 'Logic', 'Privacy']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Design', 'Logic']);
+    const panel = screen.getByRole('tabpanel');
+    const headings = within(panel).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Options', 'Customization', 'Validation', 'Advanced', 'Privacy']);
+    expect(within(panel).getByRole('button', { name: 'Add option' })).toBeInTheDocument();
   });
 
-  it('content blocks have General and Logic only', () => {
+  it('content blocks have General, Design and Logic only', () => {
     resetStore([block('heading', 'h')]);
     open('h');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Design', 'Logic']);
+  });
+
+  it('a hidden field has no Design tab: it never shows on the form', () => {
+    resetStore([block('hidden', 'utm')]);
+    open('utm');
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Logic']);
+  });
+
+  it('keeps the field key folded under Advanced until opened', async () => {
+    resetStore([block('short_text', 'name')]);
+    const user = open('name');
+    expect(screen.queryByRole('textbox', { name: 'Field key' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(screen.getByRole('button', { name: 'Advanced' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('textbox', { name: 'Field key' })).toBeInTheDocument();
   });
 
   it('edits the field key, refusing a key that is taken or malformed', async () => {
     resetStore([block('short_text', 'name'), block('email', 'mail')]);
     const user = open('name');
+    await user.click(screen.getByRole('button', { name: 'Advanced' }));
     const key = screen.getByRole('textbox', { name: 'Field key' });
     await user.clear(key);
     await user.type(key, 'full_name');
@@ -67,7 +87,8 @@ describe('BlockInspector sections', () => {
 });
 
 describe('BlockInspector options', () => {
-  const tab = async (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole('tab', { name: 'Options' }));
+  /* The options are on General: nothing to open first. */
+  const tab = async (_user: ReturnType<typeof userEvent.setup>) => undefined;
 
   it('adds an option with a fresh id, numbered after the current count', async () => {
     const user = open('color');
@@ -134,8 +155,13 @@ describe('BlockInspector options', () => {
   it('moves options and toggles Other', async () => {
     const user = open('color');
     await tab(user);
-    await user.click(screen.getByRole('button', { name: 'Move option 1 down' }));
+    expect(screen.queryByRole('button', { name: /Move option/ })).not.toBeInTheDocument();
+    const handle = screen.getByRole('button', { name: /Reorder option 1/ });
+    handle.focus();
+    await user.keyboard('{ArrowDown}');
     expect(options().map((o) => o.id)).toEqual(['o2', 'o1', 'o3']);
+    await user.keyboard('{ArrowUp}');
+    expect(options().map((o) => o.id)).toEqual(['o1', 'o2', 'o3']);
     await user.click(screen.getByRole('switch', { name: 'Add an “Other” option' }));
     expect(get('color').config['other']).toEqual({ enabled: true, textRequired: false });
   });
@@ -145,7 +171,6 @@ describe('BlockInspector validation', () => {
   it("B12: an invalid pattern '[' shows an inline error and does not crash", async () => {
     resetStore([block('short_text', 'name', { label: 'Name' })]);
     const user = open('name');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     const pattern = screen.getByRole('textbox', { name: 'Pattern (regular expression)' });
     await user.type(pattern, '[[');
     expect(get('name').config['pattern']).toEqual({ source: '[' });
@@ -157,7 +182,6 @@ describe('BlockInspector validation', () => {
   it('explains that RE2 does not support lookahead', async () => {
     resetStore([block('short_text', 'name', { label: 'Name' })]);
     const user = open('name');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     expect(screen.getByText(/RE2, not JavaScript or Python/)).toBeInTheDocument();
     const pattern = screen.getByRole('textbox', { name: 'Pattern (regular expression)' });
     await user.type(pattern, '(?=a)a');
@@ -165,21 +189,38 @@ describe('BlockInspector validation', () => {
     expect(screen.getByText(/Lookahead and lookbehind are not supported in RE2/)).toBeInTheDocument();
   });
 
-  it('required and read-only are toggles; both together warn (B27)', async () => {
+  it('required and read-only are field type toggles on General; both together warn (B27)', async () => {
     resetStore([block('short_text', 'name')]);
     const user = open('name');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
-    await user.click(screen.getByRole('switch', { name: 'Required' }));
+    await user.click(screen.getByRole('button', { name: 'Required' }));
     expect(get('name')['required']).toBe(true);
-    await user.click(screen.getByRole('switch', { name: /Read-only/ }));
+    expect(screen.getByRole('button', { name: 'Required' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Read-only' }));
     expect(get('name')['readOnly']).toBe(true);
     expect(screen.getByRole('alert')).toHaveTextContent('read-only field needs a default value');
+  });
+
+  it('Hidden is a third field type toggle: it conceals the field from respondents (PROP-07) and warns when required', async () => {
+    resetStore([block('short_text', 'ref')]);
+    const user = open('ref');
+    const hidden = screen.getByRole('button', { name: 'Hidden' });
+    await user.click(hidden);
+    expect(get('ref')['concealed']).toBe(true);
+    expect(hidden).toHaveAttribute('aria-pressed', 'true');
+    const stored = screen.getByRole('textbox', { name: 'Value stored for this field' });
+    await user.type(stored, 'REF-1');
+    expect(get('ref').config['defaultValue']).toEqual({ kind: 'static', value: 'REF-1' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Required' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('cannot fill a hidden field');
+    await user.click(hidden);
+    expect(get('ref')).not.toHaveProperty('concealed');
+    expect(get('ref')['required']).toBe(true);
   });
 
   it('writes a unique constraint', async () => {
     resetStore([block('short_text', 'code')]);
     const user = open('code');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     expect(screen.queryByRole('textbox', { name: 'Input mask' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('switch', { name: 'Must be unique on this form' }));
     expect(get('code')['unique']).toEqual({ normalize: 'trim_lower' });
@@ -188,7 +229,6 @@ describe('BlockInspector validation', () => {
   it('counts long text in words', async () => {
     resetStore([block('long_text', 'bio')]);
     const user = open('bio');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await pick(user, 'Count', 'Words');
     const min = screen.getByRole('textbox', { name: 'Minimum characters' });
     await user.type(min, '10');
@@ -198,7 +238,6 @@ describe('BlockInspector validation', () => {
   it('toggles email confirmation and allowed domains', async () => {
     resetStore([block('email', 'mail')]);
     const user = open('mail');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.click(screen.getByRole('switch', { name: 'Ask the respondent to type the email twice' }));
     await user.type(screen.getByRole('textbox', { name: 'Allowed domains' }), 'acme.com');
     expect(get('mail').config['confirm']).toBe(true);
@@ -208,7 +247,6 @@ describe('BlockInspector validation', () => {
   it('enables API validation and stores an https URL', async () => {
     resetStore([block('short_text', 'emp_name')]);
     const user = open('emp_name');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.click(screen.getByRole('switch', { name: 'Validate with an API' }));
     expect(get('emp_name').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name', method: 'POST', parser: 'json' });
     fireEvent.change(screen.getByRole('textbox', { name: 'API URL' }), { target: { value: 'https://hr.example.com/names' } });
@@ -220,7 +258,6 @@ describe('BlockInspector validation', () => {
   it('enables API validation on any answer field', async () => {
     resetStore([block('email', 'mail')]);
     const user = open('mail');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.click(screen.getByRole('switch', { name: 'Validate with an API' }));
     expect(get('mail').apiValidation).toEqual({ url: 'http://localhost:3001/verify-name', method: 'POST', parser: 'json' });
   });
@@ -228,7 +265,6 @@ describe('BlockInspector validation', () => {
   it('sets a minimum age on a date field', async () => {
     resetStore([block('date', 'dob')]);
     const user = open('dob');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.type(screen.getByRole('textbox', { name: 'Minimum age' }), '18');
     expect(get('dob').config['limits']).toEqual({ age: { min: 18 } });
   });
@@ -236,7 +272,6 @@ describe('BlockInspector validation', () => {
   it('a number limit is written only once it is a decimal', async () => {
     resetStore([block('number', 'n')]);
     const user = open('n');
-    await user.click(screen.getByRole('tab', { name: 'Validation' }));
     const min = screen.getByRole('textbox', { name: 'Minimum' });
     await user.type(min, '1.');
     expect(get('n').config['min']).toBe('1');
@@ -393,6 +428,7 @@ describe('BlockInspector look', () => {
   it('a half-typed hex code leaves the stored colour alone; a full one or an empty box writes', async () => {
     resetStore([block('short_text', 'name', { label: 'Name', style: { labelColor: '#ff0000' } })]);
     const user = open('name');
+    await user.click(screen.getByRole('tab', { name: 'Design' }));
     const box = screen.getByRole('textbox', { name: 'Question colour hex code' });
     await user.type(box, '{Backspace}');
     expect(box).toHaveValue('#ff000');
@@ -461,7 +497,6 @@ describe('dropdown fill toggle', () => {
 
   it('turns on and adds an empty field filled from the option value', async () => {
     const user = open('menu');
-    await user.click(screen.getByRole('tab', { name: 'Options' }));
     const toggle = screen.getByRole('switch', { name: 'Fill a field from the selected option' });
     expect(toggle).not.toBeChecked();
     await user.click(toggle);

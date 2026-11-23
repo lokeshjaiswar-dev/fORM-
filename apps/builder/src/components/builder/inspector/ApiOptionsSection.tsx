@@ -22,7 +22,7 @@ import { ToggleRow } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
   'inspector.api_options': 'Load options from an API',
-  'inspector.api_options_hint': 'The live form fetches this list. Static options below are the fallback.',
+  'inspector.api_options_hint': 'The live form fetches this list. The options above are the fallback.',
   'inspector.api_url_hint_options': 'GET or POST this URL. The field answer is not sent.',
   'inspector.api_query_hint_options': 'Optional extra query values.',
   'inspector.api_body_hint_options': 'Optional extra JSON fields.',

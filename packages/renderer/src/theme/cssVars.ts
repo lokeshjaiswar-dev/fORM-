@@ -16,7 +16,8 @@ export const DEFAULT_COLORS: Readonly<Record<ThemeColorToken, string>> = {
   accent: '#2383e2',
   accentText: '#ffffff',
   inputBg: '#ffffff',
-  inputBorder: '#8c8b87',
+  /* A light hairline: fields read as calm boxes, and the focus ring (accent) carries the emphasis. */
+  inputBorder: '#dfdedb',
   inputText: '#37352f',
   error: '#c4302b',
   success: '#2f7350',
@@ -27,6 +28,13 @@ const FONTS: Readonly<Record<string, string>> = {
   georgia: 'Georgia, "Times New Roman", serif',
   mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
 };
+
+/*
+ * The required asterisk is one small glyph that must read as "red" at a glance, so by default it is a true red rather
+ * than the deeper error red tuned for longer error text. #dc2626 still meets WCAG AA (4.8:1) on white. A theme that
+ * sets its own error colour gets that colour on the asterisk too.
+ */
+const REQUIRED_MARK = '#dc2626';
 
 const RADIUS: Readonly<Record<string, string>> = { none: '0px', sm: '4px', md: '6px', lg: '10px', full: '999px' };
 const GAP: Readonly<Record<ThemeTokens['density'], string>> = { compact: '16px', comfortable: '24px', spacious: '32px' };
@@ -64,6 +72,8 @@ export function themeCssVars(tokens: ThemeTokens): CSSProperties {
     const value = tokens.colors[token];
     vars[tokenVar(token)] = typeof value === 'string' && HEX.test(value) ? value : DEFAULT_COLORS[token];
   }
+  const error = tokens.colors.error;
+  vars['--fr-required'] = typeof error === 'string' && HEX.test(error) ? error : REQUIRED_MARK;
   const accentText = tokens.colors.accentText;
   if (!(typeof accentText === 'string' && HEX.test(accentText))) vars[tokenVar('accentText')] = readableOn(vars[tokenVar('accent')] as string);
   vars['--fr-font'] = fontStack(tokens.typography.body) ?? (FONTS['inter'] as string);
