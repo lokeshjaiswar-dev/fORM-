@@ -4,7 +4,8 @@ import { useDocumentStore } from '@/state/documentStore';
 import { useOpsStore, type LocalOps } from '@/state/opsStore';
 import type { SaveState } from '@/state/uiStore';
 
-export const AUTOSAVE_MS = 400;
+/** Quiet period after the last edit before the draft is written. Keystrokes inside this window share one save. */
+export const AUTOSAVE_MS = 3000;
 
 /** Every autosave write in this page, in order, so a reader that opens next sees the last one. */
 let writes: Promise<void> = Promise.resolve();

@@ -51,6 +51,36 @@ export function formRoutes(app: FastifyInstance, deps: { db: Db }): void {
     },
   );
 
+  r.delete(
+    '/v1/forms/:id',
+    {
+      config: { auth: 'user', perm: 'forms.edit' },
+      schema: {
+        tags: ['forms'],
+        summary: 'Move a form to the trash so it leaves the active list',
+        security: [{ session: [], org: [] }, { devUser: [], org: [] }],
+        params: z.object({ id: z.uuid() }),
+        response: { 200: z.object({ id: z.uuid() }) },
+      },
+    },
+    async (request) => {
+      const { id } = request.params;
+      const tenant = tenantOf(request);
+      const userId = accountOf(request).userId;
+      const now = new Date();
+      const updated = await withTenant(deps.db, tenant, async (tx) => {
+        const rows = await tx
+          .update(forms)
+          .set({ lifecycle: 'trashed', trashedAt: now, updatedAt: now, updatedBy: userId })
+          .where(eq(forms.id, id))
+          .returning({ id: forms.id });
+        return rows[0];
+      });
+      if (!updated) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
+      return { id: updated.id };
+    },
+  );
+
   r.post(
     '/v1/forms',
     {
@@ -247,7 +277,9 @@ export function formRoutes(app: FastifyInstance, deps: { db: Db }): void {
         if (inputs.some((item) => item.id === id)) continue;
         const row = byId.get(id);
         if (!row) continue;
-        const parsed = FormDefinitionSchema.safeParse(row.draft);
+        const raw = row.draft && typeof row.draft === 'object' ? { ...(row.draft as Record<string, unknown>) } : row.draft;
+        if (raw && typeof raw === 'object') delete (raw as Record<string, unknown>).media;
+        const parsed = FormDefinitionSchema.safeParse(raw);
         if (!parsed.success) throw new ProblemError('VALIDATION_FAILED', `The draft for “${row.title}” cannot be merged.`);
         inputs.push({ id: row.id, title: row.title, definition: parsed.data as FormDefinition });
       }

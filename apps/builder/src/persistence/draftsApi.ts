@@ -49,8 +49,15 @@ export function listRemoteForms(): Promise<RemoteForm[] | null> {
   });
 }
 
-export function getRemoteDraft(id: string): Promise<RemoteDraft | null> {
-  return optional(() => orgApi('GET', `/v1/forms/${id}/draft`, draftSchema));
+/** Reads the org draft. Null when the form is missing or the session cannot read it. Network failure throws. */
+export async function getRemoteDraft(id: string): Promise<RemoteDraft | null> {
+  if (!signedIn()) return null;
+  try {
+    return await orgApi('GET', `/v1/forms/${id}/draft`, draftSchema);
+  } catch (err) {
+    if (err instanceof ApiProblem && (err.status === 401 || err.status === 404)) return null;
+    throw err;
+  }
 }
 
 async function writeDraft(id: string, draft: unknown, title: string): Promise<void> {
@@ -60,16 +67,17 @@ async function writeDraft(id: string, draft: unknown, title: string): Promise<vo
 
 /**
  * Ensures the form row exists, then writes the v2 definition. Local FormOps (open/closed/password) are not sent.
- * Offline or unsigned-in: no-op. Other API refusals surface so autosave can retry.
+ * Network failure throws `ApiUnreachable` so the caller can keep the draft in this browser.
  */
-export async function putRemoteDraft(id: string, draft: unknown, title: string): Promise<void> {
-  try {
-    await writeDraft(id, draft, title);
-  } catch (err) {
-    if (err instanceof ApiUnreachable) return;
-    if (err instanceof ApiProblem) return;
-    throw err;
-  }
+export function putRemoteDraft(id: string, draft: unknown, title: string): Promise<void> {
+  return writeDraft(id, draft, title);
+}
+
+const deletedSchema = z.object({ id: z.string() });
+
+/** Moves the form to the trash. Network failure throws so the caller can delete the browser copy instead. */
+export function deleteRemoteForm(id: string): Promise<void> {
+  return orgApi('DELETE', `/v1/forms/${id}`, deletedSchema).then(() => undefined);
 }
 
 /** Same write as autosave, but refusals are not swallowed — used by Publish. */
