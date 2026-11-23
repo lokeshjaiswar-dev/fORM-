@@ -32,16 +32,16 @@ test('three pages: logic hides a required field, the form submits, and the hidde
   await label(page, 'City');
 
   await openSettings(page, 1);
-  await page.getByRole('tab', { name: 'Validation' }).click();
-  await page.getByRole('switch', { name: 'Required' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
+  await page.getByRole('button', { name: 'Required' }).click();
   await page.getByRole('tab', { name: 'Logic' }).click();
   await page.getByRole('button', { name: 'Add a rule' }).click();
   await expect(page.getByRole('button', { name: 'Attending' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Value' }).fill('yes');
   await expect(page.getByText('Hidden until a rule shows it').first()).toBeVisible();
   await openSettings(page, 2);
-  await page.getByRole('tab', { name: 'Validation' }).click();
-  await page.getByRole('switch', { name: 'Required' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
+  await page.getByRole('button', { name: 'Required' }).click();
 
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const submissions = await recordSubmissions(page);
@@ -91,8 +91,8 @@ test('the preview has no serious or critical axe violations, before and after va
     await label(page, text);
   }
   await openSettings(page, 0);
-  await page.getByRole('tab', { name: 'Validation' }).click();
-  await page.getByRole('switch', { name: 'Required' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
+  await page.getByRole('button', { name: 'Required' }).click();
 
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Submit', exact: true })).toBeVisible();

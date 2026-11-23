@@ -1,5 +1,8 @@
-import { useRef } from 'react';
-import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2 } from 'lucide-react';
+import { useRef, type ReactNode } from 'react';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type Modifier } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { themeImageUrl } from '@form/renderer';
 import type { AssetId, BlockId, BlockOf, ChoiceOption, ConditionId, OptionId, Rule, RuleId } from '@form/schema';
@@ -8,28 +11,26 @@ import { labelString } from '@/fields/style';
 import { fileToThemeImage, storeThemeImage } from '@/components/builder/design/uploads';
 import { applyPatch } from '@/lib/applyPatch';
 import { APP_IDS, blockText, inlineDoc } from '@/lib/definition';
-import { uid } from '@/lib/utils';
+import { cn, uid } from '@/lib/utils';
 import { patchBlockConfig } from '@/fields/configSink';
 import { placeBeside, removeRule, setRule, updateBlock } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import { Button, Input, Label } from '@dmacq/ui';
+import { Button, Input } from '@dmacq/ui';
 import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSection';
 import { ToggleRow } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
-  'options.title': 'Options',
   'options.add': 'Add option',
   'options.new': 'Option {n}',
   'options.label': 'Label of option {n}',
   'options.code': 'Export code of option {n}',
-  'options.code_placeholder': 'Code (optional)',
+  'options.code_placeholder': 'Code',
   'options.value': 'Value of option {n}',
   'options.value_placeholder': 'Value',
   'options.fill': 'Fill a field from the selected option',
   'options.fill_hint': 'The field stays empty until an option is chosen, then it shows that option’s value.',
-  'options.up': 'Move option {n} up',
-  'options.down': 'Move option {n} down',
+  'options.drag': 'Reorder option {n}: drag, or use the up and down arrow keys',
   'options.remove': 'Remove option {n}',
   'options.other': 'Add an “Other” option',
   'options.shuffle': 'Shuffle the options for each respondent',
@@ -89,50 +90,41 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
     write([...options, { id: APP_IDS.newId() as OptionId, label: t(M['options.new'], { n }) }]);
   };
 
+  const valueColumn = block.type === 'single_choice' && block.config.display === 'dropdown';
   return (
-    <div className="space-y-2">
-      <ApiOptionsSection block={block} />
-      <div className="flex items-center justify-between">
-        <Label>{t(M['options.title'])}</Label>
-        <Button type="button" variant="ghost" size="xs" onClick={add}>
-          <Plus className="size-3" /> {t(M['options.add'])}
+    <>
+      <div className="space-y-2">
+        <SortableOptions ids={options.map((o) => o.id)} onMove={move}>
+          {options.map((opt, i) => (
+            <SortableOption key={opt.id} id={opt.id} index={i} count={options.length} onMove={move}>
+              {images ? <OptionImage opt={opt} index={i} onChange={(image) => edit(i, { image })} /> : null}
+              <Input className="min-w-0 flex-1" aria-label={t(M['options.label'], { n: i + 1 })} value={labelString(opt.label)} onChange={(e) => edit(i, { label: e.target.value })} />
+              <Input
+                aria-label={t(valueColumn ? M['options.value'] : M['options.code'], { n: i + 1 })}
+                title={t(M['options.codes_hint'])}
+                className="w-[76px] shrink-0 text-[12px]"
+                placeholder={t(valueColumn ? M['options.value_placeholder'] : M['options.code_placeholder'])}
+                value={opt.code ?? ''}
+                onChange={(e) => edit(i, { code: e.target.value.slice(0, 200) })}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label={t(M['options.remove'], { n: i + 1 })}
+                disabled={options.length <= 1}
+                onClick={() => remove(opt.id)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </SortableOption>
+          ))}
+        </SortableOptions>
+        <Button type="button" variant="outline" size="sm" className="w-full border-dashed text-muted-foreground hover:text-foreground" onClick={add}>
+          <Plus className="size-3.5" /> {t(M['options.add'])}
         </Button>
       </div>
-      <ul className="space-y-1.5">
-        {options.map((opt, i) => (
-          <li key={opt.id} className="flex items-center gap-1">
-            <div className="flex flex-col">
-              <Button type="button" variant="ghost" size="icon-xs" aria-label={t(M['options.up'], { n: i + 1 })} onClick={() => move(i, i - 1)}>
-                <ChevronUp className="size-3" />
-              </Button>
-              <Button type="button" variant="ghost" size="icon-xs" aria-label={t(M['options.down'], { n: i + 1 })} onClick={() => move(i, i + 1)}>
-                <ChevronDown className="size-3" />
-              </Button>
-            </div>
-            {images ? <OptionImage opt={opt} index={i} onChange={(image) => edit(i, { image })} /> : null}
-            <Input aria-label={t(M['options.label'], { n: i + 1 })} value={labelString(opt.label)} onChange={(e) => edit(i, { label: e.target.value })} />
-            <Input
-              aria-label={t(block.type === 'single_choice' && block.config.display === 'dropdown' ? M['options.value'] : M['options.code'], { n: i + 1 })}
-              className="w-[96px] shrink-0"
-              placeholder={t(block.type === 'single_choice' && block.config.display === 'dropdown' ? M['options.value_placeholder'] : M['options.code_placeholder'])}
-              value={opt.code ?? ''}
-              onChange={(e) => edit(i, { code: e.target.value.slice(0, 200) })}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t(M['options.remove'], { n: i + 1 })}
-              disabled={options.length <= 1}
-              onClick={() => remove(opt.id)}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </li>
-        ))}
-      </ul>
-      <p className="text-[12px] text-muted-foreground">{t(M['options.codes_hint'])}</p>
-      {block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
       {block.type !== 'ranking' && block.type !== 'matching' && block.type !== 'constant_sum' && block.type !== 'maxdiff' ? (
         <ToggleRow
           label={t(M['options.other'])}
@@ -147,7 +139,67 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
           onChange={(on) => patchBlockConfig(block, { shuffle: on ? (block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? true : { keepLast: 0 }) : undefined })}
         />
       ) : null}
-    </div>
+      {block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
+      <ApiOptionsSection block={block} />
+    </>
+  );
+}
+
+/** Options move up and down only; a sideways drag never shifts a row out of the column. */
+const VERTICAL_ONLY: Modifier = ({ transform }) => ({ ...transform, x: 0 });
+
+/** The options list, sorted by dragging a row's handle. Only vertical moves inside the list are allowed. */
+function SortableOptions({ ids, onMove, children }: { ids: OptionId[]; onMove: (from: number, to: number) => void; children: ReactNode }) {
+  /* A few pixels of travel before a drag starts, so a click on the handle (to focus it) never moves anything. */
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    onMove(ids.indexOf(active.id as OptionId), ids.indexOf(over.id as OptionId));
+  };
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[VERTICAL_ONLY]} onDragEnd={onDragEnd}>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        <ul className="relative space-y-1.5">{children}</ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+/**
+ * One option row with its six-dot handle. Pointer users drag the handle; keyboard users focus it and press the up or
+ * down arrow to move the option one place.
+ */
+function SortableOption({ id, index, count, onMove, children }: { id: OptionId; index: number; count: number; onMove: (from: number, to: number) => void; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn('relative flex items-center gap-1 rounded-md bg-background', isDragging && 'z-10 shadow-md')}
+    >
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={t(M['options.drag'], { n: index + 1 })}
+        aria-roledescription={undefined}
+        aria-describedby={undefined}
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+          e.preventDefault();
+          const to = index + (e.key === 'ArrowUp' ? -1 : 1);
+          if (to >= 0 && to < count) onMove(index, to);
+        }}
+        className={cn(
+          '-ml-1 flex h-8 w-5 shrink-0 touch-none items-center justify-center rounded-sm text-muted-foreground/70 hover:bg-state-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
+          isDragging ? 'cursor-grabbing' : 'cursor-grab',
+        )}
+      >
+        <GripVertical aria-hidden className="size-4" />
+      </button>
+      {children}
+    </li>
   );
 }
 

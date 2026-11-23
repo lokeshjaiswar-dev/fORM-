@@ -28,6 +28,11 @@
   opacity: 1;
 }
 
+/* An empty select reads as a placeholder, like an empty text input (not the phone country or appointment day: those show real defaults). */
+.fr-root.fr-builder-canvas [data-canvas-field] [data-slot='select-trigger'][data-placeholder]:not(:is(.fr-phone-country, .fr-appointment-date) *) {
+  color: var(--fr-placeholder, var(--text-muted));
+}
+
 .fr-root.fr-builder-canvas [data-canvas-field] [data-slot='input-prefix'],
 .fr-root.fr-builder-canvas [data-canvas-field] [data-slot='input-suffix'] {
   color: var(--fr-input-color, var(--fr-inputText, currentColor));

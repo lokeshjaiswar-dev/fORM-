@@ -103,9 +103,7 @@ describe('registry views (FND-03)', () => {
     resetStore(AVAILABLE_TYPES.map((t) => (t === type ? item : block(t, `b_${t}`, { label: `Label ${t}` }))));
     useUiStore.getState().openInspector(`b_${type}` as BlockId);
     render(<BlockInspector />);
-    const view = INSPECTOR[type] as { options?: unknown };
-    const field = isField(item);
-    const expected = ['General', ...(view.options ? ['Options'] : []), ...(field ? ['Validation'] : []), 'Logic', ...(field ? ['Privacy'] : [])];
+    const expected = ['General', ...(type === 'hidden' || type === 'divider' ? [] : ['Design']), 'Logic'];
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(expected);
     const user = userEvent.setup();
     for (const name of expected) {
@@ -125,6 +123,24 @@ describe('registry views (FND-03)', () => {
     await user.clear(input);
     expect((doc().blocks['s1' as BlockId] as { config: { name: string } }).config.name).toBe('');
     expect(input).toHaveValue('');
+  });
+
+  it('a hidden (concealed) field stays editable on the canvas, badged as hidden from respondents', () => {
+    const item = block('short_text', 'ref', { label: 'Reference', concealed: true });
+    resetStore([item]);
+    render(<EditBlock block={item} />);
+    expect(screen.getByText('Hidden from respondents')).toBeInTheDocument();
+    expect(screen.getByText('Reference')).toBeInTheDocument();
+  });
+
+  it('a dynamic table names its summary row in words, as the published table does', () => {
+    const base = block('dynamic_table', 'tbl');
+    const config = base.config as { columns: Array<{ summary?: string; summaryLabel?: string }> };
+    const item = { ...base, config: { ...config, columns: config.columns.map((col, i) => ({ ...col, summary: i === 0 ? 'sum' : 'none', summaryLabel: undefined })) } } as typeof base;
+    resetStore([item]);
+    render(<EditBlock block={item} />);
+    expect(screen.getByText('Sum')).toBeInTheDocument();
+    expect(screen.queryByText('sum')).not.toBeInTheDocument();
   });
 
   it('a block of a type this builder cannot edit is kept and labelled', () => {

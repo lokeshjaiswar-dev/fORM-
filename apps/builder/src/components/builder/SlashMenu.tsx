@@ -14,19 +14,24 @@ const M = defineMessages('builder', {
   'slash.empty': 'No results',
 });
 
-/** The slash menu: the registry palette (FND-03), filtered by label, id and keywords. */
+/**
+ * The slash menu: the registry palette (FND-03), filtered by label, id and keywords. By default it drops down under
+ * its parent and closes on a press outside; `floating` is for a menu placed by a popover, which does both itself.
+ */
 export function SlashMenu({
   open,
   query,
   onQueryChange,
   onSelect,
   onClose,
+  floating = false,
 }: {
   open: boolean;
   query: string;
   onQueryChange?: (q: string) => void;
   onSelect: (tile: Tile) => void;
   onClose: () => void;
+  floating?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,7 +54,7 @@ export function SlashMenu({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || floating) return;
     function onPointerDown(e: PointerEvent) {
       const target = e.target as Node | null;
       if (rootRef.current?.contains(target)) return;
@@ -62,7 +67,7 @@ export function SlashMenu({
       window.clearTimeout(timer);
       document.removeEventListener('pointerdown', onPointerDown);
     };
-  }, [open, onClose]);
+  }, [open, floating, onClose]);
 
   if (!open) return null;
 
@@ -70,7 +75,7 @@ export function SlashMenu({
     <div
       ref={rootRef}
       data-slash-menu=""
-      className="absolute left-0 top-full z-40 mt-1 w-[324px]"
+      className={floating ? 'w-[324px]' : 'absolute left-0 top-full z-40 mt-1 w-[324px]'}
       style={{ color: 'var(--popover-foreground)', fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: '20px' }}
     >
       <Command label={t(M['slash.label'])} shouldFilter={false}>

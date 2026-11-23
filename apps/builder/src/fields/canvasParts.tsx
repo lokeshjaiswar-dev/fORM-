@@ -6,7 +6,11 @@ import type { BlockStyle, ChoiceOption } from '@form/schema';
 import { t } from '@/i18n';
 import { inputStyle, labelString } from '@/fields/style';
 
-/* Static previews of respondent controls, using the same renderer classes as fill/preview. */
+/*
+ * Static previews of respondent controls, using the same renderer classes and components as fill/preview. They are
+ * `inert` (no pointer, focus or tab stop) rather than `disabled`, so they look exactly like the live form instead of
+ * greyed out.
+ */
 
 const M = defineMessages('builder', {
   'canvas.answer': 'Your answer',
@@ -63,17 +67,17 @@ export function OptionList({
 }) {
   if (pictures) {
     return (
-      <div className="fr-image-choices pointer-events-none" style={{ '--fr-columns': columns ?? 2 } as CSSProperties}>
+      <div className="fr-image-choices" inert style={{ '--fr-columns': columns ?? 2 } as CSSProperties}>
         {options.map((opt) => {
           const src = themeImageUrl(opt.image?.assetId);
           return (
             <div key={opt.id} className="fr-image-choice">
               {shape === 'round' ? (
-                <RadioGroup disabled>
-                  <RadioField value={opt.id} label="" disabled />
+                <RadioGroup>
+                  <RadioField value={opt.id} label="" />
                 </RadioGroup>
               ) : (
-                <CheckboxField label="" disabled />
+                <CheckboxField label="" />
               )}
               {src ? <img src={src} alt="" /> : <span className="fr-image-choice-fallback" />}
               <span>{labelString(opt.label)}</span>
@@ -89,17 +93,17 @@ export function OptionList({
   ];
   if (shape === 'round') {
     return (
-      <RadioGroup className="fr-choices pointer-events-none" style={{ '--fr-columns': columns ?? 1 } as CSSProperties} disabled>
+      <RadioGroup className="fr-choices" inert style={{ '--fr-columns': columns ?? 1 } as CSSProperties}>
         {labels.map((opt) => (
-          <RadioField key={opt.id} value={opt.id} label={opt.label} disabled />
+          <RadioField key={opt.id} value={opt.id} label={opt.label} />
         ))}
       </RadioGroup>
     );
   }
   return (
-    <div className="fr-choices pointer-events-none" style={{ '--fr-columns': columns ?? 1 } as CSSProperties}>
+    <div className="fr-choices" inert style={{ '--fr-columns': columns ?? 1 } as CSSProperties}>
       {labels.map((opt) => (
-        <CheckboxField key={opt.id} label={opt.label} disabled />
+        <CheckboxField key={opt.id} label={opt.label} />
       ))}
     </div>
   );
@@ -137,14 +141,14 @@ export function Points({ from, to, low, high, variant = 'boxes' }: { from: numbe
 
 export function CanvasRadio() {
   return (
-    <RadioGroup className="flex justify-center pointer-events-none" disabled>
-      <RadioGroupItem value="preview" disabled aria-hidden tabIndex={-1} />
+    <RadioGroup className="flex justify-center" inert aria-hidden>
+      <RadioGroupItem value="preview" />
     </RadioGroup>
   );
 }
 
 export function CanvasCheck() {
-  return <Checkbox disabled aria-hidden tabIndex={-1} className="pointer-events-none" />;
+  return <Checkbox inert aria-hidden />;
 }
 
 export function CanvasDate() {
@@ -166,17 +170,17 @@ export function CanvasDateTime() {
 
 export function RankingList({ options }: { options: readonly ChoiceOption[] }) {
   return (
-    <div className="pointer-events-none">
+    <div inert>
       <p className="fr-hint">{t(M['canvas.rank_hint'])}</p>
       <ol className="fr-ranking">
         {options.map((opt, i) => (
           <li key={opt.id} className="fr-rank">
             <Badge appearance="subtle" size="sm" shape="circular" aria-hidden>{i + 1}</Badge>
             <span className="fr-rank-label">{labelString(opt.label)}</span>
-            <Button type="button" variant="outline" size="sm" disabled tabIndex={-1} aria-hidden>
+            <Button type="button" variant="outline" size="sm" aria-hidden>
               <svg viewBox="0 0 24 24" focusable="false"><path d="M6 15l6-6 6 6" /></svg>
             </Button>
-            <Button type="button" variant="outline" size="sm" disabled tabIndex={-1} aria-hidden>
+            <Button type="button" variant="outline" size="sm" aria-hidden>
               <svg viewBox="0 0 24 24" focusable="false"><path d="M6 9l6 6 6-6" /></svg>
             </Button>
           </li>

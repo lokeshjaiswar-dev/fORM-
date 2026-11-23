@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
-import { GripVertical, Plus, Trash2, X } from 'lucide-react';
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { Plus, X } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { coverPhoto, formTitlePresentation, listFormSections, packRows, pagePhoto, resolveSectionNav, SectionNav, sectionIndexForPage, sectionNavAtStart, stepsFor, submitButtonPresentation, themeCssVars, type FormSection } from '@form/renderer';
 import type { BlockId, BlockLayout, FormDefinition, PageId, SectionNav as SectionNavConfig } from '@form/schema';
@@ -26,8 +26,6 @@ const M = defineMessages('builder', {
   'canvas.insert': 'Insert a block',
   'canvas.page_break': 'Page break',
   'canvas.remove_page_break': 'Remove this page break',
-  'canvas.delete': 'Delete',
-  'canvas.drag': 'Drag to move',
   'canvas.submit': 'Submit button',
   'canvas.submit_settings': 'Open submit button settings',
   'canvas.title_settings': 'Open form title settings',
@@ -109,6 +107,11 @@ export function FormCanvas() {
   const sectionPlacement = sectionSteps?.nav.placement ?? 'top';
   const sectionNavStart = Boolean(sectionSteps && sectionNavAtStart(sectionPlacement));
   const ids = useMemo(() => pages.flatMap((p) => p.rows.flat().map((b) => b.id)), [pages]);
+  /*
+   * One block per row: the vertical list strategy shifts blocks by the dragged block's real height, so blocks of
+   * different heights never overlap. Rows with blocks side by side need the grid (rect) strategy.
+   */
+  const singleColumn = useMemo(() => pages.every((p) => p.rows.every((row) => row.length === 1)), [pages]);
   const startBlank = useUiStore((s) => s.startBlank);
   const started = useUiStore((s) => s.started);
   const openInspector = useUiStore((s) => s.openInspector);
@@ -128,8 +131,6 @@ export function FormCanvas() {
   const showStart = !started && ids.length === 0 && pages.length === 1;
   const photo = pagePhoto(tokens);
   const cover = coverPhoto(tokens);
-  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop' });
-
   useEffect(() => {
     if (showStart) titleRef.current?.focus();
   }, [showStart]);
@@ -154,8 +155,7 @@ export function FormCanvas() {
   };
 
   return (
-    <div
-      ref={setNodeRef}
+    <CanvasDropArea
       data-layout={layout}
       data-label-align={tokens.labelAlign}
       data-density={tokens.density}
@@ -163,7 +163,6 @@ export function FormCanvas() {
       className="fr-root fr-builder-canvas relative h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
       style={{
         ...themeCssVars(tokens),
-        backgroundColor: isOver ? 'color-mix(in srgb, var(--fr-text) 4%, var(--fr-page))' : 'var(--fr-page)',
         backgroundImage: 'var(--fr-page-image, none)',
         backgroundSize: 'cover',
         color: 'var(--fr-text)',
@@ -175,7 +174,12 @@ export function FormCanvas() {
         if (!isTextEntry(e.target)) setActiveBlock(null);
       }}
     >
-      <div className="grid min-h-full w-full">
+      {/*
+        * A size container. The card's text column is the published form's (`--fr-width` less its 2×32px padding), so
+        * what the author lays out is what respondents get, and it stays put as the side panels open and close. The
+        * card's 56px side padding is the gutter the drag handle (left) and block actions (right) sit in.
+        */}
+      <div className="@container grid min-h-full w-full">
       {photo ? (
         <div
           aria-hidden
@@ -188,18 +192,18 @@ export function FormCanvas() {
           }}
         />
       ) : null}
-      <div className="relative col-start-1 row-start-1 flex min-h-full items-start justify-center px-[72px] py-16 pb-24">
+      <div className="relative col-start-1 row-start-1 flex min-h-full items-start justify-center px-4 pb-24 pt-12 @2xl:px-8">
         <div
-          className="relative h-auto w-full self-start px-[7.5rem] py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)]"
+          className="relative h-auto w-full self-start px-12 py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)] @2xl:px-14"
           style={{
-            maxWidth: 'calc(var(--fr-width) + 10rem)',
+            maxWidth: 'calc(var(--fr-width) + 3rem)',
             backgroundColor: 'var(--fr-surface)',
             borderRadius: layout === 'cards' ? '24px' : 'min(24px, calc(var(--fr-radius) + 10px))',
           }}
         >
         {cover ? (
           <div
-            className="pointer-events-none -mx-[7.5rem] -mt-12 mb-8 overflow-hidden"
+            className="pointer-events-none -mx-12 -mt-12 mb-8 overflow-hidden @2xl:-mx-14"
             style={{
               height: cover.heightPx,
               borderTopLeftRadius: 'inherit',
@@ -271,7 +275,7 @@ export function FormCanvas() {
           <EmptyStart />
         ) : (
           <>
-            <SortableContext items={ids} strategy={rectSortingStrategy}>
+            <SortableContext items={ids} strategy={singleColumn ? verticalListSortingStrategy : rectSortingStrategy}>
               <div className="flex flex-col" style={{ gap: 'var(--fr-gap)' }}>
                 {pages.map((page, p) => (
                   <Fragment key={page.id}>
@@ -290,12 +294,8 @@ export function FormCanvas() {
             </SortableContext>
 
             <div className="relative mt-2" onClick={(e) => e.stopPropagation()}>
-              <div className="absolute right-full top-0 flex h-8 items-center text-[#b8b8b8]">
-                <Tooltip content={t(M['canvas.delete'])} side="top">
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label={t(M['canvas.delete'])} className="text-icon-muted hover:text-destructive" disabled>
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </Tooltip>
+              {/* In the left margin, where the blocks above keep their drag handle (CanvasBlock). */}
+              <div className="absolute right-full top-0 mr-3.5 flex h-8 w-6 items-center justify-center">
                 <Tooltip content={t(M['canvas.insert'])} shortcut="/" side="top">
                   <Button
                     type="button"
@@ -310,11 +310,6 @@ export function FormCanvas() {
                   >
                     <Plus className="size-3.5" />
                   </Button>
-                </Tooltip>
-                <Tooltip content={t(M['canvas.drag'])} side="top">
-                  <span className="flex size-6 items-center justify-center">
-                    <GripVertical className="size-3.5" />
-                  </span>
                 </Tooltip>
               </div>
               <div className="relative min-w-0">
@@ -386,6 +381,23 @@ export function FormCanvas() {
         </div>
       </div>
       </div>
+    </CanvasDropArea>
+  );
+}
+
+/**
+ * The canvas-wide drop target (used when the form has no blocks yet). It is its own component so that drag updates
+ * re-render this wrapper only: its children were created by FormCanvas and stay the same elements.
+ */
+function CanvasDropArea({ style, children, ...props }: ComponentPropsWithoutRef<'div'>) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop' });
+  return (
+    <div
+      ref={setNodeRef}
+      {...props}
+      style={{ ...style, backgroundColor: isOver ? 'color-mix(in srgb, var(--fr-text) 4%, var(--fr-page))' : 'var(--fr-page)' }}
+    >
+      {children}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { currentDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
 import { ChoiceOtherValidation, FileMinLimits } from '@/fields/validationViews';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button, Input, TextLink } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
@@ -174,6 +175,11 @@ const M = defineMessages('builder', {
   'inspector.semantic_add': 'Add pair',
   'inspector.semantic_left': 'Left pole',
   'inspector.semantic_right': 'Right pole',
+  'inspector.semantic_left_n': 'Left pole of pair {n}',
+  'inspector.semantic_right_n': 'Right pole of pair {n}',
+  'inspector.list_item': '{list}: item {n}',
+  'inspector.matching_options': 'Matches',
+  'inspector.list_remove': 'Remove item {n} from {list}',
   'inspector.schedule_days': 'Weekdays',
   'inspector.schedule_slots': 'Time slots',
   'inspector.schedule_add_slot': 'Add slot',
@@ -509,24 +515,30 @@ export function NumberValidation({ block }: InspectorProps<'number'>) {
   );
 }
 
-export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
+/** How the options are shown: the first decision about a choice question, so it heads its Options section. */
+function ChoiceDisplay({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
   const list = block.type === 'single_choice' ? 'radio' : 'checkbox';
   return (
+    <SelectField
+      label={t(M['inspector.display'])}
+      value={block.config.display === 'dropdown' || block.config.display === 'image' ? block.config.display : list}
+      options={[
+        { value: list, label: t(list === 'radio' ? M['inspector.display_radio'] : M['inspector.display_checkbox']) },
+        { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
+        { value: 'image', label: t(M['inspector.display_image']) },
+      ]}
+      onChange={(display) => setConfig(block, { display })}
+    />
+  );
+}
+
+/** A dropdown's own settings: its empty text and whether it can be searched. */
+export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
+  if (block.config.display !== 'dropdown') return null;
+  return (
     <>
-      <SelectField
-        label={t(M['inspector.display'])}
-        value={block.config.display === 'dropdown' || block.config.display === 'image' ? block.config.display : list}
-        options={[
-          { value: list, label: t(list === 'radio' ? M['inspector.display_radio'] : M['inspector.display_checkbox']) },
-          { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
-          { value: 'image', label: t(M['inspector.display_image']) },
-        ]}
-        onChange={(display) => setConfig(block, { display })}
-      />
-      {block.config.display === 'dropdown' ? <Placeholder block={block} /> : null}
-      {block.config.display === 'dropdown' ? (
-        <ToggleRow label={t(M['inspector.searchable'])} checked={block.config.searchable === true} onChange={(on) => setConfig(block, { searchable: on || undefined })} />
-      ) : null}
+      <Placeholder block={block} />
+      <ToggleRow label={t(M['inspector.searchable'])} checked={block.config.searchable === true} onChange={(on) => setConfig(block, { searchable: on || undefined })} />
     </>
   );
 }
@@ -1183,48 +1195,66 @@ export function SectionBreakGeneral({ block }: InspectorProps<'section_break'>) 
 }
 
 export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'> }) {
-  return <OptionsEditor block={block} />;
+  return (
+    <>
+      {block.type === 'single_choice' || block.type === 'multi_choice' ? <ChoiceDisplay block={block} /> : null}
+      <OptionsEditor block={block} />
+    </>
+  );
 }
 
+/**
+ * An editable list of labels (statements, rows, cards...), drawn like the options list: one input per row with a remove
+ * button, and the add button under the list where the next row appears. A list keeps at least `min` rows.
+ */
 function LabelList({
   title,
   addLabel,
   items,
   onChange,
+  min = 1,
 }: {
   title: string;
   addLabel: string;
   items: Array<{ id: string; label: string }>;
   onChange: (next: Array<{ id: string; label: string }>) => void;
+  min?: number;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium">{title}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-auto px-1 py-0 text-[12px] text-primary"
-          onClick={() => onChange([...items, { id: APP_IDS.newId(), label: `${title.replace(/s$/, '')} ${items.length + 1}` }])}
-        >
-          {addLabel}
-        </Button>
-      </div>
-      {items.map((item, i) => (
-        <div key={item.id} className="flex gap-1">
-          <TextField
-            label=""
-            value={item.label}
-            onChange={(label) => onChange(items.map((row, j) => (j === i ? { ...row, label } : row)))}
-          />
-          {items.length > 1 ? (
-            <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => onChange(items.filter((_, j) => j !== i))}>
-              ×
+      <p className="text-[13px] font-medium leading-5">{title}</p>
+      <ul className="space-y-1.5">
+        {items.map((item, i) => (
+          <li key={item.id} className="flex items-center gap-1">
+            <Input
+              className="min-w-0 flex-1"
+              aria-label={t(M['inspector.list_item'], { list: title, n: i + 1 })}
+              value={item.label}
+              onChange={(e) => onChange(items.map((row, j) => (j === i ? { ...row, label: e.target.value } : row)))}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label={t(M['inspector.list_remove'], { list: title, n: i + 1 })}
+              disabled={items.length <= min}
+              onClick={() => onChange(items.filter((_, j) => j !== i))}
+            >
+              <Trash2 className="size-3.5" />
             </Button>
-          ) : null}
-        </div>
-      ))}
+          </li>
+        ))}
+      </ul>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full border-dashed text-muted-foreground hover:text-foreground"
+        onClick={() => onChange([...items, { id: APP_IDS.newId(), label: `${title.replace(/s$/, '')} ${items.length + 1}` }])}
+      >
+        <Plus className="size-3.5" /> {addLabel}
+      </Button>
     </div>
   );
 }
@@ -1233,13 +1263,23 @@ export function MatchingGeneral({ block }: InspectorProps<'matching'>) {
   return (
     <>
       <ToggleRow label={t(M['inspector.matching_exclusive'])} checked={block.config.exclusive} onChange={(exclusive) => setConfig(block, { exclusive })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+/** The items to match come first, then the answers they are matched with. */
+export function MatchingOptions({ block }: InspectorProps<'matching'>) {
+  return (
+    <>
       <LabelList
         title={t(M['inspector.matching_prompts'])}
         addLabel={t(M['inspector.matching_add_prompt'])}
         items={block.config.prompts}
         onChange={(prompts) => setConfig(block, { prompts: prompts.map((row) => ({ id: row.id as MatchingPromptId, label: row.label })) })}
       />
-      <ConfigProblem block={block} />
+      <p className="!mt-5 text-[13px] font-medium leading-5">{t(M['inspector.matching_options'])}</p>
+      <ChoiceOptions block={block} />
     </>
   );
 }
@@ -1249,14 +1289,19 @@ export function LikertGeneral({ block }: InspectorProps<'likert'>) {
     <>
       <SelectField label={t(M['inspector.scale_max'])} value={String(block.config.max)} options={range(2, 10)} onChange={(v) => setConfig(block, { max: Number(v) })} />
       <EndLabels block={block} />
-      <LabelList
-        title={t(M['inspector.likert_statements'])}
-        addLabel={t(M['inspector.likert_add_statement'])}
-        items={block.config.statements}
-        onChange={(statements) => setConfig(block, { statements: statements.map((row) => ({ id: row.id as LikertStatementId, label: row.label })) })}
-      />
       <ConfigProblem block={block} />
     </>
+  );
+}
+
+export function LikertOptions({ block }: InspectorProps<'likert'>) {
+  return (
+    <LabelList
+      title={t(M['inspector.likert_statements'])}
+      addLabel={t(M['inspector.likert_add_statement'])}
+      items={block.config.statements}
+      onChange={(statements) => setConfig(block, { statements: statements.map((row) => ({ id: row.id as LikertStatementId, label: row.label })) })}
+    />
   );
 }
 
@@ -1274,33 +1319,48 @@ export function SemanticDifferentialGeneral({ block }: InspectorProps<'semantic_
   return (
     <>
       <SelectField label={t(M['inspector.scale_max'])} value={String(block.config.max)} options={range(2, 10)} onChange={(v) => setConfig(block, { max: Number(v) })} />
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[12px] font-medium">{t(M['inspector.semantic_pairs'])}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-auto px-1 py-0 text-[12px] text-primary"
-            onClick={() => setConfig(block, { pairs: [...block.config.pairs, { id: APP_IDS.newId() as SemanticPairId, left: t(M['inspector.semantic_left']), right: t(M['inspector.semantic_right']) }] })}
-          >
-            {t(M['inspector.semantic_add'])}
-          </Button>
-        </div>
-        {block.config.pairs.map((pair, i) => (
-          <div key={pair.id} className="grid grid-cols-[1fr_1fr_auto] gap-1">
-            <TextField label="" value={pair.left} onChange={(left) => setConfig(block, { pairs: block.config.pairs.map((row, j) => (j === i ? { ...row, left } : row)) })} />
-            <TextField label="" value={pair.right} onChange={(right) => setConfig(block, { pairs: block.config.pairs.map((row, j) => (j === i ? { ...row, right } : row)) })} />
-            {block.config.pairs.length > 1 ? (
-              <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => setConfig(block, { pairs: block.config.pairs.filter((_, j) => j !== i) })}>
-                ×
-              </Button>
-            ) : null}
-          </div>
-        ))}
-      </div>
       <ConfigProblem block={block} />
     </>
+  );
+}
+
+/** Each pair is one row: the word at the low end and the word at the high end. */
+export function SemanticDifferentialOptions({ block }: InspectorProps<'semantic_differential'>) {
+  const pairs = block.config.pairs;
+  const write = (next: typeof pairs) => setConfig(block, { pairs: next });
+  return (
+    <div className="space-y-2">
+      <p className="text-[13px] font-medium leading-5">{t(M['inspector.semantic_pairs'])}</p>
+      <ul className="space-y-1.5">
+        {pairs.map((pair, i) => (
+          <li key={pair.id} className="flex items-center gap-1">
+            <Input className="min-w-0 flex-1" aria-label={t(M['inspector.semantic_left_n'], { n: i + 1 })} value={pair.left} onChange={(e) => write(pairs.map((row, j) => (j === i ? { ...row, left: e.target.value } : row)))} />
+            <span aria-hidden className="shrink-0 text-[12px] text-muted-foreground">to</span>
+            <Input className="min-w-0 flex-1" aria-label={t(M['inspector.semantic_right_n'], { n: i + 1 })} value={pair.right} onChange={(e) => write(pairs.map((row, j) => (j === i ? { ...row, right: e.target.value } : row)))} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label={t(M['inspector.list_remove'], { list: t(M['inspector.semantic_pairs']), n: i + 1 })}
+              disabled={pairs.length <= 1}
+              onClick={() => write(pairs.filter((_, j) => j !== i))}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full border-dashed text-muted-foreground hover:text-foreground"
+        onClick={() => write([...pairs, { id: APP_IDS.newId() as SemanticPairId, left: t(M['inspector.semantic_left']), right: t(M['inspector.semantic_right']) }])}
+      >
+        <Plus className="size-3.5" /> {t(M['inspector.semantic_add'])}
+      </Button>
+    </div>
   );
 }
 
@@ -1389,6 +1449,15 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
   return (
     <>
       <ToggleRow label={t(M['inspector.card_exclusive'])} checked={block.config.exclusive} onChange={(exclusive) => setConfig(block, { exclusive })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+/** The cards respondents sort, then the groups they sort them into (at least two). */
+export function CardSortOptions({ block }: InspectorProps<'card_sort'>) {
+  return (
+    <>
       <LabelList
         title={t(M['inspector.card_items'])}
         addLabel={t(M['inspector.card_add_item'])}
@@ -1399,12 +1468,12 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
         title={t(M['inspector.card_buckets'])}
         addLabel={t(M['inspector.card_add_bucket'])}
         items={block.config.buckets}
+        min={2}
         onChange={(buckets) => {
           if (buckets.length < 2) return;
           setConfig(block, { buckets: buckets.map((row) => ({ id: row.id as CardBucketId, label: row.label })) });
         }}
       />
-      <ConfigProblem block={block} />
     </>
   );
 }
@@ -1439,6 +1508,17 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
           onChange={(value) => setMode(value as typeof mode)}
         />
       ) : null}
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+/** The rows respondents answer and the columns they answer with. */
+export function MatrixOptions({ block }: InspectorProps<'matrix'>) {
+  const inputFor = (next: typeof block.config.mode) => (next === 'single' ? 'choice' as const : next === 'multi' ? 'checkbox' as const : 'text' as const);
+  const mode = block.config.mode;
+  return (
+    <>
       <LabelList
         title={t(M['inspector.matrix_rows'])}
         addLabel={t(M['inspector.matrix_add_row'])}
@@ -1459,7 +1539,6 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
           })
         }
       />
-      <ConfigProblem block={block} />
     </>
   );
 }

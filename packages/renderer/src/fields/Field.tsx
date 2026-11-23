@@ -36,6 +36,9 @@ function RequiredMark() {
   return (
     <>
       <span className="fr-required" aria-hidden="true"><span>*</span></span>
+      {/* The space comes after the asterisk, not before it: the mark sits flush against the label, the space trails
+          the last visible character (so takes no room), and screen readers still hear "Name (required)". */}
+      {' '}
       <span className="fr-sr-only">{t(MESSAGES['field.required'])}</span>
     </>
   );
@@ -73,7 +76,7 @@ function FieldShell({ block, control }: { block: FieldBlock; control: Control<ne
   const labelText = (
     <>
       <RichTextView doc={block.label} inline resolve={resolve} />
-      {required ? <>{' '}<RequiredMark /></> : null}
+      {required ? <RequiredMark /> : null}
     </>
   );
   const labelClass = block.hideLabel ? 'fr-label fr-sr-only' : 'fr-label';
