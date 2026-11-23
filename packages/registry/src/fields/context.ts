@@ -1,4 +1,4 @@
-import { CONTEXT_SOURCES, type ContextSource } from '@form/schema';
+import { type ContextSource } from '@form/schema';
 import { defineField, headerOf, isBlank } from '../define.ts';
 import { PALETTE_LABELS } from '../messages.ts';
 import { TEXT_OPS } from '../operators.ts';
@@ -24,7 +24,7 @@ export const context = defineField({
     'globe',
     ['session', 'page url', 'referrer', 'browser', 'locale', 'time zone', 'embed', 'started', 'submitted', 'device', 'utm', 'hidden', 'url parameter'],
   )],
-  defaultConfig: () => ({ sources: [...CONTEXT_SOURCES], display: 'hidden' }),
+  defaultConfig: () => ({ sources: [], display: 'hidden' }),
   checkConfig: (config, report) => {
     const seen = new Set<ContextSource>();
     config.sources.forEach((source, i) => {
@@ -41,7 +41,6 @@ export const context = defineField({
       if (keys.has(fact.key)) report('static keys must be unique', ['staticFacts', i]);
       keys.add(fact.key);
     });
-    if (config.sources.length === 0 && extraKeys(config).length === 0) report('session details need at least one fact', ['sources']);
   },
   paths: {
     '': 'text',

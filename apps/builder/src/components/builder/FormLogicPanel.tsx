@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
 import { defineMessages, type MessageId } from '@form/i18n';
-import { isAvailable } from '@form/registry';
+import { isAvailable, PALETTE_LABELS } from '@form/registry';
 import type {
   Action, BlockId, Condition, ConditionId, DecimalString, Expr, FieldBlock, FormDefinition, LogicOperator, Operand, OptionId, Rule, RuleId,
 } from '@form/schema';
@@ -40,6 +40,8 @@ const M = defineMessages('builder', {
   'rules.remove_when': 'Remove condition',
   'rules.question': 'Question',
   'rules.operator': 'Condition',
+  'rules.session_key': 'Session key',
+  'rules.session_key_empty': 'Turn on a fact first',
   'rules.value': 'Value',
   'rules.options': 'Options',
   'rules.compare': 'Compare with',
@@ -120,7 +122,13 @@ const TEXT_OPS: LogicOperator[] = ['eq', 'neq', 'contains', 'not_contains', 'sta
 const NUMBER_OPS: LogicOperator[] = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'];
 const DATE_OPS: LogicOperator[] = ['eq', 'neq', 'before', 'after', 'on_or_before', 'on_or_after'];
 
+function sessionKeys(field: FieldBlock): string[] {
+  if (field.type !== 'context') return [];
+  return [...field.config.sources, ...(field.config.urlParams ?? []), ...(field.config.staticFacts ?? []).map((fact) => fact.key)];
+}
+
 function partsFor(field: FieldBlock): Part[] {
+  if (field.type === 'context') return ['whole'];
   const kind = kindOf(field);
   if (kind === 'choice' || kind === 'choices') return ['code', 'option', 'score', 'first', 'last'];
   if (kind === 'text') return ['whole', 'first', 'last'];
@@ -145,23 +153,27 @@ function litNum(n: string): Expr {
   return { k: 'lit', value: { type: 'number', value } };
 }
 
-function sideOperand(field: FieldBlock, part: Part, n: string): Operand {
+function answerRef(id: BlockId, key?: string): Expr {
+  return { k: 'ref', ref: { kind: 'answer', blockId: id, ...(key ? { path: key } : {}) } };
+}
+
+function sideOperand(field: FieldBlock, part: Part, n: string, key?: string): Operand {
   const id = field.id;
-  if (part === 'whole' || part === 'option') return { kind: 'ref', ref: { kind: 'answer', blockId: id } };
+  if (part === 'whole' || part === 'option') return { kind: 'ref', ref: { kind: 'answer', blockId: id, ...(key ? { path: key } : {}) } };
   if (part === 'code') return { kind: 'expr', expr: { k: 'call', fn: 'option_code', args: [answerExpr(id)] } };
   if (part === 'score') return { kind: 'expr', expr: { k: 'call', fn: 'option_score', args: [answerExpr(id)] } };
   const base: Expr = kindOf(field) === 'choice' || kindOf(field) === 'choices'
     ? { k: 'call', fn: 'option_code', args: [answerExpr(id)] }
-    : answerExpr(id);
+    : answerRef(id, key);
   return { kind: 'expr', expr: { k: 'call', fn: part === 'first' ? 'left' : 'right', args: [base, litNum(n)] } };
 }
 
-function readSide(operand: Operand | undefined, _fields: FieldBlock[]): { fieldId: BlockId; part: Part; n: string } | null {
+function readSide(operand: Operand | undefined, _fields: FieldBlock[]): { fieldId: BlockId; part: Part; n: string; key?: string } | null {
   if (!operand) return null;
   if (operand.kind === 'ref' && operand.ref.kind === 'answer') {
     const id = operand.ref.blockId;
     const part: Part = 'whole';
-    return { fieldId: id, part, n: '2' };
+    return { fieldId: id, part, n: '2', key: operand.ref.path };
   }
   if (operand.kind !== 'expr') return null;
   const expr = operand.expr;
@@ -171,7 +183,7 @@ function readSide(operand: Operand | undefined, _fields: FieldBlock[]): { fieldI
   if (expr.k === 'call' && (expr.fn === 'left' || expr.fn === 'right')) {
     const n = expr.args[1]?.k === 'lit' && expr.args[1].value.type === 'number' ? expr.args[1].value.value : '2';
     const inner = expr.args[0];
-    if (inner?.k === 'ref' && inner.ref.kind === 'answer') return { fieldId: inner.ref.blockId, part: expr.fn === 'left' ? 'first' : 'last', n };
+    if (inner?.k === 'ref' && inner.ref.kind === 'answer') return { fieldId: inner.ref.blockId, part: expr.fn === 'left' ? 'first' : 'last', n, key: inner.ref.path };
     if (inner?.k === 'call' && inner.fn === 'option_code' && inner.args[0]?.k === 'ref' && inner.args[0].ref.kind === 'answer') {
       return { fieldId: inner.args[0].ref.blockId, part: expr.fn === 'left' ? 'first' : 'last', n };
     }
@@ -206,15 +218,15 @@ function ComparisonRow({
   const rightSide = readSide(cond.right, fields);
   const typed = cond.right?.kind === 'literal' || cond.right?.kind === 'options';
   const [draft, setDraft] = useDraft(literalText(cond.right));
-  const write = (nextLeft: FieldBlock, part: Part, n: string, op: LogicOperator, right: Operand | undefined) => {
-    onChange({ kind: 'condition', id: cond.id, left: sideOperand(nextLeft, part, n), op, ...(right ? { right } : {}) });
+  const write = (nextLeft: FieldBlock, part: Part, n: string, op: LogicOperator, right: Operand | undefined, key?: string) => {
+    onChange({ kind: 'condition', id: cond.id, left: sideOperand(nextLeft, part, n, key), op, ...(right ? { right } : {}) });
   };
   const pickLeft = (id: string) => {
     const field = fields.find((f) => f.id === id);
     if (!field) return;
     const part = partsFor(field)[0] ?? 'whole';
     const op = opsFor(field, part)[0] ?? 'eq';
-    write(field, part, '2', op, undefined);
+    write(field, part, '2', op, undefined, sessionKeys(field)[0]);
   };
   if (!left || !leftField) {
     return (
@@ -222,6 +234,8 @@ function ComparisonRow({
     );
   }
   const part = partsFor(leftField).includes(left.part) ? left.part : (partsFor(leftField)[0] ?? 'whole');
+  const keys = sessionKeys(leftField);
+  const sessionKey = leftField.type === 'context' ? (keys.includes(left.key ?? '') ? left.key : undefined) : undefined;
   const ops = opsFor(leftField, part);
   const op = ops.includes(cond.op) ? cond.op : (ops[0] ?? 'eq');
   const peers = fields.filter((f) => f.id !== leftField.id && opsFor(f, partsFor(f)[0] ?? 'whole').some((candidate) => TEXT_OPS.includes(candidate) === TEXT_OPS.includes(op) || NUMBER_OPS.includes(candidate) === NUMBER_OPS.includes(op)));
@@ -229,12 +243,28 @@ function ComparisonRow({
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
         <NiceSelect size="sm" aria-label={t(M['rules.question'])} value={leftField.id} onChange={pickLeft} options={fields.map((f) => ({ value: f.id, label: fieldName(f) }))} />
-        <NiceSelect size="sm" aria-label="Part" value={part} onChange={(value) => write(leftField, value as Part, left.n, opsFor(leftField, value as Part)[0] ?? 'eq', undefined)} options={partsFor(leftField).map((p) => ({ value: p, label: partLabel(p) }))} />
+        {leftField.type === 'context' ? (
+          <NiceSelect
+            size="sm"
+            aria-label={t(M['rules.session_key'])}
+            value={sessionKey ?? ''}
+            placeholder={keys.length ? t(M['rules.session_key']) : t(M['rules.session_key_empty'])}
+            onChange={(value) => write(leftField, 'whole', left.n, opsFor(leftField, 'whole')[0] ?? 'eq', undefined, value)}
+            options={keys.map((key) => {
+              const id = `palette.context.${key}` as keyof typeof PALETTE_LABELS;
+              return { value: key, label: id in PALETTE_LABELS ? t(PALETTE_LABELS[id]) : key };
+            })}
+          />
+        ) : (
+          <NiceSelect size="sm" aria-label="Part" value={part} onChange={(value) => write(leftField, value as Part, left.n, opsFor(leftField, value as Part)[0] ?? 'eq', undefined)} options={partsFor(leftField).map((p) => ({ value: p, label: partLabel(p) }))} />
+        )}
         {part === 'first' || part === 'last' ? (
-          <LooseInput aria-label="How many characters" className="w-16" value={left.n} commit={(text) => /^\d+$/.test(text) && write(leftField, part, text, op, cond.right)} />
+          <LooseInput aria-label="How many characters" className="w-16" value={left.n} commit={(text) => /^\d+$/.test(text) && write(leftField, part, text, op, cond.right, sessionKey)} />
         ) : null}
-        <NiceSelect size="sm" aria-label={t(M['rules.operator'])} value={op} onChange={(value) => write(leftField, part, left.n, value as LogicOperator, cond.right)} options={ops.map((item) => ({ value: item, label: opLabel(item) }))} />
-        {part === 'option' ? (
+        {leftField.type === 'context' && !sessionKey ? null : (
+        <NiceSelect size="sm" aria-label={t(M['rules.operator'])} value={op} onChange={(value) => write(leftField, part, left.n, value as LogicOperator, cond.right, sessionKey)} options={ops.map((item) => ({ value: item, label: opLabel(item) }))} />
+        )}
+        {leftField.type === 'context' && !sessionKey ? null : part === 'option' ? (
           <RadioGroup name={cond.id} value={cond.right?.kind === 'options' ? (cond.right.optionIds[0] ?? '') : ''} onValueChange={(id) => write(leftField, part, left.n, op, { kind: 'options', blockId: leftField.id, optionIds: [id as OptionId] })}>
             {choiceOptions(leftField).map((o) => (
               <RadioField key={o.id} value={o.id} label={labelString(o.label)} size="sm" />
@@ -247,10 +277,10 @@ function ComparisonRow({
               aria-label={t(M['rules.compare'])}
               value={typed || !rightSide ? 'typed' : rightSide.fieldId}
               onChange={(id) => {
-                if (id === 'typed') write(leftField, part, left.n, op, literal(kindOf(leftField) === 'number' || part === 'score' ? 'number' : 'text', op, '') ?? undefined);
+                if (id === 'typed') write(leftField, part, left.n, op, literal(kindOf(leftField) === 'number' || part === 'score' ? 'number' : 'text', op, '') ?? undefined, sessionKey);
                 else {
                   const other = fields.find((f) => f.id === id);
-                  if (other) write(leftField, part, left.n, op, sideOperand(other, partsFor(other).includes(part) ? part : (partsFor(other)[0] ?? 'whole'), left.n));
+                  if (other) write(leftField, part, left.n, op, sideOperand(other, partsFor(other).includes(part) ? part : (partsFor(other)[0] ?? 'whole'), left.n, other.type === 'context' ? sessionKeys(other)[0] : undefined), sessionKey);
                 }
               }}
               options={[{ value: 'typed', label: t(M['rules.typed']) }, ...peers.map((f) => ({ value: f.id, label: fieldName(f) }))]}
@@ -272,7 +302,7 @@ function ComparisonRow({
               <Input aria-label={t(M['rules.value'])} value={draft} onChange={(e) => {
                 setDraft(e.target.value);
                 const next = literal(part === 'score' || kindOf(leftField) === 'number' ? 'number' : 'text', op, e.target.value);
-                if (next) write(leftField, part, left.n, op, next);
+                if (next) write(leftField, part, left.n, op, next, sessionKey);
               }} />
             )}
           </>

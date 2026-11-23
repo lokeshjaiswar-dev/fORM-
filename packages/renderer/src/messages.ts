@@ -75,6 +75,8 @@ export const MESSAGES = defineMessages('renderer', {
   'title.untitled': 'Form title',
   'ending.fill_again': 'Submit another response',
   'ending.redirecting': 'Taking you to the next page…',
+  'session.title': 'Session details',
+  'session.empty': 'No session facts are collected.',
   'session.page_url': 'Page URL',
   'session.referrer': 'Referrer',
   'session.user_agent': 'Browser',

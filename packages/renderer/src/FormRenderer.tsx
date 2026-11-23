@@ -43,6 +43,7 @@ function shownBlocks(def: PublicFormDefinition, pageId: PageId, visible: Readonl
     const block = def.blocks[id];
     if (!block || block.type === 'unsupported' || !isAvailable(block.type) || block.type === 'hidden' || !visible.has(id)) return [];
     if ('concealed' in block && block.concealed) return [];
+    if ((block.type === 'context' || block.type === 'calculation') && block.config.display === 'hidden') return [];
     return [block];
   });
 }

@@ -47,7 +47,7 @@ export function ShortText({ block, field }: ControlProps<'short_text'>) {
   }
   const attrs = {
     id: field.ids.input,
-    value: field.readOnly ? (fromRule ?? '') : (answer.value || fromRule || ''),
+    value: fromRule || answer.value || '',
     onChange: (e: { target: { value: string } }) => answer.set(sanitizePreset(e.target.value, c.preset, c.maxLength)),
     onBlur: answer.onBlur,
     ...inputAttrs(field),

@@ -3,12 +3,13 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable, type AvailableType } from '@form/registry';
-import { type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
+import { type BlockId, type BlockOf, type BlockStyle, type DecimalString, type FieldBlock, type HexColor, type OptionId, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { tileOf } from '@/fields/tiles';
 import { KEY_PATTERN, isField, placementOf, plainText, richDoc, takenKeys } from '@/lib/definition';
+import { patchBlockConfig } from '@/fields/configSink';
 import { isCustomFieldType, parseConfig } from '@/fields/custom/model';
 import { saveLibraryField } from '@/fields/custom/repository';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,8 @@ const M = defineMessages('builder', {
   'inspector.required': 'Required',
   'inspector.read_only': 'Read-only',
   'inspector.read_only_hint': 'Shown and submitted, but not editable',
+  'inspector.read_only_value': 'Value shown in the field',
+  'inspector.read_only_value_hint': 'Respondents see this and it is submitted. Rules can read it.',
   'inspector.required_read_only': 'A read-only field needs a default value to be required.',
   'inspector.required_message': 'Message when empty',
   'inspector.required_message_placeholder': 'This field is required.',
@@ -116,12 +119,25 @@ type Section = 'general' | 'options' | 'validation';
 const sectionOf = (block: StoredBlock, section: Section): ComponentType<InspectorProps<AvailableType>> | undefined =>
   isAvailable(block.type) ? (INSPECTOR[block.type][section] as ComponentType<InspectorProps<AvailableType>> | undefined) : undefined;
 
+/** Fields the respondent does not fill. Required, read-only, and API checks do not apply. */
+const CAPTURED = new Set<FieldBlock['type']>(['context', 'calculation', 'unique_id', 'hidden', 'captcha']);
+
+/** An external check only makes sense for a single answer the respondent types or picks. */
+const API_VALIDATION = new Set<FieldBlock['type']>([
+  'short_text', 'long_text', 'full_name', 'email', 'phone', 'number', 'url', 'single_choice', 'date', 'time', 'datetime',
+]);
+
+function hasValidation(block: FieldBlock): boolean {
+  if (CAPTURED.has(block.type)) return false;
+  return true;
+}
+
 function tabsFor(block: StoredBlock): Tab[] {
   const tabs: Tab[] = ['general'];
   if (sectionOf(block, 'options')) tabs.push('options');
-  if (isField(block)) tabs.push('validation');
+  if (isField(block) && hasValidation(block)) tabs.push('validation');
   tabs.push('logic');
-  if (isField(block)) tabs.push('privacy');
+  if (isField(block) && !CAPTURED.has(block.type)) tabs.push('privacy');
   return tabs;
 }
 
@@ -495,6 +511,84 @@ function SaveAsField({ block }: { block: FieldBlock }) {
   );
 }
 
+const TEXT_DEFAULT = new Set(['short_text', 'long_text', 'email', 'url']);
+
+function ReadOnlyValue({ block }: { block: FieldBlock }) {
+  const label = t(M['inspector.read_only_value']);
+  const hint = t(M['inspector.read_only_value_hint']);
+  if (TEXT_DEFAULT.has(block.type)) {
+    const config = block.config as { defaultValue?: { kind: string; value: string } };
+    const current = config.defaultValue?.kind === 'static' ? config.defaultValue.value : '';
+    return (
+      <TextField
+        label={label}
+        hint={hint}
+        value={current}
+        onChange={(value) => patchBlockConfig(block, { defaultValue: value ? { kind: 'static', value } : undefined })}
+      />
+    );
+  }
+  if (block.type === 'number') {
+    return (
+      <TextField
+        label={label}
+        hint={hint}
+        value={block.config.defaultValue ?? ''}
+        onChange={(raw) => {
+          const value = /^-?(0|[1-9]\d*)(\.\d{1,10})?$/.test(raw) ? (raw as DecimalString) : undefined;
+          patchBlockConfig(block, { defaultValue: raw === '' ? undefined : value ?? block.config.defaultValue });
+        }}
+      />
+    );
+  }
+  if (block.type === 'date') {
+    const current = block.config.defaultValue?.kind === 'fixed' ? block.config.defaultValue.date : '';
+    return (
+      <TextField
+        label={label}
+        hint={hint}
+        value={current}
+        onChange={(date) => patchBlockConfig(block, { defaultValue: /^\d{4}-\d{2}-\d{2}$/.test(date) ? { kind: 'fixed', date } : date === '' ? undefined : block.config.defaultValue })}
+      />
+    );
+  }
+  if (block.type === 'time') {
+    const current = block.config.defaultValue?.kind === 'fixed' ? block.config.defaultValue.time : '';
+    return (
+      <TextField
+        label={label}
+        hint={hint}
+        value={current}
+        onChange={(time) => patchBlockConfig(block, { defaultValue: /^\d{2}:\d{2}$/.test(time) ? { kind: 'fixed', time } : time === '' ? undefined : block.config.defaultValue })}
+      />
+    );
+  }
+  if (block.type === 'rating') {
+    return (
+      <TextField
+        label={label}
+        hint={hint}
+        value={block.config.defaultValue === undefined ? '' : String(block.config.defaultValue)}
+        onChange={(raw) => {
+          const n = Number(raw);
+          patchBlockConfig(block, { defaultValue: raw === '' ? undefined : Number.isInteger(n) && n >= 1 && n <= block.config.max ? n : block.config.defaultValue });
+        }}
+      />
+    );
+  }
+  if (block.type === 'single_choice') {
+    return (
+      <SelectField
+        label={label}
+        value={block.config.defaultOptionId ?? ''}
+        options={[{ value: '', label: '—' }, ...block.config.options.map((option) => ({ value: option.id, label: option.label }))]}
+        onChange={(id) => patchBlockConfig(block, { defaultOptionId: id ? (id as OptionId) : undefined })}
+      />
+    );
+  }
+  return <p className="text-[12px] text-muted-foreground">{hint}</p>;
+}
+
 function ValidationTab({ block }: { block: FieldBlock }) {
   const hidden = block.type === 'hidden';
   const formatCode = FORMAT_CODE[block.type];
@@ -512,6 +606,7 @@ function ValidationTab({ block }: { block: FieldBlock }) {
         <>
           <ToggleRow label={t(M['inspector.required'])} checked={block.required} onChange={(required) => updateBlock(block.id, { required })} />
           <ToggleRow label={t(M['inspector.read_only'])} hint={t(M['inspector.read_only_hint'])} checked={block.readOnly === true} onChange={(on) => updateBlock(block.id, { readOnly: on || undefined })} />
+          {block.readOnly ? <ReadOnlyValue block={block} /> : null}
           {block.required && block.readOnly ? (
             <p role="alert" className="text-[12px] text-amber-700">
               {t(M['inspector.required_read_only'])}
@@ -522,7 +617,7 @@ function ValidationTab({ block }: { block: FieldBlock }) {
           ) : null}
         </>
       )}
-      <ApiValidationSection block={block} />
+      {API_VALIDATION.has(block.type) ? <ApiValidationSection block={block} /> : null}
       <Registered block={block} section="validation" />
       {formatCode ? (
         <TextField label={t(M['inspector.format_message'])} value={block.messages?.[formatCode]} onChange={(text) => setMessage(formatCode, text)} />

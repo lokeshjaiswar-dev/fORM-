@@ -87,7 +87,7 @@ const mergeConflictSchema = z.object({
 
 export type MergeRemoteResult = { ok: true; id: string } | { ok: false; conflicts: MergeConflict[] };
 
-/** Asks the API to merge forms. Null when signed out or unreachable so the builder can merge locally. */
+/** Asks the API to merge forms. Null when signed out. Network failure throws so the UI can report it. */
 export async function mergeRemoteForms(
   formIds: string[],
   resolutions?: MergeResolution[],
@@ -110,7 +110,7 @@ export async function mergeRemoteForms(
       body: JSON.stringify({ formIds, resolutions, title }),
     });
   } catch {
-    return null;
+    throw new ApiUnreachable();
   }
   const json: unknown = await res.json().catch(() => ({}));
   if (res.status === 409) {

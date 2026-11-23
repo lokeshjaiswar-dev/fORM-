@@ -1029,16 +1029,56 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
 
 const PARAM_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
+/** Facts an author usually needs. Browser and embed strings stay available only when a form already captures them. */
+const SESSION_FACTS: readonly ContextSource[] = [
+  'page_url', 'referrer', 'locale', 'time_zone', 'started_at', 'submitted_at', 'utm_source', 'utm_medium', 'utm_campaign',
+];
+
+function StaticFactRow({
+  fact, onChange,
+}: {
+  fact: { key: string; value: string };
+  onChange: (next: { key: string; value: string }) => void;
+}) {
+  const [key, setKey] = useDraft(fact.key);
+  const [value, setValue] = useDraft(fact.value);
+  const commit = (nextKey: string, nextValue: string) => {
+    if (!PARAM_NAME.test(nextKey) || nextValue.length === 0) return;
+    onChange({ key: nextKey, value: nextValue });
+  };
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <TextField
+        label={t(M['inspector.context_static_key'])}
+        value={key}
+        onChange={(text) => {
+          setKey(text);
+          commit(text, value);
+        }}
+      />
+      <TextField
+        label={t(M['inspector.context_static_value'])}
+        value={value}
+        onChange={(text) => {
+          setValue(text);
+          commit(key, text);
+        }}
+      />
+    </div>
+  );
+}
+
 export function ContextGeneral({ block }: InspectorProps<'context'>) {
   const selected = new Set(block.config.sources);
-  const extras = (block.config.urlParams?.length ?? 0) + (block.config.staticFacts?.length ?? 0);
   const toggle = (source: ContextSource, on: boolean) => {
     const next = CONTEXT_SOURCES.filter((item) => (item === source ? on : selected.has(item)));
-    if (next.length === 0 && extras === 0) return;
     setConfig(block, { sources: [...next] });
   };
   const urls = selected.has('page_url') || selected.has('referrer');
   const facts = block.config.staticFacts ?? [];
+  const shown = SESSION_FACTS.filter((source) => SESSION_FACTS.includes(source) || selected.has(source));
+  const extraSelected = CONTEXT_SOURCES.filter((source) => selected.has(source) && !SESSION_FACTS.includes(source));
+  const [params, setParams] = useDraft((block.config.urlParams ?? []).join(', '));
   return (
     <>
       <ToggleRow
@@ -1047,7 +1087,7 @@ export function ContextGeneral({ block }: InspectorProps<'context'>) {
         onChange={(on) => setConfig(block, { display: on ? 'hidden' : 'visible' })}
       />
       <SectionTitle>{t(M['inspector.context_facts'])}</SectionTitle>
-      {CONTEXT_SOURCES.map((source) => (
+      {[...shown, ...extraSelected].map((source) => (
         <ToggleRow
           key={source}
           label={t(PALETTE_LABELS[`palette.context.${source}`])}
@@ -1061,39 +1101,34 @@ export function ContextGeneral({ block }: InspectorProps<'context'>) {
       <TextField
         label={t(M['inspector.context_url_params'])}
         hint={t(M['inspector.context_url_params_hint'])}
-        value={(block.config.urlParams ?? []).join(', ')}
+        value={params}
         onChange={(text) => {
+          setParams(text);
           const urlParams = text.split(',').map((part) => part.trim()).filter((name) => PARAM_NAME.test(name));
+          const pending = text.split(',').some((part) => {
+            const name = part.trim();
+            return name.length > 0 && !PARAM_NAME.test(name);
+          });
+          if (pending) return;
           setConfig(block, { urlParams: urlParams.length > 0 ? [...new Set(urlParams)] : undefined });
         }}
       />
       <SectionTitle>{t(M['inspector.context_static'])}</SectionTitle>
       {facts.map((fact, i) => (
-        <div key={`${fact.key}-${i}`} className="grid grid-cols-2 gap-2">
-          <TextField
-            label={t(M['inspector.context_static_key'])}
-            value={fact.key}
-            onChange={(key) => {
-              if (!PARAM_NAME.test(key) && key !== '') return;
-              const next = facts.map((item, j) => (j === i ? { ...item, key } : item));
-              setConfig(block, { staticFacts: next });
-            }}
-          />
-          <TextField
-            label={t(M['inspector.context_static_value'])}
-            value={fact.value}
-            onChange={(value) => {
-              const next = facts.map((item, j) => (j === i ? { ...item, value } : item));
-              setConfig(block, { staticFacts: next.filter((item) => item.key && item.value) });
-            }}
-          />
-        </div>
+        <StaticFactRow
+          key={i}
+          fact={fact}
+          onChange={(next) => {
+            const staticFacts = facts.map((item, j) => (j === i ? next : item));
+            setConfig(block, { staticFacts });
+          }}
+        />
       ))}
       <Button
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => setConfig(block, { staticFacts: [...facts, { key: `value_${facts.length + 1}`, value: 'fixed' }] })}
+        onClick={() => setConfig(block, { staticFacts: [...facts, { key: `fact_${facts.length + 1}`, value: 'value' }] })}
       >
         {t(M['inspector.context_static_add'])}
       </Button>

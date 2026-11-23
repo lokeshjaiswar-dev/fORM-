@@ -17,7 +17,7 @@ const M = defineMessages('builder', {
 
 const controlStyle = (block?: { style?: BlockStyle }) => ({ ...inputStyle(block?.style) }) as CSSProperties;
 
-export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: { style?: BlockStyle }; placeholder?: string | undefined; prefix?: string | undefined; suffix?: string | undefined; tall?: boolean }) {
+export function TextBox({ block, placeholder, prefix, suffix, tall, value }: { block: { style?: BlockStyle }; placeholder?: string | undefined; prefix?: string | undefined; suffix?: string | undefined; tall?: boolean; value?: string | undefined }) {
   const style = { ...controlStyle(block), backgroundColor: 'transparent' };
   if (tall) {
     return (
@@ -26,7 +26,8 @@ export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: {
         tabIndex={-1}
         className="pointer-events-none bg-transparent"
         data-canvas-input=""
-        placeholder={placeholder || t(M['canvas.answer'])}
+        placeholder={value ? undefined : placeholder || t(M['canvas.answer'])}
+        value={value ?? ''}
         rows={4}
         style={style}
       />
@@ -38,7 +39,8 @@ export function TextBox({ block, placeholder, prefix, suffix, tall }: { block: {
       tabIndex={-1}
       className="pointer-events-none"
       data-canvas-input=""
-      placeholder={placeholder || t(M['canvas.answer'])}
+      placeholder={value ? undefined : placeholder || t(M['canvas.answer'])}
+      value={value ?? ''}
       prefixText={prefix}
       suffixText={suffix}
       style={style}

@@ -717,23 +717,85 @@
   align-items: center;
 }
 
-:where(.fr-root) .fr-session {
+:where(.fr-root) .fr-session,
+:where(.fr-root) .fr-session-card {
   flex-direction: column;
   align-items: stretch;
-  gap: 0.35rem;
+  gap: 0;
   height: auto;
-  padding-block: 0.5rem;
+  padding: 0;
+  overflow: hidden;
+  background: var(--fr-inputBg);
+}
+
+:where(.fr-root) .fr-session-card {
+  display: flex;
+  border: 1px solid color-mix(in srgb, var(--fr-text) 12%, transparent);
+  border-radius: 10px;
+}
+
+:where(.fr-root) .fr-session-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: color-mix(in srgb, var(--fr-text) 4%, var(--fr-inputBg));
+  border-bottom: 1px solid color-mix(in srgb, var(--fr-text) 8%, transparent);
+}
+
+:where(.fr-root) .fr-session-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fr-muted);
+}
+
+:where(.fr-root) .fr-session-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  color: var(--fr-text);
+  background: color-mix(in srgb, var(--fr-accent, #5b4dff) 14%, transparent);
+}
+
+:where(.fr-root) .fr-session-empty {
+  margin: 0;
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--fr-muted);
+}
+
+:where(.fr-root) .fr-session-list {
+  margin: 0;
 }
 
 :where(.fr-root) .fr-session-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 1rem;
-  font-size: 0.875em;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8125rem;
+  border-top: 1px solid color-mix(in srgb, var(--fr-text) 6%, transparent);
 }
 
+:where(.fr-root) .fr-session-row:first-child {
+  border-top: 0;
+}
+
+:where(.fr-root) .fr-session-row dt,
 :where(.fr-root) .fr-session-key {
   color: var(--fr-muted);
+}
+
+:where(.fr-root) .fr-session-row dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 :where(.fr-root) .fr-slider {

@@ -29,6 +29,7 @@ import { mergeFromRepository } from '@/lib/mergeSelected';
 import { uid } from '@/lib/utils';
 import { DOCUMENT_FORMAT, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
 import { whenSaved } from '@/persistence/autosave';
+import { ApiUnreachable } from '@/auth/client';
 import { mergeRemoteForms } from '@/persistence/draftsApi';
 import { newStoredForm, openStored } from '@/persistence/openForm';
 import { parseFormJson } from '@/lib/formJson';
@@ -56,6 +57,7 @@ const M = defineMessages('builder', {
   'forms.merge': 'Merge selected',
   'forms.merge_need_two': 'Select at least two forms to merge.',
   'forms.merge_failed': 'Those forms could not be merged.',
+  'forms.merge_unreachable': 'The server cannot be reached, so these forms could not be merged. Check that the backend is running and try again.',
   'forms.merge_conflict_title': 'These fields cannot be combined',
   'forms.merge_conflict_help':
     'The same question appears in more than one form, but the extra rules do not fit together. Pick which version to keep.',
@@ -236,7 +238,8 @@ export function FormsPage() {
       try {
         remote = await mergeRemoteForms(ids, resolutions);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t(M['forms.merge_failed']));
+        if (err instanceof ApiUnreachable) setError(t(M['forms.merge_unreachable']));
+        else setError(err instanceof Error && err.message ? err.message : t(M['forms.merge_failed']));
         return;
       }
       if (remote?.ok) {

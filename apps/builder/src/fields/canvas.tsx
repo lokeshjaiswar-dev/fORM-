@@ -17,6 +17,10 @@ import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc, isField, plainText } from '@/lib/definition';
 
+function staticText(value: { kind: string; value: string } | undefined): string | undefined {
+  return value?.kind === 'static' ? value.value : undefined;
+}
+
 /*
  * The canvas view of every available block type (FND-03): what an author sees in place of the respondent control.
  * Value fields show a static preview of their control under the label editor; content blocks are edited in place.
@@ -87,7 +91,11 @@ const M = defineMessages('builder', {
   'canvas.session.utm_campaign': 'UTM campaign',
   'canvas.session.utm_term': 'UTM term',
   'canvas.session.utm_content': 'UTM content',
-  'canvas.session_capture_only': 'Not shown on the form · captured in the answers',
+  'canvas.session_title': 'Session details',
+  'canvas.session_capture_only': 'Captured with the response',
+  'canvas.session_shown': 'Shown on the form',
+  'canvas.session_empty': 'Nothing is collected yet. Turn on the facts you need in the field settings.',
+  'canvas.session_fixed': 'Fixed',
   'canvas.heading': 'Heading',
   'canvas.paragraph': 'Type something…',
   'canvas.repeat_hint': '{min}–{max} rows · respondents can add more while filling',
@@ -150,9 +158,9 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
         {block.config.suffix ? <span className="fr-blank-words">{block.config.suffix}</span> : null}
       </span>
     ) : (
-      <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />
+      <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} value={staticText(block.config.defaultValue)} />
     ),
-  long_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} tall />,
+  long_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} tall value={staticText(block.config.defaultValue)} />,
   full_name: ({ block }) => (
     <div className="fr-name pointer-events-none">
       {block.config.parts.map((part) => (
@@ -163,7 +171,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       ))}
     </div>
   ),
-  email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
+  email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} value={staticText(block.config.defaultValue)} />,
   phone: ({ block }) => (
     <div className="fr-phone pointer-events-none">
       {block.config.showCountrySelect ? (
@@ -189,7 +197,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   number: ({ block }) => <NumberCanvas block={block} />,
-  url: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
+  url: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} value={staticText(block.config.defaultValue)} />,
   single_choice: ({ block }) =>
     block.config.display === 'dropdown' ? (
       <Select block={block} placeholder={block.config.placeholder} />
@@ -436,24 +444,39 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   ),
   calculation: ({ block }) => <TextBox block={block} />,
   context: ({ block }) => {
-    const extras = [...(block.config.urlParams ?? []), ...(block.config.staticFacts ?? []).map((f) => f.key)];
+    const params = block.config.urlParams ?? [];
+    const fixed = block.config.staticFacts ?? [];
     const hidden = block.config.display === 'hidden';
+    const empty = block.config.sources.length === 0 && params.length === 0 && fixed.length === 0;
     return (
-      <output className="fr-input fr-computed fr-session">
-        {hidden ? <p className="text-[12px] text-[var(--fr-muted)]">{t(M['canvas.session_capture_only'])}</p> : null}
-        {block.config.sources.map((source) => (
-          <span key={source} className="fr-session-row">
-            <span className="fr-session-key">{t(SESSION_SOURCE[source])}</span>
-            <span>—</span>
-          </span>
-        ))}
-        {extras.map((key) => (
-          <span key={key} className="fr-session-row">
-            <span className="fr-session-key">{key}</span>
-            <span>—</span>
-          </span>
-        ))}
-      </output>
+      <div className="fr-session-card">
+        <div className="fr-session-head">
+          <span className="fr-session-title">{t(M['canvas.session_title'])}</span>
+          <span className="fr-session-badge">{hidden ? t(M['canvas.session_capture_only']) : t(M['canvas.session_shown'])}</span>
+        </div>
+        {empty ? <p className="fr-session-empty">{t(M['canvas.session_empty'])}</p> : (
+          <dl className="fr-session-list">
+            {block.config.sources.map((source) => (
+              <div key={source} className="fr-session-row">
+                <dt>{t(SESSION_SOURCE[source])}</dt>
+                <dd>Captured</dd>
+              </div>
+            ))}
+            {params.map((key) => (
+              <div key={key} className="fr-session-row">
+                <dt>{key}</dt>
+                <dd>URL</dd>
+              </div>
+            ))}
+            {fixed.map((fact) => (
+              <div key={fact.key} className="fr-session-row">
+                <dt>{fact.key}</dt>
+                <dd>{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
     );
   },
   consent: ({ block }) => (
@@ -567,7 +590,7 @@ function AppointmentCanvas({ block }: { block: BlockOf<'appointment'> }) {
 function NumberCanvas({ block }: { block: BlockOf<'number'> }) {
   const c = block.config;
   const slider = c.display === 'stepper' && c.min !== undefined && c.max !== undefined;
-  if (!slider) return <TextBox block={block} placeholder={c.placeholder} prefix={c.prefix} suffix={c.suffix} />;
+  if (!slider) return <TextBox block={block} placeholder={c.placeholder} prefix={c.prefix} suffix={c.suffix} value={c.defaultValue} />;
   const control = (
     <div className="fr-slider pointer-events-none">
       <span className="fr-slider-edge">{c.min}</span>
