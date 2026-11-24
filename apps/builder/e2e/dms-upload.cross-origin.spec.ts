@@ -73,9 +73,11 @@ test('the child answers headers: framable by the listed parent, the rest of the 
   const embed = await request.get(`${childOrigin}/embed/dms-upload`);
   expect(embed.headers()['content-security-policy']).toContain(`frame-ancestors 'self' ${PARENT_ORIGIN};`);
   expect(embed.headers()['x-frame-options']).toBeUndefined();
-  const other = await request.get(`${childOrigin}/forms`);
-  expect(other.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
-  expect(other.headers()['x-frame-options']).toBe('DENY');
+  for (const path of ['/forms', '/embed/dms-master']) {
+    const other = await request.get(`${childOrigin}${path}`);
+    expect(other.headers()['content-security-policy'], path).toContain("frame-ancestors 'none'");
+    expect(other.headers()['x-frame-options'], path).toBe('DENY');
+  }
 });
 
 test('a listed parent on another origin: handshake and validate round trip', async ({ page }) => {

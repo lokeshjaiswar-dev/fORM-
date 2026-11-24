@@ -191,12 +191,14 @@ test.describe('what the page refuses', () => {
     await expect.poll(() => refused.length).toBeGreaterThan(0);
   });
 
-  test('response headers: /embed/* is framable by the page itself only (default), every other route is DENY', async ({ request }) => {
+  test('response headers: only /embed/dms-upload is framable (by the page itself by default), every other route, /embed/dms-master included, is DENY', async ({ request }) => {
     const embed = await request.get('/embed/dms-upload');
     expect(embed.headers()['content-security-policy']).toContain("frame-ancestors 'self'");
     expect(embed.headers()['x-frame-options']).toBeUndefined();
-    const other = await request.get('/forms');
-    expect(other.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
-    expect(other.headers()['x-frame-options']).toBe('DENY');
+    for (const url of ['/forms', '/embed/dms-master']) {
+      const other = await request.get(url);
+      expect(other.headers()['content-security-policy'], url).toContain("frame-ancestors 'none'");
+      expect(other.headers()['x-frame-options'], url).toBe('DENY');
+    }
   });
 });
