@@ -75,6 +75,26 @@ Rules for whoever serves the build:
 - Do not add an inline script (analytics, a config blob) to `index.html`. The policy refuses it, and the builder reads its runtime settings from the API (`GET /v1/meta/edition`).
 - The API's CORS origin (`PUBLIC_BUILDER_URL`) must be the builder's origin: the Reporting API sends its batches with a CORS preflight.
 
+## Embedded pages (`/embed/*`, DMS+)
+
+`/embed/*` is fORM- hosted inside another product: `/embed/dms-master` (the master builder, a top-level page) and `/embed/dms-upload` (the field form of the DMS upload step, in an iframe on the classic frontend). Only these routes may be framed, and only by the origins in `VITE_FP_EMBED_PARENTS` (build time, comma separated; unset means the page's own origin). Every other route keeps `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+
+The `/embed/` response carries the same headers with two differences: `frame-ancestors 'self' <origins>`, and no `X-Frame-Options` (it cannot name an origin list). `/embed/dms-upload` checks the same list in the browser: it reads `?fp_parent=<origin>` only when that origin is listed, and then reads only messages whose `event.source` is the framing window and whose `event.origin` is that origin (`src/embed/bridge/`). Set `FP_EMBED_PARENTS` when you print the headers to get the lines for the extra location (here for an on-prem host with the DMS+ origin `https://dms.example`):
+
+```nginx
+location ^~ /embed/ {
+  root /usr/share/form/builder;
+  try_files $uri /index.html;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self' https://dms.example; require-trusted-types-for 'script'; trusted-types 'none'; report-uri /v1/csp-reports; report-to csp" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Cross-Origin-Opener-Policy "same-origin" always;
+  add_header Reporting-Endpoints "csp=\"/v1/csp-reports\"" always;
+}
+```
+
+The Vite dev and preview servers do the same from `VITE_FP_EMBED_PARENTS` (`security/vite.ts`, `embedFraming`).
+
 ## Development and preview
 
 | Server | Policy | Reports |

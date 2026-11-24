@@ -27,6 +27,12 @@ export interface BuilderHeaderOptions {
    * to `report-uri`, which Chromium sends at once.
    */
   reportTo?: boolean;
+  /**
+   * Set only for the `/embed/*` pages (embedHeaders): the origins that may frame them besides the page's own, as
+   * `frame-ancestors 'self' <origins>`. `X-Frame-Options` is then left out, since it cannot name an origin list and
+   * would override the CSP in browsers that honour both. Every other route keeps `'none'` and `DENY`.
+   */
+  frameAncestors?: readonly string[];
 }
 
 type Directives = Array<[string, ...string[]]>;
@@ -58,7 +64,7 @@ export function builderCsp(options: BuilderHeaderOptions): string {
     ['object-src', "'none'"],
     ['base-uri', "'none'"],
     ['form-action', "'self'"],
-    ['frame-ancestors', "'none'"],
+    options.frameAncestors === undefined ? ['frame-ancestors', "'none'"] : ['frame-ancestors', "'self'", ...origins(options.frameAncestors)],
     ...(dev ? [] : TRUSTED_TYPES),
     ...reporting(options),
   ];
@@ -71,12 +77,17 @@ export function builderSecurityHeaders(options: BuilderHeaderOptions): Record<st
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'X-Content-Type-Options': 'nosniff',
     /* Browsers without `frame-ancestors`. */
-    'X-Frame-Options': 'DENY',
+    ...(options.frameAncestors === undefined ? { 'X-Frame-Options': 'DENY' } : {}),
     'Cross-Origin-Opener-Policy': 'same-origin',
   };
   if (options.mode === 'development') headers['Content-Security-Policy-Report-Only'] = serialize([...TRUSTED_TYPES, ...reporting(options)]);
   if (options.reportUri && options.reportTo !== false) headers['Reporting-Endpoints'] = `${CSP_REPORT_GROUP}="${options.reportUri}"`;
   return headers;
+}
+
+/** The `/embed/*` pages (fORM- hosted inside DMS+): the same headers, but framable by `parents` (and the page's own origin). */
+export function embedHeaders(options: BuilderHeaderOptions, parents: readonly string[]): Record<string, string> {
+  return builderSecurityHeaders({ ...options, frameAncestors: parents });
 }
 
 /**
@@ -90,6 +101,20 @@ export function productionHeaders(env: { PUBLIC_API_URL?: string | undefined }):
     connectOrigins: api ? [api] : [],
     reportUri: `${api ?? ''}${API_CSP_REPORT_PATH}`,
   });
+}
+
+/** The production `/embed/*` headers: `FP_EMBED_PARENTS` (comma separated origins) may frame them. */
+export function productionEmbedHeaders(env: { PUBLIC_API_URL?: string | undefined; FP_EMBED_PARENTS?: string | undefined }): Record<string, string> {
+  const api = env.PUBLIC_API_URL ? new URL(env.PUBLIC_API_URL).origin : undefined;
+  const parents = (env.FP_EMBED_PARENTS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+  return embedHeaders({ mode: 'production', connectOrigins: api ? [api] : [], reportUri: `${api ?? ''}${API_CSP_REPORT_PATH}` }, parents);
+}
+
+/** True for `<base>embed` and `<base>embed/...` (`base` is the app's base path, VITE_BASE: `/` or `/formplus/`). Nothing else is framable. */
+export function isEmbedPath(url: string | undefined, base = '/'): boolean {
+  const prefix = `${base.replace(/\/+$/, '')}/embed`;
+  const path = (url ?? '').split(/[?#]/)[0] ?? '';
+  return path === prefix || path.startsWith(`${prefix}/`);
 }
 
 /** nginx `add_header … always;` lines for the static builder. */

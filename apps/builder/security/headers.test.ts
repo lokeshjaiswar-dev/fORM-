@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { builderCsp, builderSecurityHeaders, nginxHeaders, productionHeaders } from './headers.ts';
+import { builderCsp, builderSecurityHeaders, embedHeaders, isEmbedPath, nginxHeaders, productionEmbedHeaders, productionHeaders } from './headers.ts';
 
 const directives = (csp: string) => Object.fromEntries(csp.split('; ').map((d) => [d.split(' ')[0], d.split(' ').slice(1).join(' ')]));
 
@@ -69,5 +69,39 @@ describe('builder security headers (FND-20)', () => {
     const block = (lines: string) => lines.split('\n').map((l) => `  ${l}`).join('\n');
     expect(doc).toContain(block(nginxHeaders(productionHeaders({ PUBLIC_API_URL: 'https://api.form.example' }))));
     expect(doc).toContain(block(nginxHeaders(productionHeaders({}))));
+  });
+
+  it('the /embed pages may be framed by the listed origins and their own, and send no X-Frame-Options; nothing else changes', () => {
+    const plain = builderSecurityHeaders({ mode: 'production', reportUri: '/__csp-report' });
+    const embed = embedHeaders({ mode: 'production', reportUri: '/__csp-report' }, ['https://dms.example/', 'http://192.168.1.54:3000']);
+    expect(directives(embed['Content-Security-Policy'] ?? '')['frame-ancestors']).toBe("'self' https://dms.example http://192.168.1.54:3000");
+    expect(embed['X-Frame-Options']).toBeUndefined();
+    expect(directives(plain['Content-Security-Policy'] ?? '')['frame-ancestors']).toBe("'none'");
+    expect(plain['X-Frame-Options']).toBe('DENY');
+    const { 'X-Frame-Options': _a, ...plainRest } = plain;
+    expect({ ...embed, 'Content-Security-Policy': '' }).toEqual({ ...plainRest, 'Content-Security-Policy': '' });
+    expect(directives(embed['Content-Security-Policy'] ?? '')['script-src']).toBe("'self'");
+    // No listed parent: framable by the page's own origin only (the child's default allowlist).
+    expect(directives(embedHeaders({ mode: 'production' }, [])['Content-Security-Policy'] ?? '')['frame-ancestors']).toBe("'self'");
+  });
+
+  it('a wildcard or non-origin entry is not an ancestor', () => {
+    expect(() => embedHeaders({ mode: 'production' }, ['*'])).toThrow();
+  });
+
+  it('isEmbedPath matches the embed prefix under the base and nothing that merely contains the word', () => {
+    expect(isEmbedPath('/embed/dms-upload?fp_parent=x')).toBe(true);
+    expect(isEmbedPath('/embed')).toBe(true);
+    expect(isEmbedPath('/embed/')).toBe(true);
+    expect(isEmbedPath('/formplus/embed/dms-upload', '/formplus/')).toBe(true);
+    expect(isEmbedPath('/embed/dms-upload', '/formplus/')).toBe(false);
+    for (const url of ['/f/embed', '/forms/embed/responses', '/embedded', '/embed.js', '/', '/forms', undefined, '//embed/x']) expect(isEmbedPath(url as string | undefined), String(url)).toBe(false);
+  });
+
+  it('the production serving guide carries the generated /embed/ location lines', () => {
+    const doc = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../docs/platform/builder-security-headers.md'), 'utf8').replaceAll('\r\n', '\n');
+    const lines = nginxHeaders(productionEmbedHeaders({ FP_EMBED_PARENTS: 'https://dms.example' })).split('\n').map((l) => `  ${l}`).join('\n');
+    expect(doc).toContain(lines);
+    expect(directives(productionEmbedHeaders({ FP_EMBED_PARENTS: ' https://a.example , https://b.example/ ' })['Content-Security-Policy'] ?? '')['frame-ancestors']).toBe("'self' https://a.example https://b.example");
   });
 });

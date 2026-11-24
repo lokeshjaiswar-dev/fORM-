@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Connect, Plugin } from 'vite';
-import { DEV_CSP_REPORT_PATH } from './headers.ts';
+import { DEV_CSP_REPORT_PATH, isEmbedPath } from './headers.ts';
 
 const MAX_REPORT_BYTES = 64 * 1024;
 const MAX_REPORTS = 500;
@@ -85,5 +85,31 @@ export function noInjectedStyles(): Plugin {
       if (calls !== 1) this.error(`sonner: expected one __insertCSS("…") call to remove, found ${calls}; review security/vite.ts`);
       return { code: code.replace(SONNER_INSERT_CSS, '\n'), map: null };
     },
+  };
+}
+
+/**
+ * `/embed/*` may be framed by DMS+ (VITE_FP_EMBED_PARENTS) while every other route stays `frame-ancestors 'none'`.
+ * Vite's `server.headers` and `preview.headers` are one set for all paths, so this replaces the framing headers on the
+ * response of an embed path just before its head is written, whichever middleware set them first. `headers` is the
+ * full set of `embedHeaders(...)`; headers it does not carry (`X-Frame-Options`) are removed.
+ */
+export function embedFraming(headers: Record<string, string>, base = '/'): Plugin {
+  const replaced = ['Content-Security-Policy', 'X-Frame-Options'];
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    if (isEmbedPath(req.url, base)) {
+      const writeHead = res.writeHead.bind(res) as (...args: unknown[]) => ServerResponse;
+      res.writeHead = ((...args: unknown[]) => {
+        for (const name of replaced) if (!(name in headers)) res.removeHeader(name);
+        for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+        return writeHead(...args);
+      }) as typeof res.writeHead;
+    }
+    next();
+  };
+  return {
+    name: 'fr-embed-framing',
+    configureServer: (server) => void server.middlewares.use(handler),
+    configurePreviewServer: (server) => void server.middlewares.use(handler),
   };
 }
