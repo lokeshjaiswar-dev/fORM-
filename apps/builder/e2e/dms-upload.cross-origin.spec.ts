@@ -21,7 +21,7 @@ const PARENT_ORIGIN = 'http://localhost:4173';
 
 test.describe.configure({ mode: 'serial' });
 /* Chromium's Local Network Access check refuses a frame on one localhost port from a page that the test fulfils by route; production hosts are not "local". */
-test.use({ launchOptions: { args: ['--disable-features=LocalNetworkAccessChecks'] } });
+test.use({ launchOptions: { args: ['--disable-features=LocalNetworkAccessChecks'], ...(process.env['PW_CHROMIUM_PATH'] ? { executablePath: process.env['PW_CHROMIUM_PATH'] } : {}) } });
 
 let server: ChildProcess | undefined;
 let childOrigin = '';
