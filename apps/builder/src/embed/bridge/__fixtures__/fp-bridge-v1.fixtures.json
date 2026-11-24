@@ -1,0 +1,689 @@
+{
+  "$comment": "Canonical fixtures for fp-bridge/1 (DESIGN.md section 4). Repos keep byte-identical copies. Field ids d1... = doctype \"Invoice\", a1... = master \"Vendor\". today is fixed at 24-11-2026 via init.context.today.",
+  "protocol": "fp-bridge/1",
+  "childUrl": {
+    "prod": "/formplus/embed/dms-upload?fp_parent=<encoded parent origin>&fp_v=1",
+    "dev": "http://192.168.1.54:5173/embed/dms-upload?fp_parent=<encoded parent origin>&fp_v=1"
+  },
+  "documentFormBuildersResponse": {
+    "$comment": "data of POST document-form-builders for [doctypeId, masterId] after T-API G9; parent splits by field_source",
+    "data": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000001",
+        "type": "textinput",
+        "label": "",
+        "value": "Invoice No",
+        "required": false,
+        "placeholder": "",
+        "numeric": true,
+        "specialChars": true,
+        "increment": true,
+        "incrementOption": "prefix",
+        "prefix": "INV-",
+        "autoIncrementPattern": 4,
+        "autoIncrementValue": "INV-0007",
+        "field_source": "doctype"
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000002",
+        "type": "numberinput",
+        "label": "",
+        "value": "Invoice Amount",
+        "required": true,
+        "placeholder": "Amount in rupees",
+        "field_source": "doctype"
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000003",
+        "type": "email",
+        "label": "",
+        "value": "Billing Email",
+        "required": false,
+        "placeholder": "",
+        "field_source": "doctype"
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000004",
+        "type": "phonenumber",
+        "label": "",
+        "value": "Billing Phone",
+        "required": false,
+        "placeholder": "",
+        "field_source": "doctype"
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000005",
+        "type": "multilineinput",
+        "label": "",
+        "value": "Remarks",
+        "required": false,
+        "placeholder": "",
+        "field_source": "doctype"
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000006",
+        "type": "dropdown",
+        "label": "",
+        "value": "Currency",
+        "required": true,
+        "placeholder": "",
+        "options": [
+          {
+            "name": "INR",
+            "value": "INR"
+          },
+          {
+            "name": "USD",
+            "value": "USD"
+          }
+        ],
+        "field_source": "doctype"
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000007",
+        "type": "date",
+        "label": "",
+        "value": "Invoice Date",
+        "required": true,
+        "placeholder": "",
+        "isDefaultToDate": true,
+        "defaultDate": "24-11-2026",
+        "field_source": "doctype"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "type": "textinput",
+        "label": "",
+        "value": "Vendor Name",
+        "required": true,
+        "placeholder": "",
+        "primary": true,
+        "numeric": false,
+        "specialChars": false,
+        "field_source": "master"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "type": "numberinput",
+        "label": "",
+        "value": "Vendor Code",
+        "required": false,
+        "placeholder": "",
+        "field_source": "master"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "type": "email",
+        "label": "",
+        "value": "Vendor Email",
+        "required": true,
+        "placeholder": "",
+        "field_source": "master"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "type": "phonenumber",
+        "label": "",
+        "value": "Vendor Phone",
+        "required": false,
+        "placeholder": "",
+        "field_source": "master"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "type": "multilineinput",
+        "label": "",
+        "value": "Vendor Address",
+        "required": false,
+        "placeholder": "",
+        "field_source": "master"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000006",
+        "type": "dropdown",
+        "label": "",
+        "value": "Vendor Category",
+        "required": false,
+        "placeholder": "",
+        "options": [],
+        "field_source": "master"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000007",
+        "type": "date",
+        "label": "",
+        "value": "Onboarded On",
+        "required": false,
+        "placeholder": "",
+        "field_source": "master"
+      }
+    ]
+  },
+  "handshake": [
+    {
+      "protocol": "fp-bridge/1",
+      "type": "ready",
+      "id": "c-ready-1",
+      "payload": {
+        "version": "1",
+        "capabilities": [
+          "options",
+          "readOnly"
+        ]
+      }
+    },
+    {
+      "protocol": "fp-bridge/1",
+      "type": "init",
+      "id": "p-init-1",
+      "payload": {
+        "doctypeFields": [
+          {
+            "id": "d1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype"
+          },
+          {
+            "id": "d1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "",
+            "value": "Invoice Amount",
+            "required": true,
+            "placeholder": "Amount in rupees",
+            "field_source": "doctype"
+          },
+          {
+            "id": "d1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "",
+            "value": "Billing Email",
+            "required": false,
+            "placeholder": "",
+            "field_source": "doctype"
+          },
+          {
+            "id": "d1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "",
+            "value": "Billing Phone",
+            "required": false,
+            "placeholder": "",
+            "field_source": "doctype"
+          },
+          {
+            "id": "d1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Remarks",
+            "required": false,
+            "placeholder": "",
+            "field_source": "doctype"
+          },
+          {
+            "id": "d1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "",
+            "value": "Currency",
+            "required": true,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "INR",
+                "value": "INR"
+              },
+              {
+                "name": "USD",
+                "value": "USD"
+              }
+            ],
+            "field_source": "doctype"
+          },
+          {
+            "id": "d1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "24-11-2026",
+            "field_source": "doctype"
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "a1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master"
+          },
+          {
+            "id": "a1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master"
+          },
+          {
+            "id": "a1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "",
+            "value": "Vendor Email",
+            "required": true,
+            "placeholder": "",
+            "field_source": "master"
+          },
+          {
+            "id": "a1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master"
+          },
+          {
+            "id": "a1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master"
+          },
+          {
+            "id": "a1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "options": [],
+            "field_source": "master"
+          },
+          {
+            "id": "a1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master"
+          }
+        ],
+        "values": {
+          "a1000000-0000-4000-8000-000000000001": "Acme Traders",
+          "a1000000-0000-4000-8000-000000000003": "sales@acme.example",
+          "a1000000-0000-4000-8000-000000000007": "2026-04-01"
+        },
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "create",
+          "today": "24-11-2026"
+        }
+      }
+    },
+    {
+      "protocol": "fp-bridge/1",
+      "type": "initialized",
+      "id": "c-init-ack-1",
+      "replyTo": "p-init-1",
+      "payload": {
+        "fieldCount": 14,
+        "unsupported": []
+      }
+    },
+    {
+      "protocol": "fp-bridge/1",
+      "type": "resize",
+      "id": "c-resize-1",
+      "payload": {
+        "height": 1180
+      }
+    }
+  ],
+  "optionsExchange": [
+    {
+      "protocol": "fp-bridge/1",
+      "type": "options.request",
+      "id": "c-opt-1",
+      "payload": {
+        "fieldId": "a1000000-0000-4000-8000-000000000006",
+        "parentValue": null,
+        "page": 1,
+        "search": ""
+      }
+    },
+    {
+      "protocol": "fp-bridge/1",
+      "type": "options.result",
+      "id": "p-opt-1",
+      "replyTo": "c-opt-1",
+      "payload": {
+        "fieldId": "a1000000-0000-4000-8000-000000000006",
+        "options": [
+          {
+            "name": "Wholesale",
+            "value": "Wholesale"
+          },
+          {
+            "name": "Retail",
+            "value": "Retail"
+          }
+        ],
+        "hasMore": false
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "valid create: all 7 types in doctype and master; inbound master date YYYY-MM-DD normalised to DD-MM-YYYY; increment field excluded from values",
+      "init": "handshake[1]",
+      "userInput": {
+        "d1000000-0000-4000-8000-000000000002": "125000",
+        "d1000000-0000-4000-8000-000000000003": "accounts@acme.example",
+        "d1000000-0000-4000-8000-000000000004": "9876543210",
+        "d1000000-0000-4000-8000-000000000005": "Paid via NEFT.\nRef 4471",
+        "d1000000-0000-4000-8000-000000000006": "INR",
+        "a1000000-0000-4000-8000-000000000002": "1042",
+        "a1000000-0000-4000-8000-000000000004": "9123456780",
+        "a1000000-0000-4000-8000-000000000005": "12 MG Road, Pune",
+        "a1000000-0000-4000-8000-000000000006": "Wholesale"
+      },
+      "validate": {
+        "protocol": "fp-bridge/1",
+        "type": "validate",
+        "id": "p-val-1",
+        "payload": {}
+      },
+      "expectedChange": {
+        "protocol": "fp-bridge/1",
+        "type": "change",
+        "id": "c-change-n",
+        "payload": {
+          "values": {
+            "d1000000-0000-4000-8000-000000000002": "125000",
+            "d1000000-0000-4000-8000-000000000003": "accounts@acme.example",
+            "d1000000-0000-4000-8000-000000000004": "9876543210",
+            "d1000000-0000-4000-8000-000000000005": "Paid via NEFT.\nRef 4471",
+            "d1000000-0000-4000-8000-000000000006": "INR",
+            "d1000000-0000-4000-8000-000000000007": "24-11-2026",
+            "a1000000-0000-4000-8000-000000000001": "Acme Traders",
+            "a1000000-0000-4000-8000-000000000002": "1042",
+            "a1000000-0000-4000-8000-000000000003": "sales@acme.example",
+            "a1000000-0000-4000-8000-000000000004": "9123456780",
+            "a1000000-0000-4000-8000-000000000005": "12 MG Road, Pune",
+            "a1000000-0000-4000-8000-000000000006": "Wholesale",
+            "a1000000-0000-4000-8000-000000000007": "01-04-2026"
+          },
+          "valid": true
+        }
+      },
+      "expectedValidated": {
+        "protocol": "fp-bridge/1",
+        "type": "validated",
+        "id": "c-val-1",
+        "replyTo": "p-val-1",
+        "payload": {
+          "valid": true,
+          "errors": [],
+          "values": {
+            "d1000000-0000-4000-8000-000000000002": "125000",
+            "d1000000-0000-4000-8000-000000000003": "accounts@acme.example",
+            "d1000000-0000-4000-8000-000000000004": "9876543210",
+            "d1000000-0000-4000-8000-000000000005": "Paid via NEFT.\nRef 4471",
+            "d1000000-0000-4000-8000-000000000006": "INR",
+            "d1000000-0000-4000-8000-000000000007": "24-11-2026",
+            "a1000000-0000-4000-8000-000000000001": "Acme Traders",
+            "a1000000-0000-4000-8000-000000000002": "1042",
+            "a1000000-0000-4000-8000-000000000003": "sales@acme.example",
+            "a1000000-0000-4000-8000-000000000004": "9123456780",
+            "a1000000-0000-4000-8000-000000000005": "12 MG Road, Pune",
+            "a1000000-0000-4000-8000-000000000006": "Wholesale",
+            "a1000000-0000-4000-8000-000000000007": "01-04-2026"
+          }
+        }
+      },
+      "expectedRecord": {
+        "Invoice No": "INV-0007",
+        "Invoice Amount": "125000",
+        "Billing Email": "accounts@acme.example",
+        "Billing Phone": "9876543210",
+        "Remarks": "Paid via NEFT.\nRef 4471",
+        "Currency": "INR",
+        "Invoice Date": "24-11-2026",
+        "Vendor Name": "Acme Traders",
+        "Vendor Code": "1042",
+        "Vendor Email": "sales@acme.example",
+        "Vendor Phone": "9123456780",
+        "Vendor Address": "12 MG Road, Pune",
+        "Vendor Category": "Wholesale",
+        "Onboarded On": "01-04-2026"
+      },
+      "expectedRecordEdit": {
+        "Invoice No": "",
+        "Invoice Amount": "125000",
+        "Billing Email": "accounts@acme.example",
+        "Billing Phone": "9876543210",
+        "Remarks": "Paid via NEFT.\nRef 4471",
+        "Currency": "INR",
+        "Invoice Date": "24-11-2026",
+        "Vendor Name": "Acme Traders",
+        "Vendor Code": "1042",
+        "Vendor Email": "sales@acme.example",
+        "Vendor Phone": "9123456780",
+        "Vendor Address": "12 MG Road, Pune",
+        "Vendor Category": "Wholesale",
+        "Onboarded On": "01-04-2026"
+      }
+    },
+    {
+      "name": "invalid: fractional number, bad email, digits in alphabetic textinput, empty required, 11-digit phone, impossible date",
+      "init": "handshake[1]",
+      "userInput": {
+        "d1000000-0000-4000-8000-000000000002": "12.5",
+        "d1000000-0000-4000-8000-000000000003": "bad@",
+        "d1000000-0000-4000-8000-000000000004": "9876543210",
+        "d1000000-0000-4000-8000-000000000005": "Paid via NEFT.\nRef 4471",
+        "d1000000-0000-4000-8000-000000000006": "INR",
+        "d1000000-0000-4000-8000-000000000007": "24-11-2026",
+        "a1000000-0000-4000-8000-000000000001": "Acme 2",
+        "a1000000-0000-4000-8000-000000000002": "1042",
+        "a1000000-0000-4000-8000-000000000003": "",
+        "a1000000-0000-4000-8000-000000000004": "98765432101",
+        "a1000000-0000-4000-8000-000000000005": "12 MG Road, Pune",
+        "a1000000-0000-4000-8000-000000000006": "Wholesale",
+        "a1000000-0000-4000-8000-000000000007": "31-02-2026"
+      },
+      "validate": {
+        "protocol": "fp-bridge/1",
+        "type": "validate",
+        "id": "p-val-2",
+        "payload": {}
+      },
+      "expectedValidated": {
+        "protocol": "fp-bridge/1",
+        "type": "validated",
+        "id": "c-val-2",
+        "replyTo": "p-val-2",
+        "payload": {
+          "valid": false,
+          "errors": [
+            {
+              "fieldId": "d1000000-0000-4000-8000-000000000002",
+              "code": "not_integer",
+              "message": "Invoice Amount must be a whole number"
+            },
+            {
+              "fieldId": "d1000000-0000-4000-8000-000000000003",
+              "code": "invalid_email",
+              "message": "Billing Email is not a valid email"
+            },
+            {
+              "fieldId": "a1000000-0000-4000-8000-000000000001",
+              "code": "pattern",
+              "message": "Vendor Name allows only alphabets"
+            },
+            {
+              "fieldId": "a1000000-0000-4000-8000-000000000003",
+              "code": "required",
+              "message": "Vendor Email cannot be empty"
+            },
+            {
+              "fieldId": "a1000000-0000-4000-8000-000000000004",
+              "code": "too_long",
+              "message": "Vendor Phone can have at most 10 digits"
+            },
+            {
+              "fieldId": "a1000000-0000-4000-8000-000000000007",
+              "code": "invalid_date",
+              "message": "Onboarded On is not a valid date"
+            }
+          ],
+          "values": {
+            "d1000000-0000-4000-8000-000000000002": "12.5",
+            "d1000000-0000-4000-8000-000000000003": "bad@",
+            "d1000000-0000-4000-8000-000000000004": "9876543210",
+            "d1000000-0000-4000-8000-000000000005": "Paid via NEFT.\nRef 4471",
+            "d1000000-0000-4000-8000-000000000006": "INR",
+            "d1000000-0000-4000-8000-000000000007": "24-11-2026",
+            "a1000000-0000-4000-8000-000000000001": "Acme 2",
+            "a1000000-0000-4000-8000-000000000002": "1042",
+            "a1000000-0000-4000-8000-000000000003": "",
+            "a1000000-0000-4000-8000-000000000004": "98765432101",
+            "a1000000-0000-4000-8000-000000000005": "12 MG Road, Pune",
+            "a1000000-0000-4000-8000-000000000006": "Wholesale",
+            "a1000000-0000-4000-8000-000000000007": "31-02-2026"
+          }
+        }
+      },
+      "$comment": "Tests compare errors by (fieldId, code) as a set; message text is free."
+    }
+  ],
+  "unsupported": {
+    "$comment": "A doctype using a classic type outside the 7 (checkboxes). Child must answer initialized.unsupported=[id]; parent falls back to RenderElement.",
+    "init": {
+      "protocol": "fp-bridge/1",
+      "type": "init",
+      "id": "p-init-unsup",
+      "payload": {
+        "doctypeFields": [
+          {
+            "id": "d2000000-0000-4000-8000-000000000001",
+            "type": "checkboxes",
+            "label": "",
+            "value": "Flags",
+            "required": false,
+            "options": [
+              {
+                "name": "A",
+                "value": "A"
+              }
+            ]
+          }
+        ],
+        "masterFields": [],
+        "values": {},
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "create",
+          "today": "24-11-2026"
+        }
+      }
+    },
+    "expectedInitialized": {
+      "protocol": "fp-bridge/1",
+      "type": "initialized",
+      "id": "c-init-unsup",
+      "replyTo": "p-init-unsup",
+      "payload": {
+        "fieldCount": 1,
+        "unsupported": [
+          "d2000000-0000-4000-8000-000000000001"
+        ]
+      }
+    }
+  },
+  "mustBeRejected": [
+    {
+      "why": "wrong protocol",
+      "message": {
+        "protocol": "fp-bridge/2",
+        "type": "ready",
+        "id": "x1",
+        "payload": {
+          "version": "1",
+          "capabilities": []
+        }
+      }
+    },
+    {
+      "why": "credential smuggled into init",
+      "message": {
+        "protocol": "fp-bridge/1",
+        "type": "init",
+        "id": "x2",
+        "payload": {
+          "doctypeFields": [],
+          "masterFields": [],
+          "values": {},
+          "locale": "en-IN",
+          "readOnly": false,
+          "context": {
+            "mode": "create",
+            "today": "24-11-2026"
+          },
+          "token": "Bearer abc"
+        }
+      }
+    },
+    {
+      "why": "values keyed by name, not field id",
+      "message": {
+        "protocol": "fp-bridge/1",
+        "type": "change",
+        "id": "x3",
+        "payload": {
+          "values": {
+            "Vendor Name": "Acme"
+          },
+          "valid": true
+        }
+      }
+    },
+    {
+      "why": "validated without replyTo",
+      "message": {
+        "protocol": "fp-bridge/1",
+        "type": "validated",
+        "id": "x4",
+        "payload": {
+          "valid": true,
+          "errors": [],
+          "values": {}
+        }
+      }
+    }
+  ]
+}
