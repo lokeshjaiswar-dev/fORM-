@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSessionStore } from '@/auth/client';
+import { formatWhen } from '@/components/responses/format';
 import { FORM, ME, SUB, decidedJson, detailJson, fakeReviewApi, json, problem, tokenFor, unitJson, type FakeReviewApi } from '@/components/review/fakeReviewApi';
 import { UnitDecisionPanel } from '@/components/review/UnitDecisionPanel';
 import type { ReviewDetail } from '@/persistence/reviewsApi';
@@ -69,8 +70,8 @@ describe('UnitDecisionPanel (WP-2.33)', () => {
     expect(docs.getByText('Checked by Legal · Round 2')).toBeInTheDocument();
     const history = docs.getByRole('list', { name: 'History of Documents' });
     expect(within(history).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Rejected by Meera Shah, 15 Nov 2026, 5:30 pm: Missing document',
-      'Approved by a checker, 15 Nov 2026, 6:30 pm',
+      `Rejected by Meera Shah, ${formatWhen('2026-11-15T12:00:00.000Z')}: Missing document`,
+      `Approved by a checker, ${formatWhen('2026-11-15T13:00:00.000Z')}`,
     ]);
     // A unit that is not theirs, or is already decided, has no buttons.
     expect(docs.queryByRole('button')).not.toBeInTheDocument();

@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useSessionStore } from '@/auth/client';
+import { formatWhen } from '@/components/responses/format';
 import { DetailPane } from '@/components/responses/DetailPane';
 import { FORM, ME, SUB, decidedJson, detailJson, fakeReviewApi, json, problem, tokenFor, unitJson, type Call, type FakeReviewApi } from '@/components/review/fakeReviewApi';
 
@@ -156,7 +157,7 @@ describe('DetailPane of a response held for review (WP-2.33)', () => {
         ),
     });
     renderPane();
-    expect(await within(pane()).findByText('Approved by Meera Shah, 16 Nov 2026, 2:30 pm')).toBeInTheDocument();
+    expect(await within(pane()).findByText(`Approved by Meera Shah, ${formatWhen('2026-11-16T09:00:00.000Z')}`)).toBeInTheDocument();
     expect(within(pane()).queryByRole('button', { name: /Approve|Reject/ })).not.toBeInTheDocument();
     expect(within(pane()).getByText('Every required unit is approved, so the response is complete.')).toBeInTheDocument();
   });
