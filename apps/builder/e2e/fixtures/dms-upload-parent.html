@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>fp-bridge parent (test harness)</title>
+<!-- A stand-in for the classic upload step 2: frames the child, logs what it sends, sends what the test asks. -->
+<body style="margin:0;font-family:sans-serif">
+<p>parent page</p>
+<iframe id="child" title="fORM- upload form" style="width:100%;border:0;height:40px"></iframe>
+<script>
+  const params = new URLSearchParams(location.search);
+  const child = document.getElementById('child');
+  const origin = params.get('childOrigin') || location.origin;
+  const parent = params.get('parent') || location.origin;
+  window.fpLog = [];
+  window.fpReadyOnce = false;
+  child.src = origin + '/embed/dms-upload?fp_parent=' + encodeURIComponent(parent) + '&fp_v=1';
+  window.addEventListener('message', function (event) {
+    if (event.source !== child.contentWindow || event.origin !== origin) return;
+    window.fpLog.push(event.data);
+    if (event.data && event.data.type === 'resize') child.style.height = event.data.payload.height + 'px';
+  });
+  window.fpSend = function (message) { child.contentWindow.postMessage(message, origin); };
+</script>

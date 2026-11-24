@@ -259,7 +259,11 @@ function FormSession({ props, meta, base, onRestart }: {
   const evaluateNow = () => session.evaluate(form.getValues() as RawAnswers);
   const currentPage = (path: readonly PageId[]): PageId => pageId ?? path[0] ?? (def.pages[0]?.id as PageId);
 
-  /* Embedding hosts: the evaluated answers after each change (the starting answers are not a change). */
+  /*
+   * Embedding hosts: the normalised answers after each change (the starting answers are not a change). Not
+   * `state.values`: evaluation leaves out an answer that does not fit its field (an email without a domain), and the
+   * host has to see exactly what was typed to say what is wrong with it.
+   */
   const answersChanged = useRef(onAnswersChange);
   useEffect(() => {
     answersChanged.current = onAnswersChange;
@@ -269,7 +273,7 @@ function FormSession({ props, meta, base, onRestart }: {
     if (!reportsAnswers) return;
     return form.subscribe({
       formState: { values: true },
-      callback: () => answersChanged.current?.(session.evaluate(form.getValues() as RawAnswers).state.values),
+      callback: () => answersChanged.current?.(session.evaluate(form.getValues() as RawAnswers).answers),
     });
   }, [form, session, reportsAnswers]);
 

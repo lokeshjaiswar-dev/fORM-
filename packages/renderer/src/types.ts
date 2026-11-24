@@ -95,7 +95,7 @@ export interface FormRendererProps {
    */
   /** No Back, Next or Submit button, and Enter in a field does not advance: the host drives validation through `handleRef`. */
   hideNavigation?: boolean;
-  /** Called with the evaluated answers after every change a respondent makes, and not for the starting answers. */
+  /** Called with the normalised answers (blank ones absent, a value that fails its field's rules kept as typed) after every change a respondent makes, and not for the starting answers. */
   onAnswersChange?: (answers: Answers) => void;
   /** Receives the form's {@link RendererHandle} while it is mounted (and `null` when it is not). */
   handleRef?: Ref<RendererHandle>;

@@ -39,6 +39,14 @@ describe('embedding props', () => {
     expect(seen.at(-1)).toMatchObject({ name: { type: 'short_text', value: 'Al' }, city: { type: 'short_text', value: 'Pune' } });
   });
 
+  it('onAnswersChange keeps an answer that fails its field (an email without a domain), as typed', async () => {
+    const seen: Answers[] = [];
+    const emailForm = form([field('email', 'mail')], [page('p1', ['mail'])]);
+    render(<FormRenderer {...props(runtime(emailForm))} hideNavigation onAnswersChange={(a) => void seen.push(a)} />);
+    await userEvent.setup().type(screen.getByRole('textbox', { name: /mail/ }), 'bad@');
+    expect(seen.at(-1)).toEqual({ mail: { type: 'email', value: { address: 'bad@' } } });
+  });
+
   it('handleRef.validate: errors for the form, shown on the field, nothing submitted; valid once filled', async () => {
     const onSubmit = vi.fn();
     const handle = createRef<RendererHandle>();
