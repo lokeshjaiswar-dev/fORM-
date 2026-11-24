@@ -1,0 +1,574 @@
+{
+  "$comment": "Canonical master-form fixtures (DESIGN.md sections 1 and 3). T-API tests the server side, T-FORM-1 the translator. Order of form_builder_fields = canvas order. dynamic column names are field_<n> in insertion order.",
+  "endpoint": {
+    "create": "POST /dms/v1/master/form",
+    "show": "GET /dms/v1/master/form/{id}",
+    "update": "PATCH /dms/v1/master/form/{id}"
+  },
+  "headers": {
+    "Authorization": "Bearer <DMS user token, never in fixtures>",
+    "X-Tenant-Id": "<tenant>",
+    "X-Workspace-Id": "<workspace uuid>",
+    "Accept": "application/json",
+    "Content-Type": "application/json"
+  },
+  "create": {
+    "request": {
+      "name": "Vendor",
+      "source": "formplus",
+      "classification": null,
+      "doctype_ids": [],
+      "folder_ids": [],
+      "form_builder_fields": [
+        {
+          "id": "b1000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "name": "Vendor Name",
+          "value": "Vendor Name",
+          "label": "Vendor Name",
+          "required": true,
+          "placeholder": "",
+          "primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000002",
+          "type": "numberinput",
+          "name": "Vendor Code",
+          "value": "Vendor Code",
+          "label": "Vendor Code",
+          "required": false,
+          "placeholder": "e.g. 1042"
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000003",
+          "type": "email",
+          "name": "Vendor Email",
+          "value": "Vendor Email",
+          "label": "Vendor Email",
+          "required": true,
+          "placeholder": ""
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000004",
+          "type": "phonenumber",
+          "name": "Vendor Phone",
+          "value": "Vendor Phone",
+          "label": "Vendor Phone",
+          "required": false,
+          "placeholder": ""
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000005",
+          "type": "multilineinput",
+          "name": "Vendor Address",
+          "value": "Vendor Address",
+          "label": "Vendor Address",
+          "required": false,
+          "placeholder": ""
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000006",
+          "type": "dropdown",
+          "name": "Vendor Category",
+          "value": "Vendor Category",
+          "label": "Vendor Category",
+          "required": false,
+          "placeholder": "",
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ],
+          "select": {
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          }
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000007",
+          "type": "date",
+          "name": "Onboarded On",
+          "value": "Onboarded On",
+          "label": "Onboarded On",
+          "required": false,
+          "placeholder": "",
+          "isDefaultToDate": false
+        }
+      ]
+    },
+    "expectedStatus": 201,
+    "expectedPrimaryKey": "Vendor Name",
+    "expectedMasterFields": [
+      {
+        "id": "b1000000-0000-4000-8000-000000000001",
+        "name": "Vendor Name",
+        "type": "textinput",
+        "dynamic_field_name": "field_1",
+        "column": "string",
+        "is_required": true,
+        "is_primary": true,
+        "options": null
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000002",
+        "name": "Vendor Code",
+        "type": "numberinput",
+        "dynamic_field_name": "field_2",
+        "column": "bigInteger",
+        "is_required": false,
+        "is_primary": false,
+        "options": null
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000003",
+        "name": "Vendor Email",
+        "type": "email",
+        "dynamic_field_name": "field_3",
+        "column": "string",
+        "is_required": true,
+        "is_primary": false,
+        "options": null
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000004",
+        "name": "Vendor Phone",
+        "type": "phonenumber",
+        "dynamic_field_name": "field_4",
+        "column": "text",
+        "is_required": false,
+        "is_primary": false,
+        "options": null
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000005",
+        "name": "Vendor Address",
+        "type": "multilineinput",
+        "dynamic_field_name": "field_5",
+        "column": "text",
+        "is_required": false,
+        "is_primary": false,
+        "options": null
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000006",
+        "name": "Vendor Category",
+        "type": "dropdown",
+        "dynamic_field_name": "field_6",
+        "column": "string",
+        "is_required": false,
+        "is_primary": false,
+        "options": [
+          {
+            "name": "Wholesale",
+            "value": "Wholesale"
+          },
+          {
+            "name": "Retail",
+            "value": "Retail"
+          }
+        ]
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000007",
+        "name": "Onboarded On",
+        "type": "date",
+        "dynamic_field_name": "field_7",
+        "column": "date",
+        "is_required": false,
+        "is_primary": false,
+        "options": null
+      }
+    ],
+    "expectedShowFormBuilderFields": "identical to request.form_builder_fields (json_data round-trip)"
+  },
+  "update": {
+    "$comment": "rename (G5), add dropdown option (G3/G12), add a numberinput (G2: column must be bigInteger on update too). updated_at = value from create response (G10).",
+    "request": {
+      "name": "Vendor",
+      "source": "formplus",
+      "updated_at": "<create response data.updated_at>",
+      "form_builder_fields": [
+        {
+          "id": "b1000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "name": "Vendor Legal Name",
+          "value": "Vendor Legal Name",
+          "label": "Vendor Legal Name",
+          "required": true,
+          "placeholder": "",
+          "primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000002",
+          "type": "numberinput",
+          "name": "Vendor Code",
+          "value": "Vendor Code",
+          "label": "Vendor Code",
+          "required": false,
+          "placeholder": "e.g. 1042"
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000003",
+          "type": "email",
+          "name": "Vendor Email",
+          "value": "Vendor Email",
+          "label": "Vendor Email",
+          "required": true,
+          "placeholder": ""
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000004",
+          "type": "phonenumber",
+          "name": "Vendor Phone",
+          "value": "Vendor Phone",
+          "label": "Vendor Phone",
+          "required": false,
+          "placeholder": ""
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000005",
+          "type": "multilineinput",
+          "name": "Vendor Address",
+          "value": "Vendor Address",
+          "label": "Vendor Address",
+          "required": false,
+          "placeholder": ""
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000006",
+          "type": "dropdown",
+          "name": "Vendor Category",
+          "value": "Vendor Category",
+          "label": "Vendor Category",
+          "required": false,
+          "placeholder": "",
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            },
+            {
+              "name": "Distributor",
+              "value": "Distributor"
+            }
+          ],
+          "select": {
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              },
+              {
+                "name": "Distributor",
+                "value": "Distributor"
+              }
+            ]
+          }
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000007",
+          "type": "date",
+          "name": "Onboarded On",
+          "value": "Onboarded On",
+          "label": "Onboarded On",
+          "required": false,
+          "placeholder": "",
+          "isDefaultToDate": false
+        },
+        {
+          "id": "b1000000-0000-4000-8000-000000000008",
+          "type": "numberinput",
+          "name": "Credit Days",
+          "value": "Credit Days",
+          "label": "Credit Days",
+          "required": false,
+          "placeholder": ""
+        }
+      ]
+    },
+    "expectedStatus": 200,
+    "expectedPrimaryKey": "Vendor Legal Name",
+    "expectedChangedMasterFields": [
+      {
+        "id": "b1000000-0000-4000-8000-000000000001",
+        "name": "Vendor Legal Name",
+        "dynamic_field_name": "field_1"
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000006",
+        "options": [
+          {
+            "name": "Wholesale",
+            "value": "Wholesale"
+          },
+          {
+            "name": "Retail",
+            "value": "Retail"
+          },
+          {
+            "name": "Distributor",
+            "value": "Distributor"
+          }
+        ]
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000008",
+        "name": "Credit Days",
+        "type": "numberinput",
+        "dynamic_field_name": "field_8",
+        "column": "bigInteger"
+      }
+    ],
+    "thenRecordPasses": {
+      "Vendor Legal Name": "Acme Traders",
+      "Vendor Email": "sales@acme.example",
+      "Vendor Category": "Distributor",
+      "Credit Days": "45"
+    }
+  },
+  "mustBeRejected": [
+    {
+      "gap": "G11",
+      "status": 422,
+      "code": "UNSUPPORTED_FIELD_TYPE",
+      "request": {
+        "name": "Vendor X",
+        "source": "formplus",
+        "classification": null,
+        "doctype_ids": [],
+        "folder_ids": [],
+        "form_builder_fields": [
+          {
+            "id": "b2000000-0000-4000-8000-000000000001",
+            "type": "signature",
+            "name": "Sign",
+            "value": "Sign",
+            "label": "Sign",
+            "required": false,
+            "placeholder": ""
+          }
+        ]
+      }
+    },
+    {
+      "gap": "G5",
+      "status": 422,
+      "code": "DUPLICATE_FIELD_NAME",
+      "request": {
+        "name": "Vendor Y",
+        "source": "formplus",
+        "classification": null,
+        "doctype_ids": [],
+        "folder_ids": [],
+        "form_builder_fields": [
+          {
+            "id": "b3000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "name": "Name",
+            "value": "Name",
+            "label": "Name",
+            "required": false,
+            "placeholder": ""
+          },
+          {
+            "id": "b3000000-0000-4000-8000-000000000002",
+            "type": "email",
+            "name": " name ",
+            "value": " name ",
+            "label": " name ",
+            "required": false,
+            "placeholder": ""
+          }
+        ]
+      }
+    },
+    {
+      "gap": "G7",
+      "status": 422,
+      "code": "MULTIPLE_PRIMARY",
+      "request": {
+        "name": "Vendor Z",
+        "source": "formplus",
+        "classification": null,
+        "doctype_ids": [],
+        "folder_ids": [],
+        "form_builder_fields": [
+          {
+            "id": "b4000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "name": "A",
+            "value": "A",
+            "label": "A",
+            "required": false,
+            "placeholder": "",
+            "primary": true
+          },
+          {
+            "id": "b4000000-0000-4000-8000-000000000002",
+            "type": "email",
+            "name": "B",
+            "value": "B",
+            "label": "B",
+            "required": false,
+            "placeholder": "",
+            "primary": true
+          }
+        ]
+      }
+    },
+    {
+      "gap": "G4",
+      "status": 422,
+      "code": "MASTER_FIELD_TYPE_LOCKED",
+      "$comment": "after create + one record with Vendor Code = 1042: PATCH changing F2 type numberinput -> date",
+      "patchFieldId": "b1000000-0000-4000-8000-000000000002",
+      "newType": "date"
+    },
+    {
+      "gap": "G10",
+      "status": 409,
+      "code": "MASTER_CHANGED",
+      "$comment": "PATCH with updated_at older than the stored one"
+    }
+  ],
+  "mustStillPass": [
+    {
+      "$comment": "OpenForm path unchanged: source dms with OpenForm types is accepted as before",
+      "status": 201,
+      "request": {
+        "name": "Contact Master",
+        "source": "dms",
+        "doctype_ids": [],
+        "folder_ids": [],
+        "form_builder_fields": [
+          {
+            "id": "b5000000-0000-4000-8000-000000000001",
+            "type": "text",
+            "name": "Your name"
+          },
+          {
+            "id": "b5000000-0000-4000-8000-000000000002",
+            "type": "phone_number",
+            "name": "Phone Number"
+          }
+        ]
+      }
+    }
+  ],
+  "formPlusBlocks": {
+    "$comment": "What elementsToDefinition(create.request.form_builder_fields) must produce per block (subset). key = \"f_\" + id without dashes. All blocks carry x[\"x-dms\"].type = classic type. config.optionCodes is shorthand for options.map(o => o.code); option ids are \"v\" + fnv1a64 hex of the value.",
+    "blocks": [
+      {
+        "id": "b1000000-0000-4000-8000-000000000001",
+        "key": "f_b1000000000040008000000000000001",
+        "type": "short_text",
+        "required": true,
+        "unique": {
+          "normalize": "exact"
+        },
+        "config": {
+          "pattern": {
+            "source": "^[a-zA-Z\\s]+$"
+          }
+        }
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000002",
+        "key": "f_b1000000000040008000000000000002",
+        "type": "number",
+        "required": false,
+        "config": {
+          "display": "input",
+          "integerOnly": true,
+          "allowNegative": true,
+          "min": "-2147483648",
+          "max": "2147483647",
+          "placeholder": "e.g. 1042"
+        }
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000003",
+        "key": "f_b1000000000040008000000000000003",
+        "type": "email",
+        "required": true,
+        "config": {}
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000004",
+        "key": "f_b1000000000040008000000000000004",
+        "type": "short_text",
+        "required": false,
+        "config": {
+          "maxLength": 10,
+          "pattern": {
+            "source": "^[0-9]+$"
+          }
+        }
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000005",
+        "key": "f_b1000000000040008000000000000005",
+        "type": "long_text",
+        "required": false,
+        "config": {
+          "rows": 4
+        }
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000006",
+        "key": "f_b1000000000040008000000000000006",
+        "type": "single_choice",
+        "required": false,
+        "config": {
+          "display": "dropdown",
+          "searchable": true,
+          "optionCodes": [
+            "Wholesale",
+            "Retail"
+          ]
+        }
+      },
+      {
+        "id": "b1000000-0000-4000-8000-000000000007",
+        "key": "f_b1000000000040008000000000000007",
+        "type": "date",
+        "required": false,
+        "config": {
+          "pattern": "DD-MM-YYYY",
+          "picker": "calendar"
+        }
+      }
+    ],
+    "textinputPatterns": {
+      "numeric=false,specialChars=false": "^[a-zA-Z\\s]+$",
+      "numeric=true,specialChars=false": "^[a-zA-Z0-9\\s]+$",
+      "numeric=false,specialChars=true": "^[^0-9]*$",
+      "numeric=true,specialChars=true": null
+    }
+  }
+}
