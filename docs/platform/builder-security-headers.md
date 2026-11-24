@@ -21,7 +21,7 @@ The production `Content-Security-Policy`:
 
 ```
 default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self';
-connect-src 'self' {PUBLIC_API_URL origin, if separate}; object-src 'none'; base-uri 'none'; form-action 'self';
+connect-src 'self' {PUBLIC_API_URL origin, if separate} {FP_DMS_API_ORIGINS, if set}; object-src 'none'; base-uri 'none'; form-action 'self';
 frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types 'none';
 report-uri {report URL}; report-to csp
 ```
@@ -77,14 +77,16 @@ Rules for whoever serves the build:
 
 ## Embedded pages (`/embed/*`, DMS+)
 
-`/embed/*` is fORM- hosted inside another product: `/embed/dms-master` (the master builder, a top-level page) and `/embed/dms-upload` (the field form of the DMS upload step, in an iframe on the classic frontend). Only these routes may be framed, and only by the origins in `VITE_FP_EMBED_PARENTS` (build time, comma separated; unset means the page's own origin). Every other route keeps `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+`/embed/*` is fORM- hosted inside another product: `/embed/dms-master` (the master builder, a top-level page: DMS navigates to it, it is never framed) and `/embed/dms-upload` (the field form of the DMS upload step, in an iframe on the classic frontend). Only `/embed/dms-upload` may be framed, and only by the origins in `VITE_FP_EMBED_PARENTS` (build time, comma separated; unset means the page's own origin). Every other route, `/embed/dms-master` included, keeps `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
 
-The `/embed/` response carries the same headers with two differences: `frame-ancestors 'self' <origins>`, and no `X-Frame-Options` (it cannot name an origin list). `/embed/dms-upload` checks the same list in the browser: it reads `?fp_parent=<origin>` only when that origin is listed, and then reads only messages whose `event.source` is the framing window and whose `event.origin` is that origin (`src/embed/bridge/`). Set `FP_EMBED_PARENTS` when you print the headers to get the lines for the extra location (here for an on-prem host with the DMS+ origin `https://dms.example`):
+Both embed pages call the DMS API, which usually has its own origin. List those origins in `connect-src`: `VITE_FP_DMS_API_ORIGINS` at build time for the Vite servers, `FP_DMS_API_ORIGINS` (comma separated origins, the same list) when you print the headers. Without it a static build blocks every DMS call from the browser. The same list is the allowlist in `src/embed/launch.ts` (the DMS token is sent to those origins only). Set it on the plain `location /` block too: `/embed/dms-master` is served by it.
+
+The `/embed/dms-upload` response carries the same headers with two differences: `frame-ancestors 'self' <origins>`, and no `X-Frame-Options` (it cannot name an origin list). It checks the same list in the browser: it reads `?fp_parent=<origin>` only when that origin is listed, and then reads only messages whose `event.source` is the framing window and whose `event.origin` is that origin (`src/embed/bridge/`). Set `FP_EMBED_PARENTS` when you print the headers to get the lines for the extra location (here for an on-prem host with the DMS+ origin `https://dms.example`):
 
 ```nginx
-location ^~ /embed/ {
+location = /embed/dms-upload {
   root /usr/share/form/builder;
-  try_files $uri /index.html;
+  try_files /index.html =404;
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self' https://dms.example; require-trusted-types-for 'script'; trusted-types 'none'; report-uri /v1/csp-reports; report-to csp" always;
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header X-Content-Type-Options "nosniff" always;
@@ -93,7 +95,7 @@ location ^~ /embed/ {
 }
 ```
 
-The Vite dev and preview servers do the same from `VITE_FP_EMBED_PARENTS` (`security/vite.ts`, `embedFraming`).
+The Vite dev and preview servers do the same from `VITE_FP_EMBED_PARENTS` for `/embed/dms-upload` only (`security/vite.ts`, `embedFraming`).
 
 ## Development and preview
 

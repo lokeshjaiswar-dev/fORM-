@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { builderCsp, builderSecurityHeaders, embedHeaders, isEmbedPath, nginxHeaders, productionEmbedHeaders, productionHeaders } from './headers.ts';
+import { builderCsp, builderSecurityHeaders, embedHeaders, isEmbedPath, isFramablePath, nginxHeaders, productionEmbedHeaders, productionHeaders } from './headers.ts';
 
 const directives = (csp: string) => Object.fromEntries(csp.split('; ').map((d) => [d.split(' ')[0], d.split(' ').slice(1).join(' ')]));
 
@@ -103,5 +103,30 @@ describe('builder security headers (FND-20)', () => {
     const lines = nginxHeaders(productionEmbedHeaders({ FP_EMBED_PARENTS: 'https://dms.example' })).split('\n').map((l) => `  ${l}`).join('\n');
     expect(doc).toContain(lines);
     expect(directives(productionEmbedHeaders({ FP_EMBED_PARENTS: ' https://a.example , https://b.example/ ' })['Content-Security-Policy'] ?? '')['frame-ancestors']).toBe("'self' https://a.example https://b.example");
+  });
+
+  it('connect-src lists FP_DMS_API_ORIGINS (normalised to origins) on the embed and the plain production headers', () => {
+    const env = { PUBLIC_API_URL: 'https://api.form.example', FP_DMS_API_ORIGINS: ' https://dms-api.example/api , http://192.168.1.54:8000/ ' };
+    const connect = (h: Record<string, string>) => directives(h['Content-Security-Policy'] ?? '')['connect-src'];
+    expect(connect(productionEmbedHeaders({ ...env, FP_EMBED_PARENTS: 'https://dms.example' }))).toBe("'self' https://api.form.example https://dms-api.example http://192.168.1.54:8000");
+    expect(connect(productionHeaders(env))).toBe("'self' https://api.form.example https://dms-api.example http://192.168.1.54:8000");
+    expect(connect(productionEmbedHeaders({}))).toBe("'self'");
+    expect(connect(productionHeaders({}))).toBe("'self'");
+    expect(() => productionEmbedHeaders({ FP_DMS_API_ORIGINS: 'not a url' })).toThrow();
+  });
+
+  it('the generated embed block with a DMS API origin differs from the guide only by that origin in connect-src', () => {
+    const withDms = productionEmbedHeaders({ FP_EMBED_PARENTS: 'https://dms.example', FP_DMS_API_ORIGINS: 'https://dms-api.example' })['Content-Security-Policy'] ?? '';
+    expect(withDms).toContain("connect-src 'self' https://dms-api.example;");
+    expect(withDms).toContain("frame-ancestors 'self' https://dms.example;");
+  });
+
+  it('only /embed/dms-upload is framable; /embed/dms-master is a top-level page', () => {
+    expect(isFramablePath('/embed/dms-upload')).toBe(true);
+    expect(isFramablePath('/embed/dms-upload?fp_parent=x#y')).toBe(true);
+    expect(isFramablePath('/formplus/embed/dms-upload', '/formplus/')).toBe(true);
+    for (const url of ['/embed/dms-master', '/embed/dms-master?x=1', '/embed', '/embed/', '/embed/dms-uploads', '/embed/dms-record', '/forms', '/formplus/embed/dms-upload', undefined]) {
+      expect(isFramablePath(url as string | undefined), String(url)).toBe(false);
+    }
   });
 });

@@ -70,8 +70,8 @@ describe('embedFraming', () => {
     expect(run('/embed/dms-upload', '/formplus/').set.get('X-Frame-Options')).toBe('DENY');
   });
 
-  it('leaves every other route as it was', () => {
-    for (const url of ['/forms', '/f/embed', '/', '/builder/1']) {
+  it('leaves every other route as it was (/embed/dms-master is a top-level page, not framable)', () => {
+    for (const url of ['/forms', '/f/embed', '/', '/builder/1', '/embed/dms-master', '/embed/dms-master?x=1', '/embed/dms-record']) {
       const r = run(url);
       expect(r.nexted).toBe(1);
       expect(r.set.get('X-Frame-Options')).toBe('DENY');

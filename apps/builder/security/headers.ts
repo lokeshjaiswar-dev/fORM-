@@ -90,24 +90,50 @@ export function embedHeaders(options: BuilderHeaderOptions, parents: readonly st
   return builderSecurityHeaders({ ...options, frameAncestors: parents });
 }
 
+const originList = (raw: string | undefined): string[] => (raw ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+
 /**
  * The production headers from the deployment's settings (architecture §1.5): `PUBLIC_API_URL` when the API has its own
  * origin (SaaS: `https://api.form.example`); unset, the API is served from the builder's origin under `/v1`.
  */
-export function productionHeaders(env: { PUBLIC_API_URL?: string | undefined }): Record<string, string> {
+export function productionHeaders(env: { PUBLIC_API_URL?: string | undefined; FP_DMS_API_ORIGINS?: string | undefined }): Record<string, string> {
   const api = env.PUBLIC_API_URL ? new URL(env.PUBLIC_API_URL).origin : undefined;
+  const dms = originList(env.FP_DMS_API_ORIGINS).map((o) => new URL(o).origin);
   return builderSecurityHeaders({
     mode: 'production',
-    connectOrigins: api ? [api] : [],
+    connectOrigins: [...(api ? [api] : []), ...dms],
     reportUri: `${api ?? ''}${API_CSP_REPORT_PATH}`,
   });
 }
 
-/** The production `/embed/*` headers: `FP_EMBED_PARENTS` (comma separated origins) may frame them. */
-export function productionEmbedHeaders(env: { PUBLIC_API_URL?: string | undefined; FP_EMBED_PARENTS?: string | undefined }): Record<string, string> {
+/**
+ * The production headers of the framable embed route(s): `FP_EMBED_PARENTS` (comma separated origins) may frame them.
+ * `connect-src` also lists `FP_DMS_API_ORIGINS` (the DMS API origins the embed pages call; the dev and preview
+ * servers do the same from `VITE_FP_DMS_API_ORIGINS`).
+ */
+export function productionEmbedHeaders(env: {
+  PUBLIC_API_URL?: string | undefined;
+  FP_EMBED_PARENTS?: string | undefined;
+  FP_DMS_API_ORIGINS?: string | undefined;
+}): Record<string, string> {
   const api = env.PUBLIC_API_URL ? new URL(env.PUBLIC_API_URL).origin : undefined;
-  const parents = (env.FP_EMBED_PARENTS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
-  return embedHeaders({ mode: 'production', connectOrigins: api ? [api] : [], reportUri: `${api ?? ''}${API_CSP_REPORT_PATH}` }, parents);
+  const dms = originList(env.FP_DMS_API_ORIGINS).map((o) => new URL(o).origin);
+  return embedHeaders(
+    { mode: 'production', connectOrigins: [...(api ? [api] : []), ...dms], reportUri: `${api ?? ''}${API_CSP_REPORT_PATH}` },
+    originList(env.FP_EMBED_PARENTS),
+  );
+}
+
+/** The embed routes that run inside a frame. Every other `/embed/*` route (`dms-master`) is a top-level page and stays unframable. */
+export const FRAMABLE_EMBED_ROUTES: readonly string[] = ['dms-upload'];
+
+/** True for `<base>embed/<framable route>` (and below it). Nothing else is framable. */
+export function isFramablePath(url: string | undefined, base = '/'): boolean {
+  const path = (url ?? '').split(/[?#]/)[0] ?? '';
+  return FRAMABLE_EMBED_ROUTES.some((route) => {
+    const prefix = `${base.replace(/\/+$/, '')}/embed/${route}`;
+    return path === prefix || path.startsWith(`${prefix}/`);
+  });
 }
 
 /** True for `<base>embed` and `<base>embed/...` (`base` is the app's base path, VITE_BASE: `/` or `/formplus/`). Nothing else is framable. */
