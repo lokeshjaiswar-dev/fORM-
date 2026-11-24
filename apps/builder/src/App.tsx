@@ -26,6 +26,7 @@ import { InvitePage } from '@/pages/org/InvitePage';
 import { MembersPage } from '@/pages/org/MembersPage';
 import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
 import { EmbedRoutes } from '@/embed/EmbedRoutes';
+import { DevProfileProvider } from '@/embed/profile';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 
@@ -134,10 +135,12 @@ export default function App() {
     <RepositoryProvider>
       <SubmissionsProvider>
         <TooltipProvider>
-          <BrowserRouter basename={ROUTER_BASENAME}>
-            <Toaster position="bottom-right" />
-            <AppRoutes />
-          </BrowserRouter>
+          <DevProfileProvider>
+            <BrowserRouter basename={ROUTER_BASENAME}>
+              <Toaster position="bottom-right" />
+              <AppRoutes />
+            </BrowserRouter>
+          </DevProfileProvider>
         </TooltipProvider>
       </SubmissionsProvider>
     </RepositoryProvider>

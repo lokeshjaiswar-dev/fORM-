@@ -1,5 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react';
-import type { ProfileName } from '@/embed/launch';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { profileOverride, type ProfileName } from '@/embed/launch';
 
 /**
  * Which field profile the builder runs: `full` (today's builder, the default) or `dms-v1` (the seven field types DMS+
@@ -13,3 +13,13 @@ export function ProfileProvider({ profile, children }: { profile: ProfileName; c
 }
 
 export const useProfile = (): ProfileName => useContext(ProfileCtx);
+
+/**
+ * The profile of the normal (standalone) builder: `full`, unless this is a dev build (`VITE_FP_DEV_OVERRIDES=1`) opened
+ * with `?fp_profile=dms-v1`, which shows the seven-type palette so developers can see it without a DMS launch. Read
+ * once at mount. In a production build the override is never honoured, and `/embed/dms-*` sets its own profile.
+ */
+export function DevProfileProvider({ children, search }: { children: ReactNode; search?: string }) {
+  const [profile] = useState<ProfileName>(() => profileOverride(search ?? globalThis.location?.search ?? '') ?? 'full');
+  return <ProfileProvider profile={profile}>{children}</ProfileProvider>;
+}
