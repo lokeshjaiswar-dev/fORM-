@@ -6,7 +6,7 @@ import { isAvailable, type AvailableType } from '@form/registry';
 import { type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
 import { t } from '@/i18n';
 import type { ProfileName } from '@/embed/launch';
-import { useProfile } from '@/embed/profile';
+import { useProfile } from '@/embed/useProfile';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { tileOf } from '@/fields/tiles';

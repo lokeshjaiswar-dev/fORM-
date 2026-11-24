@@ -205,6 +205,29 @@ export function currentLaunch(mode: LaunchMode, env: LaunchEnv = launchEnv(), lo
   return { ok: false, reason: 'missing' };
 }
 
+/**
+ * After DMS accepted a create (POST), this tab's launch becomes "edit master `masterId`": the kept copy and the stored
+ * descriptor both carry the new id, so a reload opens that master instead of creating (and being refused) again. The
+ * stored descriptor is rewritten from its own validated content; nothing else about it changes.
+ */
+export function rememberMasterId(mode: LaunchMode, masterId: string): void {
+  const kept = memo.get(mode);
+  if (kept) memo.set(mode, { ...kept, masterId });
+  try {
+    const stored = globalThis.sessionStorage?.getItem(storeKey(mode));
+    if (!stored) return;
+    const raw = decodeDescriptor(stored) as Record<string, unknown>;
+    globalThis.sessionStorage?.setItem(storeKey(mode), encodeDescriptor({ ...(raw as unknown as LaunchDescriptor), masterId }));
+  } catch {
+    /* no storage, or a stored copy that no longer decodes: a reload shows the launch problem screen, never a second POST */
+    try {
+      globalThis.sessionStorage?.removeItem(storeKey(mode));
+    } catch {
+      /* no storage */
+    }
+  }
+}
+
 /** `?fp_profile=dms-v1|full`: the dev override of the normal builder's profile; null unless the build allows it. */
 export function profileOverride(search: string, env: LaunchEnv = launchEnv()): ProfileName | null {
   if (!env.devOverrides) return null;

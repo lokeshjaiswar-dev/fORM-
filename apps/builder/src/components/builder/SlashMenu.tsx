@@ -6,7 +6,7 @@ import { useCustomFields } from '@/fields/custom/useCustomFields';
 import { CATEGORIES, categoryLabel, matchTiles, tilesFromCustomFields, type Tile } from '@/fields/tiles';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { useEdition } from '@/edition/edition';
-import { useProfile } from '@/embed/profile';
+import { useProfile } from '@/embed/useProfile';
 import { useDoc } from '@/state/documentStore';
 
 const M = defineMessages('builder', {

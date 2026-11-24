@@ -6,7 +6,7 @@ import { t } from '@/i18n';
 import { useCustomFields } from '@/fields/custom/useCustomFields';
 import { CATEGORIES, categoryLabel, matchTiles, tilesFromCustomFields, type Tile } from '@/fields/tiles';
 import { useEdition } from '@/edition/edition';
-import { useProfile } from '@/embed/profile';
+import { useProfile } from '@/embed/useProfile';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { insertTile } from '@/components/builder/insert';

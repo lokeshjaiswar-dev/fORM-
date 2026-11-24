@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { DmsRecordUnavailable } from '@/embed/DmsRecordUnavailable';
 import { DmsMasterPage } from '@/embed/master/DmsMasterPage';
 import DmsUploadPage from '@/embed/upload/DmsUploadPage';
 
@@ -12,6 +13,7 @@ export function EmbedRoutes() {
     <Routes>
       <Route path="dms-master" element={<DmsMasterPage />} />
       <Route path="dms-upload" element={<DmsUploadPage />} />
+      <Route path="dms-record" element={<DmsRecordUnavailable />} />
       <Route path="*" element={<Navigate to="/forms" replace />} />
     </Routes>
   );

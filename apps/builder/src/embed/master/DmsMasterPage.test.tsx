@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@dmacq/ui';
 import fixtures from './__fixtures__/dms-master-form.fixtures.json' with { type: 'json' };
 import { AppRoutes } from '@/App';
-import { encodeDescriptor, resetLaunchMemo, type LaunchDescriptor } from '@/embed/launch';
+import { currentLaunch, encodeDescriptor, resetLaunchMemo, type LaunchDescriptor } from '@/embed/launch';
 import { DmsMasterPage } from '@/embed/master/DmsMasterPage';
 import { describeDmsError } from '@/embed/master/describeDmsError';
 import { DmsApiError } from '@/embed/dmsClient';
@@ -13,6 +13,7 @@ import { MemoryCustomFieldRepository, setCustomFieldRepository } from '@/fields/
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 import { MemorySubmissions } from '@/test/fixtures';
 import { currentDoc } from '@/state/documentStore';
+import { act } from '@testing-library/react';
 
 const ORIGIN = window.location.origin;
 const MASTER = 'b9000000-0000-4000-8000-000000000001';
@@ -49,6 +50,12 @@ function open(d: LaunchDescriptor | null, navigate = vi.fn()) {
 }
 
 const READY = { timeout: 15_000 };
+/** A reload keeps the tab's sessionStorage but not the page memory. */
+const resetLaunchMemoOnly = () => {
+  const keep = Object.fromEntries(Object.entries(sessionStorage));
+  resetLaunchMemo();
+  for (const [k, v] of Object.entries(keep)) sessionStorage.setItem(k, v);
+};
 
 beforeEach(() => {
   resetLaunchMemo();
@@ -163,6 +170,84 @@ describe('/embed/dms-master', () => {
     expect(names).not.toContain('Privacy');
   });
 
+  it('a create without an allowlisted returnUrl ends on Saved, and a reload then opens that master (GET) instead of POSTing again', async () => {
+    const fetch = vi.fn().mockResolvedValue(json(201, shown()));
+    vi.stubGlobal('fetch', fetch);
+    const first = open(descriptor({ returnUrl: 'https://elsewhere.example.test/back' }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    expect(await screen.findByText('Saved to DMS')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    // A reload: no fragment in the address bar, a fresh page memory, the same tab storage.
+    first.unmount();
+    window.history.replaceState(null, '', '/embed/dms-master');
+    const again = currentLaunch('dms-master', undefined, window.location);
+    expect(again.ok && again.launch.masterId).toBe(MASTER);
+    resetLaunchMemoOnly();
+    const stored = currentLaunch('dms-master', undefined, window.location);
+    expect(stored.ok && stored.launch.masterId).toBe(MASTER);
+    fetch.mockResolvedValue(json(200, shown()));
+    render(
+      <SubmissionsProvider repo={new MemorySubmissions()}>
+        <TooltipProvider>
+          <MemoryRouter initialEntries={['/embed/dms-master']}>
+            <DmsMasterPage navigate={vi.fn()} />
+          </MemoryRouter>
+        </TooltipProvider>
+      </SubmissionsProvider>,
+    );
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[1] as [string, RequestInit])[1].method).toBe('GET');
+  });
+
+  it('edits made while the save is in flight are not marked as saved, and the builder stays open', async () => {
+    let release!: (r: Response) => void;
+    const fetch = vi.fn().mockResolvedValueOnce(json(200, shown())).mockReturnValueOnce(new Promise<Response>((r) => (release = r)));
+    vi.stubGlobal('fetch', fetch);
+    const { navigate } = open(descriptor({ masterId: MASTER, master: undefined }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    expect(screen.getByText('Saved in DMS')).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole('button', { name: 'Date' })); // in flight
+    await act(async () => release(json(200, shown())));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save to DMS' })).toBeEnabled());
+    expect(screen.getByText('Changes not saved to DMS')).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('clears the warnings and the "Save anyway" state when the doc changes', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    open(descriptor({ returnUrl: 'https://elsewhere.example.test/back' }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    expect(await screen.findByText('Fix these before saving')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Date' }));
+    await waitFor(() => expect(screen.queryByText('Fix these before saving')).toBeNull());
+  });
+
+  it('asks the browser to confirm leaving while there are changes not saved to DMS', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    open(descriptor());
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const leave = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(leave()).toBe(false);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Email' }));
+    await waitFor(() => expect(leave()).toBe(true));
+  });
+
   it('is routed at /embed/dms-master outside the fORM- session gate: no sign-in, no fORM- API call', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
@@ -177,6 +262,25 @@ describe('/embed/dms-master', () => {
       </SubmissionsProvider>,
     );
     await screen.findByTestId('dms-master-builder', undefined, READY);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('/embed/dms-record', () => {
+  it('shows a notice (no redirect to the fORM- sign-in) and calls nothing', () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    window.history.replaceState(null, '', '/embed/dms-record');
+    render(
+      <SubmissionsProvider repo={new MemorySubmissions()}>
+        <TooltipProvider>
+          <MemoryRouter initialEntries={['/embed/dms-record']}>
+            <AppRoutes />
+          </MemoryRouter>
+        </TooltipProvider>
+      </SubmissionsProvider>,
+    );
+    expect(screen.getByRole('heading', { name: /not available here yet/ })).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 });

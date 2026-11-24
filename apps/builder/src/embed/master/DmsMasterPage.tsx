@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PanelLeft, Redo2, Undo2 } from 'lucide-react';
 import type { ProfileIssue } from '@form/registry/profiles/dms-v1';
 import type { BlockId } from '@form/schema';
@@ -14,7 +14,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Tooltip } from '@/components/Tooltip';
 import { DmsAuthError } from '@/embed/dmsClient';
 import { describeDmsError } from '@/embed/master/describeDmsError';
-import { currentLaunch, returnTarget, type ResolvedLaunch } from '@/embed/launch';
+import { currentLaunch, rememberMasterId, returnTarget, type ResolvedLaunch } from '@/embed/launch';
 import { ProfileProvider } from '@/embed/profile';
 import { blockText } from '@/lib/definition';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
@@ -101,6 +101,8 @@ function MasterSession({ repo, launch, navigate }: { repo: DmsMasterRepository; 
   );
 }
 
+const EMPTY_ISSUES: ProfileIssue[] = [];
+
 function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; launch: ResolvedLaunch; navigate: (url: string) => void }) {
   useHistoryShortcuts();
   useBlockClipboard();
@@ -111,13 +113,26 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
   const doc = useDocumentStore((s) => s.doc);
   const [baseline, setBaseline] = useState(doc);
   const [busy, setBusy] = useState(false);
-  const [issues, setIssues] = useState<ProfileIssue[]>([]);
-  const [confirmed, setConfirmed] = useState<string | null>(null);
+  /* What the guard said, and the doc it said it about: an edit makes the warnings and the "Save anyway" confirmation stale. */
+  const [checked, setChecked] = useState<{ doc: typeof doc; issues: ProfileIssue[]; confirmed: string | null } | null>(null);
+  const issues = checked && checked.doc === doc ? checked.issues : EMPTY_ISSUES;
+  const confirmed = checked && checked.doc === doc ? checked.confirmed : null;
   const [problem, setProblem] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [saved, setSaved] = useState<CommitResult | null>(null);
   const dirty = doc !== baseline;
   const creating = repo.current === null;
+
+  /* Local edits are the only copy until "Save to DMS" (no draft recovery). */
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   function goTo(blockId: string | undefined) {
     if (blockId && currentDoc().blocks[blockId as BlockId]) useUiStore.getState().openInspector(blockId as BlockId);
@@ -127,16 +142,21 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
     if (busy) return;
     setBusy(true);
     setProblem(null);
+    /* What DMS receives is the doc as it is now; edits made while the request is in flight are not in it. */
+    const sent = currentDoc();
     try {
-      const result = await repo.commit(currentDoc(), { confirmedWarnings: confirmed });
-      setBaseline(currentDoc());
-      setIssues(result.warnings);
+      const wasCreating = repo.current === null;
+      const result = await repo.commit(sent, { confirmedWarnings: confirmed });
+      if (wasCreating) rememberMasterId('dms-master', result.masterId);
+      setBaseline(sent);
+      setChecked(null);
+      /* Edited meanwhile: stay in the builder (header says "Changes not saved to DMS") instead of leaving with them. */
+      if (currentDoc() !== sent) return;
       if (launch.returnUrl) navigate(returnTarget(launch.returnUrl, 'saved', result.masterId));
       else setSaved(result);
     } catch (e) {
       if (e instanceof DmsCommitRefused) {
-        setIssues(e.issues);
-        if (e.needsConfirmation) setConfirmed(e.warningKey);
+        setChecked({ doc: sent, issues: e.issues, confirmed: e.needsConfirmation ? e.warningKey : null });
       } else if (e instanceof DmsAuthError) setSignedOut(true);
       else setProblem(describeDmsError(e));
     } finally {

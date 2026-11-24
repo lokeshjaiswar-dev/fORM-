@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DevProfileProvider, ProfileProvider, useProfile } from '@/embed/profile';
+import { DevProfileProvider, ProfileProvider } from '@/embed/profile';
+import { useProfile } from '@/embed/useProfile';
 
 const Probe = () => <span data-testid="p">{useProfile()}</span>;
 
