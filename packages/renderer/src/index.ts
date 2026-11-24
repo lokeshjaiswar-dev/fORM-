@@ -5,6 +5,6 @@
  */
 export { FormRenderer } from './FormRenderer.tsx';
 export type {
-  FormRendererProps, PartialSave, RendererEvent, RendererSession, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
+  FormRendererProps, PartialSave, RendererEvent, RendererHandle, RendererSession, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
 } from './types.ts';
 export { browserSession } from './eval/meta.ts';

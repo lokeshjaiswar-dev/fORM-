@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MutableRefObject, type Ref, type RefObject } from 'react';
 import { FormProvider, useForm, type FieldValues } from 'react-hook-form';
 import { EN_IN, createI18n, type I18n } from '@form/i18n';
 import { isAvailable } from '@form/registry';
@@ -29,7 +29,7 @@ import { StatusScreen } from './screens/Status.tsx';
 import { templateText, urlText } from './text.ts';
 import { themeCssVars } from './theme/cssVars.ts';
 import { coverPhoto, pagePhoto } from './theme/media.ts';
-import type { FormRendererProps, RendererEvent, RendererSession, SubmitPayload } from './types.ts';
+import type { FormRendererProps, RendererEvent, RendererHandle, RendererSession, SubmitPayload } from './types.ts';
 
 const FOCUSABLE = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex="0"]';
 
@@ -53,6 +53,8 @@ interface PageViewProps {
   busy: boolean;
   formErrors: FieldError[];
   failure: string | null;
+  /** No Back/Next/Submit: the embedding host validates and collects the answers itself. */
+  hideNavigation: boolean;
   onBack: () => void;
   onJumpPage: (pageId: PageId) => void;
 }
@@ -101,7 +103,7 @@ function SectionNavHost({ current, isLast, onJump }: { current: PageId; isLast: 
 }
 
 /** The current page: header on the first page, progress, rows of blocks, form-level errors and navigation. */
-function PageView({ current, first, canGoBack, sending, busy, formErrors, failure, onBack, onJumpPage }: PageViewProps) {
+function PageView({ current, first, canGoBack, sending, busy, formErrors, failure, hideNavigation, onBack, onJumpPage }: PageViewProps) {
   const { def, t, tokens, mode } = useRenderer();
   const { state } = useEvaluation();
   const { text, resolve } = usePipes();
@@ -168,7 +170,7 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
           {failure ? <p>{failure}</p> : null}
         </div>
       ) : null}
-      <div className="fr-nav" data-align={isLast ? def.behavior.submit.align : 'left'}>
+      {hideNavigation ? null : <div className="fr-nav" data-align={isLast ? def.behavior.submit.align : 'left'}>
         {canGoBack && page?.nav?.showBack !== false ? (
           <button type="button" className="fr-button fr-secondary" onClick={onBack} disabled={sending}>
             {text(page?.nav?.backLabel) || t('system:nav.back')}
@@ -197,7 +199,7 @@ function PageView({ current, first, canGoBack, sending, busy, formErrors, failur
             {sending ? t(MESSAGES['submit.sending']) : nextLabel}
           </button>
         )}
-      </div>
+      </div>}
       </div>
       {sectionNav && !startNav ? navEl : null}
     </div>
@@ -213,7 +215,7 @@ function FormSession({ props, meta, base, onRestart }: {
   base: Omit<RendererContextValue, 'revalidate' | 'track'>;
   onRestart: () => void;
 }) {
-  const { version, locale, onSubmit, onEvent, onPartialSave, initialAnswers, mode } = props;
+  const { version, locale, onSubmit, onEvent, onPartialSave, initialAnswers, mode, hideNavigation = false, onAnswersChange, handleRef } = props;
   const def = version.definition;
   const today = todayIn(meta.now, meta.timeZone);
   const session: EvalSession = useEvalSession(version, meta);
@@ -257,6 +259,18 @@ function FormSession({ props, meta, base, onRestart }: {
   const evaluateNow = () => session.evaluate(form.getValues() as RawAnswers);
   const currentPage = (path: readonly PageId[]): PageId => pageId ?? path[0] ?? (def.pages[0]?.id as PageId);
 
+  /* Embedding hosts: the evaluated answers after each change (the starting answers are not a change). */
+  const answersChanged = useRef(onAnswersChange);
+  useEffect(() => {
+    answersChanged.current = onAnswersChange;
+  });
+  const reportsAnswers = onAnswersChange !== undefined;
+  useEffect(() => {
+    if (!reportsAnswers) return;
+    const subscription = form.watch(() => answersChanged.current?.(session.evaluate(form.getValues() as RawAnswers).state.values));
+    return () => subscription.unsubscribe();
+  }, [form, session, reportsAnswers]);
+
   /**
    * Shows errors. A field error on an earlier page (a server result, or Submit validating the whole path) takes the
    * respondent back to that page; an error on no reachable page is shown with the form-level errors.
@@ -297,6 +311,31 @@ function FormSession({ props, meta, base, onRestart }: {
     /* The host navigates (the top window, a popup's opener, or nowhere in the builder), after `delayMs`. */
     if (redirect) emit({ type: 'redirect', url: redirect, delayMs: ending?.kind === 'redirect' ? (ending.delayMs ?? 0) : 0 });
   };
+
+  /** The host's validate(): Submit's validation of the whole form, errors shown on the fields, nothing sent. */
+  const validateAll = async (): Promise<FieldError[]> => {
+    while (pending.current.size) await Promise.allSettled([...pending.current]);
+    const current = currentPage(evaluateNow().state.path);
+    validation.scope('submit');
+    await form.trigger();
+    const errors = validation.errors();
+    if (errors.length) invalid(errors, current);
+    else {
+      setFormErrors([]);
+      setAnnouncement('');
+    }
+    return errors;
+  };
+  const validateLatest = useRef(validateAll);
+  useEffect(() => {
+    validateLatest.current = validateAll;
+  });
+  useEffect(() => {
+    if (!handleRef) return;
+    const handle: RendererHandle = { validate: () => validateLatest.current() };
+    assignRef(handleRef, handle);
+    return () => assignRef(handleRef, null);
+  }, [handleRef]);
 
   const submit = async (current: PageId) => {
     const { state } = evaluateNow();
@@ -387,7 +426,7 @@ function FormSession({ props, meta, base, onRestart }: {
   /* One Next/Submit at a time: a click while uploads, the regex engine or the submission are pending is ignored. */
   const advance = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (advancing.current) return;
+    if (hideNavigation || advancing.current) return;
     advancing.current = true;
     setBusy(true);
     try {
@@ -478,6 +517,7 @@ function FormSession({ props, meta, base, onRestart }: {
           busy={busy}
           formErrors={formErrors}
           failure={failure}
+          hideNavigation={hideNavigation}
           onBack={back}
           onJumpPage={jumpPage}
         />
@@ -493,6 +533,11 @@ function FormSession({ props, meta, base, onRestart }: {
       </FormProvider>
     </RendererContext.Provider>
   );
+}
+
+function assignRef<T>(ref: Ref<T>, value: T | null): void {
+  if (typeof ref === 'function') ref(value);
+  else if (ref) (ref as MutableRefObject<T | null>).current = value;
 }
 
 function CoverArt() {

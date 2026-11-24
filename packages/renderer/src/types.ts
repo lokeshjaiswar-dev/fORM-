@@ -1,4 +1,5 @@
 import type { Catalogs } from '@form/i18n';
+import type { Ref } from 'react';
 import type {
   Answers, BlockId, EndingId, FieldError, FileRef, FormVersionId, IsoInstant, Locale, PageId, RuntimeFormVersion, RuntimeStatus, SafeUrl,
   SubmissionRequest, SubmitResult, Theme,
@@ -58,6 +59,18 @@ export interface RendererSession {
   userAgent?: string;
 }
 
+/**
+ * What an embedding host can ask of a running form. Only set when the host passes `handleRef`; the public fill page
+ * does not.
+ */
+export interface RendererHandle {
+  /**
+   * Validates the whole form as Submit would, shows the errors on the fields and moves focus to the first one. Resolves
+   * with them (empty = valid). Nothing is submitted, no `onSubmit`, no ending.
+   */
+  validate(): Promise<FieldError[]>;
+}
+
 export interface FormRendererProps {
   version: RuntimeFormVersion;
   mode: 'live' | 'preview';
@@ -76,4 +89,14 @@ export interface FormRendererProps {
   onEvent?: (event: RendererEvent) => void;
   /** The password typed on a `password` status screen; the host checks it and replaces `status`. Never log it. */
   onUnlock?: (password: string) => void;
+  /*
+   * Embedding hosts (the DMS+ upload step: a form with no Submit of its own; the host collects the values). All three
+   * are optional and change nothing when absent.
+   */
+  /** No Back, Next or Submit button, and Enter in a field does not advance: the host drives validation through `handleRef`. */
+  hideNavigation?: boolean;
+  /** Called with the evaluated answers after every change a respondent makes, and not for the starting answers. */
+  onAnswersChange?: (answers: Answers) => void;
+  /** Receives the form's {@link RendererHandle} while it is mounted (and `null` when it is not). */
+  handleRef?: Ref<RendererHandle>;
 }
