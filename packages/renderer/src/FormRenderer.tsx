@@ -267,8 +267,10 @@ function FormSession({ props, meta, base, onRestart }: {
   const reportsAnswers = onAnswersChange !== undefined;
   useEffect(() => {
     if (!reportsAnswers) return;
-    const subscription = form.watch(() => answersChanged.current?.(session.evaluate(form.getValues() as RawAnswers).state.values));
-    return () => subscription.unsubscribe();
+    return form.subscribe({
+      formState: { values: true },
+      callback: () => answersChanged.current?.(session.evaluate(form.getValues() as RawAnswers).state.values),
+    });
   }, [form, session, reportsAnswers]);
 
   /**
