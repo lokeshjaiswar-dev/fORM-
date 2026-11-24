@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
@@ -17,7 +17,8 @@ import { expect, test, type Page } from '@playwright/test';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const classicDir = path.resolve(process.env['CLASSIC_DIR'] ?? path.resolve(appRoot, '../../../classic'));
 const harnessDir = path.join(appRoot, 'e2e/fixtures/classic-host');
-const outDir = path.join(appRoot, 'node_modules/.tmp/classic-host-dist');
+/* One output folder per worker process: beforeAll runs once in every worker, and a shared folder is emptied by the next build while another worker reads it. */
+const outDir = path.join(appRoot, `node_modules/.tmp/classic-host-dist-${process.pid}`);
 const fixtures = JSON.parse(readFileSync(path.join(appRoot, 'src/embed/bridge/__fixtures__/fp-bridge-v1.fixtures.json'), 'utf8')) as {
   handshake: Array<{ payload: Record<string, unknown> }>;
   cases: Array<{
@@ -46,6 +47,7 @@ test.beforeAll(() => {
     stdio: 'inherit',
   });
   bundle = readFileSync(path.join(outDir, 'classic-host.js'), 'utf8');
+  rmSync(outDir, { recursive: true, force: true });
 });
 
 /** Mounts classic's step 2 on a page at this build's origin, with the child at `childUrl` (its own origin, so the default allowlist applies). */
