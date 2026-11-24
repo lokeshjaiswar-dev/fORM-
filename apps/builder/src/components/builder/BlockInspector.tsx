@@ -5,6 +5,8 @@ import { defineMessages, type MessageId } from '@form/i18n';
 import { isAvailable, type AvailableType } from '@form/registry';
 import { type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexColor, type StoredBlock, type UniqueConstraint, type ValidationErrorCode } from '@form/schema';
 import { t } from '@/i18n';
+import type { ProfileName } from '@/embed/launch';
+import { useProfile } from '@/embed/profile';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { tileOf } from '@/fields/tiles';
@@ -115,12 +117,13 @@ type Section = 'general' | 'options' | 'validation';
 const sectionOf = (block: StoredBlock, section: Section): ComponentType<InspectorProps<AvailableType>> | undefined =>
   isAvailable(block.type) ? (INSPECTOR[block.type][section] as ComponentType<InspectorProps<AvailableType>> | undefined) : undefined;
 
-function tabsFor(block: StoredBlock): Tab[] {
+function tabsFor(block: StoredBlock, profile: ProfileName): Tab[] {
   const tabs: Tab[] = ['general'];
   if (sectionOf(block, 'options')) tabs.push('options');
   if (isField(block)) tabs.push('validation');
-  tabs.push('logic');
-  if (isField(block)) tabs.push('privacy');
+  // DMS forms have no logic and no per-field privacy settings (profile dms-v1).
+  if (profile === 'full') tabs.push('logic');
+  if (profile === 'full' && isField(block)) tabs.push('privacy');
   return tabs;
 }
 
@@ -131,6 +134,7 @@ export function BlockInspector() {
   const setInspectorWidth = useUiStore((s) => s.setInspectorWidth);
   const activeBlockId = useUiStore((s) => s.activeBlockId);
   const closeInspector = useUiStore((s) => s.closeInspector);
+  const profile = useProfile();
   const submitSelected = activeBlockId === SUBMIT_INSPECTOR_ID;
   const titleSelected = activeBlockId === TITLE_INSPECTOR_ID;
   const chromeSelected = submitSelected || titleSelected;
@@ -203,7 +207,7 @@ export function BlockInspector() {
     );
   }
 
-  const tabs = tabsFor(block);
+  const tabs = tabsFor(block, profile);
   const shown = tabs.includes(tab) ? tab : 'general';
   const typeName = tileOf(block.type, block.config as Readonly<Record<string, unknown>>)?.label ?? block.type;
 

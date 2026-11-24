@@ -6,6 +6,7 @@ import { t } from '@/i18n';
 import { useCustomFields } from '@/fields/custom/useCustomFields';
 import { CATEGORIES, categoryLabel, matchTiles, tilesFromCustomFields, type Tile } from '@/fields/tiles';
 import { useEdition } from '@/edition/edition';
+import { useProfile } from '@/embed/profile';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { insertTile } from '@/components/builder/insert';
@@ -37,7 +38,8 @@ export function FieldPicker() {
   const edition = useEdition();
   const { fields } = useCustomFields();
   const sectionNav = useDoc((d) => d.behavior.sectionNav?.enabled === true);
-  const tiles = matchTiles(q, edition, tilesFromCustomFields(fields ?? []), { sectionNav });
+  const profile = useProfile();
+  const tiles = matchTiles(q, edition, tilesFromCustomFields(fields ?? []), { sectionNav, profile });
   const [removing, setRemoving] = useState<Tile | null>(null);
 
   return (

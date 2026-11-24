@@ -1,9 +1,11 @@
 import { isEditionFeatureAvailable, type EditionFeatures } from '@form/config';
 import { defineMessages, type MessageId } from '@form/i18n';
 import { AVAILABLE_TYPES, REGISTRY, type AvailableType } from '@form/registry';
+import { DMS_V1_TILES } from '@form/registry/profiles/dms-v1';
 import type { PaletteEntry } from '@form/schema';
 import type { CustomField } from '@/fields/custom/model';
 import { t } from '@/i18n';
+import type { ProfileName } from '@/embed/launch';
 import type { BlockChoice } from '@/state/actions';
 
 /*
@@ -97,6 +99,23 @@ export const TILES: readonly Tile[] = allTiles.filter(
   (tile) => tile.kind === 'page_break' || (!HIDDEN_PALETTE_TYPES.has(tile.choice.type) && !HIDDEN_PALETTE_IDS.has(tile.id)),
 );
 
+/**
+ * The dms-v1 palette (DESIGN section 2): exactly DMS+'s seven field types, with DMS's labels, in its toolbox order. No
+ * page break, no template or library fields.
+ */
+export const DMS_TILES: readonly Tile[] = DMS_V1_TILES.map((tile) => ({
+  kind: 'block' as const,
+  id: `dms.${tile.id}`,
+  choice: { type: tile.type, configOverrides: tile.configOverrides as BlockChoice['configOverrides'] },
+  category: 'basic' as const,
+  label: tile.label,
+  icon: tile.icon,
+  keywords: tile.keywords,
+}));
+
+/** The palette tiles a profile offers, before search and edition filtering. */
+export const tilesFor = (profile: ProfileName): readonly Tile[] => (profile === 'dms-v1' ? DMS_TILES : TILES);
+
 /** The tile of a block type (its first palette entry), for the canvas and the drag overlay. */
 export const tileOf = (type: string, overrides?: Readonly<Record<string, unknown>>): Tile | undefined => {
   const of = allTiles.filter((tile) => tile.kind === 'block' && tile.choice.type === type);
@@ -126,9 +145,10 @@ export function tilesFromCustomFields(fields: readonly CustomField[]): Tile[] {
 }
 
 /** The edition's tiles whose label, id or keywords contain `query` (case-insensitive); all of them for an empty query. */
-export function matchTiles(query: string, edition: EditionFeatures, extra: readonly Tile[] = [], opts: { sectionNav?: boolean } = {}): Tile[] {
+export function matchTiles(query: string, edition: EditionFeatures, extra: readonly Tile[] = [], opts: { sectionNav?: boolean; profile?: ProfileName } = {}): Tile[] {
   const q = query.trim().toLowerCase();
-  return [...TILES, ...extra].filter(
+  const profile = opts.profile ?? 'full';
+  return [...tilesFor(profile), ...(profile === 'full' ? extra : [])].filter(
     (tile) =>
       (tile.kind !== 'block' || tile.choice.type !== 'section_break' || opts.sectionNav === true) &&
       tileAvailable(tile, edition) &&

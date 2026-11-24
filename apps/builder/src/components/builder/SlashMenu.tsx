@@ -6,6 +6,7 @@ import { useCustomFields } from '@/fields/custom/useCustomFields';
 import { CATEGORIES, categoryLabel, matchTiles, tilesFromCustomFields, type Tile } from '@/fields/tiles';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { useEdition } from '@/edition/edition';
+import { useProfile } from '@/embed/profile';
 import { useDoc } from '@/state/documentStore';
 
 const M = defineMessages('builder', {
@@ -34,7 +35,8 @@ export function SlashMenu({
   const { fields } = useCustomFields();
   const extras = useMemo(() => tilesFromCustomFields(fields ?? []), [fields]);
   const sectionNav = useDoc((d) => d.behavior.sectionNav?.enabled === true);
-  const items = useMemo(() => matchTiles(query, edition, extras, { sectionNav }), [query, edition, extras, sectionNav]);
+  const profile = useProfile();
+  const items = useMemo(() => matchTiles(query, edition, extras, { sectionNav, profile }), [query, edition, extras, sectionNav, profile]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
