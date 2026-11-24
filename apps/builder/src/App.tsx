@@ -25,6 +25,7 @@ import { EmailSendersPage } from '@/pages/org/EmailSendersPage';
 import { InvitePage } from '@/pages/org/InvitePage';
 import { MembersPage } from '@/pages/org/MembersPage';
 import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
+import { EmbedRoutes } from '@/embed/EmbedRoutes';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 
@@ -86,10 +87,14 @@ function RequireSession({ children }: { children: ReactNode }) {
   return <main className="h-svh bg-background" aria-busy="true" />;
 }
 
+/** `VITE_BASE=/formplus/` serves the builder under a prefix (behind DMS's dev rewrite); the router follows it. */
+const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '');
+
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/f/:slug" element={<PublicFillPage />} />
+      <Route path="/embed/*" element={<EmbedRoutes />} />
       <Route
         element={
           <RequireSession>
@@ -129,7 +134,7 @@ export default function App() {
     <RepositoryProvider>
       <SubmissionsProvider>
         <TooltipProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={ROUTER_BASENAME}>
             <Toaster position="bottom-right" />
             <AppRoutes />
           </BrowserRouter>

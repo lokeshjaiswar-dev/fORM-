@@ -1,0 +1,196 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import { TooltipProvider } from '@dmacq/ui';
+import fixtures from './__fixtures__/dms-master-form.fixtures.json' with { type: 'json' };
+import { AppRoutes } from '@/App';
+import { encodeDescriptor, resetLaunchMemo, type LaunchDescriptor } from '@/embed/launch';
+import { DmsMasterPage } from '@/embed/master/DmsMasterPage';
+import { describeDmsError } from '@/embed/master/describeDmsError';
+import { DmsApiError } from '@/embed/dmsClient';
+import { MemoryCustomFieldRepository, setCustomFieldRepository } from '@/fields/custom/repository';
+import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
+import { MemorySubmissions } from '@/test/fixtures';
+import { currentDoc } from '@/state/documentStore';
+
+const ORIGIN = window.location.origin;
+const MASTER = 'b9000000-0000-4000-8000-000000000001';
+const SEVEN = ['Text Input', 'Number Input', 'Email', 'Phone Number', 'Multi-line Input', 'Dropdown', 'Date'];
+const OTHERS = ['Short answer', 'Page break', 'Rating', 'Signature', 'Section break', 'Number', 'Long answer', 'Phone', 'File upload', 'Heading'];
+
+const descriptor = (over: Partial<LaunchDescriptor> = {}): LaunchDescriptor => ({
+  v: 1,
+  mode: 'dms-master',
+  profile: 'dms-v1',
+  tenantId: 'acme',
+  workspaceId: 'ws_1',
+  master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null },
+  returnUrl: `${ORIGIN}/dms-v2/acme/metadata`,
+  apiBase: `${ORIGIN}/api`,
+  ...over,
+});
+
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+const shown = (over: Record<string, unknown> = {}) => ({ success: true, message: 'ok', data: { id: MASTER, name: 'Vendor', source: 'formplus', updated_at: 'T1', doctype_ids: [], folder_ids: [], form_builder_fields: fixtures.create.request.form_builder_fields, ...over } });
+
+function open(d: LaunchDescriptor | null, navigate = vi.fn()) {
+  window.history.replaceState(null, '', `/embed/dms-master${d ? `#fp=${encodeDescriptor(d)}` : ''}`);
+  const view = render(
+    <SubmissionsProvider repo={new MemorySubmissions()}>
+      <TooltipProvider>
+        <MemoryRouter initialEntries={['/embed/dms-master']}>
+          <DmsMasterPage navigate={navigate} />
+        </MemoryRouter>
+      </TooltipProvider>
+    </SubmissionsProvider>,
+  );
+  return { navigate, ...view };
+}
+
+const READY = { timeout: 15_000 };
+
+beforeEach(() => {
+  resetLaunchMemo();
+  setCustomFieldRepository(new MemoryCustomFieldRepository());
+  localStorage.setItem('token', 'user-token');
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+describe('/embed/dms-master', () => {
+  it('shows exactly the seven DMS tiles, with DMS labels, and no page break, templates or library fields', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    open(descriptor());
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const palette = screen.getByRole('complementary', { name: '' }) ?? document.querySelector('aside');
+    for (const label of SEVEN) expect(within(palette).getByRole('button', { name: label })).toBeInTheDocument();
+    for (const label of OTHERS) expect(within(palette).queryByRole('button', { name: label })).toBeNull();
+    const tiles = within(palette).getAllByRole('button').filter((b) => b.getAttribute('aria-roledescription') === 'draggable');
+    expect(tiles.map((b) => b.textContent)).toEqual(SEVEN);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('saves a new master with POST to the descriptor apiBase and returns to DMS with fp_status=saved', async () => {
+    const fetch = vi.fn().mockResolvedValue(json(201, shown()));
+    vi.stubGlobal('fetch', fetch);
+    const { navigate } = open(descriptor());
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    // The field was added with the tile's label; give it a name of its own and save.
+    expect(Object.values(currentDoc().blocks)).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${ORIGIN}/api/dms/v1/master/form`);
+    expect(init.method).toBe('POST');
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer user-token', 'X-Tenant-Id': 'acme', 'X-Workspace-Id': 'ws_1' });
+    const body = JSON.parse(String(init.body)) as { name: string; source: string; form_builder_fields: Array<Record<string, unknown>> };
+    expect(body).toMatchObject({ name: 'Vendor', source: 'formplus', classification: null, doctype_ids: [], folder_ids: [] });
+    expect(body.form_builder_fields).toHaveLength(1);
+    expect(body.form_builder_fields[0]).toMatchObject({ type: 'email', name: 'Email', value: 'Email', label: 'Email', required: false });
+    expect(body.form_builder_fields[0]!.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(`${ORIGIN}/dms-v2/acme/metadata?fp_status=saved&fp_master_id=${MASTER}`));
+  });
+
+  it('lists what stops a save instead of sending it: a duplicate field name', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const { navigate } = open(descriptor());
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    expect(await screen.findByText('Fix these before saving')).toBeInTheDocument();
+    expect(screen.getByText(/Two fields are called "Email"/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('opens an existing Forms+ master from dms-api and Cancel returns with fp_status=cancelled', async () => {
+    const fetch = vi.fn().mockResolvedValue(json(200, shown()));
+    vi.stubGlobal('fetch', fetch);
+    const { navigate } = open(descriptor({ masterId: MASTER, master: undefined }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    expect((fetch.mock.calls[0] as [string])[0]).toBe(`${ORIGIN}/api/dms/v1/master/form/${MASTER}`);
+    expect(Object.values(currentDoc().blocks)).toHaveLength(7);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(navigate).toHaveBeenCalledWith(`${ORIGIN}/dms-v2/acme/metadata?fp_status=cancelled`);
+  });
+
+  it('shows a "Sign in to DMS again" screen for a 401 on open', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(401, { message: 'Unauthenticated.' })));
+    open(descriptor({ masterId: MASTER, master: undefined }));
+    expect(await screen.findByRole('heading', { name: 'Sign in to DMS again' }, READY)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to DMS' })).toHaveAttribute('href', `${ORIGIN}/dms-v2/acme/metadata`);
+  });
+
+  it('refuses a master that is not a Forms+ master, and says why', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(200, shown({ source: 'dms' }))));
+    open(descriptor({ masterId: MASTER, master: undefined }));
+    expect(await screen.findByRole('heading', { name: 'This master cannot be edited here' }, READY)).toBeInTheDocument();
+    expect(screen.getByText(/not Forms\+/)).toBeInTheDocument();
+  });
+
+  it('does not open without a launch descriptor, with a descriptor for another mode, or with an API base it does not trust', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const a = open(null);
+    expect(await screen.findByRole('heading', { name: 'This page was not opened from DMS' })).toBeInTheDocument();
+    a.unmount();
+    resetLaunchMemo();
+    const b = open(descriptor({ apiBase: 'https://evil.example.test/api' }));
+    expect(await screen.findByText(/not set up to talk to/)).toBeInTheDocument();
+    b.unmount();
+    resetLaunchMemo();
+    open(descriptor({ mode: 'dms-record' }));
+    expect(await screen.findByText(/another DMS screen/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('hides the Logic and Privacy tabs of the block inspector (DMS forms have neither)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(200, shown())));
+    open(descriptor({ masterId: MASTER, master: undefined }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const tabs = await screen.findAllByRole('tab', undefined, READY);
+    const names = tabs.map((t) => t.textContent);
+    expect(names).toContain('General');
+    expect(names).not.toContain('Logic');
+    expect(names).not.toContain('Privacy');
+  });
+
+  it('is routed at /embed/dms-master outside the fORM- session gate: no sign-in, no fORM- API call', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    window.history.replaceState(null, '', `/embed/dms-master#fp=${encodeDescriptor(descriptor())}`);
+    render(
+      <SubmissionsProvider repo={new MemorySubmissions()}>
+        <TooltipProvider>
+          <MemoryRouter initialEntries={['/embed/dms-master']}>
+            <AppRoutes />
+          </MemoryRouter>
+        </TooltipProvider>
+      </SubmissionsProvider>,
+    );
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('describeDmsError', () => {
+  it('explains the refusals dms-api documents', () => {
+    expect(describeDmsError(new DmsApiError(409, 'x', 'MASTER_CHANGED', null))).toMatch(/Someone else changed this master/);
+    expect(describeDmsError(new DmsApiError(409, 'Used by workflow W.', 2051, null))).toMatch(/running workflow uses this master/);
+    expect(describeDmsError(new DmsApiError(404, 'x', 'ALREADY_EXISTS', null))).toMatch(/already exists/);
+    expect(describeDmsError(new DmsApiError(503, 'x', 5031, null))).toMatch(/Workflows are not available/);
+    expect(describeDmsError(new DmsApiError(403, 'x', null, null))).toMatch(/permission/);
+    expect(describeDmsError(new DmsApiError(422, 'Bad.', 'DUPLICATE_FIELD_NAME', null))).toBe('Bad. (DUPLICATE_FIELD_NAME)');
+    expect(describeDmsError(new DmsApiError(500, 'Boom.', null, null))).toBe('Boom.');
+    expect(describeDmsError(new Error('offline'))).toBe('offline');
+    expect(describeDmsError('x')).toBe('The master could not be saved.');
+  });
+});

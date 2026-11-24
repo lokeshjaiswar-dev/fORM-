@@ -97,15 +97,20 @@ function adoptedScrollLockStyles(): Plugin {
 
 export default defineConfig(({ mode }) => {
   /* VITE_API_URL: the API origin when it is not the builder's own (SaaS: api.form.example). Unset: same origin. */
-  const apiUrl = loadEnv(mode, root, 'VITE_').VITE_API_URL;
+  const env = loadEnv(mode, root, 'VITE_');
+  const apiUrl = env.VITE_API_URL;
+  /* VITE_FP_DMS_API_ORIGINS: DMS API origins the /embed pages may call (the DMS token is sent to those only; see src/embed/launch.ts). */
+  const dmsOrigins = (env.VITE_FP_DMS_API_ORIGINS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
   /* Dev preview POSTs field API checks from the browser; CSP connect-src must allow the demo validator. */
   const demoValidate = mode === 'development' ? ['http://localhost:3001', 'http://127.0.0.1:3001'] : [];
-  const connectOrigins = [...(apiUrl ? [apiUrl] : []), ...demoValidate];
+  const connectOrigins = [...(apiUrl ? [apiUrl] : []), ...dmsOrigins, ...demoValidate];
   /* Same-origin API in development: `/v1` goes to `pnpm dev:api` (:8080). */
   const proxy = apiUrl ? {} : { '/v1': process.env.FR_DEV_API_URL ?? 'http://127.0.0.1:8080' };
   /* Reports go to the local collector, through `report-uri` only (see BuilderHeaderOptions.reportTo). */
   const reports = { reportUri: DEV_CSP_REPORT_PATH, reportTo: false };
   return {
+    /* VITE_BASE=/formplus/ serves the builder under a path prefix (DMS's dev rewrite); unset keeps today's root. */
+    base: env.VITE_BASE || '/',
     plugins: [react(), tailwindcss(), cspReportCollector(), noInjectedStyles(), radixViewportStyles(), adoptedScrollLockStyles()],
     /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
     assetsInclude: ['**/*.formpack'],
