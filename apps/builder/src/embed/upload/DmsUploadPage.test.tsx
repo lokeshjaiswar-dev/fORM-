@@ -66,9 +66,10 @@ describe('DmsUploadPage', () => {
     const name = await screen.findByRole('textbox', { name: /Vendor Name/ });
     await user.clear(name);
     await user.type(name, 'Acme 2');
-    await waitFor(() => expect(of('change').length).toBeGreaterThan(0), { timeout: 2000 });
-    const change = of('change').at(-1)!.payload as { values: Record<string, string>; valid: boolean };
-    expect(change.values['a1000000-0000-4000-8000-000000000001']).toBe('Acme 2');
+    // `change` is debounced: under load an earlier one (an intermediate keystroke) can exist first, so wait for the last one to carry the typed text.
+    const lastChange = () => of('change').at(-1)?.payload as { values: Record<string, string>; valid: boolean } | undefined;
+    await waitFor(() => expect(lastChange()?.values['a1000000-0000-4000-8000-000000000001']).toBe('Acme 2'), { timeout: 3000 });
+    const change = lastChange()!;
     expect(change.valid).toBe(false);
 
     fromParent(fixtures.cases[0]!.validate);
