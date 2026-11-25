@@ -412,9 +412,7 @@ describe('evaluate', () => {
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '30' } });
   });
 
-  // Merge of lan121/dev-lokesh (2026-11-25): set_value and option-vs-text comparisons stay refused by compile() until WP-2.01,
-  // because reviewUnits.derivedFrom relies on rules writing no data (review redaction). Re-enable with that work.
-  it.skip('sums the option value filled into each row, and a row formula uses that row’s value', () => {
+  it('sums the option value filled into each row, and a row formula uses that row’s value', () => {
     const fill = rule('fill', cond(ans('item'), 'is_answered'), [{
       type: 'set_value',
       target: bid('price'),
@@ -460,9 +458,7 @@ describe('evaluate', () => {
     });
   });
 
-  // Merge of lan121/dev-lokesh (2026-11-25): set_value and option-vs-text comparisons stay refused by compile() until WP-2.01,
-  // because reviewUnits.derivedFrom relies on rules writing no data (review redaction). Re-enable with that work.
-  it.skip('copies the selected option value into a text field', () => {
+  it('copies the selected option value into a text field', () => {
     const def = form(
       [
         field('single_choice', 'menu', { config: { display: 'dropdown', options: [{ id: oid('burger'), label: 'Burger', code: '467' }] } }),
@@ -484,9 +480,7 @@ describe('evaluate', () => {
     expect(next.values[bid('price')]).toEqual({ type: 'short_text', value: '467' });
   });
 
-  // Merge of lan121/dev-lokesh (2026-11-25): set_value and option-vs-text comparisons stay refused by compile() until WP-2.01,
-  // because reviewUnits.derivedFrom relies on rules writing no data (review redaction). Re-enable with that work.
-  it.skip('treats “is” between an option and the first characters as the option value', () => {
+  it('treats “is” between an option and the first characters as the option value', () => {
     const prefix = expr({ k: 'call', fn: 'left', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('gstin') } }, { k: 'lit', value: { type: 'number', value: '2' as S.DecimalString } }] });
     const def = form(
       [

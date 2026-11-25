@@ -4,10 +4,12 @@ import { cell, stepKey } from './cells.ts';
 import type { BoundCheck } from './pageOrder.ts';
 import type { StepInfo } from './plan.ts';
 import { placementOf, valueReadsOf, type Placement } from './structure.ts';
-import { checkGroup, typeExpr, type TypeContext } from './subset.ts';
+import { checkGroup, repeatingGroupOf, typeExpr, type TypeContext, type Typed, type ValueKind } from './subset.ts';
 
 /** Client actions the engine runs today; every other action is `missing_capability` until WP-2.01–2.03. */
-const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit']);
+const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit', 'set_value']);
+/** Fields a `set_value` rule may write, and the kind of value each takes (what the evaluator assigns). */
+const SETTABLE: Readonly<Partial<Record<StoredBlock['type'], ValueKind>>> = { number: 'number', short_text: 'text', long_text: 'text' };
 const SERVER_ONLY: ReadonlySet<string> = new Set(SERVER_ONLY_ACTION_TYPES);
 export const isClientAction = (action: Action): action is ClientAction => !SERVER_ONLY.has(action.type);
 
@@ -31,6 +33,42 @@ export function actionWrites(def: Pick<FormDefinition, 'blocks' | 'pages'>, acti
     default:
       return [];
   }
+}
+
+type SetValueAction = Extract<Action, { type: 'set_value' }>;
+
+/** The option_code call a fill-from-option rule writes into a row of the repeating group its choice is in. */
+function fillsRowFromChoice(def: Pick<FormDefinition, 'blocks'>, action: SetValueAction, group: BlockId): boolean {
+  const value = action.value;
+  if (value.k !== 'call' || value.fn !== 'option_code') return false;
+  const arg = value.args[0];
+  return arg?.k === 'ref' && arg.ref.kind === 'answer' && repeatingGroupOf(def, arg.ref.blockId)?.id === group;
+}
+
+/**
+ * Publish checks of a `set_value` (WP-2.01): the target is a number or text field (never a calculation, hidden, context
+ * or unique ID, whose value the server makes), the value has the target's kind, a list is never written into one field,
+ * and a field inside a repeating group is only filled per row from a choice in the same rows (row-scoped rules are not
+ * available yet). A rule chain that writes a field it reads is a `logic_cycle` (cycles.ts).
+ */
+function checkSetValue(ctx: TypeContext, action: SetValueAction, typed: Typed | null, here: string): void {
+  const block = ctx.def.blocks[action.target] as StoredBlock;
+  const kind = SETTABLE[block.type];
+  if (kind === undefined) {
+    ctx.issue('expr_type_error', `${here}/target`, `a rule can set a number or text field, not a '${block.type}' block`);
+    return;
+  }
+  const group = repeatingGroupOf(ctx.def, action.target);
+  if (group !== undefined && !fillsRowFromChoice(ctx.def, action, group.id)) {
+    ctx.issue('missing_capability', `${here}/target`, 'setting a field inside a repeating group needs row-scoped rules, which are not available yet');
+    return;
+  }
+  if (!typed) return;
+  if (typed.list && group === undefined) {
+    ctx.issue('expr_type_error', `${here}/value`, 'a list (every row of a repeating group) cannot be set into one field');
+    return;
+  }
+  if (typed.kind !== kind) ctx.issue('expr_type_error', `${here}/value`, `a '${block.type}' field takes ${kind}, not ${typed.kind}`);
 }
 
 const hasExprOperand = (group: ConditionGroup): boolean =>
@@ -147,14 +185,19 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     const actions = [...rule.then, ...(rule.else ?? [])];
     const branch = (list: readonly Action[] | undefined, name: 'then' | 'else') => list?.forEach((action, j) => {
       if (!P0_ACTIONS.has(action.type)) {
-        ctx.issue('missing_capability', `${at}/${name}/${j}`, `'${action.type}' actions are not available yet; logic shows, hides, requires, enables and can block submit`);
+        ctx.issue('missing_capability', `${at}/${name}/${j}`, `'${action.type}' actions are not available yet; logic shows, hides, requires, enables, sets values and can block submit`);
         return;
       }
       if (action.type === 'set_value') {
-        if (action.path) ctx.issue('missing_capability', `${at}/${name}/${j}/path`, 'setting a nested answer path is not available yet');
-        typeExpr(ctx, action.value, `${at}/${name}/${j}/value`, reads);
+        const here = `${at}/${name}/${j}`;
+        if (action.path) ctx.issue('missing_capability', `${here}/path`, 'setting a nested answer path is not available yet');
+        /* The value's reads join the condition's: the step reads both, so review redaction and taint follow both (WP-2.01). */
+        const typed = typeExpr(ctx, action.value, `${here}/value`, reads);
         usesExpr = true;
-        if (def.blocks[action.target] !== undefined) writes.add(cell.value(action.target));
+        if (def.blocks[action.target] !== undefined) {
+          checkSetValue(ctx, action, typed, here);
+          writes.add(cell.value(action.target));
+        }
         return;
       }
       for (const [c] of actionWrites(def, action)) writes.add(c);

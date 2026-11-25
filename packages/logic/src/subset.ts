@@ -50,6 +50,8 @@ const COUNT = /^(0|[1-9]\d*)$/;
 /** The choice whose option value is copied into `target`, when a fill-from-option rule writes it. */
 export function optionValueSource(def: Pick<FormDefinition, 'logic'>, target: BlockId): BlockId | undefined {
   for (const rule of def.logic.rules) {
+    /* A disabled rule writes nothing, so its target is an ordinary field (and review redaction does not follow it). */
+    if (!rule.enabled) continue;
     for (const action of [...rule.then, ...(rule.else ?? [])]) {
       if (action.type !== 'set_value' || action.target !== target || action.value.k !== 'call' || action.value.fn !== 'option_code') continue;
       const arg = action.value.args[0];
@@ -57,6 +59,25 @@ export function optionValueSource(def: Pick<FormDefinition, 'logic'>, target: Bl
     }
   }
   return undefined;
+}
+
+const setTargets = new WeakMap<object, ReadonlySet<BlockId>>();
+
+/**
+ * The fields an enabled rule writes with `set_value` (WP-2.01: set, percent, fill from an option). Like a calculation,
+ * their value is the form's, never the respondent's: the renderer shows them read-only and the server drops what a
+ * respondent sends for them before it evaluates the answers again. Cached per `logic` object (definitions are immutable).
+ */
+export function setValueTargets(def: Pick<FormDefinition, 'logic'>): ReadonlySet<BlockId> {
+  const cached = setTargets.get(def.logic);
+  if (cached) return cached;
+  const out = new Set<BlockId>();
+  for (const rule of def.logic.rules) {
+    if (!rule.enabled) continue;
+    for (const action of [...rule.then, ...(rule.else ?? [])]) if (action.type === 'set_value') out.add(action.target);
+  }
+  setTargets.set(def.logic, out);
+  return out;
 }
 
 const LITERAL_KINDS: Record<Exclude<Literal['type'], 'relative_date'>, ValueKind> = {
@@ -128,7 +149,7 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
   return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type };
 }
 
-function repeatingGroupOf(def: FormDefinition, blockId: BlockId): Extract<StoredBlock, { type: 'repeating_group' }> | undefined {
+export function repeatingGroupOf(def: Pick<FormDefinition, 'blocks'>, blockId: BlockId): Extract<StoredBlock, { type: 'repeating_group' }> | undefined {
   for (const block of Object.values(def.blocks)) {
     if (block?.type === 'repeating_group' && block.config.children.includes(blockId)) return block;
   }
@@ -271,6 +292,12 @@ function fits(op: LogicOperator, left: Typed, right: Typed): boolean {
   switch (base) {
     case 'eq':
     case 'neq':
+      /*
+       * A choice against worked-out text (another answer, an expression such as left(gstin, 2)) compares the chosen
+       * option's code (dev-lokesh). A typed text literal stays a mismatch: an author testing a choice picks its options.
+       */
+      if ((left.kind === 'choice' || left.kind === 'choices') && right.kind === 'text' && right.source !== 'literal') return true;
+      if (left.kind === 'text' && left.source !== 'literal' && (right.kind === 'choice' || right.kind === 'choices')) return true;
       if (left.kind === 'choice' || left.kind === 'choices') return right.kind === 'option_set' && right.blockId === left.blockId;
       return right.kind === left.kind;
     case 'contains':

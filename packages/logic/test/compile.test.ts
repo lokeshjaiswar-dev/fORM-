@@ -103,7 +103,6 @@ describe('compile', () => {
       ]);
       def.logic.variables = [{ id: id('v1'), key: id('v1'), name: 'v', type: 'number', expr: { k: 'lit', value: { type: 'number', value: id('1') } }, persist: false }];
       expect(codes(failure(def)).filter((c) => c.includes('missing_capability'))).toEqual([
-        'error:missing_capability:/logic/rules/0/then/0',
         'error:missing_capability:/logic/rules/1/when/children/0/op',
         'error:missing_capability:/logic/rules/2/when/children/0/right/value',
         'error:missing_capability:/logic/rules/3/when/children/0/left/expr',
@@ -357,6 +356,93 @@ describe('compile', () => {
     expect(c.plan).toEqual([{ kind: 'on_path', pageId: 'p1' }, { kind: 'capture', blockId: 'src' }, { kind: 'capture', blockId: 'copy' }]);
     expect(c.taint).toEqual({ 'value:copy': { classification: 'personal', purposeIds: ['respond'] } });
     expect(c.requires).toContain('expr@1');
+  });
+
+  /* WP-2.01: rules that write values (set, percent, fill from an option) and their publish checks. */
+  describe('set_value', () => {
+    const ref = (blockId: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(blockId) } });
+    const n = (v: string): S.Expr => ({ k: 'lit', value: { type: 'number', value: id<S.DecimalString>(v) } });
+    const set = (target: string, value: S.Expr): S.Action => ({ type: 'set_value', target: bid(target), value });
+    const plus1 = (blockId: string): S.Expr => ({ k: 'binary', op: '+', left: ref(blockId), right: n('1') });
+    const nums = () => form([field('number', 'x'), field('number', 'y'), field('number', 'z'), field('short_text', 'note'), field('calculation', 'calc', { config: { expr: ref('x'), resultType: 'number', display: 'visible' } })],
+      [page('p1', ['x', 'y', 'z', 'note', 'calc'])]);
+    const withRules = (...rules: S.Rule[]) => ({ ...nums(), logic: { ...nums().logic, rules } });
+    const publishCodes = (def: S.FormDefinition) => codes(validateDefinition(def, 'publish', REGISTRY).filter((i) => i.severity === 'error'));
+
+    it('compiles a set, a percent and a copy, and records what each rule writes', () => {
+      const def = withRules(
+        rule('set', cond(ans('x'), 'is_answered'), [set('y', n('5'))]),
+        rule('pct', cond(ans('x'), 'is_answered'), [set('z', { k: 'binary', op: '/', left: { k: 'binary', op: '*', left: ref('x'), right: n('10') }, right: n('100') })]),
+      );
+      const c = compiled(def);
+      expect(c.ruleWrites).toEqual({ 'rule:set': ['value:y'], 'rule:pct': ['value:z'] });
+      expect(c.requires).toContain('expr@1');
+      expect(publishCodes(def)).toEqual([]);
+    });
+
+    it('refuses at publish a rule chain that writes a field it reads (logic_cycle): directly, and through two rules', () => {
+      const self = withRules(rule('self', cond(ans('x'), 'is_answered'), [set('x', plus1('x'))]));
+      expect(publishCodes(self)).toEqual(['error:logic_cycle:/logic/rules/0']);
+      const pair = withRules(
+        rule('y_from_x', cond(ans('x'), 'is_answered'), [set('y', plus1('x'))]),
+        rule('x_from_y', cond(ans('y'), 'is_answered'), [set('x', plus1('y'))]),
+      );
+      expect(publishCodes(pair)).toEqual(['error:logic_cycle:/logic/rules/0']);
+      /* The condition alone closes the loop too: a rule that writes y when y is answered. */
+      const byCondition = withRules(rule('c', cond(ans('y'), 'gt', num('1')), [set('y', n('0'))]));
+      expect(publishCodes(byCondition)).toEqual(['error:logic_cycle:/logic/rules/0']);
+      expect(compile(self, REGISTRY).ok).toBe(false);
+    });
+
+    it('type-checks the value against the target, and refuses targets whose value the server makes', () => {
+      const def = withRules(
+        rule('r0', cond(ans('x'), 'is_answered'), [set('y', { k: 'lit', value: { type: 'text', value: 'a' } })]),
+        rule('r1', cond(ans('x'), 'is_answered'), [set('note', n('1'))]),
+        rule('r2', cond(ans('x'), 'is_answered'), [set('calc', n('1'))]),
+      );
+      expect(publishCodes(def)).toEqual([
+        'error:expr_type_error:/logic/rules/0/then/0/value',
+        'error:expr_type_error:/logic/rules/1/then/0/value',
+        'error:expr_type_error:/logic/rules/2/then/0/target',
+      ]);
+    });
+
+    it('refuses a nested path, and a field inside a repeating group unless it is filled per row from a choice in the same rows', () => {
+      const group = form([
+        field('repeating_group', 'items', { config: { children: [bid('item'), bid('price'), bid('qty')], minRows: 0, maxRows: 5, initialRows: 1, layout: 'stacked' } }),
+        field('single_choice', 'item', { config: { display: 'dropdown', options: [{ id: oid('a'), label: 'A', code: '4' }] } }),
+        field('short_text', 'price'), field('number', 'qty'), field('number', 'outside'),
+      ], [page('p1', ['items', 'outside'])], [
+        rule('fill', cond(ans('item'), 'is_answered'), [set('price', { k: 'call', fn: 'option_code', args: [ref('item')] })]),
+        rule('lit', cond(ans('outside'), 'is_answered'), [set('qty', n('1'))]),
+        rule('path', cond(ans('outside'), 'is_answered'), [{ type: 'set_value', target: bid('outside'), path: 'x' as S.AnswerPath, value: n('1') }]),
+      ]);
+      expect(publishCodes(group).filter((c) => !c.includes('logic_cycle'))).toEqual([
+        'error:missing_capability:/logic/rules/1/then/0/target',
+        'error:missing_capability:/logic/rules/2/then/0/path',
+      ]);
+    });
+
+    it('taints the field a rule sets with everything its condition and value read, merging several writers', () => {
+      const def = form([
+        field('short_text', 'pan', { compliance: { classification: 'sensitive', purposeIds: [id<S.PurposeId>('kyc')], encrypt: false, retentionDays: null } as never }),
+        field('number', 'income', { compliance: { classification: 'personal', purposeIds: [id<S.PurposeId>('loan')], encrypt: false, retentionDays: null } as never }),
+        field('short_text', 'copy', { compliance: { classification: 'none', purposeIds: [], encrypt: false, retentionDays: null } as never }),
+        field('short_text', 'flag', { compliance: { classification: 'none', purposeIds: [], encrypt: false, retentionDays: null } as never }),
+      ], [page('p1', ['pan', 'income', 'copy', 'flag'])], [
+        rule('copy_pan', cond(ans('income'), 'is_answered'), [set('copy', ref('pan'))]),
+        rule('flag_pan', cond(ans('pan'), 'is_answered'), [set('flag', { k: 'lit', value: { type: 'text', value: 'yes' } })]),
+        rule('flag_income', cond(ans('income'), 'gt', num('10')), [set('flag', { k: 'lit', value: { type: 'text', value: 'rich' } })]),
+      ]);
+      def.privacy.purposes = [
+        { id: id<S.PurposeId>('kyc'), name: 'KYC', lawfulBasis: 'consent' } as never,
+        { id: id<S.PurposeId>('loan'), name: 'Loan', lawfulBasis: 'consent' } as never,
+      ];
+      const c = compiled(def);
+      expect(c.taint['value:copy']).toEqual({ classification: 'sensitive', purposeIds: ['kyc', 'loan'] });
+      /* The condition alone taints: flag is 'yes' exactly when a PAN was given. */
+      expect(c.taint['value:flag']).toEqual({ classification: 'sensitive', purposeIds: ['kyc', 'loan'] });
+    });
   });
 
   it('is deterministic: the same definition compiles to the same bytes', () => {

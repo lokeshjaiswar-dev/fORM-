@@ -12,7 +12,7 @@ import { ENGINE } from './compile.ts';
 import { D, formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
 import { ancestorsOf } from './structure.ts';
-import { optionValueSource } from './subset.ts';
+import { optionValueSource, setValueTargets } from './subset.ts';
 import { traceEntry, type TraceEntry } from './trace.ts';
 
 /*
@@ -872,6 +872,7 @@ class Session {
     const disabled = new Set<BlockId>();
     const values: Answers = {};
     const rowValues: Partial<Record<BlockId, Record<string, ScalarValue>>> = {};
+    const setTargets = setValueTargets(p.def);
     for (const block of p.fields) {
       const id = block.id;
       if (block.type === 'calculation' && this.rowGroupOf(id) !== undefined) {
@@ -888,7 +889,9 @@ class Session {
       const answer = this.answerOf(id);
       const shown = visible.has(id);
       if (shown && enabled && answer) values[id] = answer;
-      if (this.flag(cell.required(id)) && shown && enabled && !(block.readOnly === true && !answer)) required.add(id);
+      /* A read-only field nobody filled is not required: one the author locked, or one a rule sets (WP-2.01), which the respondent cannot type into. */
+      const locked = block.readOnly === true || setTargets.has(id);
+      if (this.flag(cell.required(id)) && shown && enabled && !(locked && !answer)) required.add(id);
     }
     /* Dependent options: a block waiting for its parent's answer is disabled, so it is neither answered nor required. */
     const dependent = dependentOptions(p.documentOrder, p.blocks, values);
