@@ -6,6 +6,7 @@ import { isPortError, JOB_POLICIES, PortError, toIsoInstant, type SubmissionEven
 import type { EffectDeps } from '../effects/deps.ts';
 import { recordDisclosure } from '../effects/disclosure.ts';
 import { loadSubmission } from '../effects/submission.ts';
+import { BodyRefused, renderWebhookBody } from '../effects/webhook/body.ts';
 import { buildWebhookPayload } from '../effects/webhook/payload.ts';
 import { DELIVERY_ID_HEADER, EVENT_HEADER, SIGNATURE_HEADER, signWebhook, webhookSigningSecret } from '../effects/webhook/sign.ts';
 import { scrubSnippet } from '../effects/webhook/snippet.ts';
@@ -160,6 +161,7 @@ type Prepared =
       hook: { id: string; formId: string; url: string; secretId: string };
       submission: { id: string; receivedAt: Date };
       body: string;
+      contentType: string;
       sentKeys: string[];
       enc: Record<string, unknown>;
     };
@@ -239,9 +241,9 @@ function webhookDeliver(deps: EffectDeps) {
       const prepared = await inTenant((tx) => prepare(tx, deliveryId, job.attempt, log));
       if (prepared.kind === 'done') return;
 
-      const { delivery, hook, submission, body, sentKeys, enc } = prepared;
+      const { delivery, hook, submission, body, contentType, sentKeys, enc } = prepared;
       const started = performance.now();
-      const outcome = await send(deps, log, { orgId, deliveryId, hook, event: delivery.event, enc, body });
+      const outcome = await send(deps, log, { orgId, deliveryId, hook, event: delivery.event, enc, body, contentType });
       const durationMs = Math.round(performance.now() - started);
       const requestHash = createHash('sha256').update(body).digest();
 
@@ -330,7 +332,7 @@ async function prepare(tx: Tx, deliveryId: string, attempt: number, log: Logger)
     next = origin.replayOf;
   }
 
-  const { payload, sentKeys } = buildWebhookPayload({
+  const built = buildWebhookPayload({
     eventId: event.id,
     event: delivery.event,
     createdAt: event.createdAt,
@@ -340,6 +342,14 @@ async function prepare(tx: Tx, deliveryId: string, attempt: number, log: Logger)
     compiled: loaded.compiled,
     webhook: { purposeIds: hook.purposeIds, fieldKeys: hook.fieldKeys, keyBy: hook.keyBy },
   });
+  // The format and the mapping come after the disclosure filter: they reshape what `built` already allows and add nothing to it.
+  let rendered: ReturnType<typeof renderWebhookBody>;
+  try {
+    rendered = renderWebhookBody(built, { bodyFormat: hook.bodyFormat, payloadMapping: hook.payloadMapping });
+  } catch (err) {
+    if (err instanceof BodyRefused) return settle(err.message);
+    throw err;
+  }
   const enc = await secretEnc(tx, hook.secretId);
   if (!enc) return settle('the signing secret no longer exists');
   return {
@@ -347,8 +357,9 @@ async function prepare(tx: Tx, deliveryId: string, attempt: number, log: Logger)
     delivery: { id: delivery.id, createdAt: delivery.createdAt, event: delivery.event },
     hook: { id: hook.id, formId: hook.formId, url: hook.url, secretId: hook.secretId },
     submission: { id: loaded.row.id, receivedAt: loaded.row.receivedAt },
-    body: JSON.stringify(payload),
-    sentKeys,
+    body: rendered.body,
+    contentType: rendered.contentType,
+    sentKeys: rendered.sentKeys,
     enc,
   };
 }
@@ -361,7 +372,7 @@ async function prepare(tx: Tx, deliveryId: string, attempt: number, log: Logger)
 async function send(
   deps: EffectDeps,
   log: Logger,
-  o: { orgId: string; deliveryId: string; hook: { url: string; secretId: string }; event: WebhookEvent; enc: Record<string, unknown>; body: string },
+  o: { orgId: string; deliveryId: string; hook: { url: string; secretId: string }; event: WebhookEvent; enc: Record<string, unknown>; body: string; contentType: string },
 ): Promise<Outcome> {
   let url: URL;
   try {
@@ -384,7 +395,7 @@ async function send(
     const res = await deps.tenantHttp(url, {
       method: 'POST',
       headers: {
-        'content-type': 'application/json',
+        'content-type': o.contentType,
         'user-agent': deps.config.webhookUserAgent,
         // The key is the text the owner was shown (`whsec_...`), not the sealed bytes; see `webhookSigningSecret`.
         [SIGNATURE_HEADER]: signWebhook(webhookSigningSecret(secret), o.body, seconds),
