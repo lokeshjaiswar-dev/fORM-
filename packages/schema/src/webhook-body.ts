@@ -12,6 +12,26 @@ import type { WebhookPayloadMapping, WebhookPayloadMeta } from './v2/ops.ts';
 export const MAX_MAPPING_ENTRIES = 200;
 export const MAX_PATH_DEPTH = 8;
 export const MAX_SPREAD_ROWS = 5000;
+/**
+ * The largest mapping, in UTF-8 bytes of its JSON, that can be saved. Migration 0025 caps the stored jsonb at 64 KiB
+ * (`pg_column_size(payload_mapping) <= 65536`), and jsonb is about 24 bytes per entry larger than the JSON text (measured on
+ * Postgres 18: 200 entries add 4.6 to 4.8 KB), so 56 KiB of JSON always fits. Without this, a schema-valid mapping (200
+ * entries of 200-character paths and keys is about 90 KB) passed the API and failed the column check as a 500.
+ */
+export const MAX_MAPPING_BYTES = 56 * 1024;
+
+/** The UTF-8 size of a string, counted by code point (no TextEncoder: this package also builds without DOM or Node types). */
+function utf8Length(text: string): number {
+  let n = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    n += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+  }
+  return n;
+}
+
+/** The UTF-8 size of a mapping's JSON (what MAX_MAPPING_BYTES limits). */
+export const mappingBytes = (mapping: WebhookPayloadMapping): number => utf8Length(JSON.stringify(mapping));
 const MAX_XML_DEPTH = 24;
 
 const SEGMENT = /^([A-Za-z_][A-Za-z0-9_-]{0,63})(\[\])?$/;
@@ -47,6 +67,8 @@ export function validateMapping(mapping: WebhookPayloadMapping): string[] {
   const issues: string[] = [];
   if (mapping.root !== undefined && !isXmlName(mapping.root)) issues.push(`"${mapping.root}" is not a valid XML root element name`);
   if (mapping.entries.length > MAX_MAPPING_ENTRIES) issues.push(`at most ${MAX_MAPPING_ENTRIES} mapped values`);
+  const bytes = mappingBytes(mapping);
+  if (bytes > MAX_MAPPING_BYTES) issues.push(`the mapping is too large (${Math.ceil(bytes / 1024)} KB; at most ${MAX_MAPPING_BYTES / 1024} KB): use shorter paths or fewer values`);
   // A trie of the paths: a name is a leaf or has children, never both, and `a` and `a[]` are different shapes.
   interface Node { repeat: boolean; leaf: boolean; kids: Map<string, Node> }
   const top = new Map<string, Node>();

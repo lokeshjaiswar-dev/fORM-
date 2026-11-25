@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WebhookPayloadMapping } from '../src/index.ts';
-import { applyMapping, escapeXml, isXmlName, parsePath, renderJson, renderXml, validateMapping } from '../src/index.ts';
+import { applyMapping, escapeXml, isXmlName, mappingBytes, MAX_MAPPING_BYTES, parsePath, renderJson, renderXml, validateMapping } from '../src/index.ts';
 
 const meta = { event: 'submission.created', eventId: 'e1', createdAt: '2026-01-01T00:00:00.000Z', formId: 'f1', submissionId: 's1', submittedAt: '2026-01-01T00:00:01.000Z' } as const;
 const answer = (path: string, key: string) => ({ path, source: { kind: 'answer' as const, key } });
@@ -22,6 +22,27 @@ describe('validateMapping', () => {
     expect(validateMapping({ entries: [answer('a[].b', 'x'), answer('a.c', 'y')] }).length).toBeGreaterThan(0);
     expect(validateMapping({ root: '1bad', entries: [] }).length).toBe(1);
     expect(validateMapping({ root: 'XMLroot', entries: [] }).length).toBe(1);
+  });
+
+  it('refuses a mapping whose JSON is over MAX_MAPPING_BYTES (the stored jsonb must fit the 64 KiB column check)', () => {
+    // 200 schema-valid entries (194-character paths); only the answer key length changes the size.
+    const sized = (keyLength: number, fill = 'y'): WebhookPayloadMapping => ({
+      entries: Array.from({ length: 200 }, (_, i) => answer([`s${i}_`.padEnd(64, 'a'), 'b'.repeat(64), 'c'.repeat(64)].join('.'), `k${i}_`.padEnd(keyLength, fill))),
+    });
+    expect(MAX_MAPPING_BYTES).toBe(56 * 1024);
+    expect(mappingBytes(sized(40))).toBeLessThanOrEqual(MAX_MAPPING_BYTES);
+    expect(validateMapping(sized(40))).toEqual([]);
+    for (const big of [sized(200), sized(60)]) {
+      expect(mappingBytes(big)).toBeGreaterThan(MAX_MAPPING_BYTES);
+      expect(validateMapping(big)).toEqual([expect.stringMatching(/too large/)]);
+    }
+    // Bytes, not UTF-16 units: 3-byte characters in the keys count three times.
+    expect(mappingBytes(sized(40, '\u0939'))).toBeGreaterThan(MAX_MAPPING_BYTES);
+    expect(validateMapping(sized(40, '\u0939'))).toEqual([expect.stringMatching(/too large/)]);
+    const utf8 = (text: string) => encodeURIComponent(text).replace(/%[0-9A-F]{2}/g, '.').length;
+    for (const text of ['abc', '\u00e9', '\u0939', '\u{1F600}', 'a\u0939\u{1F600}"\\']) {
+      expect(mappingBytes({ entries: [answer('a', text)] })).toBe(utf8(JSON.stringify({ entries: [answer('a', text)] })));
+    }
   });
 });
 
