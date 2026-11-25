@@ -68,7 +68,7 @@ const isChoice = (block: unknown): block is DependentBlock =>
   !!block && typeof block === 'object' && ((block as { type?: string }).type === 'single_choice' || (block as { type?: string }).type === 'multi_choice');
 
 /** Blocks inside a repeating group (a configurable list), at any depth: each row has its own answer. */
-export function repeatingMembers(def: Pick<FormDefinition, 'blocks'>): Set<BlockId> {
+function repeatingMembers(def: Pick<FormDefinition, 'blocks'>): Set<BlockId> {
   const out = new Set<BlockId>();
   const visit = (id: BlockId) => {
     if (out.has(id)) return;
