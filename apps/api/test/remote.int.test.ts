@@ -612,11 +612,22 @@ describe('the author route and the SSRF guard (T-LK-02, T-LK-13)', () => {
 describe('caps against a real server (T-LK-14)', () => {
   let server: Server;
   let base: string;
-  let mode: 'big' | 'hang' | 'ok' = 'ok';
+  let mode: 'big' | 'hang' | 'drip' | 'xml' | 'ok' = 'ok';
   beforeAll(async () => {
     server = createServer((req, res) => {
       if (mode === 'hang') return; // never answers: the 5 s limit must cut it off
+      if (mode === 'xml') {
+        // About 1 MiB of repeated siblings: the parser must stay linear on the API's event loop (review blocker).
+        res.writeHead(200, { 'content-type': 'application/xml' });
+        return res.end(`<r>${'<a>1</a>'.repeat(130_000)}</r>`);
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (mode === 'drip') {
+        // One byte every 2 s: never idle for 5 s, never over 1 MiB. The 5 s is a total deadline, so it still ends.
+        const timer = setInterval(() => res.write(' '), 2000);
+        res.on('close', () => clearInterval(timer));
+        return;
+      }
       if (mode === 'big') res.end(JSON.stringify({ data: 'x'.repeat(2 * 1024 * 1024) }));
       else res.end(JSON.stringify({ data: [{ name: 'Maya Rao' }] }));
       void req;
@@ -640,5 +651,18 @@ describe('caps against a real server (T-LK-14)', () => {
     expect(slow.statusCode).toBe(502);
     expect(Date.now() - started).toBeLessThan(9000);
     expect(Date.now() - started).toBeGreaterThanOrEqual(4500);
+    mode = 'drip';
+    const dripStarted = Date.now();
+    expect((await lookup(direct, f, 'mayd')).statusCode).toBe(502);
+    expect(Date.now() - dripStarted).toBeLessThan(9000);
+  }, 40_000);
+
+  it('1 MiB of XML siblings answers 502 or 200 within about a second (the event loop is never held)', async () => {
+    const direct = await startApp({ tenantHttp: (url, r) => sendHttp(url, { method: r.method, headers: r.headers, ...(r.body !== undefined ? { body: r.body } : {}), timeoutMs: r.timeoutMs, maxResponseBytes: r.maxResponseBytes }) });
+    const f = await publishForm(direct, { title: 'Xml', lookups: [lookupDef({ url: `${base}/people`, itemsPath: 'a', parser: 'xml', searchParam: undefined as never })] });
+    mode = 'xml';
+    const started = Date.now();
+    expect([200, 502]).toContain((await lookup(direct, f, 'maye')).statusCode);
+    expect(Date.now() - started).toBeLessThan(2000);
   }, 30_000);
 });
