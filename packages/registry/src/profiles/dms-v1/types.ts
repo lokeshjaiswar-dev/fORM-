@@ -38,6 +38,15 @@ export interface DmsElement {
   options?: DmsOption[];
   select?: { options: DmsOption[] };
   parent_field_id?: string;
+  /**
+   * Linked (cascading) dropdown, a fORM- addition kept as plain field-level keys (dms-api stores and returns unknown
+   * field-level keys untouched; per-option keys would not survive its option normalisation).
+   * `linkedTo`: DMS field id of an EARLIER top-level dropdown whose answer filters this one's options.
+   * `optionParents`: child option VALUE -> the parent option VALUES it is offered under. An option with no entry is always offered.
+   * Not to be confused with `parent_field_id`, DMS's own remote-options parent.
+   */
+  linkedTo?: string;
+  optionParents?: Record<string, string[]>;
   [extra: string]: unknown;
 }
 
@@ -56,4 +65,6 @@ export interface DmsTranslateOptions {
   locale: string;
   /** A definition to take everything but the blocks and the first page from (the builder passes `blankDefinition`). */
   base?: FormDefinition;
+  /** When given, links the translator dropped (unknown parent, unknown option) are pushed here instead of being silent. */
+  issues?: ProfileIssue[];
 }

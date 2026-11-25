@@ -10,7 +10,6 @@ import { patchBlockConfig } from '@/fields/configSink';
 import { placeBeside, removeRule, setRule, updateBlock } from '@/state/actions';
 import { currentDoc, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import { useProfile } from '@/embed/useProfile';
 import { Button } from '@dmacq/ui';
 import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSection';
 import { Disclosure, ToggleRow } from '@/components/builder/inspector/parts';
@@ -46,9 +45,9 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
   const options = block.config.options;
   const images = (block.type === 'single_choice' || block.type === 'multi_choice') && block.config.display === 'image';
   const valueColumn = block.type === 'single_choice' && block.config.display === 'dropdown';
-  /* Cascading options are a full-profile feature: a DMS master (dms-v1) drops dependsOn when it saves (review S8). */
+  /* Cascading options work in both profiles: dms-v1 stores the link as linkedTo/optionParents on the DMS element. */
   const choice = block.type === 'single_choice' || block.type === 'multi_choice' ? block : undefined;
-  const dependent = useProfile() === 'full' ? choice : undefined;
+  const dependent = choice;
   const parent = useLinkedParent(block);
   const rules = useDoc((d) => d.logic.rules);
   const [fresh, setFresh] = useState<OptionId | null>(null);

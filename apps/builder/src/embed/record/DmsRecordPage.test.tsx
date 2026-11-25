@@ -315,3 +315,63 @@ describe('/embed/dms-record non-Forms+ master', () => {
     expect(calls).toHaveLength(1);
   });
 });
+
+describe('/embed/dms-record linked dropdowns (linkedTo / optionParents)', () => {
+  const master = () => {
+    const body = structuredClone(fixtures.loadMaster.response.body) as { data: { form_builder_fields: Array<Record<string, unknown>> } };
+    const tier = body.data.form_builder_fields.find((f) => f.name === 'Tier')!;
+    body.data.form_builder_fields.push({
+      id: 'c2000000-0000-4000-8000-000000000106', type: 'dropdown', name: 'City', value: 'City', label: 'City', required: false, placeholder: '',
+      options: [{ name: 'Mumbai', value: 'Mumbai' }, { name: 'Delhi', value: 'Delhi' }, { name: 'Other', value: 'Other' }],
+      linkedTo: tier.id, optionParents: { Mumbai: ['Gold'], Delhi: ['Silver'] },
+    });
+    return body;
+  };
+  const record = (city: string) => {
+    const body = structuredClone(fixtures.loadRecord.response.body) as { data: { json_data: string } };
+    body.data.json_data = JSON.stringify({ ...JSON.parse(body.data.json_data), City: city });
+    return body;
+  };
+  const optionsOf = (name: RegExp) => Array.from((screen.getByRole('combobox', { name }) as HTMLSelectElement).options).map((o) => o.textContent);
+
+  it('offers only the options the stored parent allows, and an unchanged save sends nothing', async () => {
+    const calls = dms({ master: master(), record: record('Mumbai') });
+    const navigate = open(edit());
+    await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    await waitFor(() => expect(optionsOf(/City/)).toContain('Mumbai'));
+    expect(optionsOf(/City/)).not.toContain('Delhi');
+    expect(optionsOf(/City/)).toContain('Other');
+    expect(screen.getByRole('combobox', { name: /City/ })).toHaveDisplayValue('Mumbai');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(calls.filter((c) => c.method !== 'GET')).toHaveLength(0);
+  });
+
+  it('changing the parent clears a child value it no longer allows, and the new child value is written', async () => {
+    const calls = dms({ master: master(), record: record('Mumbai') });
+    const navigate = open(edit());
+    await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: /Tier/ }), 'Silver');
+    await waitFor(() => expect(optionsOf(/City/)).toContain('Delhi'));
+    expect(optionsOf(/City/)).not.toContain('Mumbai');
+    expect(screen.getByRole('combobox', { name: /City/ })).not.toHaveDisplayValue('Mumbai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /City/ }), 'Delhi');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    const patch = calls.filter((c) => c.method !== 'GET');
+    expect(patch).toHaveLength(1);
+    expect(JSON.stringify(patch[0]!.body)).toContain('Delhi');
+    expect(JSON.stringify(patch[0]!.body)).toContain('Silver');
+  });
+
+  it('a stored child value the parent never allowed is not shown, and an untouched save leaves what DMS stores', async () => {
+    const calls = dms({ master: master(), record: record('Delhi') });
+    const navigate = open(edit());
+    await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /City/ })).not.toHaveDisplayValue('Delhi'));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(calls.filter((c) => c.method !== 'GET')).toHaveLength(0);
+  });
+});

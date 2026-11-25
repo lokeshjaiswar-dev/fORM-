@@ -373,3 +373,88 @@ describe('answers', () => {
     expect(answerToDms(other, 3 as never)).toBe('');
   });
 });
+
+describe('linked dropdowns (linkedTo / optionParents)', () => {
+  const country = el(1, 'dropdown', 'Country', { options: [{ name: 'India', value: 'IN' }, { name: 'USA', value: 'US' }] });
+  const state = (extra: Record<string, unknown> = {}) =>
+    el(2, 'dropdown', 'State', {
+      options: [{ name: 'Goa', value: 'GA' }, { name: 'Texas', value: 'TX' }, { name: 'Other', value: 'OT' }],
+      linkedTo: uuid(1),
+      optionParents: { GA: ['IN'], TX: ['US'] },
+      ...extra,
+    });
+  const cfg = (def: FormDefinition, n: number) => (def.blocks[uuid(n) as BlockId] as FieldBlock).config as unknown as { dependsOn?: string; options: Array<{ id: string; code?: string; parentOptionIds?: string[] }> };
+
+  it('reads into dependsOn and parentOptionIds, and writes the same keys back (lossless)', () => {
+    const issues: never[] = [];
+    const def = elementsToDefinition([country, state()], { ...opts, issues });
+    expect(issues).toEqual([]);
+    expect(cfg(def, 2).dependsOn).toBe(uuid(1));
+    const [ga, tx, ot] = cfg(def, 2).options;
+    expect(ga!.parentOptionIds).toEqual([optionIdOf('IN')]);
+    expect(tx!.parentOptionIds).toEqual([optionIdOf('US')]);
+    expect(ot!.parentOptionIds).toBeUndefined();
+    expect(FormDefinitionSchema.safeParse(def).success).toBe(true);
+    expect(errorCodes(def)).toEqual([]);
+    expect(checkDmsV1(def).some((i) => i.code === 'config_dropped')).toBe(false);
+    const back = definitionToElements(def);
+    expect(back[1]!.linkedTo).toBe(uuid(1));
+    expect(back[1]!.optionParents).toEqual({ GA: ['IN'], TX: ['US'] });
+    expect(back.map(({ select: _s, ...e }) => e)).toEqual([country, state()]);
+  });
+  it('a dropdown with no link writes no link keys', () => {
+    const back = definitionToElements(elementsToDefinition([country], opts));
+    expect('linkedTo' in back[0]!).toBe(false);
+    expect('optionParents' in back[0]!).toBe(false);
+  });
+  it('the link keys do not ride in x-dms', () => {
+    const def = elementsToDefinition([country, state()], opts);
+    expect(JSON.stringify((def.blocks[uuid(2) as BlockId] as FieldBlock).x)).not.toContain('linkedTo');
+  });
+  it('an unknown parent drops the link with an issue and never throws', () => {
+    const issues: Array<{ code: string }> = [];
+    const def = elementsToDefinition([country, state({ linkedTo: uuid(99) })], { ...opts, issues: issues as never });
+    expect(cfg(def, 2).dependsOn).toBeUndefined();
+    expect(cfg(def, 2).options.every((o) => o.parentOptionIds === undefined)).toBe(true);
+    expect(issues.map((i) => i.code)).toEqual(['link_parent_unknown']);
+    expect(() => elementsToDefinition([country, state({ linkedTo: uuid(99) })], opts)).not.toThrow();
+  });
+  it('a parent that comes later, or is not a dropdown, drops the link', () => {
+    const later = elementsToDefinition([state(), country], opts);
+    expect(cfg(later, 2).dependsOn).toBeUndefined();
+    const text = elementsToDefinition([el(1, 'textinput', 'Country'), state()], opts);
+    expect(cfg(text, 2).dependsOn).toBeUndefined();
+  });
+  it('an orphaned option value (child or parent) is dropped with an issue, the rest of the link stays', () => {
+    const issues: Array<{ code: string }> = [];
+    const def = elementsToDefinition([country, state({ optionParents: { GA: ['IN', 'ZZ'], GONE: ['IN'], TX: ['US'] } })], { ...opts, issues: issues as never });
+    expect(cfg(def, 2).dependsOn).toBe(uuid(1));
+    expect(cfg(def, 2).options[0]!.parentOptionIds).toEqual([optionIdOf('IN')]);
+    expect(issues.filter((i) => i.code === 'link_option_unknown')).toHaveLength(2);
+  });
+  it('a link with no optionParents keeps dependsOn and offers every option', () => {
+    const def = elementsToDefinition([country, state({ optionParents: undefined })], opts);
+    expect(cfg(def, 2).dependsOn).toBe(uuid(1));
+    expect(definitionToElements(def)[1]!.optionParents).toBeUndefined();
+  });
+  it('guard: an earlier dropdown parent passes; a later, missing or non-dropdown parent is an error', () => {
+    const ok = elementsToDefinition([country, state()], opts);
+    expect(errorCodes(ok)).toEqual([]);
+    const toLater = mapDef(elementsToDefinition([state({ linkedTo: undefined, optionParents: undefined }), country], opts), (b) => (b.id === uuid(2) ? ({ ...b, config: { ...b.config, dependsOn: uuid(1) } } as FieldBlock) : b));
+    expect(errorCodes(toLater)).toContain('link_parent_invalid');
+    const missing = mapDef(ok, (b) => (b.id === uuid(2) ? ({ ...b, config: { ...b.config, dependsOn: uuid(77) } } as FieldBlock) : b));
+    expect(errorCodes(missing)).toContain('link_parent_invalid');
+    const text = elementsToDefinition([el(1, 'textinput', 'Country'), el(2, 'dropdown', 'State', { options: [{ name: 'a', value: 'a' }] })], opts);
+    const toText = mapDef(text, (b) => (b.id === uuid(2) ? ({ ...b, config: { ...b.config, dependsOn: uuid(1) } } as FieldBlock) : b));
+    expect(errorCodes(toText)).toContain('link_parent_invalid');
+  });
+  it('guard: a parentOptionIds entry that is not an option of the parent is an error', () => {
+    const ok = elementsToDefinition([country, state()], opts);
+    const bad = mapDef(ok, (b) => {
+      if (b.id !== uuid(2)) return b;
+      const c = b.config as unknown as { options: Array<Record<string, unknown>> };
+      return { ...b, config: { ...b.config, options: c.options.map((o, i) => (i === 0 ? { ...o, parentOptionIds: ['vdeadbeef'] } : o)) } } as unknown as FieldBlock;
+    });
+    expect(errorCodes(bad)).toContain('link_option_unknown');
+  });
+});

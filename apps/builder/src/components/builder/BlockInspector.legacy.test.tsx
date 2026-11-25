@@ -36,14 +36,14 @@ describe('BlockInspector in profile dms-v1: legacy read-only blocks', () => {
     expect(screen.queryByRole('note')).toBeNull();
   });
 
-  it('a DMS master choice offers no cascading link, and no field shows the Privacy section (review S8)', () => {
+  it('a DMS master dropdown offers the cascading link (stored as linkedTo/optionParents), and no field shows the Privacy section', () => {
     resetStore([
       block('single_choice', 'country', { label: 'Country', config: { display: 'dropdown', options: [{ id: 'in' as OptionId, label: 'India' }] } }),
       block('single_choice', 'state', { label: 'State', config: { display: 'dropdown', options: [{ id: 's1' as OptionId, label: 'Goa' }] } }),
     ]);
     open('state', 'dms-v1');
     expect(screen.getByRole('button', { name: 'Add option' })).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Link to an earlier question' })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Link to an earlier question' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Privacy' })).toBeNull();
     cleanup();
     open('state', 'full');

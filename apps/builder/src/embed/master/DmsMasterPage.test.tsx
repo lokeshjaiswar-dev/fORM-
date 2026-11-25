@@ -231,6 +231,33 @@ describe('/embed/dms-master', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('shows the cascading link for a dropdown in a DMS master, and the save carries linkedTo/optionParents', async () => {
+    const U = (n: number) => `c1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const el = (id: string, type: string, name: string, extra: Record<string, unknown> = {}) => ({ id, type, name, value: name, label: name, required: false, placeholder: '', ...extra });
+    const fields = [
+      el(U(1), 'dropdown', 'Country', { options: [{ name: 'India', value: 'IN' }, { name: 'USA', value: 'US' }] }),
+      el(U(2), 'dropdown', 'State', { options: [{ name: 'Goa', value: 'GA' }, { name: 'Texas', value: 'TX' }], linkedTo: U(1), optionParents: { GA: ['IN'], TX: ['US'] } }),
+      el(U(3), 'email', 'Mail'),
+    ];
+    const fetch = vi.fn().mockResolvedValueOnce(json(200, shown({ form_builder_fields: fields }))).mockResolvedValueOnce(json(200, shown({ form_builder_fields: fields })));
+    vi.stubGlobal('fetch', fetch);
+    open(descriptor({ masterId: MASTER, master: undefined }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    expect(screen.getAllByText('Linked to Country').length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByText('State'));
+    expect(await screen.findByRole('switch', { name: 'Link to an earlier question' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const [, init] = fetch.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { form_builder_fields: Array<Record<string, unknown>> };
+    const state = body.form_builder_fields.find((f) => f.name === 'State')!;
+    expect(state.linkedTo).toBe(U(1));
+    expect(state.optionParents).toEqual({ GA: ['IN'], TX: ['US'] });
+    expect(body.form_builder_fields.find((f) => f.name === 'Country')).not.toHaveProperty('linkedTo');
+  });
+
   it('hides the Logic and Privacy tabs of the block inspector (DMS forms have neither)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(200, shown())));
     open(descriptor({ masterId: MASTER, master: undefined }));

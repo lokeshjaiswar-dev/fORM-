@@ -38,6 +38,8 @@ const REPRESENTABLE: Record<DmsV1Type, Record<string, Check>> = {
   dropdown: {
     placeholder: any,
     options: any,
+    // a link to an earlier top-level dropdown is stored as linkedTo/optionParents; checkLink refuses any other parent
+    dependsOn: any,
     searchable: any,
     preset: any,
     display: (v) => v === 'dropdown',
@@ -73,6 +75,7 @@ export function checkDmsV1(def: FormDefinition): ProfileIssue[] {
   let fields = 0;
   let primaries = 0;
 
+  const dropdowns = new Map<string, FieldBlock>();
   for (const { id, block, placed } of blocks) {
     const at = jsonPointer('blocks', id);
     const type = block.type === 'unsupported' ? null : dmsTypeOf(block);
@@ -87,7 +90,11 @@ export function checkDmsV1(def: FormDefinition): ProfileIssue[] {
     checkName(block, id, names, add);
     checkLegacy(block, id, add);
     checkPrimary(block, id, type, add, () => (primaries += 1));
-    if (type === 'dropdown') checkOptions(block, id, add);
+    if (type === 'dropdown') {
+      checkOptions(block, id, add);
+      checkLink(block, id, dropdowns, add);
+      dropdowns.set(id, block);
+    }
     checkRepresentable(block, id, type, add);
   }
   if (fields === 0 && !blocks.some((b) => b.block.type === 'unsupported')) add('error', 'no_fields', jsonPointer('pages'), 'Add at least one field.');
@@ -142,4 +149,18 @@ function checkRepresentable(block: FieldBlock, id: string, type: DmsV1Type, add:
   if (dropped.length > 0) add('warning', 'config_dropped', jsonPointer('blocks', id, 'config'), `DMS cannot keep these settings, so they are left out when you save: ${dropped.join(', ')}.`, id);
   const settings = UNSUPPORTED_SETTINGS.filter((k) => (block as unknown as Record<string, unknown>)[k] !== undefined && (block as unknown as Record<string, unknown>)[k] !== false);
   if (settings.length > 0) add('warning', 'settings_dropped', jsonPointer('blocks', id), `DMS cannot keep these field settings, so they are left out when you save: ${settings.join(', ')}.`, id);
+}
+
+/** A link must point at an EARLIER top-level dropdown, and every `parentOptionIds` entry at one of that dropdown's options. */
+function checkLink(block: FieldBlock, id: string, earlier: Map<string, FieldBlock>, add: Add): void {
+  const config = block.config as unknown as { dependsOn?: string; options: Array<{ id: string; parentOptionIds?: string[] }> };
+  const parentId = config.dependsOn;
+  if (parentId === undefined) return;
+  const at = jsonPointer('blocks', id, 'config', 'dependsOn');
+  const parent = earlier.get(parentId);
+  if (!parent) return add('error', 'link_parent_invalid', at, 'A linked dropdown must follow the dropdown it is linked to. Link it to an earlier dropdown.', id);
+  const known = new Set((parent.config as unknown as { options: Array<{ id: string }> }).options.map((o) => o.id));
+  config.options.forEach((o, i) => {
+    if ((o.parentOptionIds ?? []).some((p) => !known.has(p))) add('error', 'link_option_unknown', jsonPointer('blocks', id, 'config', 'options', i, 'parentOptionIds'), 'This option is linked to an option the parent dropdown does not have.', id);
+  });
 }

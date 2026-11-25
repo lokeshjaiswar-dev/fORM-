@@ -7,7 +7,7 @@ export const X_DMS = 'x-dms';
 
 /** Classic keys fORM- models itself (as block fields, config or `unique`), so they never travel in `x-dms`. */
 export const MODELLED_KEYS: ReadonlySet<string> = new Set([
-  'id', 'type', 'name', 'value', 'label', 'required', 'placeholder', 'primary', 'options', 'select', 'numeric', 'specialChars', 'isDefaultToDate', 'autoIncrementValue',
+  'id', 'type', 'name', 'value', 'label', 'required', 'placeholder', 'primary', 'options', 'select', 'numeric', 'specialChars', 'isDefaultToDate', 'autoIncrementValue', 'linkedTo', 'optionParents',
 ]);
 
 /** Types whose value may be the master's primary key. */
