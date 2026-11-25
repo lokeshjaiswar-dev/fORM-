@@ -336,6 +336,14 @@ describe('validateStructure', () => {
       expect(codes(validateStructure(def, { mode: 'publish' }))).toEqual(expect.arrayContaining(['error:lookup_id_missing:/lookups/0/id', 'error:lookup_id_duplicate:/lookups/2/id']));
     });
 
+    it('an id the proxy route cannot name (not /^[A-Za-z0-9_-]{1,64}$/) is lookup_id_missing (review nit)', () => {
+      const def = definition();
+      def.lookups = [base({ id: 'my lookup' }), base({ id: 'a.b' }), base({ id: 'ok_id-1' })];
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toEqual(expect.arrayContaining(['error:lookup_id_missing:/lookups/0/id', 'error:lookup_id_missing:/lookups/1/id']));
+      expect(codes(validateStructure(def, { mode: 'publish' }))).not.toContain('error:lookup_id_missing:/lookups/2/id');
+      expect(codes(validateStructure(def))).toContain('warning:lookup_id_missing:/lookups/0/id');
+    });
+
     it('a disabled lookup without an id is fine, and the legacy lookup counts as the id "lookup"', () => {
       const def = definition();
       const { id: _id, ...noId } = base({ enabled: false });

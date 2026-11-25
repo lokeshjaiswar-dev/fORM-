@@ -52,6 +52,9 @@ describe('server-side lookups: the public projection shapes', () => {
       expect(ok(S.PublicLookupSchema, { ...lookup, ...leak }), Object.keys(leak)[0]).toBe(false);
     }
     expect(ok(S.PublicLookupSchema, { ...lookup, source: 'dms_master', masterId: 'm-1' })).toBe(true);
+    // The id is what the proxy route's path names: the same pattern.
+    expect(ok(S.PublicLookupSchema, { ...lookup, id: 'my lookup' })).toBe(false);
+    expect(ok(S.PublicLookupSchema, { ...lookup, id: 'a.b' })).toBe(false);
   });
 
   it('a public block carries only the remote markers: a url, key or credential is refused', () => {

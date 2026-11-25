@@ -95,7 +95,7 @@ export const DmsMasterLookupSchema = z.strictObject({
 });
 export const ApiLookupSchema = z.union([DmsMasterLookupSchema, HttpLookupSchema]);
 export const PublicLookupSchema = z.strictObject({
-  id: z.string().min(1).max(64),
+  id: z.string().max(64).regex(/^[A-Za-z0-9_-]{1,64}$/),
   source: z.enum(['http', 'dms_master']),
   name: z.string().min(1).max(80).exactOptional(),
   pickerFieldId: BlockIdSchema,

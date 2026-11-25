@@ -8,6 +8,9 @@ import { VALUE_FIELD_TYPES } from '../v2/zod/catalogue.ts';
 import { isSafeHref, isSafeUrl } from '../v2/zod/primitives.ts';
 import { InlineDocSchema, RichDocSchema } from '../v2/zod/rich-text.ts';
 
+/** A lookup id as the proxy route names it (`/v1/p/:slug/lookups/:lookupId`). */
+const LOOKUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 /**
  * Structural invariants of a v2 definition that one zod parse cannot see: I1 (one id namespace
  * for blocks, pages and endings; unique ids per parent and per logic list), I3 (unique FieldKey),
@@ -392,6 +395,8 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
     if (lookup.source !== 'dms_master') needsHttps(lookup, jsonPointer(...path, 'url'));
     const id = lookup.id ?? fallbackId;
     if (lookup.enabled === true && id === undefined) soft('lookup_id_missing', jsonPointer(...path, 'id'), 'an enabled lookup needs an id, so the respondent can name it');
+    // The id is a path segment of the proxy route (`/v1/p/:slug/lookups/:lookupId`), which takes only this pattern.
+    if (id !== undefined && !LOOKUP_ID.test(id)) soft('lookup_id_missing', jsonPointer(...path, 'id'), 'a lookup id is 1 to 64 letters, digits, "_" or "-"');
     if (id !== undefined) {
       const first = lookupIds.get(id);
       if (first === undefined) lookupIds.set(id, jsonPointer(...path, 'id'));
