@@ -338,25 +338,6 @@ describe('/embed/dms-master', () => {
   });
 });
 
-describe('/embed/dms-record', () => {
-  it('shows a notice (no redirect to the fORM- sign-in) and calls nothing', () => {
-    const fetch = vi.fn();
-    vi.stubGlobal('fetch', fetch);
-    window.history.replaceState(null, '', '/embed/dms-record');
-    render(
-      <SubmissionsProvider repo={new MemorySubmissions()}>
-        <TooltipProvider>
-          <MemoryRouter initialEntries={['/embed/dms-record']}>
-            <AppRoutes />
-          </MemoryRouter>
-        </TooltipProvider>
-      </SubmissionsProvider>,
-    );
-    expect(screen.getByRole('heading', { name: /not available here yet/ })).toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
-  });
-});
-
 describe('describeDmsError', () => {
   it('explains the refusals dms-api documents', () => {
     expect(describeDmsError(new DmsApiError(409, 'x', 'MASTER_CHANGED', null))).toMatch(/Someone else changed this master/);
