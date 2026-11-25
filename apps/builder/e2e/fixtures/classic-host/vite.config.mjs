@@ -33,6 +33,7 @@ export default defineConfig({
     'process.env.NODE_ENV': '"production"',
     'process.env.NEXT_PUBLIC_FORMPLUS_UPLOAD_URL': '(window.__FP_URL)',
     'process.env.NEXT_PUBLIC_FORMPLUS_UPLOAD': '"1"',
+    'process.env.NEXT_PUBLIC_FORMPLUS_BASE_URL': '""',
   },
   resolve: {
     alias: [
