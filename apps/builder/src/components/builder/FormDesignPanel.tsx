@@ -13,6 +13,8 @@ import { Tooltip } from '@/components/Tooltip';
 import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
 import { LookupSettings } from '@/components/builder/LookupSettings';
+import { DmsLookupSettings } from '@/components/builder/DmsLookupSettings';
+import { useProfile } from '@/embed/useProfile';
 import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
 import { useUiStore } from '@/state/uiStore';
 import { ReviewSettings } from '@/components/builder/review/ReviewSettings';
@@ -31,6 +33,7 @@ const M = defineMessages('builder', {
   'design.themes': 'Themes',
   'design.submit': 'Submit',
   'design.lookup': 'API autofill',
+  'design.lookup_dms': 'Fill from master',
   'design.logic': 'Rules',
   'design.sections': 'Sections',
   'design.review': 'Review',
@@ -73,6 +76,7 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
   const setOpen = useUiStore((s) => s.setDesignOpen);
   const [tab, setTab] = useState<Tab>('colors');
   const [query, setQuery] = useState('');
+  const profile = useProfile();
   const theme = useDoc((d) => d.theme);
   const tokens = theme.tokens;
   const [switchMark, setSwitchMark] = useState(0);
@@ -124,7 +128,7 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
     : id === 'logic' ? t(M['design.logic'])
     : id === 'sections' ? t(M['design.sections'])
     : id === 'review' ? t(M['design.review'])
-    : id === 'lookup' ? t(M['design.lookup'])
+    : id === 'lookup' ? t(M[profile === 'dms-v1' ? 'design.lookup_dms' : 'design.lookup'])
     : t(M['design.submit']);
 
   return (
@@ -333,7 +337,7 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
               {tab === 'sections' ? <SettingCard><SectionBreakSettings /></SettingCard> : null}
 
               {tab === 'review' ? <SettingCard><ReviewSettings /></SettingCard> : null}
-              {tab === 'lookup' ? <SettingCard><LookupSettings /></SettingCard> : null}
+              {tab === 'lookup' ? <SettingCard>{profile === 'dms-v1' ? <DmsLookupSettings /> : <LookupSettings />}</SettingCard> : null}
               {tab === 'submit' ? <SettingCard><SubmissionSettings dark /></SettingCard> : null}
         </div>
       </div>

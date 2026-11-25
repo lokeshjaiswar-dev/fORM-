@@ -8,3 +8,4 @@ export type {
   FormRendererProps, PartialSave, RendererEvent, RendererHandle, RendererSession, SubmitAccepted, SubmitHandler, SubmitPayload, UploadRequest, Uploader,
 } from './types.ts';
 export { browserSession } from './eval/meta.ts';
+export type { RemoteLookupResult, RemoteLookupRow, RemoteSource } from './remote.ts';

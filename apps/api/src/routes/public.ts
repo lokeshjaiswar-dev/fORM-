@@ -26,7 +26,7 @@ import {
 import { runtimeStatus } from '../runtime/status.ts';
 import { assertOpen, isUnlocked, readAccess } from '../submit/access.ts';
 import type { EffectsDeps } from '../submit/effects.ts';
-import { createVersionLoader, type LoadedVersion } from '../submit/live.ts';
+import { createVersionLoader, type LoadedVersion, type VersionLoader } from '../submit/live.ts';
 import { submit } from '../submit/pipeline.ts';
 import { storableJson, storableString } from '../text-safety.ts';
 
@@ -88,11 +88,11 @@ const accessTokenOf = (request: FastifyRequest): string | undefined => {
 
 export function publicFormRoutes(
   app: FastifyInstance,
-  deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date; effects?: EffectsDeps | undefined },
+  deps: { db: Db; config: ApiConfig; files: FileStore; throttle: Throttle; now: () => Date; effects?: EffectsDeps | undefined; loader?: VersionLoader | undefined },
 ): void {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const edition: RuntimeEdition = runtimeEdition(editionSummary(deps.config.edition));
-  const loader = createVersionLoader({ db: deps.db, edition });
+  const loader = deps.loader ?? createVersionLoader({ db: deps.db, edition });
 
   /**
    * The live version of a resolved slug. The slug is resolved on every request, so a form that was unpublished,

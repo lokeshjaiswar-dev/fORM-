@@ -38,6 +38,7 @@ export const ApiSuccessRuleSchema = z.union([
   z.strictObject({ type: z.literal('number'), equals: z.number().finite() }),
   z.strictObject({ type: z.literal('string'), equals: z.array(z.string().min(1).max(256)).min(1).max(3) }),
 ]);
+export const CredentialRefSchema = z.strictObject({ secretId: z.string().max(36).regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) });
 const apiRequest = {
   url: SafeUrlSchema,
   method: z.enum(['GET', 'POST']).exactOptional(),
@@ -45,6 +46,7 @@ const apiRequest = {
   body: z.array(ApiPairSchema).max(32).exactOptional(),
   auth: ApiAuthSchema.exactOptional(),
   parser: z.enum(['json', 'xml']).exactOptional(),
+  credentialRef: CredentialRefSchema.exactOptional(),
 };
 export const ApiRequestConfigSchema = z.strictObject(apiRequest);
 export const ApiValidationSchema = z.strictObject({
@@ -63,16 +65,48 @@ export const ApiLookupMappingSchema = z.strictObject({
   key: z.string().min(1).max(128),
   fieldId: BlockIdSchema.exactOptional(),
 });
-export const ApiLookupSchema = z.strictObject({
+export const HttpLookupSchema = z.strictObject({
   ...apiRequest,
   id: z.string().min(1).max(64).exactOptional(),
+  source: z.literal('http').exactOptional(),
   name: z.string().min(1).max(80).exactOptional(),
   enabled: z.boolean().exactOptional(),
   itemsPath: z.string().max(256).exactOptional(),
   pickerFieldId: BlockIdSchema.exactOptional(),
   pickerKey: z.string().max(128).exactOptional(),
   mappings: z.array(ApiLookupMappingSchema).max(32).exactOptional(),
+  searchParam: z.string().min(1).max(64).exactOptional(),
+  minChars: z.number().int().min(0).max(3).exactOptional(),
+  maxRows: z.number().int().min(1).max(50).exactOptional(),
 });
+const DMS_ID = /^[0-9a-fA-F-]{36}$/;
+export const DmsLookupMappingSchema = z.strictObject({ key: z.string().max(36).regex(DMS_ID), fieldId: BlockIdSchema });
+export const DmsMasterLookupSchema = z.strictObject({
+  id: z.string().max(64).regex(/^[A-Za-z0-9_-]{1,64}$/),
+  source: z.literal('dms_master'),
+  name: z.string().min(1).max(80).exactOptional(),
+  enabled: z.boolean().exactOptional(),
+  masterId: z.string().max(64).regex(/^[A-Za-z0-9-]{1,64}$/),
+  pickerFieldId: BlockIdSchema,
+  pickerKey: z.string().max(36).regex(DMS_ID),
+  mappings: z.array(DmsLookupMappingSchema).max(16),
+  minChars: z.number().int().min(0).max(3).exactOptional(),
+  maxRows: z.number().int().min(1).max(20).exactOptional(),
+});
+export const ApiLookupSchema = z.union([DmsMasterLookupSchema, HttpLookupSchema]);
+export const PublicLookupSchema = z.strictObject({
+  id: z.string().min(1).max(64),
+  source: z.enum(['http', 'dms_master']),
+  name: z.string().min(1).max(80).exactOptional(),
+  pickerFieldId: BlockIdSchema,
+  pickerKey: z.string().max(128),
+  mappings: z.array(z.strictObject({ key: z.string().min(1).max(128), fieldId: BlockIdSchema })).max(32),
+  minChars: z.number().int().min(0).max(3),
+  maxRows: z.number().int().min(1).max(50),
+  masterId: z.string().max(64).regex(/^[A-Za-z0-9-]{1,64}$/).exactOptional(),
+});
+export const PublicApiOptionsSchema = z.strictObject({ remote: z.literal(true) });
+export const PublicApiValidationSchema = z.strictObject({ remote: z.literal(true), message: z.string().max(1000).exactOptional() });
 
 /** Shape of BlockBase<T>. */
 export const blockBase = <T extends string>(type: T) => ({

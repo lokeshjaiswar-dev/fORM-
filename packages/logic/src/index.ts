@@ -16,3 +16,4 @@ export { CASE_FOLD_UNICODE_VERSION, caseFold, comparable, nfc, textLength } from
 export { evalStateJson, traceEntry } from './trace.ts';
 export type { TraceEntry } from './trace.ts';
 export { validateDefinition } from './validateDefinition.ts';
+export * from './remote/index.ts';

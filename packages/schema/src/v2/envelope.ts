@@ -87,6 +87,8 @@ export interface ApiRequestConfig {
   body?: ApiPair[];
   auth?: ApiAuth;
   parser?: 'json' | 'xml';
+  /** Org API credential for the proxy (never reaches the respondent). */
+  credentialRef?: CredentialRef;
 }
 
 /**
@@ -118,13 +120,18 @@ export interface ApiLookupMapping {
   fieldId?: BlockId;
 }
 
+/** Reference to an org API credential (`secrets` row of kind api_credential). Only the id is stored in a definition. */
+export interface CredentialRef { secretId: string }
+
 /**
- * Form-level master list. `itemsPath` is the array of records. `pickerFieldId` is the
- * field that becomes the dropdown; `pickerKey` is the label on each row (usually name).
+ * Form-level master list read from an HTTP API through the fORM- proxy (the respondent never calls it). `itemsPath` is
+ * the array of records. `pickerFieldId` is the field that becomes the search box; `pickerKey` is the label on each row.
+ * `source` absent means 'http', so drafts saved before the union still parse.
  */
-export interface ApiLookup extends ApiRequestConfig {
-  /** Stable id so several lookups on one form stay distinct. */
+export interface HttpLookup extends ApiRequestConfig {
+  /** Stable id so several lookups on one form stay distinct. Required at publish for an enabled lookup, unique per form. */
   id?: string;
+  source?: 'http';
   name?: string;
   /** When true, the live form loads this list and fills mapped fields. */
   enabled?: boolean;
@@ -132,7 +139,58 @@ export interface ApiLookup extends ApiRequestConfig {
   pickerFieldId?: BlockId;
   pickerKey?: string;
   mappings?: ApiLookupMapping[];
+  /** Org API credential sent with the upstream request (https and the credential's own host only). */
+  credentialRef?: CredentialRef;
+  /** Query key (GET) or JSON body key (POST) that carries the search term; absent: the server fetches the list and filters it. */
+  searchParam?: string;
+  /** 0..3, default 2. */
+  minChars?: number;
+  /** 1..50, default 20. */
+  maxRows?: number;
 }
+
+export interface DmsLookupMapping {
+  /** Field uuid on the source master. */
+  key: string;
+  fieldId: BlockId;
+}
+
+/** Records of a DMS master, answered by DMS as the user (never by the fORM- API). */
+export interface DmsMasterLookup {
+  id: string;
+  source: 'dms_master';
+  name?: string;
+  enabled?: boolean;
+  masterId: string;
+  pickerFieldId: BlockId;
+  /** Field uuid on the source master: the label column and the search column. */
+  pickerKey: string;
+  mappings: DmsLookupMapping[];
+  minChars?: number;
+  /** 1..20, default 20. */
+  maxRows?: number;
+}
+
+export type ApiLookup = HttpLookup | DmsMasterLookup;
+
+/** What the respondent gets of a lookup: no URL, method, query, body, parser, itemsPath, searchParam or credential. */
+export interface PublicLookup {
+  id: string;
+  source: 'http' | 'dms_master';
+  name?: string;
+  pickerFieldId: BlockId;
+  pickerKey: string;
+  mappings: Array<{ key: string; fieldId: BlockId }>;
+  minChars: number;
+  maxRows: number;
+  /** dms_master only. */
+  masterId?: string;
+}
+
+/** Public form of a block's `apiOptions`: the options are fetched through the proxy. */
+export interface PublicApiOptions { remote: true }
+/** Public form of a block's `apiValidation`: the check runs through the proxy; `message` is the author's failure text. */
+export interface PublicApiValidation { remote: true; message?: string }
 
 export interface FieldBase<T extends ValueFieldType> extends BlockBase<T> {
   key: FieldKey;

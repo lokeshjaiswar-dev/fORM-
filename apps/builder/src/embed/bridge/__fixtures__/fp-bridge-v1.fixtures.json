@@ -685,5 +685,505 @@
         }
       }
     }
-  ]
+  ],
+  "lookup": {
+    "$comment": "Server-side lookups over fp-bridge/1 (additive; fORM- is canonical, the classic repo copies this file byte for byte). childUrlCaps is the fp_caps value the parent appends to the iframe URL; the child sends lookup.request only when it is present. masterRecordsResponse holds a masked secret (Tax Id with a __masked sibling, and a value equal to the mask) and a hidden-field value (Internal Note); neither may ever reach a cell.",
+    "childUrlCaps": "lookup",
+    "pickerElement": {
+      "id": "a2000000-0000-4000-8000-000000000001",
+      "type": "textinput",
+      "value": "Vendor",
+      "name": "Vendor",
+      "label": "Vendor",
+      "fp_lookup": {
+        "v": 1,
+        "id": "vendor",
+        "master_id": "m-vendors",
+        "label_field_id": "b2000000-0000-4000-8000-000000000001",
+        "fill": [
+          {
+            "from": "b2000000-0000-4000-8000-000000000002",
+            "to": "a2000000-0000-4000-8000-000000000002"
+          },
+          {
+            "from": "b2000000-0000-4000-8000-000000000003",
+            "to": "a2000000-0000-4000-8000-000000000003"
+          },
+          {
+            "from": "b2000000-0000-4000-8000-000000000004",
+            "to": "a2000000-0000-4000-8000-000000000004"
+          }
+        ],
+        "min_chars": 2
+      },
+      "field_source": "master"
+    },
+    "sourceMasterElements": [
+      {
+        "id": "b2000000-0000-4000-8000-000000000001",
+        "type": "textinput",
+        "value": "Vendor Name",
+        "name": "Vendor Name",
+        "label": "Vendor Name"
+      },
+      {
+        "id": "b2000000-0000-4000-8000-000000000002",
+        "type": "textinput",
+        "value": "City",
+        "name": "City",
+        "label": "City"
+      },
+      {
+        "id": "b2000000-0000-4000-8000-000000000003",
+        "type": "textinput",
+        "value": "Phone",
+        "name": "Phone",
+        "label": "Phone"
+      },
+      {
+        "id": "b2000000-0000-4000-8000-000000000004",
+        "type": "textinput",
+        "value": "Tax Id",
+        "name": "Tax Id",
+        "label": "Tax Id",
+        "is_secret": true
+      },
+      {
+        "id": "b2000000-0000-4000-8000-000000000005",
+        "type": "textinput",
+        "value": "Internal Note",
+        "name": "Internal Note",
+        "label": "Internal Note",
+        "is_hidden": true
+      }
+    ],
+    "masterRecordsResponse": {
+      "data": {
+        "records": [
+          {
+            "id": "r1",
+            "json_data": "{\"Vendor Name\": \"Acme Traders\", \"City\": \"Pune\", \"Phone\": \"9800000001\", \"Tax Id\": \"\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\", \"Tax Id__masked\": true, \"Internal Note\": \"do not share\"}"
+          },
+          {
+            "id": "r2",
+            "json_data": {
+              "Vendor Name": "Acme Foods",
+              "City": "Delhi",
+              "Phone": "••••••",
+              "Tax Id": "••••••",
+              "Tax Id__masked": true
+            }
+          },
+          {
+            "id": "r3",
+            "json_data": {
+              "Vendor Name": "",
+              "City": "Nowhere"
+            }
+          }
+        ],
+        "total": 3
+      }
+    },
+    "exchange": [
+      {
+        "protocol": "fp-bridge/1",
+        "type": "lookup.request",
+        "id": "c-lookup-1",
+        "payload": {
+          "lookupId": "vendor",
+          "search": "acm"
+        }
+      },
+      {
+        "protocol": "fp-bridge/1",
+        "type": "lookup.result",
+        "id": "p-lookupresult-1",
+        "replyTo": "c-lookup-1",
+        "payload": {
+          "lookupId": "vendor",
+          "status": "ok",
+          "rows": [
+            {
+              "label": "Acme Traders",
+              "cells": {
+                "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                "b2000000-0000-4000-8000-000000000002": "Pune",
+                "b2000000-0000-4000-8000-000000000003": "9800000001"
+              }
+            }
+          ],
+          "truncated": false
+        }
+      }
+    ],
+    "mustBeRejected": [
+      {
+        "why": "lookup.request with an extra key",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.request",
+          "id": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "search": "acm",
+            "url": "http://x"
+          }
+        }
+      },
+      {
+        "why": "lookup.request search over 100 chars",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.request",
+          "id": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "search": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      },
+      {
+        "why": "lookup.request bad lookupId",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.request",
+          "id": "c-lookup-1",
+          "payload": {
+            "lookupId": "a b",
+            "search": "acm"
+          }
+        }
+      },
+      {
+        "why": "lookup.result without replyTo",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "ok",
+            "rows": [
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      {
+        "why": "lookup.result unknown status",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "replyTo": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "maybe",
+            "rows": [
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      {
+        "why": "lookup.result more than 20 rows",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "replyTo": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "ok",
+            "rows": [
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              },
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      {
+        "why": "lookup.result cell key not a uuid",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "replyTo": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "ok",
+            "rows": [
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001",
+                  "city": "x"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      {
+        "why": "lookup.result cell over 1000 chars",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "replyTo": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "ok",
+            "rows": [
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      {
+        "why": "lookup.result label over 200 chars",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "replyTo": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "ok",
+            "rows": [
+              {
+                "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      {
+        "why": "lookup.result extra row key",
+        "message": {
+          "protocol": "fp-bridge/1",
+          "type": "lookup.result",
+          "id": "p-lookupresult-1",
+          "replyTo": "c-lookup-1",
+          "payload": {
+            "lookupId": "vendor",
+            "status": "ok",
+            "rows": [
+              {
+                "label": "Acme Traders",
+                "cells": {
+                  "b2000000-0000-4000-8000-000000000001": "Acme Traders",
+                  "b2000000-0000-4000-8000-000000000002": "Pune",
+                  "b2000000-0000-4000-8000-000000000003": "9800000001"
+                },
+                "secret": "x"
+              }
+            ],
+            "truncated": false
+          }
+        }
+      }
+    ]
+  }
 }

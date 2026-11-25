@@ -2541,3 +2541,13 @@
     animation: none !important;
   }
 }
+
+/* Server-side lookup picker: a searchable combobox with its list under the input. */
+:where(.fr-root) .fr-lookup { position: relative; display: block; }
+:where(.fr-root) .fr-lookup-list {
+  position: absolute; z-index: 20; inset-inline: 0; margin: 2px 0 0; padding: 4px 0; list-style: none; max-height: 16rem; overflow-y: auto;
+  background: var(--fr-input-bg, var(--fr-inputBg, #fff)); border: 1px solid var(--fr-input-border, var(--fr-inputBorder)); border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+}
+:where(.fr-root) .fr-lookup-list [role='option'] { padding: 6px 12px; cursor: pointer; }
+:where(.fr-root) .fr-lookup-list [role='option'][data-active] { background: color-mix(in srgb, currentColor 10%, transparent); }

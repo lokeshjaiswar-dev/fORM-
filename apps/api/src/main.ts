@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { createInfrastructureEgressGuard, createTenantEgressGuard, infrastructureHosts } from '@form/adapters/egress';
+import { createInfrastructureEgressGuard, createTenantEgressGuard, egressHttp, infrastructureHosts } from '@form/adapters/egress';
 import { createKeyfileKeyProvider, createOrgSecrets, openKeyProvider } from '@form/adapters/kms';
 import { createSmtpMailer, MAILPIT_SMTP_URL } from '@form/adapters/mailer';
 import { createPostgresSearchIndex } from '@form/adapters/search';
@@ -118,6 +118,8 @@ const app = await buildApp(config, {
   keys,
   orgSecrets,
   tenantEgress,
+  // Lookups, option lists and checks call an API the form's owner chose: through the tenant guard, pinned to the vetted address, no redirect.
+  tenantHttp: (url, request) => egressHttp(tenantEgress, url, request),
   orgMailer,
   searchIndex: createPostgresSearchIndex,
   ...(storage ? { storage } : {}),

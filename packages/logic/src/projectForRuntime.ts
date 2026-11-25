@@ -1,4 +1,4 @@
-import type { ClientAction, FormDefinition, ProjectForRuntime, PublicFormDefinition, Rule, RuntimeFormVersion } from '@form/schema';
+import type { ApiLookup, BlockId, ClientAction, FormDefinition, PublicLookup, ProjectForRuntime, PublicFormDefinition, Rule, RuntimeFormVersion } from '@form/schema';
 import { isClientAction } from './analyze.ts';
 import { stepKey } from './cells.ts';
 
@@ -14,14 +14,33 @@ function stripOrigins<T>(value: T): T {
 }
 
 /**
- * Step 0 denylist (DEC-03): the respondent's browser sends lookups, API options and API checks itself, so a request's
- * credentials never reach the runtime projection. Publish already refuses them (`browser_credentials`); this is the
- * second line for a version published before that check.
+ * Server-side lookups: the respondent never sends the upstream request, so nothing of it reaches the runtime
+ * projection. A field's `apiOptions` / `apiValidation` shrink to `{ remote: true }` (the proxy finds the request in the
+ * stored version), and a lookup shrinks to its picker, key, field mapping and limits. Credentials (`auth` of a version
+ * published before the publish check, `credentialRef`), the URL, the query, `itemsPath`, `searchParam` and every response
+ * key stay on the server (T-LK-01). The author's failure text for a check is the block's own `messages.api_failed`.
  */
-function withoutAuth<T extends { auth?: unknown }>(request: T): T {
-  if (request.auth === undefined) return request;
-  const { auth: _auth, ...rest } = request;
-  return rest as T;
+export const LOOKUP_DEFAULT_MIN_CHARS = 2;
+export const LOOKUP_DEFAULT_MAX_ROWS = 20;
+
+function publicLookup(lookup: ApiLookup, fallbackId: string, hasBlock: (id: string) => boolean): PublicLookup | undefined {
+  if (lookup.enabled !== true || !lookup.pickerFieldId || !lookup.pickerKey || !hasBlock(lookup.pickerFieldId)) return undefined;
+  const dms = lookup.source === 'dms_master';
+  const id = lookup.id ?? fallbackId;
+  const mappings = (lookup.mappings ?? []).flatMap((m): Array<{ key: string; fieldId: BlockId }> =>
+    m.fieldId !== undefined && hasBlock(m.fieldId) ? [{ key: m.key, fieldId: m.fieldId }] : []);
+  const rowCap = dms ? 20 : 50;
+  return {
+    id,
+    source: dms ? 'dms_master' : 'http',
+    ...(lookup.name !== undefined ? { name: lookup.name } : {}),
+    pickerFieldId: lookup.pickerFieldId,
+    pickerKey: lookup.pickerKey,
+    mappings,
+    minChars: lookup.minChars ?? LOOKUP_DEFAULT_MIN_CHARS,
+    maxRows: Math.min(lookup.maxRows ?? LOOKUP_DEFAULT_MAX_ROWS, rowCap),
+    ...(dms ? { masterId: lookup.masterId } : {}),
+  };
 }
 
 /** Rules keep only client actions; a rule left with no actions is dropped. */
@@ -45,20 +64,26 @@ export const projectForRuntime: ProjectForRuntime = (version, status, publicConf
   const blocks = Object.fromEntries(Object.entries(def.blocks).map(([id, block]) => {
     if (!block || block.type === 'unsupported') return [id, block];
     const { note: _note, ...rest } = block;
-    const field = rest as typeof rest & { apiOptions?: { auth?: unknown }; apiValidation?: { auth?: unknown } };
+    const { apiOptions, apiValidation, ...field } = rest as typeof rest & { apiOptions?: unknown; apiValidation?: unknown };
     return [id, {
-      ...rest,
-      ...(field.apiOptions ? { apiOptions: withoutAuth(field.apiOptions) } : {}),
-      ...(field.apiValidation ? { apiValidation: withoutAuth(field.apiValidation) } : {}),
+      ...field,
+      ...(apiOptions !== undefined ? { apiOptions: { remote: true } } : {}),
+      ...(apiValidation !== undefined ? { apiValidation: { remote: true } } : {}),
     }];
   }));
+  const hasBlock = (blockId: string) => {
+    const b = def.blocks[blockId as BlockId];
+    return b !== undefined && b.type !== 'unsupported';
+  };
+  /* The legacy singular `lookup` is folded in last, under the id 'lookup' when it has none (a listed lookup wins an id clash). */
+  const listed = (def.lookups ?? []).flatMap((l) => publicLookup(l, '', hasBlock) ?? []);
+  const legacy = def.lookup ? publicLookup(def.lookup, 'lookup', hasBlock) : undefined;
   const lookups = {
-    ...(def.lookup ? { lookup: withoutAuth(def.lookup) } : {}),
-    ...(def.lookups ? { lookups: def.lookups.map(withoutAuth) } : {}),
+    ...(listed.length || legacy ? { lookups: [...listed, ...(legacy && !listed.some((l) => l.id === legacy.id) ? [legacy] : [])] } : {}),
   };
   const rules = clientRules(def.logic.rules);
   /* WP-2.33: the respondent gets each review unit's id and name, never its target (page or block ids), group or visibility. */
-  const { review, ...rest } = def;
+  const { review, lookup: _lookup, lookups: _lookups, ...rest } = def;
   const publicReview = review ? { review: { units: review.units.map((unit) => ({ id: unit.id, name: unit.name })) } } : {};
   const definition = stripOrigins({ ...rest, ...publicReview, ...lookups, blocks, logic: { ...def.logic, rules } }) as PublicFormDefinition;
   const { dataInventory: _inventory, taint: _taint, reviewUnits: _reviewUnits, reviewUnitMarkers: _reviewUnitMarkers, ruleWrites: _ruleWrites, plan, reads, ...compiled } = version.compiled;

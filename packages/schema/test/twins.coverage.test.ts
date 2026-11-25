@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 /** Exported types that are not wire data, with where their checking happens instead. */
 const NO_TWIN: Record<string, string> = {
+  PublicFieldBlock: 'derived union; checked through PublicBlockSchema',
   Brand: 'utility; every branded id has its own twin',
   BlockBase: 'generic; checked per type through BLOCK_SCHEMAS',
   FieldBase: 'generic; checked per type through FIELD_BLOCK_SCHEMAS',

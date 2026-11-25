@@ -144,6 +144,15 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ApiValidationSchema>>().toEqualTypeOf<S.ApiValidation>();
   expectTypeOf<z.infer<typeof S.ApiLookupMappingSchema>>().toEqualTypeOf<S.ApiLookupMapping>();
   expectTypeOf<z.infer<typeof S.ApiLookupSchema>>().toEqualTypeOf<S.ApiLookup>();
+  expectTypeOf<z.infer<typeof S.CredentialRefSchema>>().toEqualTypeOf<S.CredentialRef>();
+  expectTypeOf<z.infer<typeof S.HttpLookupSchema>>().toEqualTypeOf<S.HttpLookup>();
+  expectTypeOf<z.infer<typeof S.DmsLookupMappingSchema>>().toEqualTypeOf<S.DmsLookupMapping>();
+  expectTypeOf<z.infer<typeof S.DmsMasterLookupSchema>>().toEqualTypeOf<S.DmsMasterLookup>();
+  expectTypeOf<z.infer<typeof S.PublicLookupSchema>>().toEqualTypeOf<S.PublicLookup>();
+  expectTypeOf<z.infer<typeof S.PublicApiOptionsSchema>>().toEqualTypeOf<S.PublicApiOptions>();
+  expectTypeOf<z.infer<typeof S.PublicApiValidationSchema>>().toEqualTypeOf<S.PublicApiValidation>();
+  expectTypeOf<z.infer<typeof S.PublicStoredBlockSchema>>().branded.toEqualTypeOf<S.PublicStoredBlock>();
+  expectTypeOf<z.infer<typeof S.PublicBlockSchema>>().branded.toEqualTypeOf<S.PublicBlock>();
   expectTypeOf<z.infer<typeof S.ApiRequestConfigSchema>>().toEqualTypeOf<S.ApiRequestConfig>();
   expectTypeOf<z.infer<typeof S.ApiOptionsSchema>>().toEqualTypeOf<S.ApiOptions>();
   expectTypeOf<z.infer<typeof S.TextPresetSchema>>().toEqualTypeOf<S.TextPreset>();

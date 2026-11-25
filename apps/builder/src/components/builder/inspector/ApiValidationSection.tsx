@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { buildApiRequest, defaultSuccess, getAtPath, parseApiBody } from '@form/renderer/author';
+import { defaultSuccess, getAtPath } from '@form/renderer/author';
 import {
   isSafeUrl,
   type ApiSuccessRule,
@@ -17,6 +17,7 @@ import { Alert, AlertDescription, Badge, Button, Input, Label, ToggleGroup, Togg
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
 import { ApiResponseTree } from '@/components/builder/inspector/ApiResponseTree';
 import { SectionTitle, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { useRemoteTest } from '@/components/builder/inspector/useRemoteTest';
 
 const M = defineMessages('builder', {
   'inspector.api_validation': 'Validate with an API',
@@ -28,7 +29,7 @@ const M = defineMessages('builder', {
   'inspector.api_sample_hint': 'Used only to test the request. Live forms send the respondent’s answer.',
   'inspector.api_test': 'Test',
   'inspector.api_testing': 'Testing…',
-  'inspector.api_test_fail': 'The request could not be sent. Check the URL and that the API allows this origin.',
+  'inspector.api_test_fail': 'The server could not get an answer from this API. Check the URL, the credential, and that the form is saved.',
   'inspector.api_parse_fail': 'The response could not be parsed as {format}.',
   'inspector.api_empty': 'The response had no keys to pick.',
   'inspector.api_pick': 'Use this key',
@@ -128,6 +129,7 @@ export function ApiValidationSection({ block }: { block: FieldBlock }) {
   const [status, setStatus] = useState<'idle' | 'testing' | 'fail' | 'parse' | 'empty' | 'ok'>('idle');
   const [data, setData] = useState<unknown>();
 
+  const runTest = useRemoteTest();
   const on = api !== undefined;
 
   const test = async () => {
@@ -135,15 +137,12 @@ export function ApiValidationSection({ block }: { block: FieldBlock }) {
     setStatus('testing');
     setData(undefined);
     try {
-      const { url, init } = buildApiRequest(api, block.key, sample);
-      const res = await fetch(url, init);
-      const text = await res.text();
-      const parsed = parseApiBody(text, api.parser ?? 'json');
-      if (parsed.data === undefined) {
-        setStatus(text.trim() ? 'parse' : 'empty');
+      const { data: tree } = await runTest(api, { fieldKey: block.key, value: sample });
+      if (tree === undefined || tree === null) {
+        setStatus('empty');
         return;
       }
-      setData(parsed.data);
+      setData(tree);
       setStatus('ok');
     } catch {
       setStatus('fail');

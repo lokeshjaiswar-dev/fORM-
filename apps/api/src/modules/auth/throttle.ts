@@ -41,6 +41,15 @@ export const DEFAULT_AUTH_LIMITS: Record<AuthThrottleBucket, Limit> = {
   // (WP-1.09, architecture §3.5 `runtime_unlock`).
   auth_unlock_ip: { max: 30, windowSeconds: 900 },
   auth_unlock_form: { max: 10, windowSeconds: 900 },
+  // Server-side lookups (`POST /v1/p/:slug/lookups|fields/...`): a respondent types, and each pause is one call, so the budgets
+  // are well above filling a form but bound what one address, one address on one form, and every address together on one
+  // form can ask the form owner's upstream API for (the proxy is the only caller of that API). Ten-minute windows. The author's
+  // Test and preview calls (`POST /v1/forms/:id/remote/test`) are counted per user. None of these touches the submit buckets,
+  // so an exhausted lookup budget never blocks a submission.
+  auth_remote_ip: { max: 600, windowSeconds: 600 },
+  auth_remote_form: { max: 300, windowSeconds: 600 },
+  auth_remote_formall: { max: 20000, windowSeconds: 600 },
+  auth_remote_test: { max: 120, windowSeconds: 600 },
 };
 
 export interface ThrottleKey {

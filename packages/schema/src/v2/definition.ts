@@ -10,7 +10,7 @@ import type { RichDoc } from './rich-text.ts';
 import type { BrandToken, TemplateVariableName } from './template-primitives.ts';
 import type { TemplateKind } from './templates.ts';
 import type { HexColor } from './ids.ts';
-import type { ApiLookup } from './envelope.ts';
+import type { ApiLookup, HttpLookup, PublicLookup } from './envelope.ts';
 import type { Behavior, Theme } from './theme.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -49,7 +49,7 @@ export interface FormDefinition {
   theme: Theme;
   behavior: Behavior;
   /** @deprecated One lookup. Prefer `lookups`. Kept so drafts saved before the list still open. */
-  lookup?: ApiLookup;
+  lookup?: HttpLookup;
   /** Master-data lookups. Each picker fills only the fields mapped on that API. */
   lookups?: ApiLookup[];
   i18n: I18nBundle;
@@ -151,7 +151,15 @@ export interface FormVersion {
 }
 
 /** Rules keep only client actions; rules left with no actions are dropped. */
-export type PublicFormDefinition = Omit<FormDefinition, 'logic' | 'review'> & {
+export type PublicFormDefinition = Omit<FormDefinition, 'logic' | 'review' | 'blocks' | 'lookup' | 'lookups'> & {
+  /**
+   * Typed as the stored blocks so the engines and controls keep one block type. At runtime a field's `apiOptions` and
+   * `apiValidation` are `PublicApiOptions` / `PublicApiValidation` markers (`{ remote: true }`): the URL, keys and
+   * credentials stay on the server. Read them through `PublicStoredBlock` (as `@form/renderer` does), never as the stored config.
+   */
+  blocks: Partial<Record<BlockId, StoredBlock>>;
+  /** Enabled lookups only: the picker, the keys and the field mapping, never the upstream request. A legacy `lookup` is folded in. */
+  lookups?: PublicLookup[];
   logic: Omit<LogicModel, 'rules'> & { rules: Array<Rule<ClientAction>> };
   /** Unit ids and names only: no targets, groups or visibility (the receipt names each unit, nothing more). */
   review?: { units: Array<Pick<ReviewUnit, 'id' | 'name'>> };

@@ -6,6 +6,7 @@ import { ACCESS_EVENTS } from './access.ts';
 import { EXPORTS_EVENTS } from './exports.ts';
 import { FORMS_EVENTS } from './forms.ts';
 import { NOTIFICATIONS_EVENTS } from './notifications.ts';
+import { REMOTE_EVENTS } from './remote.ts';
 import { PUBLISH_EVENTS } from './publish.ts';
 import { REVIEWS_EVENTS } from './reviews.ts';
 import { SUBMISSIONS_EVENTS } from './submissions.ts';
@@ -20,6 +21,7 @@ const FILES = {
   submissions: SUBMISSIONS_EVENTS,
   reviews: REVIEWS_EVENTS,
   notifications: NOTIFICATIONS_EVENTS,
+  remote: REMOTE_EVENTS,
   webhooks: WEBHOOKS_EVENTS,
   webhookDelivery: WEBHOOK_DELIVERY_EVENTS,
   exports: EXPORTS_EVENTS,

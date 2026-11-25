@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { buildApiRequest, getAtPath, parseApiBody } from '@form/renderer/author';
-import { isSafeUrl, type ApiLookup, type BlockId, type SafeUrl } from '@form/schema';
+import { getAtPath } from '@form/renderer/author';
+import { isSafeUrl, type DmsMasterLookup, type HttpLookup, type BlockId, type SafeUrl } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { applyPatch, type Patch } from '@/lib/patch';
@@ -18,15 +18,20 @@ import {
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
 import { ApiResponseTree } from '@/components/builder/inspector/ApiResponseTree';
 import { NiceSelect } from '@/components/NiceSelect';
+import { useRemoteTest } from '@/components/builder/inspector/useRemoteTest';
 
 const M = defineMessages('builder', {
   'lookup.add': 'Add an API',
   'lookup.api_key': 'API key',
   'lookup.configure_first': 'Configure this API first: map at least one response key to a form field before turning it on.',
   'lookup.empty': 'The response had no list to use.',
-  'lookup.fail': 'The request could not be sent. Check the URL and that the API allows this origin.',
+  'lookup.fail': 'The server could not get an answer from this API. Check the URL and the credential, and that the form is saved.',
   'lookup.field': 'Form field',
-  'lookup.hint': 'Each API fills its own fields. A field already mapped stays visible and cannot be used again.',
+  'lookup.hint': 'Each API fills its own fields. A field already mapped stays visible and cannot be used again. The server calls the API for each respondent search.',
+  'lookup.search_param': 'Search parameter',
+  'lookup.search_param_hint': 'The name the typed text is sent under. Leave empty if the API returns a whole list: the server then filters it.',
+  'lookup.min_chars': 'Characters before searching',
+  'lookup.max_rows': 'Most rows shown',
   'lookup.keys': 'Response keys',
   'lookup.name': 'Name',
   'lookup.none': 'Not mapped',
@@ -51,7 +56,7 @@ const TEXT_TYPES = new Set(['short_text', 'long_text', 'url', 'number']);
  * A new lookup starts with no URL (review N3). A lookup must have a URL to be stored, so the new one stays in this panel
  * until the author saves a valid URL.
  */
-function freshLookup(n: number): ApiLookup {
+function freshLookup(n: number): HttpLookup {
   return {
     id: APP_IDS.newId(),
     name: `API ${n}`,
@@ -103,13 +108,17 @@ function sampleKeys(data: unknown, itemsPath: string | undefined): string[] {
   return sample && typeof sample === 'object' ? Object.keys(sample as object) : [];
 }
 
-function sourcesOf(lookups: ApiLookup[] | undefined, legacy: ApiLookup | undefined): ApiLookup[] {
-  if (lookups?.length) return lookups.map((source, i) => ({ ...source, id: source.id ?? `lookup-${i}` }));
+/** The HTTP lookups this panel edits; a DMS master lookup (edited by the DMS profile's own panel) is kept as it is. */
+const isHttp = (lookup: HttpLookup | DmsMasterLookup): lookup is HttpLookup => lookup.source !== 'dms_master';
+
+function sourcesOf(lookups: Array<HttpLookup | DmsMasterLookup> | undefined, legacy: HttpLookup | undefined): HttpLookup[] {
+  const http = lookups?.filter(isHttp);
+  if (http?.length) return http.map((source, i) => ({ ...source, id: source.id ?? `lookup-${i}` }));
   if (legacy) return [{ ...legacy, id: legacy.id ?? 'lookup-0', name: legacy.name ?? 'API 1' }];
   return [];
 }
 
-function usedElsewhere(sources: ApiLookup[], currentId: string): Map<string, string> {
+function usedElsewhere(sources: HttpLookup[], currentId: string): Map<string, string> {
   const taken = new Map<string, string>();
   for (const source of sources) {
     if ((source.id ?? '') === currentId || source.enabled !== true) continue;
@@ -123,9 +132,9 @@ function usedElsewhere(sources: ApiLookup[], currentId: string): Map<string, str
 export function LookupSettings() {
   const doc = useDoc((d) => d);
   const sources = sourcesOf(doc.lookups, doc.lookup);
-  const [pending, setPending] = useState<ApiLookup>();
+  const [pending, setPending] = useState<HttpLookup>();
   const [open, setOpen] = useState(sources[0]?.id ?? '');
-  const save = (next: ApiLookup[]) => setLookups(next);
+  const save = (next: HttpLookup[]) => setLookups([...(doc.lookups ?? []).filter((l): l is DmsMasterLookup => !isHttp(l)), ...next]);
   const shown = pending ? [...sources, pending] : sources;
   const fields = Object.values(doc.blocks).flatMap((block) => {
     if (!block || !isField(block) || !TEXT_TYPES.has(block.type)) return [];
@@ -175,10 +184,10 @@ function LookupAccordion({
   onChange,
   onRemove,
 }: {
-  source: ApiLookup;
+  source: HttpLookup;
   fields: { value: string; label: string }[];
   taken: Map<string, string>;
-  onChange: (next: ApiLookup) => void;
+  onChange: (next: HttpLookup) => void;
   onRemove: () => void;
 }) {
   const [draft, setDraft] = useState(source);
@@ -187,11 +196,12 @@ function LookupAccordion({
   const [data, setData] = useState<unknown>();
   const [notice, setNotice] = useState('');
   const [conflict, setConflict] = useState('');
+  const runTest = useRemoteTest();
   const keys = (draft.mappings ?? []).map((row) => row.key);
 
-  const patch = (next: Patch<ApiLookup>) => {
+  const patch = (next: Patch<HttpLookup>) => {
     const merged = applyPatch(draft, next);
-    for (const key of ['query', 'body', 'auth', 'itemsPath', 'pickerFieldId', 'pickerKey', 'mappings', 'name'] as const) {
+    for (const key of ['query', 'body', 'auth', 'itemsPath', 'pickerFieldId', 'pickerKey', 'mappings', 'name', 'searchParam', 'credentialRef', 'minChars', 'maxRows'] as const) {
       if (merged[key] === undefined) delete merged[key];
     }
     setDraft(merged);
@@ -240,16 +250,13 @@ function LookupAccordion({
     setStatus('testing');
     setData(undefined);
     try {
-      const { url, init } = buildApiRequest(draft);
-      const res = await fetch(url, init);
-      const text = await res.text();
-      const parsed = parseApiBody(text, draft.parser ?? 'json');
-      if (parsed.data === undefined) {
-        setStatus(text.trim() ? 'parse' : 'empty');
+      const { data: tree } = await runTest(draft, draft.searchParam !== undefined ? { q: '' } : {});
+      if (tree === undefined || tree === null) {
+        setStatus('empty');
         return;
       }
-      setData(parsed.data);
-      setStatus(sampleKeys(parsed.data, draft.itemsPath).length || draft.itemsPath === undefined ? 'ok' : 'empty');
+      setData(tree);
+      setStatus(sampleKeys(tree, draft.itemsPath).length || draft.itemsPath === undefined ? 'ok' : 'empty');
     } catch {
       setStatus('fail');
     }
@@ -327,6 +334,46 @@ function LookupAccordion({
           onUrlText={setUrlText}
           onPatch={(next) => patch(next)}
         />
+        <div className="space-y-1.5">
+          <Label htmlFor={`lookup-search-${draft.id}`}>{t(M['lookup.search_param'])}</Label>
+          <p className="text-[12px] text-muted-foreground">{t(M['lookup.search_param_hint'])}</p>
+          <Input
+            id={`lookup-search-${draft.id}`}
+            value={draft.searchParam ?? ''}
+            maxLength={64}
+            onChange={(e) => patch({ searchParam: e.target.value.trim() ? e.target.value.trim() : undefined })}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor={`lookup-min-${draft.id}`}>{t(M['lookup.min_chars'])}</Label>
+            <Input
+              id={`lookup-min-${draft.id}`}
+              type="number"
+              min={0}
+              max={3}
+              value={draft.minChars ?? 2}
+              onChange={(e) => {
+                const n = Math.trunc(Number(e.target.value));
+                if (Number.isFinite(n) && n >= 0 && n <= 3) patch({ minChars: n });
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`lookup-rows-${draft.id}`}>{t(M['lookup.max_rows'])}</Label>
+            <Input
+              id={`lookup-rows-${draft.id}`}
+              type="number"
+              min={1}
+              max={50}
+              value={draft.maxRows ?? 20}
+              onChange={(e) => {
+                const n = Math.trunc(Number(e.target.value));
+                if (Number.isFinite(n) && n >= 1 && n <= 50) patch({ maxRows: n });
+              }}
+            />
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <Button type="button" size="sm" disabled={status === 'testing'} onClick={() => void test()}>
             {status === 'testing' ? t(M['lookup.testing']) : t(M['lookup.test'])}

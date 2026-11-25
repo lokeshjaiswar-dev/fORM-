@@ -130,24 +130,66 @@ describe('projectForRuntime and review units (WP-2.33)', () => {
     for (const assignment of REVIEW_ASSIGNMENTS) expect(json).not.toContain(assignment.groupId);
   });
 
-  it('never carries lookup, API option or API check credentials to the respondent (Step 0 denylist, review B1)', () => {
-    const url = 'https://hr.example/api/employees' as S.SafeUrl;
-    const def = form([
-      { ...field('short_text', 'emp'), apiValidation: { url, auth: { type: 'bearer', token: 'CHECK-SECRET' } } },
-      { ...field('single_choice', 'city', { config: { display: 'dropdown', options: choices('pune') } }), apiOptions: { url, method: 'GET', auth: { type: 'api_key', header: 'X-Key', value: 'OPTIONS-SECRET' } } },
-    ], [page('p1', ['emp', 'city'])], []);
-    def.lookups = [{ id: 'hr', name: 'HR', enabled: true, url, method: 'GET', auth: { type: 'bearer', token: 'HR-SECRET-TOKEN' }, itemsPath: 'data', pickerFieldId: bid('emp'), pickerKey: 'name' }];
-    def.lookup = { url, auth: { type: 'basic', username: 'hr', password: 'LEGACY-SECRET' } };
-    const v = versionOf(def);
-    const before = JSON.stringify(v);
-    const runtime = projectForRuntime(v, { state: 'open' }, publicConfig);
-    const json = JSON.stringify(runtime);
-    for (const secret of ['HR-SECRET-TOKEN', 'LEGACY-SECRET', 'OPTIONS-SECRET', 'CHECK-SECRET', '"auth"']) expect(json).not.toContain(secret);
-    expect(runtime.definition.lookups?.[0]).toMatchObject({ id: 'hr', url, itemsPath: 'data', pickerKey: 'name' });
-    expect(runtime.definition.blocks[bid('city')]).toMatchObject({ apiOptions: { url, method: 'GET' } });
-    const parsed = RuntimeFormVersionSchema.safeParse(JSON.parse(json));
-    expect(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('/')} ${i.message}`)).toEqual([]);
-    expect(JSON.stringify(v)).toBe(before);
+  describe('server-side lookups: the respondent gets markers, never the upstream request (T-LK-01 unit)', () => {
+    const url = 'https://hr.example/api/employees?secret_path=1' as S.SafeUrl;
+    const secretId = '0192f7a2-0000-7000-8000-00000000c0de';
+    const lookupVersion = () => {
+      const def = form([
+        { ...field('short_text', 'emp'), apiValidation: { url, auth: { type: 'bearer', token: 'CHECK-SECRET' }, credentialRef: { secretId }, responseKey: 'SECRET_RESPONSE_KEY', success: { type: 'boolean', equals: true } } },
+        { ...field('single_choice', 'city', { config: { display: 'dropdown', options: choices('pune') } }), apiOptions: { url, method: 'GET', auth: { type: 'api_key', header: 'X-Key', value: 'OPTIONS-SECRET' }, credentialRef: { secretId }, itemsPath: 'SECRET_ITEMS_PATH', labelKey: 'SECRET_LABEL_KEY' } },
+        field('short_text', 'city_name'),
+        field('short_text', 'phone'),
+      ], [page('p1', ['emp', 'city', 'city_name', 'phone'])], []);
+      def.lookups = [
+        { id: 'hr', name: 'HR', enabled: true, url, method: 'GET', auth: { type: 'bearer', token: 'HR-SECRET-TOKEN' }, credentialRef: { secretId }, itemsPath: 'SECRET_ITEMS', searchParam: 'SECRET_SEARCH', pickerFieldId: bid('emp'), pickerKey: 'name',
+          mappings: [{ key: 'city', fieldId: bid('city_name') }, { key: 'orphan' }, { key: 'ghost', fieldId: bid('not_a_block') }, { key: 'phone', fieldId: bid('phone') }], minChars: 1, maxRows: 5 },
+        { id: 'off', enabled: false, url, pickerFieldId: bid('emp'), pickerKey: 'name' },
+        { id: 'vendor', source: 'dms_master', enabled: true, masterId: 'm-1', pickerFieldId: bid('emp'), pickerKey: 'b2000000-0000-4000-8000-000000000001', mappings: [{ key: 'b2000000-0000-4000-8000-000000000002', fieldId: bid('city_name') }] },
+      ];
+      def.lookup = { url, auth: { type: 'basic', username: 'hr', password: 'LEGACY-SECRET' }, enabled: true, pickerFieldId: bid('phone'), pickerKey: 'legacy_name', mappings: [{ key: 'legacy_city', fieldId: bid('city_name') }] };
+      return versionOf(def);
+    };
+
+    it('carries no credential, secretId, host, path, query, itemsPath, searchParam, response key or label key', () => {
+      const v = lookupVersion();
+      const before = JSON.stringify(v);
+      const runtime = projectForRuntime(v, { state: 'open' }, publicConfig);
+      const json = JSON.stringify(runtime);
+      for (const leak of ['HR-SECRET-TOKEN', 'LEGACY-SECRET', 'OPTIONS-SECRET', 'CHECK-SECRET', '"auth"', secretId, 'credentialRef', 'hr.example', 'secret_path', 'SECRET_ITEMS', 'SECRET_SEARCH', 'SECRET_RESPONSE_KEY', 'SECRET_LABEL_KEY', 'searchParam', 'itemsPath', 'responseKey', '"url"']) {
+        expect(json, leak).not.toContain(leak);
+      }
+      expect(JSON.stringify(v)).toBe(before);
+      const parsed = RuntimeFormVersionSchema.safeParse(JSON.parse(json));
+      expect(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('/')} ${i.message}`)).toEqual([]);
+    });
+
+    it('pins the public key sets of a lookup and of the block markers (allowlist)', () => {
+      const runtime = projectForRuntime(lookupVersion(), { state: 'open' }, publicConfig);
+      const lookups = runtime.definition.lookups ?? [];
+      for (const l of lookups) expect(Object.keys(l).sort()).toEqual(l.source === 'dms_master'
+        ? ['id', 'masterId', 'maxRows', 'mappings', 'minChars', 'pickerFieldId', 'pickerKey', 'source'].sort()
+        : ['id', 'maxRows', 'mappings', 'minChars', 'pickerFieldId', 'pickerKey', 'source'].concat(l.name ? ['name'] : []).sort());
+      const emp = runtime.definition.blocks[bid('emp')] as unknown as { apiValidation: unknown };
+      const city = runtime.definition.blocks[bid('city')] as unknown as { apiOptions: unknown };
+      expect(emp.apiValidation).toEqual({ remote: true });
+      expect(city.apiOptions).toEqual({ remote: true });
+    });
+
+    it('keeps only enabled lookups, folds the legacy `lookup` in as id "lookup", and drops mappings without an existing field', () => {
+      const runtime = projectForRuntime(lookupVersion(), { state: 'open' }, publicConfig);
+      expect(runtime.definition).not.toHaveProperty('lookup');
+      const lookups = runtime.definition.lookups ?? [];
+      expect(lookups.map((l) => l.id)).toEqual(['hr', 'vendor', 'lookup']);
+      expect(lookups[0]).toMatchObject({ id: 'hr', source: 'http', name: 'HR', pickerFieldId: bid('emp'), pickerKey: 'name', minChars: 1, maxRows: 5, mappings: [{ key: 'city', fieldId: bid('city_name') }, { key: 'phone', fieldId: bid('phone') }] });
+      expect(lookups[1]).toMatchObject({ id: 'vendor', source: 'dms_master', masterId: 'm-1', minChars: 2, maxRows: 20 });
+      expect(lookups[2]).toMatchObject({ id: 'lookup', source: 'http', pickerKey: 'legacy_name', minChars: 2, maxRows: 20 });
+    });
+
+    it('a lookup without a picker field or key is not public, and a form without lookups has none', () => {
+      const def = form([field('short_text', 'emp')], [page('p1', ['emp'])], []);
+      def.lookups = [{ id: 'a', enabled: true, url }, { id: 'b', enabled: true, url, pickerFieldId: bid('emp') }, { id: 'c', enabled: true, url, pickerFieldId: bid('gone'), pickerKey: 'name' }];
+      expect(projectForRuntime(versionOf(def), { state: 'open' }, publicConfig).definition).not.toHaveProperty('lookups');
+    });
   });
 
   it('does not touch the version it projects, and leaves a form without review as it was', () => {

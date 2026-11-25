@@ -93,9 +93,15 @@ export function planRecordForm(elements: readonly DmsElement[], values: DmsRecor
       answers[id] = { type: 'date', value: today } as AnswerValue;
     }
   }
+  /* A lookup fills only fields a person can edit: never a locked (legacy, auto-increment) field, nor the search field itself. */
+  const locked = new Set(elements.filter((el) => isLegacyElement(el) || isIncrementElement(el)).map((el) => String(el.id)));
+  const lookups = def.lookups?.flatMap((l) =>
+    l.source !== 'dms_master' || locked.has(l.pickerFieldId) ? [] : [{ ...l, mappings: l.mappings.filter((m) => !locked.has(m.fieldId) && m.fieldId !== l.pickerFieldId) }],
+  );
   /* The renderer works out "today" in the form's zone: make that the viewer's zone so its today is the seeded one. */
   def = {
     ...def,
+    ...(lookups ? { lookups } : {}),
     blocks,
     behavior: { ...def.behavior, timeZone: clock.timeZone as FormDefinition['behavior']['timeZone'] },
     theme: { ...def.theme, tokens: { ...def.theme.tokens, density: 'compact', formWidth: 'wide' } },

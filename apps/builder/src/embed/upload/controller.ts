@@ -1,4 +1,5 @@
 import { answerToDms } from '@form/registry/profiles/dms-v1';
+import type { RemoteLookupResult } from '@form/renderer';
 import type { Answers, BlockId, FieldBlock } from '@form/schema';
 import type { InboundMessage, OutboundType, PayloadOf } from '../bridge/protocol.ts';
 import { buildModel, editableFields, fieldOf, initialValues, validateValues, type Option, type UploadField, type UploadModel } from './model.ts';
@@ -26,12 +27,20 @@ export interface ControllerDeps {
   /** Shows the renderer's own inline errors on the fields; best effort, never decides `valid`. */
   showInlineErrors?(): Promise<unknown>;
   setTimer?(fn: () => void, ms: number): () => void;
+  /**
+   * The parent announced `fp_caps=lookup`. Without it `lookup()` answers with no rows and sends nothing: an old parent never
+   * sees a `lookup.request`, and a lookup declared on a field stays a plain input (the page passes no source either).
+   */
+  lookupEnabled?: boolean;
 }
 
 export const CHANGE_DEBOUNCE_MS = 150;
 /** Demo cap on options per dropdown (DESIGN section 4). */
 export const MAX_OPTIONS = 500;
 const INLINE_ERRORS_TIMEOUT_MS = 1500;
+/** A lookup the parent does not answer in this time gives no rows (the person can type on). */
+export const LOOKUP_TIMEOUT_MS = 8000;
+const NO_ROWS: RemoteLookupResult = { rows: [], truncated: false };
 
 interface State {
   model: UploadModel;
@@ -51,6 +60,12 @@ interface PendingOptions {
   collected: Option[];
 }
 
+interface PendingLookup {
+  lookupId: string;
+  settle: (result: RemoteLookupResult) => void;
+  cancelTimeout: () => void;
+}
+
 const defaultTimer = (fn: () => void, ms: number): (() => void) => {
   const handle = setTimeout(fn, ms);
   return () => clearTimeout(handle);
@@ -62,6 +77,8 @@ export class UploadController {
   private cancelChange: (() => void) | null = null;
   private readonly pending = new Map<string, PendingOptions>();
   private readonly generation = new Map<string, number>();
+  /** `lookup.request` id -> what waits for its answer. One per lookup id: the newest request supersedes the older. */
+  private readonly lookups = new Map<string, PendingLookup>();
 
   private readonly deps: ControllerDeps;
 
@@ -75,6 +92,8 @@ export class UploadController {
         return this.onInit(message.id, message.payload);
       case 'options.result':
         return this.onOptions(message.replyTo, message.payload);
+      case 'lookup.result':
+        return this.onLookupResult(message.replyTo, message.payload);
       case 'validate':
         void this.onValidate(message.id);
     }
@@ -99,6 +118,61 @@ export class UploadController {
     this.cancelChange = null;
     this.pending.clear();
     this.generation.clear();
+    this.settleLookups();
+  }
+
+  /** Ends every open lookup with no rows (a new init, a dispose). */
+  private settleLookups(except?: string): void {
+    for (const [id, open] of [...this.lookups]) {
+      if (except !== undefined && open.lookupId !== except) continue;
+      this.lookups.delete(id);
+      open.cancelTimeout();
+      open.settle(NO_ROWS);
+    }
+  }
+
+  /**
+   * Rows for what the person typed in a lookup's search field, asked of the parent as `lookup.request`. Nothing is sent when
+   * the parent did not announce the capability, when the lookup is not one this init declared, or before an init. One request
+   * is open per lookup (a newer one supersedes the older, which gets no rows); no answer in 8 s gives no rows.
+   */
+  lookup(lookupId: string, search: string): Promise<RemoteLookupResult> {
+    const declared = this.state?.plan.version.definition.lookups?.find((l) => l.id === lookupId && l.source === 'dms_master');
+    if (this.deps.lookupEnabled !== true || !declared) return Promise.resolve(NO_ROWS);
+    this.settleLookups(lookupId);
+    return new Promise<RemoteLookupResult>((resolve) => {
+      const id = this.deps.send('lookup.request', { lookupId, search: search.slice(0, 100) });
+      const cancelTimeout = this.timer(() => {
+        this.lookups.delete(id);
+        resolve(NO_ROWS);
+      }, LOOKUP_TIMEOUT_MS);
+      this.lookups.set(id, { lookupId, settle: resolve, cancelTimeout });
+    });
+  }
+
+  /**
+   * The parent's answer. Taken only for a request still open (an unknown or superseded `replyTo` is dropped) and only for the
+   * lookup it was asked for. Cells are cut to the ids the lookup declares: the label column and the filled columns.
+   */
+  private onLookupResult(replyTo: string, result: PayloadOf<'lookup.result'>): void {
+    const open = this.lookups.get(replyTo);
+    if (!open || result.lookupId !== open.lookupId) return;
+    this.lookups.delete(replyTo);
+    open.cancelTimeout();
+    const declared = this.state?.plan.version.definition.lookups?.find((l) => l.id === open.lookupId);
+    if (result.status !== 'ok' || !declared) return open.settle(NO_ROWS);
+    const keys = new Map([declared.pickerKey, ...declared.mappings.map((m) => m.key)].map((k) => [k.toLowerCase(), k]));
+    const rows = result.rows.slice(0, declared.maxRows).flatMap((row) => {
+      const label = row.label.trim();
+      if (label === '') return [];
+      const cells: Record<string, string> = {};
+      for (const [key, text] of Object.entries(row.cells)) {
+        const declaredKey = keys.get(key.toLowerCase());
+        if (declaredKey !== undefined) cells[declaredKey] = text;
+      }
+      return [{ label, cells }];
+    });
+    open.settle({ rows, truncated: result.truncated });
   }
 
   private onInit(replyTo: string, init: PayloadOf<'init'>): void {

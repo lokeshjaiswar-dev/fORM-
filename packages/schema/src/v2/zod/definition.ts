@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { keyed } from './_util.ts';
 import { SCHEMA_VERSION } from '../definition.ts';
 import { TEMPLATE_KINDS } from '../templates.ts';
-import { StoredBlockSchema } from './blocks.ts';
+import type { StoredBlock } from '../blocks.ts';
+import { PublicStoredBlockSchema, StoredBlockSchema } from './blocks.ts';
 import { DataClassificationSchema, PrivacyConfigSchema } from './compliance.ts';
 import { CaptchaConfigSchema } from './config.ts';
 import { I18nBundleSchema } from './i18n.ts';
@@ -16,7 +17,7 @@ import {
 } from './primitives.ts';
 import { RichDocSchema } from './rich-text.ts';
 import { FORM_TITLE_WEIGHTS } from '../definition.ts';
-import { ApiLookupSchema } from './envelope.ts';
+import { ApiLookupSchema, HttpLookupSchema, PublicLookupSchema } from './envelope.ts';
 import { BehaviorSchema, ThemeSchema } from './theme.ts';
 
 export const FormTitleStyleSchema = z.strictObject({
@@ -42,7 +43,7 @@ export const FormDefinitionSchema = z.strictObject({
   privacy: PrivacyConfigSchema,
   theme: ThemeSchema,
   behavior: BehaviorSchema,
-  lookup: ApiLookupSchema.exactOptional(),
+  lookup: HttpLookupSchema.exactOptional(),
   lookups: z.array(ApiLookupSchema).max(8).exactOptional(),
   i18n: I18nBundleSchema,
   review: FormReviewDefinitionSchema.exactOptional(),
@@ -136,7 +137,10 @@ export const FormVersionSchema = z.strictObject({
   variablesSnapshot: VariablesSnapshotSchema,
 });
 
-export const PublicFormDefinitionSchema = FormDefinitionSchema.extend({
+export const PublicFormDefinitionSchema = FormDefinitionSchema.omit({ lookup: true }).extend({
+  // Typed as StoredBlock on purpose (see PublicFormDefinition.blocks); the schema itself only admits the `remote` markers.
+  blocks: keyed(z.partialRecord(BlockIdSchema, PublicStoredBlockSchema as unknown as z.ZodType<StoredBlock>)),
+  lookups: z.array(PublicLookupSchema).max(8).exactOptional(),
   logic: LogicModelSchema.extend({ rules: z.array(ClientRuleSchema) }),
   review: PublicFormReviewSchema.exactOptional(),
 });

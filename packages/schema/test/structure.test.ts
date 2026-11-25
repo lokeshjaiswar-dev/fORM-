@@ -323,6 +323,54 @@ describe('validateStructure', () => {
     });
   });
 
+  describe('server-side lookups (contract section 1)', () => {
+    const url = 'https://hr.example/api/employees' as S.SafeUrl;
+    const secretId = '0192f7a2-0000-7000-8000-000000000001';
+    const base = (extra: Partial<S.HttpLookup> = {}): S.HttpLookup => ({ id: 'hr', enabled: true, url, pickerFieldId: ids.name, pickerKey: 'name', mappings: [{ key: 'city', fieldId: ids.name }], ...extra });
+
+    it('an enabled lookup needs a unique id (warning in a draft, error at publish)', () => {
+      const def = definition();
+      const { id: _id, ...noId } = base();
+      def.lookups = [noId, base({ id: 'a' }), base({ id: 'a' })];
+      expect(codes(validateStructure(def))).toEqual(expect.arrayContaining(['warning:lookup_id_missing:/lookups/0/id', 'warning:lookup_id_duplicate:/lookups/2/id']));
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toEqual(expect.arrayContaining(['error:lookup_id_missing:/lookups/0/id', 'error:lookup_id_duplicate:/lookups/2/id']));
+    });
+
+    it('a disabled lookup without an id is fine, and the legacy lookup counts as the id "lookup"', () => {
+      const def = definition();
+      const { id: _id, ...noId } = base({ enabled: false });
+      def.lookups = [noId];
+      expect(validateStructure(def, { mode: 'publish' })).toEqual([]);
+      const { id: _legacyId, ...legacy } = base();
+      def.lookup = legacy;
+      def.lookups = [base({ id: 'lookup' })];
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toContain('error:lookup_id_duplicate:/lookup/id');
+    });
+
+    it('a credential needs https, on a lookup, an option list and a check', () => {
+      const def = definition();
+      const plain = 'http://hr.example/api' as S.SafeUrl;
+      def.lookups = [base({ url: plain, credentialRef: { secretId } })];
+      blockOf(def, ids.marketing, 'single_choice').apiOptions = { url: plain, credentialRef: { secretId } };
+      blockOf(def, ids.name, 'short_text').apiValidation = { url: plain, credentialRef: { secretId } };
+      expect(codes(validateStructure(def, { mode: 'publish' })).sort()).toEqual([
+        'error:credential_needs_https:/lookups/0/url',
+        `error:credential_needs_https:/blocks/${ids.marketing}/apiOptions/url`,
+        `error:credential_needs_https:/blocks/${ids.name}/apiValidation/url`,
+      ].sort());
+      def.lookups = [base({ credentialRef: { secretId } })];
+      delete blockOf(def, ids.marketing, 'single_choice').apiOptions;
+      delete blockOf(def, ids.name, 'short_text').apiValidation;
+      expect(validateStructure(def, { mode: 'publish' })).toEqual([]);
+    });
+
+    it('a mapping fills only text, long text, url or number fields', () => {
+      const def = definition();
+      def.lookups = [base({ mappings: [{ key: 'a', fieldId: ids.name }, { key: 'b', fieldId: ids.marketing }, { key: 'c' }] })];
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toEqual([`error:lookup_mapping_type:/lookups/0/mappings/1/fieldId`]);
+    });
+  });
+
   describe('dependent options', () => {
     const child = id<S.BlockId>('channel_1');
     /** A second choice after "Send updates?" whose options follow its answer: Email only for Yes, Never always. */

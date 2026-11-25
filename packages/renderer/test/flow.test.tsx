@@ -81,22 +81,21 @@ describe('paging, logic and submit', () => {
     expect(await screen.findByRole('textbox', { name: /city/ })).toBeInTheDocument();
   });
 
-  it('POSTs the field key from the browser and blocks submit when the API returns ok false', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: false, message: 'Name not found' }), { status: 200 }));
+  it('asks the host\'s remote source (not the network) and blocks submit with the author\'s message when the check fails', async () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
+    const check = vi.fn(async () => ({ ok: false }));
     const def = form(
-      [field('short_text', 'emp_name', { required: true, apiValidation: { url: 'https://hr.example.com/names' as SafeUrl } })],
+      [field('short_text', 'emp_name', { required: true, messages: { api_failed: 'Name not found' }, apiValidation: { url: 'https://hr.example.com/names' as SafeUrl } })],
       [page('p1', ['emp_name'])],
     );
-    render(<FormRenderer {...props(runtime(def))} />);
+    render(<FormRenderer {...props(runtime(def), { remote: { lookup: async () => ({ rows: [], truncated: false }), check } })} />);
     const user = userEvent.setup();
     await user.type(screen.getByRole('textbox', { name: /emp_name/ }), 'Lokesh');
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     expect(await screen.findByText('Name not found')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://hr.example.com/names',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ emp_name: 'Lokesh' }) }),
-    );
+    expect(check).toHaveBeenCalledWith('emp_name', 'Lokesh', expect.any(AbortSignal));
+    expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 

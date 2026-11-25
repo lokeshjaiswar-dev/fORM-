@@ -22,6 +22,7 @@ import { NoticePage } from '@/pages/privacy/NoticePage';
 import { PrivacyPage } from '@/pages/privacy/PrivacyPage';
 import { CreateOrgPage } from '@/pages/org/CreateOrgPage';
 import { EmailSendersPage } from '@/pages/org/EmailSendersPage';
+import { ApiCredentialsPage } from '@/pages/org/ApiCredentialsPage';
 import { InvitePage } from '@/pages/org/InvitePage';
 import { MembersPage } from '@/pages/org/MembersPage';
 import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
@@ -108,6 +109,7 @@ export function AppRoutes() {
         <Route path="/forms/:id/settings/:tab?" element={<FormSettingsPage />} />
         <Route path="/reviews" element={<ReviewQueuePage />} />
         <Route path="/org/email-senders" element={<EmailSendersPage />} />
+        <Route path="/org/api-credentials" element={<ApiCredentialsPage />} />
         <Route path="/builder/:id/preview?" element={<BuilderPage />} />
       </Route>
       <Route path="/fields/*" element={<Navigate to="/forms" replace />} />

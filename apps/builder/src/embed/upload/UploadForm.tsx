@@ -1,5 +1,5 @@
 import { Component, type ReactNode, type Ref } from 'react';
-import { FormRenderer, type RendererHandle } from '@form/renderer';
+import { FormRenderer, type RemoteSource, type RendererHandle } from '@form/renderer';
 import type { Answers, FileRef, Locale } from '@form/schema';
 import type { RenderView } from './controller.ts';
 import { sessionStart } from './plan.ts';
@@ -24,13 +24,15 @@ class Boundary extends Component<{ children: ReactNode; onError: (error: Error) 
   }
 }
 
-export function UploadForm({ view, today, handleRef, onAnswers, onError }: {
+export function UploadForm({ view, today, handleRef, onAnswers, onError, remote }: {
   view: RenderView;
   /** DD-MM-YYYY, from the parent; pins the renderer's clock. */
   today: string;
   handleRef: Ref<RendererHandle>;
   onAnswers: (answers: Answers) => void;
   onError: (error: Error) => void;
+  /** The parent's lookup source; given only when the parent announced `fp_caps=lookup`. Without it a lookup field is a plain input. */
+  remote?: RemoteSource;
 }) {
   return (
     <Boundary key={view.revision} onError={onError}>
@@ -44,6 +46,7 @@ export function UploadForm({ view, today, handleRef, onAnswers, onError }: {
         onSubmit={() => undefined}
         uploader={refuseUpload}
         hideNavigation
+        {...(remote ? { remote } : {})}
         onAnswersChange={onAnswers}
         handleRef={handleRef}
       />

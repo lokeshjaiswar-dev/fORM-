@@ -9,10 +9,10 @@
  */
 export { CONTROLS } from './controls/index.ts';
 export {
-  buildApiRequest, callFieldApi, defaultSuccess, getAtPath, matchSuccessRule, parseApiBody, postFieldApi,
+  buildApiRequest, defaultSuccess, getAtPath, matchSuccessRule, parseApiBody,
 } from './controls/apiValidation.ts';
 export type { ApiCheckResult, ApiCollection, ApiParseResult, ApiResponseLeaf } from './controls/apiValidation.ts';
-export { collectionLabel, displayOptionPath, fetchApiOptions, guessMapping, mapApiOptions, pickFromTree } from './controls/apiOptions.ts';
+export { collectionLabel, displayOptionPath, guessMapping, mapApiOptions, pickFromTree } from './controls/apiOptions.ts';
 export type { TreePick } from './controls/apiOptions.ts';
 export { slotsOf, toWallDateTime } from './controls/appointmentSlots.ts';
 export type { AppointmentSlot } from './controls/appointmentSlots.ts';

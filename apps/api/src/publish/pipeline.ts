@@ -3,6 +3,7 @@ import { REGISTRY } from '@form/registry';
 import { FormDefinitionSchema, jsonPointer, type CompiledForm, type FormDefinition } from '@form/schema';
 import { patternIssues } from '@form/validation';
 import { distinctIssues, type PipelineIssue } from './issues.ts';
+import { lookupIssues } from './lookups.ts';
 import { redirectIssues } from './redirects.ts';
 import { NO_ORG_PROFILE, resolveForPublish, type OrgProfileSource } from './resolve.ts';
 
@@ -21,6 +22,11 @@ export interface PublishContext {
    * the server compiles the definition itself, stores its own plan, and refuses (PLAN_MISMATCH) when the two differ.
    */
   clientDefinitionHash?: string | undefined;
+  /**
+   * The ids of the org's API credentials (`credentialIdsOf`), so a lookup, option list or check that names one that is not
+   * the org's is refused (`credential_missing`). Omitted: that check is skipped (callers that have no database).
+   */
+  credentialIds?: ReadonlySet<string> | undefined;
 }
 
 export type PublishOutcome =
@@ -78,6 +84,7 @@ export async function publishPipeline(draft: unknown, ctx: PublishContext): Prom
     ...validateDefinition(definition, 'publish', REGISTRY),
     ...patternIssues(definition),
     ...redirectIssues(definition, ctx.redirectAllowlist),
+    ...lookupIssues(definition, ctx.credentialIds),
   ];
   if (hasError(checked)) return blocked(checked);
 

@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { ANSWER_CODEC_PLAIN, formCounters, formAccess, formFilesCheck, formVersionState, newSubmissionKey, recordSubmission, resolveFormSlug, withTenant, type Db, type Tx } from '@form/db';
+import { ANSWER_CODEC_PLAIN, formCounters, formAccess, formFilesCheck, newSubmissionKey, recordSubmission, resolveFormSlug, withTenant, type Db, type Tx } from '@form/db';
 import type { Answers, EvalState, FieldError } from '@form/schema';
 import { ProblemError, type FieldIssue } from '../errors.ts';
 import { openReview, planReviewFrom, readReviewSettings } from '../modules/reviews/open.ts';
@@ -11,6 +11,7 @@ import { assertOpen, isUnlocked, readAccess, type AccessView } from './access.ts
 import { issuedForEnding, recordEffects, takeUniqueIds, type EffectsContext, type EffectsDeps } from './effects.ts';
 import { claimIdempotency, findIdempotent, hashRequest, type StoredResult } from './idempotency.ts';
 import type { LoadedVersion, VersionLoader } from './live.ts';
+import { isPreviousVersionAccepted, readNamedVersionState, type NamedVersionState } from './versions.ts';
 import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } from './meta.ts';
 
 /*
@@ -36,7 +37,6 @@ import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } 
 const MAX_FILES_PER_SUBMISSION = 100;
 /** The longest user agent kept for a context field; browsers send a few hundred bytes. */
 const MAX_USER_AGENT = 512;
-const MS_PER_HOUR = 60 * 60 * 1000;
 
 export interface SubmitDeps {
   db: Db;
@@ -116,7 +116,7 @@ export async function countSubmission(tx: Tx, formId: string): Promise<boolean> 
 
 interface Preflight extends AccessView {
   /** The named version's dates, when it is not the live one; null when it has no row for this form. */
-  named: { supersededAt: Date | null; retiredAt: Date | null } | null;
+  named: NamedVersionState | null;
 }
 
 /** Everything the decision about a request reads, in one read-only transaction. */
@@ -124,12 +124,7 @@ async function preflight(tx: Tx, formId: string, namedVersionId: string, isLive:
   const view = await readAccess(tx, formId);
   let named: Preflight['named'] = null;
   if (!isLive) {
-    const [state] = await tx
-      .select({ supersededAt: formVersionState.supersededAt, retiredAt: formVersionState.retiredAt })
-      .from(formVersionState)
-      .where(and(eq(formVersionState.versionId, namedVersionId), eq(formVersionState.formId, formId)))
-      .limit(1);
-    named = state ?? null;
+    named = await readNamedVersionState(tx, formId, namedVersionId);
   }
   return { ...view, named };
 }
@@ -170,9 +165,7 @@ export async function submit(deps: SubmitDeps, input: SubmitInput): Promise<Subm
   // the newer one went live (F-34), unless it was retired. The page names it; the server decides.
   if (!isLive) {
     const state = seen.named;
-    const window = seen.access.acceptPreviousVersionsHours * MS_PER_HOUR;
-    const accepted = state !== null && state.retiredAt === null && state.supersededAt !== null && receivedAt.getTime() - state.supersededAt.getTime() < window;
-    if (!accepted) throw new ProblemError('VERSION_SUPERSEDED', 'This form was updated while you were filling it. Reload and try again.');
+    if (!isPreviousVersionAccepted(state, seen.access.acceptPreviousVersionsHours, receivedAt)) throw new ProblemError('VERSION_SUPERSEDED', 'This form was updated while you were filling it. Reload and try again.');
   }
   const version = await deps.loader.get(found, named, input.requestId);
   if (!version) throw new ProblemError('VERSION_SUPERSEDED', 'This form was updated while you were filling it. Reload and try again.');

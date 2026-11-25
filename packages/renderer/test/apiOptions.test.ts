@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ApiOptions, SafeUrl } from '@form/schema';
-import { displayOptionPath, fetchApiOptions, guessMapping, mapApiOptions, pickFromTree } from '../src/controls/apiOptions.ts';
+import { displayOptionPath, guessMapping, mapApiOptions, pickFromTree } from '../src/controls/apiOptions.ts';
 
 const url = 'https://hr.example.com/cities' as SafeUrl;
 
@@ -87,16 +87,5 @@ describe('guessMapping', () => {
     expect(guessMapping('array', false, ['id', 'name'])).toEqual({ labelKey: 'name', valueKey: 'id' });
     expect(guessMapping('map', true, [])).toEqual({ labelKey: '$self', valueKey: '$key' });
     expect(guessMapping('array', true, [])).toEqual({ labelKey: '$self', valueKey: '$self' });
-  });
-});
-
-describe('fetchApiOptions', () => {
-  it('GETs the URL and maps the selected array', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { cities: [{ id: 'mum', name: 'Mumbai' }] } }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const config: ApiOptions = { url, method: 'GET', itemsPath: 'data.cities', collectionKind: 'array', labelKey: 'name', valueKey: 'id' };
-    await expect(fetchApiOptions(config)).resolves.toEqual([{ id: 'mum', label: 'Mumbai' }]);
-    expect(fetchMock).toHaveBeenCalledWith(url, expect.objectContaining({ method: 'GET' }));
-    vi.unstubAllGlobals();
   });
 });

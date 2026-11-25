@@ -2,6 +2,7 @@ import type { BlockConfigMap, BlockId, ChoiceOption, FieldBlock, FieldKey, FormD
 import { DEFAULT_COMPLIANCE } from '../../compliance.ts';
 import { labelText } from '../../util/text.ts';
 import { blankDmsDefinition } from './blank.ts';
+import { FP_LOOKUP_KEY, lookupOfPicker, readLookups } from './lookup.ts';
 import { optionIdOf } from './fnv.ts';
 import {
   DMS_DATE_PATTERN, DMS_PHONE_DEFAULTS, INT32_MAX, INT32_MIN, MODELLED_KEYS, PRIMARY_TYPES, X_DMS, charsOf, dmsTypeOf, isFieldBlock, nameOf, patternFor, xDms,
@@ -110,14 +111,17 @@ export function elementsToDefinition(elements: readonly DmsElement[], options: D
     children.push(block.id);
   }
   applyLinks(elements, blocks, options.issues);
+  const lookups = readLookups(elements, blocks, options.issues);
   const [first, ...later] = base.pages;
   const page = first ?? blankDmsDefinition(options.formId, options.title, options.locale).pages[0]!;
+  const { lookups: _baseLookups, ...baseRest } = base;
   return {
-    ...base,
+    ...baseRest,
     formId: options.formId as FormDefinition['formId'],
     title: options.title,
     blocks,
     pages: [{ ...page, children }, ...later.map((p) => ({ ...p, children: [] }))].slice(0, 1),
+    ...(lookups.length > 0 ? { lookups } : {}),
   };
 }
 
@@ -215,6 +219,8 @@ function blockToElement(block: FieldBlock, type: DmsV1Type, def: FormDefinition)
     el.select = { options: options.map((o) => ({ ...o })) };
   }
   if (type === 'dropdown') writeLink(el, block, def);
+  const lookup = lookupOfPicker(def.lookups, block.id);
+  if (lookup && type === 'textinput') el[FP_LOOKUP_KEY] = lookup;
   if (type === 'date') el.isDefaultToDate = (block.config as BlockConfigMap['date']).defaultValue?.kind === 'today';
   return el;
 }
