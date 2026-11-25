@@ -144,7 +144,7 @@
           "id": "d3000000-0000-4000-8000-000000000001",
           "master_id": "a1000000-0000-4000-8000-000000000001",
           "primary_key_value": "Acme",
-          "json_data": "{\"Vendor Name\":\"Acme\",\"Tier\":\"Gold\",\"Docs\":\"doc-1,doc-2\",\"Joined\":\"2026-11-01\",\"Phone\":\"+919876543210\"}",
+          "json_data": "{\"Vendor Name\":\"Acme\",\"Tier\":\"Gold\",\"Docs\":\"doc-1,doc-2\",\"Joined\":\"01-11-2026\",\"Phone\":\"+919876543210\"}",
           "created_at": "2026-11-25 10:00:00",
           "updated_at": "2026-11-25 10:00:00"
         }
@@ -225,19 +225,21 @@
   },
   "validationError": {
     "response": {
-      "status": 422,
+      "status": 200,
       "body": {
-        "message": "The json data field is invalid.",
+        "success": false,
+        "message": "Validation error",
         "errors": {
           "json_data": [
-            "Tier: The selected value is invalid."
+            "The Tier field must be a valid selection."
           ]
         }
       }
     },
     "rules": [
-      "422 -> show errors.json_data[] under the form, keep the user's input",
-      "success:false with any status -> show message",
+      "the real routes answer HTTP 200 with success:false and errors.json_data[] (ApiErrorResponse::failedValidation, shared by every FormRequest); a 422 with the same body must be handled the same way",
+      "success:false with errors.json_data[] (any status) -> show errors.json_data[] under the form, keep the user's input",
+      "success:false without errors.json_data -> show message",
       "401 -> 'Sign in to DMS again' screen (same as dms-master)"
     ]
   },
@@ -246,6 +248,6 @@
     "cancelled": "fp_status=cancelled&fp_master_id=a1000000-0000-4000-8000-000000000001",
     "rule": "appended to returnUrl with ? or &; returnUrl origin must pass the existing VITE_FP_RETURN_ORIGINS check"
   },
-  "recorded": false,
-  "recordedNote": "Shapes taken from MasterRecordController@store/@show/@update and HasResponse on 25 Nov 2026. Lane api-surface replays these requests against the real routes (RecordContractTest) and, if a shape differs, fixes THIS file in its commit and says so; fORM- tests read only the keys listed in rules."
+  "recorded": true,
+  "recordedNote": "Shapes taken from MasterRecordController@store/@show/@update and HasResponse on 25 Nov 2026. Replayed against the real routes by dms-api tests/Feature/FormPlus/RecordContractTest.php (25 Nov 2026). Two shapes differed and were corrected in this file: validationError is HTTP 200 + success:false + message Validation error (not 422), and loadRecord json_data returns date values as DD-MM-YYYY (not YYYY-MM-DD). fORM- tests read only the keys listed in rules."
 }
