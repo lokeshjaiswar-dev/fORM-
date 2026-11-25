@@ -901,6 +901,62 @@
   -webkit-appearance: none;
 }
 
+/* A date in the block's pattern (DD-MM-YYYY): a text field with a calendar button that opens the browser's picker. */
+:where(.fr-root) .fr-date-field {
+  position: relative;
+  display: block;
+}
+
+:where(.fr-root) .fr-date-text {
+  padding-inline-end: 40px;
+}
+
+:where(.fr-root) .fr-date-button {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fr-muted);
+  cursor: pointer;
+}
+
+:where(.fr-root) .fr-date-button:hover:not(:disabled) {
+  color: var(--fr-text);
+}
+
+:where(.fr-root) .fr-date-button:disabled {
+  cursor: not-allowed;
+}
+
+:where(.fr-root) .fr-date-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The browser picker the button opens: kept in layout under the button (showPicker anchors to it), never seen. */
+:where(.fr-root) .fr-date-picker {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  width: 34px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 :where(.fr-root) .fr-date::-webkit-calendar-picker-indicator,
 :where(.fr-root) .fr-time::-webkit-calendar-picker-indicator {
   cursor: pointer;

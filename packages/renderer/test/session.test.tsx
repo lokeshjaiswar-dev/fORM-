@@ -64,7 +64,7 @@ describe('meta.now is frozen at session start', () => {
     const version = dated();
     const view = render(<FormRenderer {...props(version, { session: { device: 'desktop' }, onSubmit: (p) => void submitted.push(p) })} />);
     const day = screen.getByLabelText(/day/);
-    expect(day).toHaveValue('2026-10-19');
+    expect(day).toHaveValue('19-10-2026');
 
     vi.setSystemTime(new Date('2026-10-20T03:00:00Z'));
     view.rerender(<FormRenderer {...props(version, { session: { device: 'mobile' }, onSubmit: (p) => void submitted.push(p) })} />);

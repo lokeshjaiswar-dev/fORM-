@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLeaveGuard } from '@/embed/leaveGuard';
 import { FormRenderer, type RendererHandle } from '@form/renderer';
 import { answerToDms } from '@form/registry/profiles/dms-v1';
 import type { Answers, FileRef, Locale } from '@form/schema';
@@ -140,15 +141,7 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
   const adding = loaded.recordId === null;
 
   /* Typed values are the only copy until Save. */
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  const allowLeave = useLeaveGuard(dirty);
 
   /** Every field's DMS string by name; a field the person did not touch keeps the exact string DMS stored. */
   function collect(): DmsRecordValues {
@@ -179,7 +172,10 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
       if (blocking.length > 0) return;
       const { recordId } = await repo.save(loaded, collect());
       setDirty(false);
-      if (launch.returnUrl) navigate(recordReturnTarget(launch.returnUrl, 'saved', loaded.masterId, recordId));
+      if (launch.returnUrl) {
+        allowLeave();
+        navigate(recordReturnTarget(launch.returnUrl, 'saved', loaded.masterId, recordId));
+      }
       else setSavedId(recordId);
     } catch (e) {
       if (e instanceof DmsAuthError) setSignedOut(true);

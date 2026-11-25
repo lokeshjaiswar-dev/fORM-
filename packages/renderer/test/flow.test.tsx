@@ -342,7 +342,8 @@ describe('paging, logic and submit', () => {
     );
     render(<FormRenderer {...props(runtime(def), { initialAnswers: { greeting: { type: 'short_text', value: 'Hi' } } as never })} />);
     expect(screen.getByRole('textbox', { name: 'name' })).toHaveValue('Asha');
-    expect(screen.getByLabelText('day')).toHaveValue('2026-10-19');
+    /* Shown in the block's pattern (DD-MM-YYYY); the answer stays ISO. */
+    expect(screen.getByLabelText('day')).toHaveValue('19-10-2026');
     expect(screen.getByRole('textbox', { name: 'Hello Asha' })).toHaveValue('Hi');
     const user = userEvent.setup();
     await user.clear(screen.getByRole('textbox', { name: 'name' }));

@@ -15,12 +15,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
  * owner decides, the initial load and the engines are held to ratchets so they cannot grow. A ratchet only moves up by an
  * explicit decision recorded here and in the backlog: 15 Nov 2026, native controls replaced @dmacq/ui (282 KB -> 160.5 KB) and
  * the ratchets were set to the measured sizes; the growth since the original 132/97 KB is real field code (repeating-group sum, multi-slot
- * appointments, UTM context facts, section breaks). BL-129a tracks getting back under (zod/mini, export-only registry split).
+ * appointments, UTM context facts, section breaks). 25 Nov 2026: 161 -> 162 KB for the pattern-aware date field (DD-MM-YYYY text
+ * with the browser calendar, DMS parity; about 0.8 KB). BL-129a tracks getting back under (zod/mini, export-only registry split).
  */
 
 const KB = 1024;
 const SPEC_BUDGET = 90 * KB;
-const INITIAL_RATCHET = 161 * KB;
+const INITIAL_RATCHET = 162 * KB;
 const ENGINES_RATCHET = 107 * KB;
 const REGEX_CHUNK_CEILING = 50 * KB;
 

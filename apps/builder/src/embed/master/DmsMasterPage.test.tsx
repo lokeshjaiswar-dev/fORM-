@@ -320,6 +320,24 @@ describe('/embed/dms-master', () => {
     await waitFor(() => expect(leave()).toBe(true));
   });
 
+  it('does not ask "Changes you made may not be saved" when a save returns to DMS', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(201, shown())));
+    /* The browser fires beforeunload during the navigation itself, before React re-renders after the save. */
+    const prompted: boolean[] = [];
+    const navigate = vi.fn(() => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      prompted.push(e.defaultPrevented);
+    });
+    open(descriptor(), navigate);
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    expect(prompted).toEqual([false]);
+  });
+
   it('is routed at /embed/dms-master outside the fORM- session gate: no sign-in, no fORM- API call', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useLeaveGuard } from '@/embed/leaveGuard';
 import { PanelLeft, Redo2, Undo2 } from 'lucide-react';
 import type { ProfileIssue } from '@form/registry/profiles/dms-v1';
 import type { BlockId } from '@form/schema';
@@ -125,15 +126,7 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
   const creating = repo.current === null;
 
   /* Local edits are the only copy until "Save to DMS" (no draft recovery). */
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  const allowLeave = useLeaveGuard(dirty);
 
   function goTo(blockId: string | undefined) {
     if (blockId && currentDoc().blocks[blockId as BlockId]) useUiStore.getState().openInspector(blockId as BlockId);
@@ -154,7 +147,10 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
       setChecked(null);
       /* Edited meanwhile: stay in the builder (header says "Changes not saved to DMS") instead of leaving with them. */
       if (currentDoc() !== sent) return;
-      if (launch.returnUrl) navigate(returnTarget(launch.returnUrl, 'saved', result.masterId));
+      if (launch.returnUrl) {
+        allowLeave();
+        navigate(returnTarget(launch.returnUrl, 'saved', result.masterId));
+      }
       else setSaved(result);
     } catch (e) {
       if (e instanceof DmsCommitRefused) {

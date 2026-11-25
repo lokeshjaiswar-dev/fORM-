@@ -23,7 +23,8 @@ export const DEFAULT_COLORS: Readonly<Record<ThemeColorToken, string>> = {
 };
 
 const FONTS: Readonly<Record<string, string>> = {
-  inter: 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif',
+  /* Inter where the device has it, else the Noto Sans the builder and DMS ship (the builder canvas paints with it); never a bare system font. */
+  inter: 'Inter, "Noto Sans Variable", "Noto Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
   georgia: 'Georgia, "Times New Roman", serif',
   mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
 };

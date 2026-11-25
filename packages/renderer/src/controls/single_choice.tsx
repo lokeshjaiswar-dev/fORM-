@@ -9,6 +9,13 @@ import { NativeSelect } from './native.tsx';
 const OTHER = '__other__';
 
 /**
+ * A searchable dropdown shows its search box only from this many options. Below it the box is a second input that
+ * looks like a field of its own above a short list (the "extra field" DMS users saw on every dropdown); the
+ * native select already jumps by typed letters.
+ */
+export const SEARCH_FROM_OPTIONS = 8;
+
+/**
  * FLD-10/12: radios, a native select (the accessible dropdown) with an optional search box above it, or image tiles;
  * Other takes a typed answer.
  */
@@ -23,12 +30,13 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const selected = answer.value ? (answer.value.optionId ?? (answer.value.other !== undefined ? OTHER : '')) : '';
   const locked = field.disabled || field.readOnly;
   const [query, setQuery] = useState('');
+  const searchable = c.searchable === true && options.length >= SEARCH_FROM_OPTIONS;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!c.searchable || q === '') return options;
+    if (!searchable || q === '') return options;
     /* The chosen option stays listed while the search narrows the rest, so the select never shows a blank for it. */
     return options.filter((o) => o.id === selected || text(o.label).toLowerCase().includes(q) || o.id.toLowerCase().includes(q));
-  }, [c.searchable, options, query, selected, text]);
+  }, [searchable, options, query, selected, text]);
   const choose = (value: string) => {
     if (value === '') answer.set(undefined);
     else if (value === OTHER) answer.set({ optionId: null, other: answer.value?.other ?? '' });
@@ -81,15 +89,15 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
     const items = [...filtered.map((o) => ({ value: o.id as string, label: text(o.label) })), ...(other ? [{ value: OTHER, label: otherLabel }] : [])];
     return (
       <>
-        {c.searchable ? (
+        {searchable ? (
           <input
             className="fr-input fr-search"
             type="search"
             value={query}
-            placeholder={placeholder}
+            placeholder={t(MESSAGES['dropdown.search'])}
             onChange={(e) => setQuery(e.target.value)}
             disabled={locked}
-            aria-label={placeholder}
+            aria-label={t(MESSAGES['dropdown.search'])}
           />
         ) : null}
         <NativeSelect
