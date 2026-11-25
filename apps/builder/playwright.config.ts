@@ -22,7 +22,7 @@ export default defineConfig({
     video: rerun ? 'on' : 'on-first-retry',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...(process.env['PW_CHROMIUM_PATH'] ? { launchOptions: { executablePath: process.env['PW_CHROMIUM_PATH'] } } : {}) } }],
   webServer: {
     /* Self-contained: VITE_FP_DMS_API_BASE is baked in at build time (unset, every dms-master launch is refused), so the e2e build sets it. */
     command: `pnpm exec vite build && pnpm exec vite preview --port ${port} --strictPort`,
