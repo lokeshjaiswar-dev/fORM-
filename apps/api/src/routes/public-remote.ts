@@ -11,6 +11,7 @@ import { ProblemError } from '../errors.ts';
 import type { Throttle, ThrottleKey } from '../modules/auth/throttle.ts';
 import { LOOKUP_TTL_MS, OPTIONS_TTL_MS, TtlCache } from '../remote/cache.ts';
 import { FormConcurrency } from '../remote/concurrency.ts';
+import { lookupCacheKey, OPTION_LIMITS, publicOptions } from '../remote/project.ts';
 import { findFieldCheck, findFieldOptions, findHttpLookup } from '../remote/targets.ts';
 import { callUpstream, UpstreamError, type TenantHttp } from '../remote/upstream.ts';
 import { runtimeStatus } from '../runtime/status.ts';
@@ -38,10 +39,9 @@ const UPSTREAM_FAILED = 'The lookup source did not answer.';
 
 const cells = z.record(z.string().max(128), z.string().max(1000));
 const lookupResponse = z.object({ rows: z.array(z.object({ label: z.string().max(200), cells })).max(50), truncated: z.boolean() });
-const optionsResponse = z.object({ options: z.array(z.object({ id: z.string(), label: z.string(), code: z.string().exactOptional() })).max(500) });
+const optionsResponse = z.object({ options: z.array(z.object({ id: z.string().max(OPTION_LIMITS.id), label: z.string().max(OPTION_LIMITS.label), code: z.string().max(OPTION_LIMITS.id).exactOptional() })).max(OPTION_LIMITS.count) });
 const checkResponse = z.object({ ok: z.boolean() });
 
-const normalised = (q: string) => q.normalize('NFC').trim().toLowerCase();
 
 /**
  * The respondent's door to third-party APIs a form uses (founder, 25 Nov 2026): `POST /v1/p/:slug/lookups/:lookupId`,
@@ -159,7 +159,7 @@ export function publicRemoteRoutes(app: FastifyInstance, deps: PublicRemoteDeps)
       const minChars = lookup.minChars ?? 2;
       if (q.trim().length < minChars) return { rows: [], truncated: false };
       const now = deps.now().getTime();
-      const key = `${loaded.versionId}|${request.params.lookupId}|${normalised(q)}`;
+      const key = lookupCacheKey(loaded.versionId, request.params.lookupId, q, lookup.searchParam);
       const hit = lookupCache.get(key, now);
       if (hit) return hit;
       const extra = lookup.searchParam !== undefined ? { key: lookup.searchParam, value: q } : undefined;
@@ -177,7 +177,7 @@ export function publicRemoteRoutes(app: FastifyInstance, deps: PublicRemoteDeps)
       schema: {
         tags: TAGS,
         summary: "Load a field's option list from its API",
-        description: 'At most 500 options, cached for 60 seconds per version and field. Same access rules and errors as the lookup route.',
+        description: 'At most 500 options (ids and codes clipped to 200 characters, labels to 500), cached for 60 seconds per version and field. Same access rules and errors as the lookup route.',
         params: z.object({ slug: z.string().regex(SLUG), blockId: z.string().regex(OPAQUE) }),
         body: z.strictObject({ formVersionId: z.uuid() }),
         response: { 200: optionsResponse },
@@ -193,7 +193,7 @@ export function publicRemoteRoutes(app: FastifyInstance, deps: PublicRemoteDeps)
       const hit = optionsCache.get(key, now);
       if (hit) return hit;
       const { data } = await upstream(request, reply, found.formId, () => callUpstream(upstreamDeps(), { orgId: found.orgId, config: target.config }));
-      const options = mapApiOptions(data, target.config).slice(0, 500).map((o) => ({ id: o.id as string, label: o.label as string, ...(o.code !== undefined ? { code: o.code } : {}) }));
+      const options = publicOptions(mapApiOptions(data, target.config));
       const body = { options };
       optionsCache.set(key, body, now, OPTIONS_TTL_MS);
       return body;
