@@ -87,10 +87,34 @@ const withTodayDefault = () => {
   (joined as { isDefaultToDate: boolean }).isDefaultToDate = true;
   return m;
 };
+/** Today in the viewer's own zone (not UTC), in the DMS format. */
 const todayDms = () => {
-  const [y, mo, d] = new Date().toISOString().slice(0, 10).split('-');
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [y, mo, d] = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-');
   return `${d}-${mo}-${y}`;
 };
+
+/** Pins the clock (Date only, so timers and promises still run) and the viewer's zone as the browser reports it. */
+function viewerAt(instant: string, timeZone: string) {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(instant));
+  const real = Intl.DateTimeFormat.prototype.resolvedOptions;
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(function (this: Intl.DateTimeFormat) {
+    return { ...real.call(this), timeZone };
+  });
+}
+
+async function addWithDefault() {
+  const calls = dms({ master: withTodayDefault() });
+  const navigate = open(add());
+  const name = await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+  const shown = (screen.getByLabelText(/Joined/) as HTMLInputElement).value;
+  const user = userEvent.setup();
+  await user.type(name, 'Acme');
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(navigate).toHaveBeenCalled());
+  return { shown, json: (calls.find((c) => c.method === 'POST')!.body as { json_data: Record<string, string> }).json_data };
+}
 
 describe('/embed/dms-record date default (isDefaultToDate)', () => {
   it('edit: a record with no stored date shows none, and changing only Tier PATCHes {Tier}', async () => {
@@ -118,15 +142,27 @@ describe('/embed/dms-record date default (isDefaultToDate)', () => {
     expect(calls.filter((c) => c.method !== 'GET')).toHaveLength(0);
   });
   it('add: an untouched default date is posted as today in the DMS format', async () => {
-    const calls = dms({ master: withTodayDefault() });
-    const navigate = open(add());
-    const name = await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
-    const user = userEvent.setup();
-    await user.type(name, 'Acme');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(navigate).toHaveBeenCalled());
-    const post = calls.find((c) => c.method === 'POST')!;
-    expect((post.body as { json_data: Record<string, string> }).json_data.Joined).toBe(todayDms());
+    expect((await addWithDefault()).json.Joined).toBe(todayDms());
+  });
+  describe('today is the viewer\'s local date, not the UTC date', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+    it('Asia/Kolkata at 01:30 IST on 26 Nov (20:00Z on 25 Nov) shows and posts 26-11-2026', async () => {
+      viewerAt('2026-11-25T20:00:00Z', 'Asia/Kolkata');
+      expect(todayDms()).toBe('26-11-2026');
+      const { shown, json } = await addWithDefault();
+      expect(shown).toBe('2026-11-26');
+      expect(json.Joined).toBe('26-11-2026');
+    });
+    it('America/New_York at 22:00 on 25 Nov (03:00Z on 26 Nov) shows and posts 25-11-2026', async () => {
+      viewerAt('2026-11-26T03:00:00Z', 'America/New_York');
+      expect(todayDms()).toBe('25-11-2026');
+      const { shown, json } = await addWithDefault();
+      expect(shown).toBe('2026-11-25');
+      expect(json.Joined).toBe('25-11-2026');
+    });
   });
 });
 

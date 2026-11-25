@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FormRenderer, type RendererHandle } from '@form/renderer';
 import { answerToDms } from '@form/registry/profiles/dms-v1';
-import type { Answers, FileRef, IsoInstant, Locale } from '@form/schema';
+import type { Answers, FileRef, Locale } from '@form/schema';
 import { Alert, AlertDescription, AlertTitle, Button } from '@dmacq/ui';
 import { BUILDER_LOCALE } from '@/i18n';
 import { DmsApiError, DmsAuthError } from '@/embed/dmsClient';
@@ -10,7 +10,7 @@ import { ProfileProvider } from '@/embed/profile';
 import { fieldNameOf, recordReturnTarget, writableElements, type DmsRecordValues, type LoadedDmsRecord } from './contract';
 import { describeRecordError } from './describeRecordError';
 import { DmsRecordRepository } from './DmsRecordRepository';
-import { planRecordForm, type RecordForm } from './recordForm';
+import { planRecordForm, viewerClock, type RecordForm } from './recordForm';
 
 /*
  * `/embed/dms-record` (DESIGN-v2 section 4): add or edit ONE record of a Forms+ master with the user's own DMS token. Outside
@@ -48,9 +48,6 @@ function BackToDms({ launch, loaded }: { launch: ResolvedLaunch; loaded?: Loaded
   );
 }
 
-/** The renderer's clock: pinned to the page's own date, midday in India. */
-const todayInstant = (): IsoInstant => `${new Date().toISOString().slice(0, 10)}T06:30:00Z` as IsoInstant;
-
 export function DmsRecordPage({ navigate = (url: string) => window.location.assign(url) }: { navigate?: (url: string) => void }) {
   const resolved = useMemo(() => currentLaunch('dms-record'), []);
   if (!resolved.ok) {
@@ -84,7 +81,7 @@ function RecordApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (ur
       .load(launch.masterId as string, launch.recordId)
       .then((loaded) => {
         if (!live) return;
-        const planned = loaded.source === 'formplus' ? planRecordForm(loaded.elements, loaded.values, loaded.masterName, todayInstant(), loaded.recordId) : null;
+        const planned = loaded.source === 'formplus' ? planRecordForm(loaded.elements, loaded.values, loaded.masterName, viewerClock(), loaded.recordId) : null;
         setLoad({ state: 'ready', loaded, form: planned?.ok ? planned.form : null, formError: planned && !planned.ok ? planned.message : null });
       })
       .catch((e: unknown) => {
@@ -253,6 +250,7 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
         status={{ state: 'open' }}
         locale={BUILDER_LOCALE as Locale}
         initialAnswers={form.initialAnswers}
+        startedAt={form.startedAt}
         onSubmit={() => undefined}
         uploader={refuseUpload}
         hideNavigation

@@ -3,7 +3,7 @@ import { compile, projectForRuntime } from '@form/logic';
 import { REGISTRY } from '@form/registry';
 import { blankDmsDefinition, dmsToAnswer, elementsToDefinition, type DmsElement } from '@form/registry/profiles/dms-v1';
 import type {
-  AnswerValue, Answers, BlockId, FieldBlock, FormDefinition, FormVersion, FormVersionId, IsoInstant, OrgId, RuntimeFormVersion, StoredBlock, UserId,
+  AnswerValue, Answers, BlockId, FieldBlock, FormDefinition, FormVersion, FormVersionId, IsoDate, IsoInstant, OrgId, RuntimeFormVersion, StoredBlock, UserId,
 } from '@form/schema';
 import { fieldNameOf, isIncrementElement, isLegacyElement, type DmsRecordValues } from './contract';
 
@@ -22,6 +22,39 @@ export interface RecordForm {
   baseline: Record<string, string>;
   /** Element id -> the translated block, for `answerToDms`. */
   blocks: Record<string, FieldBlock>;
+  /** The instant the renderer's session starts at (its `startedAt`), so its "today" is the one the default was seeded with. */
+  startedAt: IsoInstant;
+}
+
+/** When the page is planned and where the viewer is: "today" is the viewer's calendar date (OpenForm prefill_today did the same). */
+export interface RecordClock {
+  now: IsoInstant;
+  /** The viewer's IANA time zone. */
+  timeZone: string;
+}
+
+/** The browser's own zone; UTC when the browser does not say. */
+export function viewerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+export const viewerClock = (): RecordClock => ({ now: new Date().toISOString() as IsoInstant, timeZone: viewerTimeZone() });
+
+/** The calendar date of `now` in `timeZone`, by the renderer's own rule (`todayIn`, packages/renderer/src/eval/meta.ts); the UTC date for an unknown zone. */
+export function localDate(now: IsoInstant, timeZone: string): IsoDate {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(now));
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const date = `${get('year')}-${get('month')}-${get('day')}`;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date as IsoDate;
+  } catch {
+    /* An unknown zone falls through to UTC. */
+  }
+  return now.slice(0, 10) as IsoDate;
 }
 
 export type RecordFormResult = { ok: true; form: RecordForm } | { ok: false; message: string };
@@ -30,8 +63,9 @@ export type RecordFormResult = { ok: true; form: RecordForm } | { ok: false; mes
 const forRender = (el: DmsElement): DmsElement =>
   isIncrementElement(el) ? { ...el, type: 'textinput', numeric: true, specialChars: true, required: false, primary: false } : el;
 
-export function planRecordForm(elements: readonly DmsElement[], values: DmsRecordValues, title: string, today: IsoInstant, recordId: string | null = null): RecordFormResult {
+export function planRecordForm(elements: readonly DmsElement[], values: DmsRecordValues, title: string, clock: RecordClock, recordId: string | null = null): RecordFormResult {
   const editing = recordId !== null;
+  const today = localDate(clock.now, clock.timeZone);
   const translated = elements.map(forRender);
   let def: FormDefinition = elementsToDefinition(translated, { formId: FORM_ID, title, locale: LOCALE, base: blankDmsDefinition(FORM_ID, title, LOCALE) });
   const blocks: Partial<Record<BlockId, StoredBlock>> = { ...def.blocks };
@@ -56,10 +90,16 @@ export function planRecordForm(elements: readonly DmsElement[], values: DmsRecor
     baseline[id] = JSON.stringify(answers[id] ?? null);
     /* Add: the default the screen shows is part of the starting answers, so it is what gets posted. */
     if (!editing && answers[id] === undefined && field.type === 'date' && field.config.defaultValue?.kind === 'today') {
-      answers[id] = { type: 'date', value: today.slice(0, 10) } as AnswerValue;
+      answers[id] = { type: 'date', value: today } as AnswerValue;
     }
   }
-  def = { ...def, blocks, theme: { ...def.theme, tokens: { ...def.theme.tokens, density: 'compact', formWidth: 'wide' } } };
+  /* The renderer works out "today" in the form's zone: make that the viewer's zone so its today is the seeded one. */
+  def = {
+    ...def,
+    blocks,
+    behavior: { ...def.behavior, timeZone: clock.timeZone as FormDefinition['behavior']['timeZone'] },
+    theme: { ...def.theme, tokens: { ...def.theme.tokens, density: 'compact', formWidth: 'wide' } },
+  };
   const compiled = (() => {
     try {
       return compile(def, REGISTRY);
@@ -74,7 +114,7 @@ export function planRecordForm(elements: readonly DmsElement[], values: DmsRecor
     formId: def.formId,
     number: 0,
     schemaVersion: def.schemaVersion,
-    publishedAt: today,
+    publishedAt: clock.now,
     publishedBy: 'fp-record' as UserId,
     definition: def,
     compiled: compiled.compiled,
@@ -88,5 +128,5 @@ export function planRecordForm(elements: readonly DmsElement[], values: DmsRecor
     branding: false,
     thirdPartyTrackingAllowed: false,
   });
-  return { ok: true, form: { version, initialAnswers: answers as Answers, baseline, blocks: byId } };
+  return { ok: true, form: { version, initialAnswers: answers as Answers, baseline, blocks: byId, startedAt: clock.now } };
 }
