@@ -260,23 +260,23 @@ describe('BlockInspector validation', () => {
     expect(get('emp_name').apiValidation).toMatchObject({ method: 'GET' });
   });
 
-  it('offers no Authorization for a request the browser sends, warns that respondents get the response, and lets an old draft drop its credentials (review B1)', async () => {
+  it('offers no inline Authorization (an org credential is picked instead), says the server sends the request, and lets an old draft drop its inline credentials (review B1)', async () => {
     resetStore([block('short_text', 'emp_name', { apiValidation: { url: 'https://hr.example.com/names', method: 'POST', auth: { type: 'bearer', token: 'secret' } } })]);
     const user = open('emp_name');
     expect(screen.queryByRole('combobox', { name: 'Authorization' })).not.toBeInTheDocument();
     expect(screen.queryByText('Bearer token')).not.toBeInTheDocument();
-    expect(screen.getByText(/browser sends this request and receives the whole response/)).toBeInTheDocument();
-    expect(screen.getByText(/This request carries credentials/)).toBeInTheDocument();
+    expect(screen.getByText(/server sends this request for each respondent/)).toBeInTheDocument();
+    expect(screen.getByText(/This request carries inline credentials/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove credentials' }));
     expect(get('emp_name').apiValidation).toEqual({ url: 'https://hr.example.com/names', method: 'POST' });
-    expect(screen.queryByText(/This request carries credentials/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/This request carries inline credentials/)).not.toBeInTheDocument();
   });
 
-  it('API options warn that every respondent receives the full list, with no Authorization (review B1)', async () => {
+  it('API options say the server loads the list and passes on only the mapped fields, with no inline Authorization (review B1)', async () => {
     const user = open('color');
     await user.click(screen.getByRole('button', { name: 'More options' }));
     await user.click(screen.getByRole('switch', { name: 'Load options from an API' }));
-    expect(screen.getByText(/receives the full response list/)).toBeInTheDocument();
+    expect(screen.getByText(/passes on only the fields you map/)).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Authorization' })).not.toBeInTheDocument();
   });
 
