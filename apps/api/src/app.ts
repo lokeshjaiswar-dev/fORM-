@@ -26,6 +26,12 @@ import { formRoutes } from './routes/forms.ts';
 import { notificationRoutes } from './routes/notifications.ts';
 import { publicFormRoutes } from './routes/public.ts';
 import { publicUnlockRoutes } from './routes/public-unlock.ts';
+import { publicRemoteRoutes } from './routes/public-remote.ts';
+import { apiCredentialRoutes } from './routes/api-credentials.ts';
+import { remoteTestRoutes } from './routes/remote-test.ts';
+import type { TenantHttp } from './remote/upstream.ts';
+import { createVersionLoader } from './submit/live.ts';
+import { editionSummary, runtimeEdition } from '@form/config';
 import { publishRoutes } from './routes/publish.ts';
 import { submissionRoutes } from './routes/submissions.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
@@ -62,6 +68,12 @@ export interface AppDeps {
    * Without it the webhook routes cannot check a URL and answer 503.
    */
   tenantEgress?: EgressGuard;
+  /**
+   * One HTTP request to an address a form's owner chose (a lookup, an option list or a check), through `tenantEgress`:
+   * `(url, r) => egressHttp(tenantEgress, url, r)` in `main.ts`, so the routes import no adapter. Without it the lookup proxy and
+   * the author's test route answer 503 `REMOTE_UNAVAILABLE`.
+   */
+  tenantHttp?: TenantHttp;
   /**
    * The mailer of one org: its own email senders (`email_senders.smtp_secret_id`, opened under that org's key) and the
    * platform relay when a message names no sender. Built in `org-mailer.ts` and passed by the composition root, which is
@@ -243,13 +255,18 @@ export async function buildApp(config: ApiConfig, deps: AppDeps = {}): Promise<F
   publishRoutes(app, { db: handle.db, secret: config.auth.secret, now });
   accessRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   const files = deps.files ?? createFileStore(path.resolve(config.filesDir ?? path.resolve(process.cwd(), '.data/files')));
-  publicFormRoutes(app, { db: handle.db, config, files, throttle, now, effects: { searchIndex: deps.searchIndex, queue: deps.queue } });
+  // One loader for every public route: a published version never changes, so one cache serves all of them.
+  const loader = createVersionLoader({ db: handle.db, edition: runtimeEdition(editionSummary(config.edition)) });
+  publicFormRoutes(app, { db: handle.db, config, files, throttle, now, loader, effects: { searchIndex: deps.searchIndex, queue: deps.queue } });
+  publicRemoteRoutes(app, { db: handle.db, config, throttle, loader, tenantHttp: deps.tenantHttp, orgSecrets: deps.orgSecrets, now });
   publicUnlockRoutes(app, { db: handle.db, auditDb: auditHandle.db, config, throttle, now });
   formFileRoutes(app, { db: handle.db, files, secret: config.auth.secret, now });
   submissionRoutes(app, { db: handle.db, files, secret: config.auth.secret, searchIndex: deps.searchIndex, now });
   // Approvals, notifications, webhooks and exports (WP-2.33, WP-1.16, WP-1.18, WP-1.17). Each module is registered here
   // once, empty, and its task fills its own files, so no feature task edits this list.
   registerReviewModule(app, { db: handle.db, auditDb: auditHandle.db, queue: deps.queue, keys: deps.keys, secret: config.auth.secret, now });
+  apiCredentialRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, secret: config.auth.secret, now });
+  remoteTestRoutes(app, { db: handle.db, throttle, tenantHttp: deps.tenantHttp, orgSecrets: deps.orgSecrets, secret: config.auth.secret, now });
   emailSenderRoutes(app, { db: handle.db, auditDb: auditHandle.db, orgSecrets: deps.orgSecrets, orgMailer: deps.orgMailer, secret: config.auth.secret, now });
   notificationRoutes(app, { db: handle.db, auditDb: auditHandle.db, secret: config.auth.secret, now });
   webhookRoutes(app, {

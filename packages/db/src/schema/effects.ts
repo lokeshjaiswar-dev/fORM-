@@ -17,15 +17,17 @@ import { submissions } from './submissions.ts';
  * migration allows.
  */
 
-export const SECRET_KINDS = ['smtp', 'webhook_hmac'] as const;
+export const SECRET_KINDS = ['smtp', 'webhook_hmac', 'api_credential'] as const;
 export type SecretKind = (typeof SECRET_KINDS)[number];
 
 /**
- * A sealed secret: SMTP credentials or a webhook signing secret. `enc` is the output of `sealOrgSecret` (the per-secret
+ * A sealed secret: SMTP credentials, a webhook signing secret or an API credential (sealed ApiAuth; meta has name, type, header, host, last4). `enc` is the output of `sealOrgSecret` (the per-secret
  * key wrapped under the org's KMS key, the id, kind and org as associated data). fr_app can write `enc` and never read it
  * back: `select *` and `returning *` fail with "permission denied", so select `secretPublicColumns`. A system context
  * opens one with `secretEnc()`. `meta` is what the UI may show (host and user name, the last four characters).
- * RLS: `secrets_tenant`, and `secrets_access` (a system job; `org.settings` for kind smtp; `data.route` for webhook_hmac).
+ * RLS: `secrets_tenant`, and `secrets_access_<command>` (a system job; `org.settings` for kind smtp; `data.route` for
+ * webhook_hmac; `org.settings` writes and `org.settings` or `forms.edit` lists kind api_credential, an org API credential
+ * a lookup, option list or check names by `credentialRef.secretId`).
  * Unique by (org, id, kind): a webhook or a sender points at a secret by all three, so a webhook can only name a
  * webhook_hmac secret and a sender only an smtp one (foreign-key checks bypass RLS, so the kind has to be in the key).
  */

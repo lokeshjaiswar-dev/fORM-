@@ -3,6 +3,7 @@ import { EXPORTS_EVENTS } from './events/exports.ts';
 import { FORMS_EVENTS } from './events/forms.ts';
 import { NOTIFICATIONS_EVENTS } from './events/notifications.ts';
 import { PUBLISH_EVENTS } from './events/publish.ts';
+import { REMOTE_EVENTS } from './events/remote.ts';
 import { REVIEWS_EVENTS } from './events/reviews.ts';
 import type { AuditEventSpec } from './events/spec.ts';
 import { SUBMISSIONS_EVENTS } from './events/submissions.ts';
@@ -272,6 +273,7 @@ export const AUDIT_EVENTS = {
   ...WEBHOOKS_EVENTS,
   ...WEBHOOK_DELIVERY_EVENTS,
   ...EXPORTS_EVENTS,
+  ...REMOTE_EVENTS,
 } as const satisfies Record<string, AuditEventSpec>;
 
 export type AuditAction = keyof typeof AUDIT_EVENTS;

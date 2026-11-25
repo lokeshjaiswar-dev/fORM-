@@ -9,6 +9,7 @@ import { accountOf, clientInfo, tenantOf } from '../auth.ts';
 import { PROBLEM_CONTENT_TYPE, ProblemError, problemOf } from '../errors.ts';
 import { hex } from '../modules/auth/crypto.ts';
 import { capIssues, type PipelineIssue } from '../publish/issues.ts';
+import { credentialIdsOf } from '../publish/lookups.ts';
 import { publishPipeline, type PublishOutcome } from '../publish/pipeline.ts';
 import { NO_ORG_PROFILE, type OrgProfileSource } from '../publish/resolve.ts';
 import { storableString } from '../text-safety.ts';
@@ -253,14 +254,14 @@ export function publishRoutes(app: FastifyInstance, deps: PublishDeps): void {
     async (request) => {
       const { id } = request.params;
       const tenant = tenantOf(request);
-      const { draftRow, allowlist } = await withTenant(deps.db, { ...tenant, readOnly: true }, async (tx) => {
+      const { draftRow, allowlist, credentialIds } = await withTenant(deps.db, { ...tenant, readOnly: true }, async (tx) => {
         const [form] = await tx.select({ id: forms.id }).from(forms).where(eq(forms.id, id)).limit(1);
         if (!form) throw new ProblemError('NOT_FOUND', 'That form is not in this organisation.');
         const [row] = await tx.select({ draft: formDrafts.draft, draftRev: formDrafts.draftRev }).from(formDrafts).where(eq(formDrafts.formId, id)).limit(1);
         if (!row) throw new ProblemError('NOT_FOUND', 'That form has no draft to check.');
-        return { draftRow: row, allowlist: await redirectAllowlistOf(tx, id) };
+        return { draftRow: row, allowlist: await redirectAllowlistOf(tx, id), credentialIds: await credentialIdsOf(tx) };
       });
-      const outcome = await publishPipeline(draftRow.draft, { orgId: tenant.orgId, formId: id, redirectAllowlist: allowlist, profiles });
+      const outcome = await publishPipeline(draftRow.draft, { orgId: tenant.orgId, formId: id, redirectAllowlist: allowlist, profiles, credentialIds });
       if (outcome.ok) return { ok: true, draftRev: draftRow.draftRev, definitionHash: outcome.contentHash, ...capIssues(outcome.issues) };
       // No client hash was sent, so a mismatch cannot happen here; the type still has to be narrowed.
       const issues = outcome.reason === 'blocked' ? outcome.issues : [];
@@ -324,6 +325,7 @@ export function publishRoutes(app: FastifyInstance, deps: PublishDeps): void {
           formId: id,
           redirectAllowlist: allowlist,
           profiles,
+          credentialIds: await credentialIdsOf(tx),
           clientDefinitionHash: input.clientDefinitionHash,
         });
         if (!outcome.ok) return { kind: 'refused', outcome };

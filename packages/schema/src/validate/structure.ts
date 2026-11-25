@@ -1,6 +1,7 @@
 import type { PublishIssue, StoredBlock } from '../v2/blocks.ts';
 import type { FieldCompliance } from '../v2/compliance.ts';
 import type { FormDefinition } from '../v2/definition.ts';
+import type { ApiLookup } from '../v2/envelope.ts';
 import type { ClientAction, ServerAction } from '../v2/logic.ts';
 import type { PlainTemplate } from '../v2/rich-text.ts';
 import { VALUE_FIELD_TYPES } from '../v2/zod/catalogue.ts';
@@ -97,6 +98,9 @@ function optionIdsOf(block: StoredBlock | undefined): ReadonlySet<string> | null
 function childIdsOf(block: StoredBlock): readonly string[] {
   return block.type === 'section' || block.type === 'repeating_group' ? block.config.children : [];
 }
+
+/** Field types a lookup may fill (the value is a plain string). */
+export const LOOKUP_TEXT_TYPES: ReadonlySet<string> = new Set(['short_text', 'long_text', 'url', 'number']);
 
 export function validateStructure(def: FormDefinition, options: StructureOptions = {}): PublishIssue[] {
   const mode = options.mode ?? 'save';
@@ -376,6 +380,37 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
   };
   credentials(def.lookup, jsonPointer('lookup', 'auth'));
   def.lookups?.forEach((lookup, i) => credentials(lookup.source === 'dms_master' ? undefined : lookup, jsonPointer('lookups', i, 'auth')));
+
+  /* Server-side lookups: ids, https for credentials, and text-like mapping targets. */
+  const needsHttps = (request: { url?: string; credentialRef?: unknown } | undefined, path: string) => {
+    if (request?.credentialRef !== undefined && typeof request.url === 'string' && !request.url.startsWith('https://')) {
+      soft('credential_needs_https', path, 'an org API credential is sent only over https; use an https address');
+    }
+  };
+  const lookupIds = new Map<string, string>();
+  const checkLookup = (lookup: ApiLookup, path: Array<string | number>, fallbackId?: string) => {
+    if (lookup.source !== 'dms_master') needsHttps(lookup, jsonPointer(...path, 'url'));
+    const id = lookup.id ?? fallbackId;
+    if (lookup.enabled === true && id === undefined) soft('lookup_id_missing', jsonPointer(...path, 'id'), 'an enabled lookup needs an id, so the respondent can name it');
+    if (id !== undefined) {
+      const first = lookupIds.get(id);
+      if (first === undefined) lookupIds.set(id, jsonPointer(...path, 'id'));
+      else soft('lookup_id_duplicate', jsonPointer(...path, 'id'), `lookup id '${id}' is already used at ${first}`);
+    }
+    lookup.mappings?.forEach((m, i) => {
+      const target = m.fieldId === undefined ? undefined : blocks.get(m.fieldId);
+      if (target !== undefined && !LOOKUP_TEXT_TYPES.has(target.type)) {
+        soft('lookup_mapping_type', jsonPointer(...path, 'mappings', i, 'fieldId'), `a lookup fills text, long text, URL and number fields only, not '${target.type}'`);
+      }
+    });
+  };
+  def.lookups?.forEach((lookup, i) => checkLookup(lookup, ['lookups', i]));
+  if (def.lookup) checkLookup(def.lookup, ['lookup'], 'lookup');
+  for (const [id, b] of blocks) {
+    const api = b as { apiOptions?: { url?: string; credentialRef?: unknown }; apiValidation?: { url?: string; credentialRef?: unknown } };
+    needsHttps(api.apiOptions, jsonPointer('blocks', id, 'apiOptions', 'url'));
+    needsHttps(api.apiValidation, jsonPointer('blocks', id, 'apiValidation', 'url'));
+  }
   for (const [id, b] of blocks) {
     const field = b as { apiOptions?: { auth?: unknown }; apiValidation?: { auth?: unknown } };
     credentials(field.apiOptions, jsonPointer('blocks', id, 'apiOptions', 'auth'));
