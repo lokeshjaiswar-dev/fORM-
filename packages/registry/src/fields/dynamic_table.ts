@@ -21,16 +21,11 @@ const allColumns = (value: DynamicTableValue, columns: readonly DynamicTableColu
 /** An absolute http(s) address with a host; the registry has no DOM `URL` (it runs in the API and the worker too). */
 const URL_CELL = /^https?:\/\/[^\s/?#]+[^\s]*$/i;
 
-const cellValid = (input: string, cell: string): boolean => {
-  if (input === 'number' || input === 'formula') return DECIMAL.test(cell);
-  if (input === 'date') return ISO_DATE.test(cell);
-  if (input === 'email') return EMAIL.test(cell);
-  if (input === 'phone') return PHONE.test(cell);
-  if (input === 'datetime') return DATETIME.test(cell);
-  if (input === 'time') return TIME.test(cell);
-  if (input === 'url') return URL_CELL.test(cell);
-  return true;
+/** The pattern a cell of each input kind must match; text and long text take anything. */
+const CELL_PATTERN: Readonly<Partial<Record<string, RegExp>>> = {
+  number: DECIMAL, formula: DECIMAL, date: ISO_DATE, email: EMAIL, phone: PHONE, datetime: DATETIME, time: TIME, url: URL_CELL,
 };
+const cellValid = (input: string, cell: string): boolean => !Object.hasOwn(CELL_PATTERN, input) || CELL_PATTERN[input]!.test(cell);
 
 /** Numeric cells of one column (non-blank, parsed). */
 export const columnNumbers = (rows: DynamicTableValue['rows'], id: string): number[] =>

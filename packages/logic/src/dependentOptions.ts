@@ -18,7 +18,7 @@ function choiceConfig(block: StoredBlock | undefined): DependentChoice | undefin
   return block.config as DependentChoice;
 }
 
-function chosenOptions(answer: AnswerValue | undefined): OptionId[] {
+export function chosenOptions(answer: AnswerValue | undefined): OptionId[] {
   if (answer?.type === 'single_choice') return answer.value.optionId === null ? [] : [answer.value.optionId];
   if (answer?.type === 'multi_choice') return answer.value.optionIds;
   return [];
@@ -50,38 +50,4 @@ export function dependentOptions(order: readonly BlockId[], blocks: ReadonlyMap<
     if (hidden.length) hiddenOptions[id] = hidden;
   }
   return { hiddenOptions, waiting };
-}
-
-/** The ids of blocks whose options depend on another block, in document order. */
-export function dependentBlockIds(order: readonly BlockId[], blocks: ReadonlyMap<string, StoredBlock>): BlockId[] {
-  return order.filter((id) => choiceConfig(blocks.get(id))?.dependsOn !== undefined);
-}
-
-/**
- * The answers rules, calculations and checks may read: a dependent answer the parent's answer no longer allows is
- * dropped (a waiting block's answer entirely; disallowed options from a multi choice), so a stale State never reaches
- * a rule after Country changes, on the client or the server. Answers of every other block pass through untouched.
- */
-export function admittedAnswers(order: readonly BlockId[], blocks: ReadonlyMap<string, StoredBlock>, answers: Answers): Answers {
-  const dependants = dependentBlockIds(order, blocks);
-  if (dependants.length === 0) return answers;
-  const admitted: Answers = { ...answers };
-  const { hiddenOptions, waiting } = dependentOptions(order, blocks, admitted);
-  for (const id of dependants) {
-    const answer = admitted[id];
-    if (!answer) continue;
-    if (waiting.has(id)) {
-      delete admitted[id];
-      continue;
-    }
-    const hidden = new Set(hiddenOptions[id] ?? []);
-    if (answer.type === 'single_choice' && answer.value.optionId !== null && hidden.has(answer.value.optionId)) delete admitted[id];
-    if (answer.type === 'multi_choice') {
-      const optionIds = answer.value.optionIds.filter((o) => !hidden.has(o));
-      if (optionIds.length === answer.value.optionIds.length) continue;
-      if (optionIds.length === 0 && answer.value.other === undefined) delete admitted[id];
-      else admitted[id] = { ...answer, value: { ...answer.value, optionIds } };
-    }
-  }
-  return admitted;
 }
