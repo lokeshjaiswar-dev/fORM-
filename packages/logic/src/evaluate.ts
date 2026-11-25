@@ -11,7 +11,7 @@ import { admittedAnswers, dependentBlockIds, dependentOptions } from './dependen
 import { ENGINE } from './compile.ts';
 import { D, formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
-import { ancestorsOf, dependsOnOf } from './structure.ts';
+import { ancestorsOf } from './structure.ts';
 import { optionValueSource, setValueTargets } from './subset.ts';
 import { traceEntry, type TraceEntry } from './trace.ts';
 
@@ -136,12 +136,16 @@ function prepare(version: EvaluableVersion): Prepared {
   const staticCells = new Map<string, unknown>();
   for (const page of def.pages) staticCells.set(cell.visible(page.id), page.initiallyHidden !== true);
   const valueCells: Array<readonly [BlockId, string]> = [];
+  const dependsOn: Partial<Record<BlockId, BlockId>> = {};
   for (const [id, block] of blocks) {
     staticCells.set(cell.visible(id), block.type === 'unsupported' || block.initiallyHidden !== true);
     if (!isField(block)) continue;
     staticCells.set(cell.enabled(id), block.initiallyDisabled !== true);
     staticCells.set(cell.required(id), block.required);
     valueCells.push([id as BlockId, cell.value(id)]);
+    /* Only single and multi choice configs have `dependsOn`; the parent must be one too (structure.ts dependsOnOf). */
+    const parent = (block.config as { dependsOn?: BlockId }).dependsOn;
+    if (parent !== undefined && blocks.get(parent)?.type.endsWith('_choice')) dependsOn[id as BlockId] = parent;
   }
   const pageKeys = def.pages.map((pg) => ({ visible: cell.visible(pg.id), onPath: cell.onPath(pg.id), jump: cell.jump(pg.id) }));
   const optionValues = new Map<string, BlockId>();
@@ -152,7 +156,7 @@ function prepare(version: EvaluableVersion): Prepared {
   }
   const p: Prepared = {
     def, steps, writers, readers, parentOf: compiled.parentOf, blocks, fields, documentOrder: compiled.documentOrder, pageIds: def.pages.map((pg) => pg.id), pageIndex,
-    keys, pageKeys, staticCells, valueCells, stepWrites, optionValues, dependsOn: dependsOnOf(def),
+    keys, pageKeys, staticCells, valueCells, stepWrites, optionValues, dependsOn,
   };
   prepared.set(version.compiled, p);
   return p;
@@ -193,6 +197,11 @@ function literalValue(literal: Literal): ScalarValue {
 }
 
 const text = (v: string | undefined): ScalarValue => (v === undefined ? NULL : { t: 'text', v });
+/** A decimal typed as text (an option code or score), or null when it is empty or not a number. */
+const decimalOf = (raw: string | undefined): ScalarValue => {
+  const n = raw?.trim() ? formatDecimal(parseDecimal(raw.trim()) ?? D(NaN)) : null;
+  return n ? { t: 'number', v: n as never } : NULL;
+};
 const ZERO: ScalarValue = { t: 'number', v: '0' as never };
 const ONE: ScalarValue = { t: 'number', v: '1' as never };
 const NUMERIC_FIELD = new Set(['number', 'calculation', 'rating', 'linear_scale', 'nps']);
@@ -368,10 +377,7 @@ class Session {
     const source = this.p.optionValues.get(blockId);
     if (!source) return scalar;
     const written = scalar.t === 'text' ? scalar.v.trim() : '';
-    const raw = written !== '' ? written : this.codeInScope(source, rowValues);
-    if (!raw) return NULL;
-    const n = formatDecimal(parseDecimal(raw) ?? D(NaN));
-    return n ? { t: 'number', v: n as never } : NULL;
+    return decimalOf(written !== '' ? written : this.codeInScope(source, rowValues));
   }
 
   /**
@@ -385,15 +391,9 @@ class Session {
     if (groupId === undefined || this.rowGroupOf(source) !== groupId) return undefined;
     const group = this.answerOf(groupId as BlockId);
     if (!group || group.type !== 'repeating_group') return undefined;
-    const choice = this.p.blocks.get(source);
-    if (!isField(choice)) return undefined;
     const out: Record<string, ScalarValue> = {};
     for (const row of group.value.rows) {
-      const cellAnswer = asAnswer(row.values[source], choice.type);
-      if (!cellAnswer) continue;
-      const scalar = answerScalar(choice as never, cellAnswer.value as never, undefined);
-      if (scalar.t !== 'option') continue;
-      const code = this.optionCode(source, scalar.v);
+      const code = this.codeInScope(source, row.values);
       if (code) out[row.rowId] = text(code);
     }
     return Object.keys(out).length > 0 ? out : undefined;
@@ -403,15 +403,8 @@ class Session {
   private codeInScope(source: BlockId, rowValues?: Partial<Record<string, StoredAnswer>>): string {
     const block = this.p.blocks.get(source);
     if (!isField(block)) return '';
-    if (rowValues && this.p.parentOf[source] !== undefined && this.p.blocks.get(this.p.parentOf[source] as string)?.type === 'repeating_group') {
-      const cellAnswer = asAnswer(rowValues[source], block.type);
-      if (!cellAnswer) return '';
-      const scalar = answerScalar(block as never, cellAnswer.value as never, undefined);
-      return scalar.t === 'option' ? this.optionCode(source, scalar.v) : '';
-    }
-    const answer = this.answerOf(source);
-    if (!answer) return '';
-    const scalar = answerScalar(block as never, answer.value as never, undefined);
+    const answer = rowValues && this.rowGroupOf(source) !== undefined ? asAnswer(rowValues[source], block.type) : this.answerOf(source);
+    const scalar = answer ? answerScalar(block as never, answer.value as never, undefined) : NULL;
     return scalar.t === 'option' ? this.optionCode(source, scalar.v) : '';
   }
 
@@ -480,9 +473,10 @@ class Session {
         return text === null ? NULL : { t: 'number', v: text as never };
       }
       case 'call': {
-        if (expr.fn === 'option_code' && expr.args[0] !== undefined) {
+        if ((expr.fn === 'option_code' || expr.fn === 'option_score') && expr.args[0] !== undefined) {
           const chosen = this.exprValue(expr.args[0], depth + 1);
           if (chosen.t !== 'option') return NULL;
+          if (expr.fn === 'option_score') return decimalOf(this.option(chosen.blockId, chosen.v)?.score);
           const code = this.optionCode(chosen.blockId, chosen.v);
           return code ? text(code) : NULL;
         }
@@ -495,26 +489,16 @@ class Session {
           const count = Math.min(raw.length, n);
           return text(expr.fn === 'left' ? raw.slice(0, count) : raw.slice(-count));
         }
-        if (expr.fn === 'option_score' && expr.args[0] !== undefined) {
-          const chosen = this.exprValue(expr.args[0], depth + 1);
-          if (chosen.t !== 'option') return NULL;
-          const block = this.p.blocks.get(chosen.blockId);
-          const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; score?: string }> }).options : undefined;
-          const raw = options?.find((o) => o.id === chosen.v)?.score?.trim() ?? '';
-          const score = formatDecimal(parseDecimal(raw) ?? D(NaN));
-          return score ? { t: 'number', v: score as never } : NULL;
-        }
         if (expr.fn !== 'sum' || expr.args[0] === undefined) break;
         return sumNumbers(this.exprValue(expr.args[0], depth + 1));
       }
       case 'binary': {
         const op = expr.op;
-        if (op === '/') return arithmetic(this.exprValue(expr.left, depth + 1), this.exprValue(expr.right, depth + 1), op);
-        if (op === '+' || op === '-' || op === '*') {
+        if (op === '+' || op === '-' || op === '*' || op === '/') {
+          /* A division never skips a hidden operand (review S2). */
+          const skip = (e: Expr) => op !== '/' && this.skippedNumber(e);
           const identity = op === '*' ? ONE : ZERO;
-          const a = this.skippedNumber(expr.left) ? identity : this.exprValue(expr.left, depth + 1);
-          const b = this.skippedNumber(expr.right) ? identity : this.exprValue(expr.right, depth + 1);
-          return arithmetic(a, b, op);
+          return arithmetic(skip(expr.left) ? identity : this.exprValue(expr.left, depth + 1), skip(expr.right) ? identity : this.exprValue(expr.right, depth + 1), op);
         }
         if (op !== '==' && op !== '!=' && op !== '<' && op !== '<=' && op !== '>' && op !== '>=') break;
         const a = this.exprValue(expr.left, depth + 1);
@@ -564,10 +548,12 @@ class Session {
    * values filled from the option.
    */
   private optionCode(blockId: string, optionId: string): string {
+    return this.option(blockId, optionId)?.code?.trim() ?? '';
+  }
+
+  private option(blockId: string, optionId: string): { code?: string; score?: string } | undefined {
     const block = this.p.blocks.get(blockId as BlockId);
-    const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; code?: string }> }).options : undefined;
-    const code = options?.find((o) => o.id === optionId)?.code?.trim();
-    return code ?? '';
+    return (block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; code?: string; score?: string }> }).options : undefined)?.find((o) => o.id === optionId);
   }
 
   private asText(value: ScalarValue): ScalarValue {
@@ -586,11 +572,9 @@ class Session {
    * respondent back over a state that has no code.
    */
   private textOperand(operand: Operand | undefined, value: ScalarValue): ScalarValue {
-    if (operand?.kind === 'expr' && operand.expr.k === 'call' && operand.expr.fn === 'option_code' && operand.expr.args[0] !== undefined) {
-      const chosen = this.exprValue(operand.expr.args[0]);
-      if (chosen.t === 'option') return this.asText(chosen);
-    }
-    return this.asText(value);
+    const e = operand?.kind === 'expr' ? operand.expr : undefined;
+    const chosen = e?.k === 'call' && e.fn === 'option_code' && e.args[0] ? this.exprValue(e.args[0]) : value;
+    return this.asText(chosen.t === 'option' ? chosen : value);
   }
 
   private condition(c: Condition): boolean {
