@@ -127,6 +127,19 @@ describe('UploadController.lookup', () => {
     expect(await rows).toEqual({ rows: [{ label: 'Acme', cells: { [B(1)]: 'Acme', [B(2)]: 'Pune' } }], truncated: false });
   });
 
+  it('T-BR-L8 (child side): a cell or a label that is the DMS secret mask is dropped again (defence in depth, review nit)', async () => {
+    const h = harness();
+    const rows = h.controller.lookup('vendor', 'acm');
+    const MASK = '\u2022'.repeat(6);
+    h.answer(h.requests()[0]!.id, {
+      rows: [
+        { label: 'Acme', cells: { [B(1)]: 'Acme', [B(2)]: MASK, [B(3)]: '98' } },
+        { label: MASK, cells: { [B(1)]: MASK } },
+      ],
+    });
+    expect(await rows).toEqual({ rows: [{ label: 'Acme', cells: { [B(1)]: 'Acme', [B(3)]: '98' } }], truncated: false });
+  });
+
   it.each(['unknown_lookup', 'forbidden', 'unavailable', 'rate_limited'] as const)('status %s gives no rows', async (status) => {
     const h = harness();
     const rows = h.controller.lookup('vendor', 'acm');

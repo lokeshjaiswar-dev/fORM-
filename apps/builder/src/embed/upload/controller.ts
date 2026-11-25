@@ -2,6 +2,7 @@ import { answerToDms } from '@form/registry/profiles/dms-v1';
 import type { RemoteLookupResult } from '@form/renderer';
 import type { Answers, BlockId, FieldBlock } from '@form/schema';
 import type { InboundMessage, OutboundType, PayloadOf } from '../bridge/protocol.ts';
+import { SECRET_MASK } from '../lookup/dmsRows.ts';
 import { buildModel, editableFields, fieldOf, initialValues, validateValues, type Option, type UploadField, type UploadModel } from './model.ts';
 import { planRender, type RenderPlan } from './plan.ts';
 
@@ -152,7 +153,8 @@ export class UploadController {
 
   /**
    * The parent's answer. Taken only for a request still open (an unknown or superseded `replyTo` is dropped) and only for the
-   * lookup it was asked for. Cells are cut to the ids the lookup declares: the label column and the filled columns.
+   * lookup it was asked for. Cells are cut to the ids the lookup declares: the label column and the filled columns; a value
+   * that is the DMS secret mask is dropped (the parent's projection does the same).
    */
   private onLookupResult(replyTo: string, result: PayloadOf<'lookup.result'>): void {
     const open = this.lookups.get(replyTo);
@@ -164,11 +166,12 @@ export class UploadController {
     const keys = new Map([declared.pickerKey, ...declared.mappings.map((m) => m.key)].map((k) => [k.toLowerCase(), k]));
     const rows = result.rows.slice(0, declared.maxRows).flatMap((row) => {
       const label = row.label.trim();
-      if (label === '') return [];
+      // The parent already drops masked values (dmsRows); a value that is still the mask is dropped here again.
+      if (label === '' || label === SECRET_MASK) return [];
       const cells: Record<string, string> = {};
       for (const [key, text] of Object.entries(row.cells)) {
         const declaredKey = keys.get(key.toLowerCase());
-        if (declaredKey !== undefined) cells[declaredKey] = text;
+        if (declaredKey !== undefined && text !== SECRET_MASK) cells[declaredKey] = text;
       }
       return [{ label, cells }];
     });

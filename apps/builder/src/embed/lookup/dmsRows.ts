@@ -3,8 +3,8 @@ import type { RemoteLookupResult } from '@form/renderer';
 
 /*
  * Rows of a source master B for a lookup, from a `master-records` answer (server-side lookups, contract sections 5 and 6).
- * The ONE place where DMS data becomes cells, shared by the bridge path (the parent's answer arrives already projected, and
- * the child applies the same drops again) and the direct path of `/embed/dms-record`. A cell can only be the label column or
+ * The ONE place where DMS data becomes cells, shared by the bridge path (the parent's answer arrives already projected; the
+ * child's controller keeps only the declared ids and drops a mask value again) and the direct path of `/embed/dms-record`. A cell can only be the label column or
  * one of the declared fill columns. Never a cell: a field flagged `is_secret` or `is_hidden`, a value equal to the mask, a
  * key that has a `<name>__masked` sibling, or a row with no label.
  */
