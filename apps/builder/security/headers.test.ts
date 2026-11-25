@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { builderCsp, builderSecurityHeaders, embedHeaders, isEmbedPath, isFramablePath, nginxHeaders, productionEmbedHeaders, productionHeaders } from './headers.ts';
+import { builderCsp, builderSecurityHeaders, deployEnv, embedHeaders, isEmbedPath, isFramablePath, nginxHeaders, productionEmbedHeaders, productionHeaderSets, productionHeaders, productionHeadersForPath } from './headers.ts';
 
 const directives = (csp: string) => Object.fromEntries(csp.split('; ').map((d) => [d.split(' ')[0], d.split(' ').slice(1).join(' ')]));
 
@@ -129,5 +129,54 @@ describe('builder security headers (FND-20)', () => {
     for (const url of ['/embed/dms-master', '/embed/dms-master?x=1', '/embed', '/embed/', '/embed/dms-uploads', '/embed/dms-record', '/forms', '/formplus/embed/dms-upload', '/embed/dms-upload/x', '/embed/dms-upload/..%2Fdms-master', '/embed/dms-upload/x/', undefined]) {
       expect(isFramablePath(url as string | undefined), String(url)).toBe(false);
     }
+  });
+});
+
+describe('production headers from the build environment (VITE_*)', () => {
+  const build = {
+    VITE_API_URL: 'https://api.form.example/',
+    VITE_FP_DMS_API_ORIGINS: 'https://dms-api.example/api, http://192.168.1.54:8000',
+    VITE_FP_DMS_API_BASE: '/api,https://dms-base.example/api/v1',
+    VITE_FP_EMBED_PARENTS: 'https://dms.example, https://classic.example/',
+  };
+  const csp = (h: Record<string, string>) => directives(h['Content-Security-Policy'] ?? '');
+
+  it('connect-src lists VITE_FP_DMS_API_ORIGINS and the absolute VITE_FP_DMS_API_BASE origins on both header sets', () => {
+    const { plain, embed } = productionHeaderSets(build);
+    const want = "'self' https://api.form.example https://dms-api.example http://192.168.1.54:8000 https://dms-base.example";
+    expect(csp(plain)['connect-src']).toBe(want);
+    expect(csp(embed)['connect-src']).toBe(want);
+  });
+
+  it('only the embed set is framable, by VITE_FP_EMBED_PARENTS and the page itself; the plain set and X-Frame-Options stay shut', () => {
+    const { plain, embed } = productionHeaderSets(build);
+    expect(csp(embed)['frame-ancestors']).toBe("'self' https://dms.example https://classic.example");
+    expect(embed['X-Frame-Options']).toBeUndefined();
+    expect(csp(plain)['frame-ancestors']).toBe("'none'");
+    expect(plain['X-Frame-Options']).toBe('DENY');
+  });
+
+  it('per route under /formplus/: dms-upload framable; dms-master, dms-record, record sub-paths and the SPA are not', () => {
+    const frame = (url: string) => csp(productionHeadersForPath(url, build, '/formplus/'))['frame-ancestors'];
+    expect(frame('/formplus/embed/dms-upload?fp_parent=https%3A%2F%2Fdms.example')).toBe("'self' https://dms.example https://classic.example");
+    for (const url of ['/formplus/embed/dms-master', '/formplus/embed/dms-record', '/formplus/embed/dms-record/x', '/formplus/', '/formplus/forms', '/embed/dms-upload']) {
+      expect(frame(url), url).toBe("'none'");
+    }
+  });
+
+  it('the FP_* names win over the VITE_* ones, and an unset environment is the plain same-origin policy', () => {
+    expect(deployEnv({ ...build, FP_DMS_API_ORIGINS: 'https://other.example', PUBLIC_API_URL: 'https://api2.example', FP_EMBED_PARENTS: 'https://p.example' })).toEqual({
+      PUBLIC_API_URL: 'https://api2.example',
+      FP_DMS_API_ORIGINS: 'https://other.example,https://dms-base.example',
+      FP_EMBED_PARENTS: 'https://p.example',
+    });
+    const none = productionHeaderSets({});
+    expect(csp(none.plain)['connect-src']).toBe("'self'");
+    expect(csp(none.embed)['frame-ancestors']).toBe("'self'");
+  });
+
+  it('a malformed origin fails the build instead of shipping a broken policy', () => {
+    expect(() => productionHeaderSets({ VITE_FP_DMS_API_ORIGINS: 'not a url' })).toThrow();
+    expect(() => productionHeaderSets({ VITE_FP_EMBED_PARENTS: '*' })).toThrow();
   });
 });

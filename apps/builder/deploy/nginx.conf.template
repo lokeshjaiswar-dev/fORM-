@@ -1,0 +1,76 @@
+# fORM- builder (Forms+) static server, nginx-unprivileged on :8080. Rendered by the image entrypoint (envsubst) into
+# /etc/nginx/conf.d/default.conf. Only the two variables below are substituted; every other `$name` is nginx's own.
+#   FP_WEB_ROOT      where the build lives (the SPA is under <root>/formplus/, built with VITE_BASE=/formplus/)
+#   FP_HEADERS_DIR   plain.conf and embed.conf written at build time by security/render-nginx.ts
+# nginx does not inherit add_header into a block that sets its own, so each location includes its header file itself.
+# The ingress sends /formplus/ and /formbuilder/ (the retired OpenForm paths) here; /sharemaster belongs to DMS.
+
+server {
+  listen 8080;
+  listen [::]:8080;
+  server_name _;
+  root ${FP_WEB_ROOT};
+  server_tokens off;
+  absolute_redirect off;
+  port_in_redirect off;
+
+  # Liveness and readiness probe: no files, no headers, no access log.
+  location = /formplus/healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  # Trailing slash: /formplus is the app.
+  location = /formplus {
+    return 301 /formplus/$is_args$args;
+  }
+
+  # The only framable route: DMS classic frames it for upload step 2 (VITE_FP_EMBED_PARENTS, build time).
+  location = /formplus/embed/dms-upload {
+    include ${FP_HEADERS_DIR}/embed.conf;
+    add_header Cache-Control "no-store" always;
+    try_files /formplus/index.html =404;
+  }
+
+  # Hashed build output: immutable.
+  location ^~ /formplus/assets/ {
+    include ${FP_HEADERS_DIR}/plain.conf;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    try_files $uri =404;
+  }
+
+  # The SPA, /formplus/embed/dms-master and /formplus/embed/dms-record included (full-page launches: frame-ancestors 'none').
+  location /formplus/ {
+    include ${FP_HEADERS_DIR}/plain.conf;
+    add_header Cache-Control "no-cache" always;
+    try_files $uri /formplus/index.html;
+  }
+
+  # OpenForm is retired (decisions.md item 6). The share page moved to DMS: keep the query (it carries the share token).
+  location = /formbuilder/sharemaster {
+    return 301 /sharemaster$is_args$args;
+  }
+  location = /formbuilder/sharemaster/ {
+    return 301 /sharemaster$is_args$args;
+  }
+
+  # Everything else under /formbuilder is gone: 410 with a static page that says where to go.
+  location = /formbuilder {
+    return 410;
+  }
+  location ^~ /formbuilder/ {
+    return 410;
+  }
+  error_page 410 /moved/formbuilder.html;
+  location = /moved/formbuilder.html {
+    internal;
+    include ${FP_HEADERS_DIR}/plain.conf;
+    add_header Cache-Control "no-store" always;
+    try_files $uri =410;
+  }
+
+  location / {
+    return 404;
+  }
+}

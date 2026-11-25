@@ -124,7 +124,36 @@ export function productionEmbedHeaders(env: {
   );
 }
 
-/** The embed routes that run inside a frame. Every other `/embed/*` route (`dms-master`) is a top-level page and stays unframable. */
+type Env = Readonly<Record<string, string | undefined>>;
+
+/**
+ * The settings of one deployment as the build sees them: the `VITE_*` names a Docker build passes (the same ones the
+ * Vite servers read) and the `FP_*` / `PUBLIC_API_URL` names `headers:nginx` has always taken (they win when both are set).
+ * `VITE_FP_DMS_API_BASE` adds the origin of each absolute entry to the DMS origins, as the Vite config does.
+ */
+export function deployEnv(env: Env): { PUBLIC_API_URL: string | undefined; FP_DMS_API_ORIGINS: string | undefined; FP_EMBED_PARENTS: string | undefined } {
+  const bases = originList(env.VITE_FP_DMS_API_BASE).filter((b) => /^https?:/i.test(b)).map((b) => new URL(b).origin);
+  const dms = [...originList(env.FP_DMS_API_ORIGINS ?? env.VITE_FP_DMS_API_ORIGINS), ...bases];
+  return {
+    PUBLIC_API_URL: env.PUBLIC_API_URL || env.VITE_API_URL || undefined,
+    FP_DMS_API_ORIGINS: dms.length > 0 ? dms.join(',') : undefined,
+    FP_EMBED_PARENTS: env.FP_EMBED_PARENTS ?? env.VITE_FP_EMBED_PARENTS,
+  };
+}
+
+/** The two production header sets: `plain` for every route (frame-ancestors 'none'), `embed` for the framable `/embed/dms-upload`. */
+export function productionHeaderSets(env: Env): { plain: Record<string, string>; embed: Record<string, string> } {
+  const e = deployEnv(env);
+  return { plain: productionHeaders(e), embed: productionEmbedHeaders(e) };
+}
+
+/** The production headers a path gets: the embed set for a framable route, the plain set for everything else (`dms-master`, `dms-record` included). */
+export function productionHeadersForPath(url: string | undefined, env: Env, base = '/'): Record<string, string> {
+  const sets = productionHeaderSets(env);
+  return isFramablePath(url, base) ? sets.embed : sets.plain;
+}
+
+/** The embed routes that run inside a frame. Every other `/embed/*` route (`dms-master`, `dms-record`) is a top-level page and stays unframable. */
 export const FRAMABLE_EMBED_ROUTES: readonly string[] = ['dms-upload'];
 
 /** True for `<base>embed/<framable route>` exactly (a trailing slash is fine, a sub-path is not). Nothing else is framable. */

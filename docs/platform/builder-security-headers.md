@@ -77,7 +77,7 @@ Rules for whoever serves the build:
 
 ## Embedded pages (`/embed/*`, DMS+)
 
-`/embed/*` is fORM- hosted inside another product: `/embed/dms-master` (the master builder, a top-level page: DMS navigates to it, it is never framed) and `/embed/dms-upload` (the field form of the DMS upload step, in an iframe on the classic frontend). Only `/embed/dms-upload` may be framed, and only by the origins in `VITE_FP_EMBED_PARENTS` (build time, comma separated; unset means the page's own origin). Every other route, `/embed/dms-master` included, keeps `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+`/embed/*` is fORM- hosted inside another product: `/embed/dms-master` (the master builder, a top-level page: DMS navigates to it, it is never framed), `/embed/dms-record` (the record form, also a top-level page, never framed) and `/embed/dms-upload` (the field form of the DMS upload step, in an iframe on the classic frontend). Only `/embed/dms-upload` may be framed, and only by the origins in `VITE_FP_EMBED_PARENTS` (build time, comma separated; unset means the page's own origin). Every other route, `/embed/dms-master` and `/embed/dms-record` included, keeps `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
 
 Both embed pages call the DMS API, which usually has its own origin. List those origins in `connect-src`: `VITE_FP_DMS_API_ORIGINS` at build time for the Vite servers, `FP_DMS_API_ORIGINS` (comma separated origins, the same list) when you print the headers. Without it a static build blocks every DMS call from the browser. The launch allowlist is a separate, exact list: `VITE_FP_DMS_API_BASE` (origin and path, comma separated; `/api` resolves against the page origin). The descriptor's `apiBase` must equal one entry, path included, or the launch is refused (the DMS token goes to those bases only; fetch does not follow redirects). Set it on the plain `location /` block too: `/embed/dms-master` is served by it.
 
@@ -96,6 +96,35 @@ location = /embed/dms-upload {
 ```
 
 The Vite dev and preview servers do the same from `VITE_FP_EMBED_PARENTS` for `/embed/dms-upload` only (`security/vite.ts`, `embedFraming`).
+
+## The container image (`apps/builder/Dockerfile`, v2)
+
+The image builds `@form/builder` with pnpm and serves it from `nginxinc/nginx-unprivileged` on port 8080, under `/formplus/` (`VITE_BASE=/formplus/`). Build from the repository root:
+
+```bash
+docker build -f apps/builder/Dockerfile \
+  --build-arg VITE_FP_DMS_API_BASE=https://dms.example/api \
+  --build-arg VITE_FP_DMS_API_ORIGINS=https://dms.example \
+  --build-arg VITE_FP_EMBED_PARENTS=https://dms.example \
+  -t form-builder .
+```
+
+The build args are the same `VITE_*` names the Vite servers read (`VITE_API_URL`, `VITE_FP_DMS_API_BASE`, `VITE_FP_DMS_API_ORIGINS`, `VITE_FP_EMBED_PARENTS`, `VITE_WEBHOOK_DOCS_URL`). They are baked into the bundle and into two header files, `plain.conf` and `embed.conf`, which `security/render-nginx.ts` writes at build time from `security/headers.ts` (so the image, `headers:nginx` and the Vite servers cannot drift). Nothing secret is a build arg.
+
+`apps/builder/deploy/nginx.conf.template` is rendered by the image entrypoint (only `FP_WEB_ROOT` and `FP_HEADERS_DIR` are substituted):
+
+| Path | Answer |
+|---|---|
+| `/formplus/healthz` | `200 ok`, no headers, not logged (probe) |
+| `/formplus` | `301 /formplus/` |
+| `/formplus/embed/dms-upload` | the SPA with `embed.conf`: `frame-ancestors 'self' <VITE_FP_EMBED_PARENTS>`, no `X-Frame-Options` |
+| `/formplus/assets/*` | hashed build output with `plain.conf`, `Cache-Control: public, max-age=31536000, immutable` |
+| `/formplus/*` (SPA fallback, `/formplus/embed/dms-master` and `/formplus/embed/dms-record` included) | `index.html` with `plain.conf`: `frame-ancestors 'none'`, `X-Frame-Options: DENY` (the master builder and the record form are full-page launches) |
+| `/formbuilder/sharemaster` | `301 /sharemaster`, query string kept (the share token rides in it) |
+| any other `/formbuilder/*` | `410 Gone` with the static page `deploy/moved.html` (OpenForm is retired, decisions.md item 6) |
+| anything else | `404` |
+
+The ingress sends `/formplus/` and `/formbuilder/` to this container; `/sharemaster` stays with DMS. `connect-src` of both header files lists every DMS API origin (`VITE_FP_DMS_API_ORIGINS` plus the origin of each absolute `VITE_FP_DMS_API_BASE` entry), so the browser may call DMS; without them every DMS call is blocked. `security/deploy.test.ts` checks the template and the generated files; the template was also run through `nginx -t` and exercised with curl in a throwaway nginx container.
 
 ## Development and preview
 
