@@ -250,7 +250,7 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
         status={{ state: 'open' }}
         locale={BUILDER_LOCALE as Locale}
         initialAnswers={form.initialAnswers}
-        startedAt={form.startedAt}
+        session={{ startedAt: form.startedAt }}
         onSubmit={() => undefined}
         uploader={refuseUpload}
         hideNavigation
