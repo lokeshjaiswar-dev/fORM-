@@ -6,6 +6,10 @@ import type { StepGraph } from './plan.ts';
  * Taint (I13, schema §3.3.10): a derived cell (a variable, a calculation, a captured or set value) carries
  * the highest classification and the union of purposes of every data cell it reads, transitively.
  * Lowering it needs an explicit `declassify` with a reason.
+ *
+ * A rule that writes a value (`set_value`, WP-2.01) taints its targets with every data cell its condition and its value
+ * read: the written value, and whether it was written, carry them. Several writers of one cell (two rules setting the
+ * same field) merge: the cell carries the highest classification and every purpose of any of them.
  */
 
 const RANK: Record<DataClassification, number> = { none: 0, personal: 1, sensitive: 2 };
@@ -22,7 +26,9 @@ export function taintOf(def: FormDefinition, graph: StepGraph, order: readonly n
   };
   for (const s of order) {
     const step = graph.steps[s];
-    if (!step || step.step.kind === 'rule' || step.step.kind === 'on_path') continue;
+    if (!step || step.step.kind === 'on_path') continue;
+    const written = step.writes.filter((c) => DATA_CELLS.has(parseCell(c).kind));
+    if (!written.length) continue;
     const data = step.reads.filter((c) => DATA_CELLS.has(parseCell(c).kind));
     if (!data.length) continue;
     let classification: DataClassification = 'none';
@@ -36,11 +42,16 @@ export function taintOf(def: FormDefinition, graph: StepGraph, order: readonly n
         for (const p of t.purposeIds) purposes.add(p);
       }
     }
-    const entry: Taint = { classification, purposeIds: [...purposes].sort() };
-    for (const c of step.writes) {
-      if (!DATA_CELLS.has(parseCell(c).kind)) continue;
-      taint[c] = entry;
-      writtenBy.set(c, entry);
+    for (const c of written) {
+      const before = writtenBy.get(c);
+      const merged: Taint = before
+        ? {
+          classification: RANK[before.classification] > RANK[classification] ? before.classification : classification,
+          purposeIds: [...new Set([...before.purposeIds, ...purposes])].sort(),
+        }
+        : { classification, purposeIds: [...purposes].sort() };
+      taint[c] = merged;
+      writtenBy.set(c, merged);
     }
   }
   return taint;

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applicableUnits, compile, evaluate, reviewUnitAnswersHash, reviewUnitIssues, reviewUnitMembership, validateDefinition, visibleBlocksForReviewer,
 } from '../src/index.ts';
-import { META, a, ans, bid, cond, field, form, heading, hide, id, page, rule, text, versionOf } from './build.ts';
+import { META, a, ans, bid, cond, field, form, heading, hide, id, num, oid, page, rule, text, versionOf } from './build.ts';
 import { V1_FORMS } from './corpus/generate.ts';
 import { toV2 } from './corpus/v1.ts';
 import { REVIEW_ASSIGNMENTS, assign, breakTarget, groups, pageTarget, reviewCases, reviewForm, reviewUnit, sectionBreak, sectionOf } from './corpus/review.ts';
@@ -490,16 +490,109 @@ describe('visibleBlocksForReviewer', () => {
       expect([...(visibleBlocksForReviewer(gv.compiled, assignments, groups('g_a')) ?? [])]).toEqual(['brk_a', 'a', 'a_late']);
     });
 
-    it('rules write no data today: set_value and logic variables are still refused by compile, which this function relies on', () => {
-      const withSetValue = form([field('short_text', 'name'), field('short_text', 'other')], [page('p1', ['name', 'other'])], [
-        rule('r', cond(ans('name'), 'eq', text('x')), [{ type: 'set_value', target: bid('other'), value: { k: 'lit', value: { type: 'text', value: 'y' } } }]),
-      ]);
-      const result = compile(withSetValue, REGISTRY);
-      expect(!result.ok && result.issues.some((i) => i.code === 'missing_capability' && i.path === '/logic/rules/0/then/0')).toBe(true);
+    it('logic variables are still refused by compile, which this function relies on', () => {
       const withVariable = form([field('short_text', 'name')], [page('p1', ['name'])]);
       withVariable.logic.variables = [{ id: id<S.VariableId>('v1'), key: id<S.FieldKey>('v1'), name: 'v', type: 'number', expr: lit('1'), persist: false }];
       const variable = compile(withVariable, REGISTRY);
       expect(!variable.ok && variable.issues.some((i) => i.code === 'missing_capability' && i.path === '/logic/variables/0')).toBe(true);
+    });
+  });
+
+  /*
+   * WP-2.01 (founder, 25 Nov 2026): rules that write values (set, percent, fill from an option) are allowed, so a rule can
+   * carry another unit's answer into a field the caller's unit holds. The written field is derived from everything the
+   * rule's condition and value read, through chains, and is hidden wherever any of those is.
+   */
+  describe('values a rule sets from a hidden block (set_value)', () => {
+    const textRef = (blockId: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(blockId) } });
+    const set = (target: string, value: S.Expr): S.Action => ({ type: 'set_value', target: bid(target), value });
+    const lit = (n: string): S.Expr => ({ k: 'lit', value: { type: 'number', value: id<S.DecimalString>(n) } });
+    const word = (v: string): S.Expr => ({ k: 'lit', value: { type: 'text', value: v } });
+    const percentOf = (blockId: string, pct: string): S.Expr => ({ k: 'binary', op: '/', left: { k: 'binary', op: '*', left: textRef(blockId), right: lit(pct) }, right: lit('100') });
+    const optionCode = (blockId: string): S.Expr => ({ k: 'call', fn: 'option_code', args: [textRef(blockId)] });
+    const assignments = { units: [assign('A', 'g_a', 1, 'own_unit'), assign('B', 'g_b', 1, 'own_unit')] };
+    const BANKS = [{ id: oid('hdfc'), label: 'HDFC', code: '501' }, { id: oid('sbi'), label: 'SBI', code: '602' }];
+    /**
+     * Unit A (brk_a) holds the fields the rules write; unit B (brk_b) holds the sources: a text, a number and a dropdown.
+     * `top` sits before the first break (outside every unit) and is the middle link of the chain.
+     */
+    const setForm = (rules: S.Rule[]) => withUnits(form([
+      field('short_text', 'top'), field('calculation', 'top_calc', { config: { expr: { k: 'binary', op: '+', left: textRef('top_n'), right: lit('1') }, resultType: 'number', display: 'visible' } }),
+      field('number', 'top_n'),
+      sectionBreak('brk_a'), field('short_text', 'a_name'), field('short_text', 'a_copy'), field('short_text', 'a_flag'), field('short_text', 'a_own'),
+      field('number', 'a_amount'), field('number', 'a_fee'), field('short_text', 'a_bank_code', { readOnly: true }),
+      sectionBreak('brk_b'), field('short_text', 'b_name'), field('number', 'b_amount'),
+      field('single_choice', 'b_bank', { config: { display: 'dropdown', options: BANKS } }),
+    ], [page('p1', ['top', 'top_n', 'top_calc', 'brk_a', 'a_name', 'a_copy', 'a_flag', 'a_own', 'a_amount', 'a_fee', 'a_bank_code']), page('p2', ['brk_b', 'b_name', 'b_amount', 'b_bank'])], rules),
+    reviewUnit('A', breakTarget('brk_a')), reviewUnit('B', breakTarget('brk_b')));
+    const seenBy = (def: S.FormDefinition, ...g: string[]) => [...(visibleBlocksForReviewer(versionOf(def).compiled, assignments, groups(...g)) ?? [])];
+    const B_ANSWERS = { [bid('a_name')]: a.text('Asha'), [bid('a_amount')]: a.number('1000'), [bid('b_name')]: a.text('secret-b'), [bid('b_amount')]: a.number('2000'), [bid('b_bank')]: a.single('sbi') };
+
+    it('a field a rule copies from another unit\'s answer is hidden from the caller\'s unit, though it sits in it', () => {
+      const def = setForm([rule('copy', cond(ans('a_name'), 'is_answered'), [set('a_copy', textRef('b_name'))])]);
+      /* The copy is real: the evaluator writes unit B's answer into a_copy, which unit A holds. */
+      expect(evaluate(versionOf(def), B_ANSWERS, META, 'server').values[bid('a_copy')]).toEqual(a.text('secret-b'));
+      expect(seenBy(def, 'g_a')).not.toContain('a_copy');
+      expect(seenBy(def, 'g_a')).toEqual(['top', 'top_n', 'top_calc', 'brk_a', 'a_name', 'a_flag', 'a_own', 'a_amount', 'a_fee', 'a_bank_code']);
+      /* B's checker does not see unit A at all; a checker of both sees it. */
+      expect(seenBy(def, 'g_a', 'g_b')).toContain('a_copy');
+    });
+
+    it('a field a rule sets because of another unit\'s answer is hidden too: the condition\'s reads count, not only the value\'s', () => {
+      const def = setForm([rule('flag', cond(ans('b_amount'), 'gt', num('1500')), [set('a_flag', word('big'))])]);
+      expect(evaluate(versionOf(def), B_ANSWERS, META, 'server').values[bid('a_flag')]).toEqual(a.text('big'));
+      expect(seenBy(def, 'g_a')).not.toContain('a_flag');
+    });
+
+    it('follows a chain of rules and a calculation: B → a_copy (rule) → top (rule) → reader, to a fixed point', () => {
+      const def = setForm([
+        rule('copy', cond(ans('a_name'), 'is_answered'), [set('a_copy', textRef('b_name'))]),
+        rule('relay', cond(ans('a_name'), 'is_answered'), [set('top', textRef('a_copy'))]),
+        rule('count', cond(ans('top'), 'is_answered'), [set('top_n', lit('1'))]),
+      ]);
+      const state = evaluate(versionOf(def), B_ANSWERS, META, 'server');
+      expect(state.values[bid('top')]).toEqual(a.text('secret-b'));
+      const seen = seenBy(def, 'g_a');
+      for (const leaked of ['a_copy', 'top', 'top_n', 'top_calc']) expect(seen).not.toContain(leaked);
+      expect(seen).toEqual(['brk_a', 'a_name', 'a_flag', 'a_own', 'a_amount', 'a_fee', 'a_bank_code']);
+    });
+
+    it('a field filled from a hidden dropdown\'s option code (Fill from option) is hidden', () => {
+      const def = setForm([rule('fill', cond(ans('b_bank'), 'is_answered'), [set('a_bank_code', optionCode('b_bank'))])]);
+      expect(evaluate(versionOf(def), B_ANSWERS, META, 'server').values[bid('a_bank_code')]).toEqual(a.text('602'));
+      expect(seenBy(def, 'g_a')).not.toContain('a_bank_code');
+    });
+
+    it('a percent of a hidden number is hidden', () => {
+      const def = setForm([rule('fee', cond(ans('a_amount'), 'is_answered'), [set('a_fee', percentOf('b_amount', '10'))])]);
+      expect(evaluate(versionOf(def), B_ANSWERS, META, 'server').values[bid('a_fee')]).toEqual(a.number('200'));
+      expect(seenBy(def, 'g_a')).not.toContain('a_fee');
+    });
+
+    it('the else branch writes as well, and a rule that reads only the caller\'s blocks leaves its target shown', () => {
+      const def = setForm([
+        rule('mine', cond(ans('a_amount'), 'gt', num('10')), [set('a_fee', percentOf('a_amount', '5'))], [set('a_own', textRef('a_name'))]),
+        rule('theirs', cond(ans('a_amount'), 'gt', num('10')), [set('a_flag', word('x'))], [set('a_copy', textRef('b_name'))]),
+      ]);
+      const seen = seenBy(def, 'g_a');
+      expect(seen).toEqual(expect.arrayContaining(['a_fee', 'a_own']));
+      expect(seen).not.toContain('a_copy');
+      /* A rule is one step: every field it writes is derived from everything any of its actions reads (conservative). */
+      expect(seen).not.toContain('a_flag');
+      /* B's checker loses nothing of unit B: the rules read unit A, whose blocks B's checker never sees anyway. */
+      expect(seenBy(def, 'g_b')).toEqual(['top', 'top_n', 'top_calc', 'brk_b', 'b_name', 'b_amount', 'b_bank']);
+    });
+
+    it('compiles the rule writes into compiled.ruleWrites, and a form without such rules has none', () => {
+      const def = setForm([rule('copy', cond(ans('a_name'), 'is_answered'), [set('a_copy', textRef('b_name'))])]);
+      expect(versionOf(def).compiled.ruleWrites).toEqual({ 'rule:copy': ['value:a_copy'] });
+      expect(versionOf(setForm([rule('r', cond(ans('a_name'), 'is_answered'), [hide('a_own')])])).compiled.ruleWrites).toBeUndefined();
+    });
+
+    it('fails closed on a jsonb-loaded scoping whose ruleWrites is null (a version without such rules)', () => {
+      const { compiled } = versionOf(setForm([]));
+      const loaded = { ...compiled, ruleWrites: null } as unknown as Parameters<typeof visibleBlocksForReviewer>[0];
+      expect([...(visibleBlocksForReviewer(loaded, assignments, groups('g_a')) ?? [])]).toContain('a_copy');
     });
   });
 

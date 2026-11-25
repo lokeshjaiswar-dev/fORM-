@@ -1,5 +1,6 @@
 import { contentHash, jsonPointer } from '@form/schema';
 import type { BlockId, Capability, Compile, CompiledForm, DataClassification, FieldRegistry, FormDefinition, PublishIssue } from '@form/schema';
+import { parseCell } from './cells.ts';
 import type { StepInfo } from './plan.ts';
 import type { Placement } from './structure.ts';
 import { taintOf } from './taint.ts';
@@ -51,6 +52,19 @@ function danglingSourceRules(def: FormDefinition, issues: readonly PublishIssue[
   return out;
 }
 
+/**
+ * The data cells each rule step writes (`set_value`), keyed like `reads`; undefined when no rule writes data, so a form
+ * without such rules compiles to exactly what it did before WP-2.01. Review redaction reads it (`derivedFrom`).
+ */
+function ruleWritesOf(plan: readonly StepInfo[]): CompiledForm['ruleWrites'] {
+  const entries = plan.flatMap((s) => {
+    if (s.step.kind !== 'rule') return [];
+    const data = s.writes.filter((c) => parseCell(c).kind === 'value').sort();
+    return data.length ? [[s.key, data] as const] : [];
+  });
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
 /** Issues compile() refuses: any error and any `missing_capability` (registry stubs and logic outside the P0 subset alike; ADR-0002 §2). */
 const isFatal = (issue: PublishIssue): boolean => issue.severity === 'error' || issue.code === 'missing_capability';
 
@@ -71,6 +85,7 @@ export const compile: Compile = (def, registry) => {
   }
   const { analysis, graph, order } = checked;
   const plan = order.map((i) => graph.steps[i] as StepInfo);
+  const ruleWrites = ruleWritesOf(plan);
   const compiled: CompiledForm = {
     engine: ENGINE,
     requires: requirements(def, registry, analysis.usesExpr),
@@ -83,6 +98,7 @@ export const compile: Compile = (def, registry) => {
     taint: taintOf(def, graph, order),
     /* Only when the form has `review`, so a form without it compiles to exactly what it did before WP-2.33. */
     ...(def.review ? { reviewUnits: checked.reviewUnits, reviewUnitMarkers: checked.reviewUnitMarkers } : {}),
+    ...(ruleWrites ? { ruleWrites } : {}),
     definitionHash: contentHash(def),
   };
   return { ok: true, compiled };

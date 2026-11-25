@@ -114,6 +114,13 @@ export interface CompiledForm {
    * server-only: the runtime projection drops it.
    */
   reviewUnitMarkers?: Partial<Record<ReviewUnitId, BlockId>>;
+  /**
+   * The data cells (`value:<blockId>`) each rule step writes with `set_value`, keyed like `reads` (`rule:<ruleId>`).
+   * Present only when some rule writes a value. Review redaction (`visibleBlocksForReviewer`) follows these writes: a
+   * value a rule copies or works out from a block hidden from the caller is hidden too. Server-only: the runtime
+   * projection drops it.
+   */
+  ruleWrites?: Partial<Record<string, string[]>>;
   definitionHash: Sha256Hex;
 }
 
@@ -164,7 +171,7 @@ export interface RuntimeFormVersion {
   versionId: FormVersionId; formId: FormId; contentHash: Sha256Hex;
   definition: PublicFormDefinition;  // notes, origin stamps, server actions stripped
   /** `reads` is kept (filtered to client steps) for incremental client evaluation (FND-13). */
-  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits' | 'reviewUnitMarkers'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
+  compiled: Omit<CompiledForm, 'dataInventory' | 'taint' | 'plan' | 'reviewUnits' | 'reviewUnitMarkers' | 'ruleWrites'> & { plan: Array<Exclude<PlanStep, ServerRuleStep>> };
   status: RuntimeStatus;
   accessToken?: string;              // short-lived, proves unlock/schedule checks
   publicConfig: {

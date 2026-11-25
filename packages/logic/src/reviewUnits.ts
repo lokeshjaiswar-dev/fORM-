@@ -198,40 +198,53 @@ export function reviewUnitAnswersHash(
   return sha256Jcs(Object.fromEntries(blocks.filter((id) => Object.hasOwn(answers, id) && answers[id] !== undefined).map((id) => [id, answers[id]])));
 }
 
-/** The data cell a plan step writes, when the compiled form says: a block's value or a variable. Rules write no data cell today. */
-function dataCellWrittenBy(step: PlanStep): string | undefined {
+/**
+ * The data cells a plan step writes, as the compiled form says: a block's value, a variable, or, for a rule, the values
+ * its `set_value` actions write (`compiled.ruleWrites`). A rule's other writes (visibility, required, enabled, submit
+ * blocks) are not data.
+ */
+function dataCellsWrittenBy(compiled: Pick<CompiledForm, 'ruleWrites'>, step: PlanStep): readonly string[] {
   switch (step.kind) {
     case 'default':
     case 'capture':
     case 'calc':
-      return cell.value(step.blockId);
+      return [cell.value(step.blockId)];
     case 'variable':
-      return cell.variable(step.varId);
+      return [cell.variable(step.varId)];
+    case 'rule': {
+      /* Absent (or null, when a loader picked the key out of jsonb) on a version where no rule writes a value. */
+      const writes = compiled.ruleWrites as CompiledForm['ruleWrites'] | null;
+      const key = stepKey(step);
+      return writes !== undefined && writes !== null && Object.hasOwn(writes, key) ? writes[key] ?? [] : [];
+    }
     default:
-      return undefined;
+      return [];
   }
 }
 
 /**
  * Blocks whose value is worked out from `hidden` blocks, directly or through other derived values, taken to a fixed point:
- * every `default`, `capture` or `calc` step (a calculation, a hidden or context field, a unique id) and every `variable`
- * step that reads a hidden block's value, or a variable that does. Such a value carries the hidden answer to whoever sees it.
+ * every `default`, `capture` or `calc` step (a calculation, a hidden or context field, a unique id), every `variable`
+ * step, and every rule that writes a value (`set_value`, WP-2.01: a copy, a percent, a fill from an option's code) whose
+ * reads include a hidden block's value or a value derived from one. Such a value carries the hidden answer to whoever
+ * sees it.
  *
- * Rule steps are not followed: they write visibility, required and enabled cells, never data, because the one action that
- * writes a value (`set_value`) is refused by `compile()` until WP-2.01 (compile.test.ts pins that). When it lands, a
- * rule's targets are not in `compiled.reads`, so this must then read them from the definition.
+ * A rule step's reads are its condition's and its values' together (`analyze`), so a field a rule sets is derived from
+ * every field the condition tests as well as every field the value reads: whether it was written at all tells the reader
+ * about the condition. Chains (a rule writing A from B, another writing C from A, a calculation reading C) are followed
+ * by the fixed point. Visibility reads are not values and are not followed.
  */
-function derivedFrom(compiled: Pick<CompiledForm, 'plan' | 'reads'>, hidden: ReadonlySet<BlockId>): Set<BlockId> {
+function derivedFrom(compiled: Pick<CompiledForm, 'plan' | 'reads' | 'ruleWrites'>, hidden: ReadonlySet<BlockId>): Set<BlockId> {
   const tainted = new Set<string>([...hidden].map((id) => cell.value(id)));
   const writers = compiled.plan.flatMap((step) => {
-    const out = dataCellWrittenBy(step);
-    return out === undefined ? [] : [{ out, reads: compiled.reads[stepKey(step)] ?? [] }];
+    const outs = dataCellsWrittenBy(compiled, step);
+    return outs.length === 0 ? [] : [{ outs, reads: compiled.reads[stepKey(step)] ?? [] }];
   });
   for (let changed = true; changed;) {
     changed = false;
-    for (const { out, reads } of writers) {
-      if (tainted.has(out) || !reads.some((c) => tainted.has(c))) continue;
-      tainted.add(out);
+    for (const { outs, reads } of writers) {
+      if (outs.every((c) => tainted.has(c)) || !reads.some((c) => tainted.has(c))) continue;
+      for (const c of outs) tainted.add(c);
       changed = true;
     }
   }
@@ -252,14 +265,15 @@ function derivedFrom(compiled: Pick<CompiledForm, 'plan' | 'reads'>, hidden: Rea
  * this version does hold. A checker of a unit this version lacks sees the blocks outside all units and nothing else:
  * failing open there would show them every unit of an older submission.
  *
- * A value worked out from a hidden block (a calculation, a hidden or context field, a default, a variable) is hidden too,
- * wherever it sits, so a unit-A checker cannot read unit B's answer through `total = bank.amount`. The caller must also
+ * A value worked out from a hidden block (a calculation, a hidden or context field, a default, a variable, a field a rule
+ * sets) is hidden too, wherever it sits, so a unit-A checker cannot read unit B's answer through `total = bank.amount` or
+ * a rule that copies it. The caller must also
  * withhold `StoredSubmission.computed.variables` (and `firedRuleIds`) from a redacted caller: they are not blocks, so a
  * set of block ids cannot filter them. A caller drops answers whose block is not in the returned set, so a block this
  * function does not know is hidden by default.
  */
 export function visibleBlocksForReviewer(
-  compiled: Pick<CompiledForm, 'documentOrder' | 'reviewUnits' | 'plan' | 'reads'>,
+  compiled: Pick<CompiledForm, 'documentOrder' | 'reviewUnits' | 'plan' | 'reads' | 'ruleWrites'>,
   settings: Pick<ReviewSettings, 'units'>,
   callerGroupIds: Iterable<ReviewGroupId>,
 ): ReadonlySet<BlockId> | null {

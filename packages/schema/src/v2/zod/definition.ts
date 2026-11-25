@@ -102,6 +102,7 @@ export const CompiledFormSchema = z.strictObject({
   taint: keyed(z.partialRecord(z.string(), z.strictObject({ classification: DataClassificationSchema, purposeIds: z.array(PurposeIdSchema) }))),
   reviewUnits: keyed(z.partialRecord(ReviewUnitIdSchema, z.array(BlockIdSchema))).exactOptional(),
   reviewUnitMarkers: keyed(z.partialRecord(ReviewUnitIdSchema, BlockIdSchema)).exactOptional(),
+  ruleWrites: keyed(z.partialRecord(z.string(), z.array(z.string()))).exactOptional(),
   definitionHash: Sha256HexSchema,
 });
 
@@ -156,7 +157,7 @@ export const RuntimeFormVersionSchema = z.strictObject({
   formId: FormIdSchema,
   contentHash: Sha256HexSchema,
   definition: PublicFormDefinitionSchema,
-  compiled: CompiledFormSchema.omit({ dataInventory: true, taint: true, plan: true, reviewUnits: true, reviewUnitMarkers: true }).extend({ plan: z.array(RuntimePlanStepSchema) }),
+  compiled: CompiledFormSchema.omit({ dataInventory: true, taint: true, plan: true, reviewUnits: true, reviewUnitMarkers: true, ruleWrites: true }).extend({ plan: z.array(RuntimePlanStepSchema) }),
   status: RuntimeStatusSchema,
   accessToken: z.string().exactOptional(),
   publicConfig: z.strictObject({
