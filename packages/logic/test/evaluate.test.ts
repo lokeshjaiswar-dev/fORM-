@@ -356,11 +356,11 @@ describe('evaluate', () => {
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '13.5' } });
   });
 
-  it('leaves a hidden number out of a formula: addition skips it and multiplication does not zero out', () => {
+  it('with skipHidden, leaves a hidden number out of a formula: addition skips it and multiplication does not zero out', () => {
     const ref = (name: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(name) } });
     const total = (...parts: S.Expr[]): S.Expr => parts.slice(1).reduce<S.Expr>((left, right) => ({ k: 'binary', op: '+', left, right }), parts[0] as S.Expr);
     const product = (...parts: S.Expr[]): S.Expr => parts.slice(1).reduce<S.Expr>((left, right) => ({ k: 'binary', op: '*', left, right }), parts[0] as S.Expr);
-    const calc = (id: string, expr: S.Expr) => field('calculation', id, { config: { expr, resultType: 'number', display: 'visible' } });
+    const calc = (id: string, expr: S.Expr) => field('calculation', id, { config: { expr, resultType: 'number', display: 'visible', skipHidden: true } });
     const def = form(
       [
         field('number', 'price'),
@@ -386,6 +386,54 @@ describe('evaluate', () => {
     expect(state.visible.has(bid('cgst'))).toBe(false);
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '118' } });
     expect(state.values[bid('gross')]).toEqual({ type: 'calculation', value: { t: 'number', v: '200' } });
+  });
+
+  describe('hidden operands keep their published meaning (review S2)', () => {
+    const ref = (name: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(name) } });
+    const bin = (op: '+' | '-' | '*' | '/', left: S.Expr, right: S.Expr): S.Expr => ({ k: 'binary', op, left, right });
+    const run = (skipHidden: boolean | undefined) => {
+      const calc = (id: string, expr: S.Expr) => field('calculation', id, { config: { expr, resultType: 'number', display: 'visible', ...(skipHidden === undefined ? {} : { skipHidden }) } });
+      const def = form(
+        [field('number', 'amount'), field('number', 'qty'),
+          calc('unit', bin('/', ref('amount'), ref('qty'))), calc('per', bin('/', ref('qty'), ref('amount'))),
+          calc('diff', bin('-', ref('amount'), ref('qty'))), calc('times', bin('*', ref('amount'), ref('qty')))],
+        [page('p1', ['amount', 'qty', 'unit', 'per', 'diff', 'times'])],
+        [rule('r', cond(ans('qty'), 'is_answered'), [hide('amount')])],
+      );
+      const state = evaluate(versionOf(def), { [bid('amount')]: a.number('100'), [bid('qty')]: a.number('4') }, META, 'client');
+      expect(state.visible.has(bid('amount'))).toBe(false);
+      const num = (id: string) => (state.values[bid(id)] as { value?: { v?: string } } | undefined)?.value?.v ?? null;
+      return { unit: num('unit'), per: num('per'), diff: num('diff'), times: num('times') };
+    };
+
+    it('without the opt-in a hidden operand reads null, so every formula over it is empty (as on dev)', () => {
+      expect(run(undefined)).toEqual({ unit: null, per: null, diff: null, times: null });
+      expect(run(false)).toEqual({ unit: null, per: null, diff: null, times: null });
+    });
+
+    it('with skipHidden, + and - read it as 0 and * as 1, but a division never replaces a hidden numerator or divisor', () => {
+      expect(run(true)).toEqual({ unit: null, per: null, diff: '-4', times: '4' });
+    });
+  });
+
+  it.each([
+    ['the State answer (dev)', { kind: 'ref', ref: { kind: 'answer', blockId: bid('state') } }],
+    ['option_code(State) (the rules panel)', { kind: 'expr', expr: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('state') } }] } }],
+  ] as Array<[string, S.Operand]>)('GSTIN not_starts_with %s: a state option with no code does not block submit (dev semantics, review S2)', (_name, right) => {
+    const def = form([
+      field('single_choice', 'state', { config: { display: 'dropdown', options: [{ id: oid('mh'), label: 'Maharashtra', code: '27' }, { id: oid('goa'), label: 'Goa' }] } }),
+      field('short_text', 'gstin'),
+    ], [page('p1', ['state', 'gstin'])], [
+      rule('gst', { kind: 'group', id: 'g' as S.ConditionId, combinator: 'all', children: [
+        { kind: 'condition', id: 'c1' as S.ConditionId, left: ans('gstin'), op: 'is_answered' },
+        { kind: 'condition', id: 'c2' as S.ConditionId, left: ans('state'), op: 'is_answered' },
+        { kind: 'condition', id: 'c3' as S.ConditionId, left: ans('gstin'), op: 'not_starts_with', right },
+      ] }, [{ type: 'block_submit', anchorBlockId: bid('gstin'), message: 'GSTIN must start with the state code' } as S.ClientAction]),
+    ]);
+    const check = (state: string, gstin: string) => evaluate(versionOf(def), { [bid('state')]: a.single(state), [bid('gstin')]: a.text(gstin) }, META, 'client').submitBlocks.length;
+    expect(check('mh', '29AAAAA0000A1Z5')).toBe(1);
+    expect(check('mh', '27AAAAA0000A1Z5')).toBe(0);
+    expect(check('goa', '30AAAAA0000A1Z5')).toBe(0);
   });
 
   it('a formula sums every row of a repeating-group number', () => {

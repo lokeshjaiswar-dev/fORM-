@@ -426,7 +426,14 @@ export interface AppointmentConfig {
 }
 
 /* Computed */
-export interface CalculationConfig { expr: Expr; resultType: ExprType; format?: ValueFormat; display: 'visible' | 'hidden'; declassify?: { reason: string } }
+export interface CalculationConfig {
+  expr: Expr; resultType: ExprType; format?: ValueFormat; display: 'visible' | 'hidden'; declassify?: { reason: string };
+  /**
+   * Opt-in: a hidden number field is left out of `+`, `-` (read as 0) and `*` (read as 1). A division that reads a hidden
+   * number stays null. Absent (every form published before it): a hidden operand reads null, so the result is null.
+   */
+  skipHidden?: boolean;
+}
 export const CONTEXT_SOURCES = [
   'page_url', 'referrer', 'user_agent', 'started_at', 'submitted_at', 'locale', 'time_zone', 'embed_origin',
   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',

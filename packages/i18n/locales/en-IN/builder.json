@@ -598,6 +598,8 @@
   "inspector.calc_hidden": "Keep in the answers only",
   "inspector.calc_no_fields": "Add a number, rating or scale field first.",
   "inspector.calc_none": "Fixed zero until a field is chosen",
+  "inspector.calc_skip_hidden": "Leave hidden numbers out",
+  "inspector.calc_skip_hidden_hint": "A hidden number counts as 0 when adding or subtracting and as 1 when multiplying. A division that uses one stays empty. When off, the formula stays empty while a field it uses is hidden.",
   "inspector.calc_source": "Take the value from",
   "inspector.capture": "Camera",
   "inspector.capture_environment": "Rear camera",

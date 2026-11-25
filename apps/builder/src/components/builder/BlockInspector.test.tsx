@@ -527,6 +527,17 @@ describe('formula fields from a filled option value', () => {
     expect(screen.getByRole('button', { name: 'sum(Price)' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Price' })).not.toBeInTheDocument();
   });
+
+  it('leaving hidden numbers out is an explicit choice per formula, off by default (review S2)', async () => {
+    const user = open('total');
+    const toggle = screen.getByRole('switch', { name: 'Leave hidden numbers out' });
+    expect(toggle).not.toBeChecked();
+    expect(get('total').config['skipHidden']).toBeUndefined();
+    await user.click(toggle);
+    expect(get('total').config['skipHidden']).toBe(true);
+    await user.click(screen.getByRole('switch', { name: 'Leave hidden numbers out' }));
+    expect(get('total').config).not.toHaveProperty('skipHidden');
+  });
 });
 
 describe('dropdown fill toggle', () => {

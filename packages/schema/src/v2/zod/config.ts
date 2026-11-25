@@ -456,6 +456,7 @@ export const CalculationConfigSchema = z.strictObject({
   format: ValueFormatSchema.exactOptional(),
   display: z.enum(['visible', 'hidden']),
   declassify: z.strictObject({ reason: z.string().min(1).max(1000) }).exactOptional(),
+  skipHidden: z.boolean().exactOptional(),
 });
 export const ContextSourceSchema = z.enum(CONTEXT_SOURCES);
 const ContextParamNameSchema = z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/);

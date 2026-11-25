@@ -221,6 +221,8 @@ const M = defineMessages('builder', {
   'inspector.calc_formula_hint': 'Use field keys with + − × ÷. Use sum(field) to add every row of a list number. Click a field below to insert it.',
   'inspector.calc_fields': 'Insert a field',
   'inspector.calc_no_fields': 'Add a number, rating or scale field first.',
+  'inspector.calc_skip_hidden': 'Leave hidden numbers out',
+  'inspector.calc_skip_hidden_hint': 'A hidden number counts as 0 when adding or subtracting and as 1 when multiplying. A division that uses one stays empty. When off, the formula stays empty while a field it uses is hidden.',
   'inspector.context_facts': 'Facts to capture',
   'inspector.context_strip': 'Drop the query string from URLs',
   'inspector.context_hidden': 'Do not show this field on the form',
@@ -1047,6 +1049,12 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
           </Button>
         ))}
       </div>
+      <ToggleRow
+        label={t(M['inspector.calc_skip_hidden'])}
+        hint={t(M['inspector.calc_skip_hidden_hint'])}
+        checked={block.config.skipHidden === true}
+        onChange={(on) => setConfig(block, { skipHidden: on || undefined })}
+      />
       <SelectField
         label={t(M['inspector.calc_display'])}
         value={block.config.display}

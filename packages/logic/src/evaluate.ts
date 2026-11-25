@@ -243,6 +243,8 @@ class Session {
   private current = -1;
   /** The repeating-group row a per-row formula is being evaluated for; null outside that evaluation. */
   private currentRow: { groupId: string; values: Partial<Record<string, StoredAnswer>> } | null = null;
+  /** True while a calculation that opted in to `skipHidden` is evaluated. */
+  private skipHidden = false;
   private readonly p: Prepared;
   private readonly meta: EvalMeta;
   private readonly scope: Scope;
@@ -434,15 +436,17 @@ class Session {
   }
 
   /**
-   * A hidden number is left out of a formula. Addition and subtraction use 0 for it; multiplication and
-   * division use 1, so a hidden factor does not wipe the product and a hidden divisor does not divide by zero.
+   * Only for a calculation that opts in (`skipHidden`, review S2): a hidden number is left out of a formula. Addition
+   * and subtraction use 0 for it and multiplication 1, so a hidden factor does not wipe the product. A division never
+   * skips: a hidden numerator or divisor leaves it null. Without the opt-in a hidden operand reads null, as on dev.
    */
   private skippedNumber(expr: Expr): boolean {
+    if (!this.skipHidden) return false;
     if (expr.k === 'ref' && expr.ref.kind === 'answer' && (expr.ref.path ?? '') === '' && expr.ref.row !== 'current') {
       const block = this.p.blocks.get(expr.ref.blockId);
       return isField(block) && NUMERIC_FIELD.has(block.type) && !this.visibleEff(expr.ref.blockId);
     }
-    if (expr.k === 'binary' && (expr.op === '+' || expr.op === '-' || expr.op === '*' || expr.op === '/')) {
+    if (expr.k === 'binary' && (expr.op === '+' || expr.op === '-' || expr.op === '*')) {
       return this.skippedNumber(expr.left) && this.skippedNumber(expr.right);
     }
     return false;
@@ -494,8 +498,9 @@ class Session {
       }
       case 'binary': {
         const op = expr.op;
-        if (op === '+' || op === '-' || op === '*' || op === '/') {
-          const identity = op === '*' || op === '/' ? ONE : ZERO;
+        if (op === '/') return arithmetic(this.exprValue(expr.left, depth + 1), this.exprValue(expr.right, depth + 1), op);
+        if (op === '+' || op === '-' || op === '*') {
+          const identity = op === '*' ? ONE : ZERO;
           const a = this.skippedNumber(expr.left) ? identity : this.exprValue(expr.left, depth + 1);
           const b = this.skippedNumber(expr.right) ? identity : this.exprValue(expr.right, depth + 1);
           return arithmetic(a, b, op);
@@ -542,12 +547,16 @@ class Session {
     return !(valueDefinition(block.type as ValueFieldType).isEmpty as (value: unknown) => boolean)(answer.value);
   }
 
-  /** Option export code of a choice answer, so text operators can match GSTIN prefixes to a state field. */
+  /**
+   * Option export code of a choice answer, so text operators can match GSTIN prefixes to a state field. An option with no
+   * code reads as '' (as on dev, review S2): never its internal id, which would change published text rules and leak into
+   * values filled from the option.
+   */
   private optionCode(blockId: string, optionId: string): string {
     const block = this.p.blocks.get(blockId as BlockId);
     const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; code?: string }> }).options : undefined;
     const code = options?.find((o) => o.id === optionId)?.code?.trim();
-    return code || optionId;
+    return code ?? '';
   }
 
   private asText(value: ScalarValue): ScalarValue {
@@ -560,6 +569,19 @@ class Session {
     return value;
   }
 
+  /**
+   * A text operator's operand. `option_code(choice)` (the rules panel's "Option value") reads like the choice itself, as
+   * dev's text operators do: an option with no code is '' (review S2), so "GSTIN does not start with State" never holds a
+   * respondent back over a state that has no code.
+   */
+  private textOperand(operand: Operand | undefined, value: ScalarValue): ScalarValue {
+    if (operand?.kind === 'expr' && operand.expr.k === 'call' && operand.expr.fn === 'option_code' && operand.expr.args[0] !== undefined) {
+      const chosen = this.exprValue(operand.expr.args[0]);
+      if (chosen.t === 'option') return this.asText(chosen);
+    }
+    return this.asText(value);
+  }
+
   private condition(c: Condition): boolean {
     const left = this.operandValue(c.left);
     const right = this.operandValue(c.right);
@@ -569,8 +591,8 @@ class Session {
     const codeEq = (c.op === 'eq' || c.op === 'neq') && ((optionish(left) && right.t === 'text') || (optionish(right) && left.t === 'text'));
     return compare({
       op: c.op,
-      left: textOp || codeEq ? this.asText(left) : left,
-      right: textOp || codeEq ? this.asText(right) : right,
+      left: textOp ? this.textOperand(c.left, left) : codeEq ? this.asText(left) : left,
+      right: textOp ? this.textOperand(c.right, right) : codeEq ? this.asText(right) : right,
       right2: this.operandValue(c.right2),
       caseSensitive: c.caseSensitive === true,
       answered: this.answered(c.left, left),
@@ -647,7 +669,7 @@ class Session {
     try {
       for (const row of group.value.rows) {
         this.currentRow = { groupId: groupId as string, values: row.values };
-        out[row.rowId] = this.exprValue(block.config.expr);
+        out[row.rowId] = this.calculate(block);
       }
     } finally {
       this.currentRow = null;
@@ -656,12 +678,22 @@ class Session {
     return prev && JSON.stringify(prev) === JSON.stringify(out) ? prev : out;
   }
 
+  /** A calculation's formula, under its own `skipHidden` opt-in. */
+  private calculate(block: Extract<StoredBlock, { type: 'calculation' }>): ScalarValue {
+    this.skipHidden = block.config.skipHidden === true;
+    try {
+      return this.exprValue(block.config.expr);
+    } finally {
+      this.skipHidden = false;
+    }
+  }
+
   private capture(id: BlockId, previous: unknown): unknown {
     const block = this.p.blocks.get(id);
     const prev = previous as AnswerValue | null | undefined;
     if (block?.type === 'calculation' && this.rowGroupOf(id) !== undefined) return this.rowResults(id, block, previous);
     if (block?.type === 'calculation') {
-      const v = this.exprValue(block.config.expr);
+      const v = this.calculate(block);
       if (v.t === 'null') return null;
       return prev?.type === 'calculation' && JSON.stringify(prev.value) === JSON.stringify(v) ? prev : { type: 'calculation', value: v };
     }
