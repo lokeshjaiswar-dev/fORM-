@@ -20,6 +20,15 @@ export const fixtures = raw as unknown as {
   cases: Case[];
   unsupported: { init: Extract<BridgeMessage, { type: 'init' }>; expectedInitialized: BridgeMessage };
   mustBeRejected: Array<{ why: string; message: unknown }>;
+  lookup: {
+    $comment: string;
+    childUrlCaps: string;
+    pickerElement: Record<string, unknown> & { id: string; fp_lookup: { v: 1; id: string; master_id: string; label_field_id: string; fill: Array<{ from: string; to: string }>; min_chars: number } };
+    sourceMasterElements: Array<Record<string, unknown> & { id: string; name: string; is_secret?: boolean; is_hidden?: boolean }>;
+    masterRecordsResponse: { data: { records: Array<{ id: string; json_data: string | Record<string, unknown> }>; total: number } };
+    exchange: [Extract<BridgeMessage, { type: 'lookup.request' }>, Extract<BridgeMessage, { type: 'lookup.result' }>];
+    mustBeRejected: Array<{ why: string; message: unknown }>;
+  };
 };
 
 export const handshakeInit = fixtures.handshake[1] as Extract<BridgeMessage, { type: 'init' }>;

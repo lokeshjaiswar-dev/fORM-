@@ -68,6 +68,17 @@ const validated = z.strictObject({ valid: z.boolean(), errors: z.array(fieldErro
 export const ERROR_CODES = ['unsupported_version', 'invalid_init', 'unsupported_field_type', 'render_failed', 'origin_rejected', 'internal'] as const;
 const error = z.strictObject({ code: z.enum(ERROR_CODES), message: z.string().max(500).optional(), fatal: z.boolean() });
 
+const lookupId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const lookupRequest = z.strictObject({ lookupId, search: z.string().max(100) });
+export const LOOKUP_STATUSES = ['ok', 'unknown_lookup', 'forbidden', 'unavailable', 'rate_limited'] as const;
+export type LookupStatus = (typeof LOOKUP_STATUSES)[number];
+const lookupResult = z.strictObject({
+  lookupId,
+  status: z.enum(LOOKUP_STATUSES),
+  rows: z.array(z.strictObject({ label: z.string().max(200), cells: z.record(fieldId, z.string().max(1000)) })).max(20),
+  truncated: z.boolean(),
+});
+
 const optionalReply = msgId.optional();
 const envelope = <T extends string, P extends z.ZodType, R extends z.ZodType = typeof optionalReply>(type: T, payload: P, replyTo?: R) =>
   z.strictObject({
@@ -86,6 +97,8 @@ export const MessageSchema = z.discriminatedUnion('type', [
   envelope('change', change),
   envelope('options.request', optionsRequest),
   envelope('options.result', optionsResult, msgId),
+  envelope('lookup.request', lookupRequest),
+  envelope('lookup.result', lookupResult, msgId),
   envelope('validate', validate),
   envelope('validated', validated, msgId),
   envelope('error', error),
@@ -95,12 +108,13 @@ export type BridgeMessage = z.infer<typeof MessageSchema>;
 export type MessageType = BridgeMessage['type'];
 export type PayloadOf<T extends MessageType> = Extract<BridgeMessage, { type: T }>['payload'];
 export type InitPayload = PayloadOf<'init'>;
+export type LookupResultPayload = PayloadOf<'lookup.result'>;
 export type ValidatedPayload = PayloadOf<'validated'>;
 export type FieldError = z.infer<typeof fieldError>;
 
 /** Messages the child sends and the ones it accepts; anything else from the parent is ignored. */
-export const OUTBOUND_TYPES = ['ready', 'initialized', 'resize', 'change', 'options.request', 'validated', 'error'] as const satisfies readonly MessageType[];
-export const INBOUND_TYPES = ['init', 'options.result', 'validate'] as const satisfies readonly MessageType[];
+export const OUTBOUND_TYPES = ['ready', 'initialized', 'resize', 'change', 'options.request', 'lookup.request', 'validated', 'error'] as const satisfies readonly MessageType[];
+export const INBOUND_TYPES = ['init', 'options.result', 'lookup.result', 'validate'] as const satisfies readonly MessageType[];
 export type OutboundType = (typeof OUTBOUND_TYPES)[number];
 export type InboundType = (typeof INBOUND_TYPES)[number];
 export type InboundMessage = Extract<BridgeMessage, { type: InboundType }>;

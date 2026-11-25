@@ -54,7 +54,7 @@ export const projectForRuntime: ProjectForRuntime = (version, status, publicConf
   }));
   const lookups = {
     ...(def.lookup ? { lookup: withoutAuth(def.lookup) } : {}),
-    ...(def.lookups ? { lookups: def.lookups.map(withoutAuth) } : {}),
+    ...(def.lookups ? { lookups: def.lookups.map((l) => (l.source === 'dms_master' ? l : withoutAuth(l))) } : {}),
   };
   const rules = clientRules(def.logic.rules);
   /* WP-2.33: the respondent gets each review unit's id and name, never its target (page or block ids), group or visibility. */

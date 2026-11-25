@@ -3,7 +3,7 @@ import type { BlockType, ContainerBlockType, ContentBlockType, TransientBlockTyp
 import type { FieldCompliance } from './compliance.ts';
 import type { BlockConfigMap } from './config.ts';
 import type { Capability, FormDefinition } from './definition.ts';
-import type { BlockBase, FieldBase } from './envelope.ts';
+import type { BlockBase, FieldBase, PublicApiOptions, PublicApiValidation } from './envelope.ts';
 import type { ScalarValue } from './expr.ts';
 import type { TextKey } from './i18n.ts';
 import type { BlockId, Locale } from './ids.ts';
@@ -28,6 +28,13 @@ export type BlockOf<T extends BlockType> = Extract<Block, { type: T }>;
  */
 export interface UnsupportedBlock { id: BlockId; type: 'unsupported'; originalType: string; raw: unknown }
 export type StoredBlock = Block | UnsupportedBlock;
+
+/** A field block as the respondent gets it: `apiOptions` / `apiValidation` are `remote` markers only. */
+export type PublicFieldBlock = FieldBlock extends infer B
+  ? B extends unknown ? Omit<B, 'apiOptions' | 'apiValidation'> & { apiOptions?: PublicApiOptions; apiValidation?: PublicApiValidation } : never
+  : never;
+export type PublicBlock = PublicFieldBlock | PlainBlock;
+export type PublicStoredBlock = PublicBlock | UnsupportedBlock;
 
 export type ComparableKind = 'text' | 'number' | 'money' | 'date' | 'datetime' | 'time' | 'choice' | 'choices' | 'boolean' | 'file' | 'none';
 
@@ -60,7 +67,9 @@ export interface PublishIssue {
     /** WP-2.33 review units: no blocks, a block in two units, a payment block inside a unit, a target that is not in the form. */
     | 'review_unit_empty' | 'review_unit_overlap' | 'review_unit_contains_payment' | 'review_unit_dangling_target'
     /** Step 0 denylist: an API request the respondent's browser sends (lookup, API options, API check) carries credentials. */
-    | 'browser_credentials';
+    | 'browser_credentials'
+    /** Server-side lookups: an enabled lookup needs a unique id, a credential needs https, a mapping fills a text-like field; the API publish adds `credential_missing` and `lookup_source_not_allowed`. */
+    | 'lookup_id_missing' | 'lookup_id_duplicate' | 'credential_needs_https' | 'lookup_mapping_type' | 'credential_missing' | 'lookup_source_not_allowed';
   path: string;        // JSON pointer
   message: string;
   fixUrl?: string;     // e.g. '/settings/org-profile#privacy_contact'

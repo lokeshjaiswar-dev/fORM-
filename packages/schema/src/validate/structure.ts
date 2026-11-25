@@ -375,7 +375,7 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
     soft('browser_credentials', path, "this API request carries credentials, and every respondent's browser would receive them; remove them and use an API that needs no sign-in");
   };
   credentials(def.lookup, jsonPointer('lookup', 'auth'));
-  def.lookups?.forEach((lookup, i) => credentials(lookup, jsonPointer('lookups', i, 'auth')));
+  def.lookups?.forEach((lookup, i) => credentials(lookup.source === 'dms_master' ? undefined : lookup, jsonPointer('lookups', i, 'auth')));
   for (const [id, b] of blocks) {
     const field = b as { apiOptions?: { auth?: unknown }; apiValidation?: { auth?: unknown } };
     credentials(field.apiOptions, jsonPointer('blocks', id, 'apiOptions', 'auth'));

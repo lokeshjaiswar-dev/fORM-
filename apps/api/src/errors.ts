@@ -12,6 +12,7 @@ import { REVIEWS_PROBLEMS } from './problems/reviews.ts';
 import type { ProblemSpec } from './problems/spec.ts';
 import { SUBMISSIONS_PROBLEMS } from './problems/submissions.ts';
 import { SUBMIT_PROBLEMS } from './problems/submit.ts';
+import { REMOTE_PROBLEMS } from './problems/remote.ts';
 import { WEBHOOKS_PROBLEMS } from './problems/webhooks.ts';
 
 /**
@@ -74,6 +75,7 @@ export const PROBLEMS = {
   ...REVIEWS_PROBLEMS,
   ...NOTIFICATIONS_PROBLEMS,
   ...WEBHOOKS_PROBLEMS,
+  ...REMOTE_PROBLEMS,
   ...EXPORTS_PROBLEMS,
 } as const satisfies Record<string, ProblemSpec>;
 

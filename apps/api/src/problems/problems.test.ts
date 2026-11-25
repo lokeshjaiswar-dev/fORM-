@@ -6,6 +6,7 @@ import { ACCESS_PROBLEMS } from './access.ts';
 import { EXPORTS_PROBLEMS } from './exports.ts';
 import { FORMS_PROBLEMS } from './forms.ts';
 import { NOTIFICATIONS_PROBLEMS } from './notifications.ts';
+import { REMOTE_PROBLEMS } from './remote.ts';
 import { PUBLISH_PROBLEMS } from './publish.ts';
 import { REVIEWS_PROBLEMS } from './reviews.ts';
 import { SUBMISSIONS_PROBLEMS } from './submissions.ts';
@@ -22,6 +23,7 @@ const FILES = {
   reviews: REVIEWS_PROBLEMS,
   notifications: NOTIFICATIONS_PROBLEMS,
   webhooks: WEBHOOKS_PROBLEMS,
+  remote: REMOTE_PROBLEMS,
   exports: EXPORTS_PROBLEMS,
 } as const;
 

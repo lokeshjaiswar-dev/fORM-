@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtures } from './fixtures.ts';
-import { parseMessage, type BridgeMessage } from './protocol.ts';
+import { INBOUND_TYPES, OUTBOUND_TYPES, parseMessage, type BridgeMessage } from './protocol.ts';
 
 /* The zod mirror of contract/fp-bridge-v1.schema.json against the contract fixtures. */
 
@@ -61,5 +61,31 @@ describe('parseMessage on the contract fixtures', () => {
     const result = structuredClone(fixtures.optionsExchange[1]) as Extract<BridgeMessage, { type: 'options.result' }>;
     result.payload.options = Array.from({ length: 501 }, (_, i) => ({ name: `n${i}`, value: `v${i}` }));
     expect(parseMessage(result).ok).toBe(false);
+  });
+});
+
+describe('fp-bridge/1 lookup messages (additive)', () => {
+  it('accepts the fixture exchange and rejects every mustBeRejected case', () => {
+    fixtures.lookup.exchange.forEach((m, i) => accepted(`lookup.exchange[${i}]`, m));
+    for (const r of fixtures.lookup.mustBeRejected) expect(parseMessage(r.message).ok, r.why).toBe(false);
+  });
+
+  it('keeps fp_lookup on a master element (the element schema is open) and closes the lookup payloads', () => {
+    const init = structuredClone(fixtures.handshake[1]) as Extract<BridgeMessage, { type: 'init' }>;
+    init.payload.masterFields = [fixtures.lookup.pickerElement as never];
+    const parsed = parseMessage(init);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect((parsed.message as typeof init).payload.masterFields[0]).toHaveProperty('fp_lookup');
+    for (const m of fixtures.lookup.exchange) expect(parseMessage({ ...m, payload: { ...m.payload, token: 'Bearer abc' } }).ok, m.type).toBe(false);
+  });
+
+  it('routes lookup.request out of the child and lookup.result into it, and leaves ready and init unchanged', () => {
+    expect(OUTBOUND_TYPES).toContain('lookup.request');
+    expect(INBOUND_TYPES).toContain('lookup.result');
+    expect(INBOUND_TYPES).not.toContain('lookup.request');
+    expect(OUTBOUND_TYPES).not.toContain('lookup.result');
+    // an old parent still validates the child's ready: no new capability value
+    expect(parseMessage({ protocol: 'fp-bridge/1', type: 'ready', id: 'r', payload: { version: '1', capabilities: ['lookup'] } }).ok).toBe(false);
+    expect(fixtures.lookup.childUrlCaps).toBe('lookup');
   });
 });
