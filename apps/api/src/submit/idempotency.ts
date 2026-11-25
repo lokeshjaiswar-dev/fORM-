@@ -23,6 +23,13 @@ export interface StoredResult {
   submissionId: string;
   endingId: string;
   held?: 'pending_review';
+  /**
+   * The reference numbers the respondent's ending shows (`issuedForEnding`): the first of the `unique_id` fields marked
+   * `showOnEnding`, and every number by block id that the ending shows or pipes. Stored with the key, so a replay gives
+   * the same numbers (the row is never edited, which is why the numbers are taken before the key is claimed).
+   */
+  uniqueId?: string;
+  uniqueIds?: Record<string, string>;
 }
 
 export interface StoredIdempotency {
@@ -41,10 +48,19 @@ export function hashRequest(request: { formVersionId: string; locale: string; an
 
 function parseResult(response: Record<string, unknown>): StoredResult {
   // Written by `claimIdempotency` below and by nothing else; a row that does not parse is a defect to see, not to hide.
-  const { submissionId, endingId, held } = response;
-  if (typeof submissionId !== 'string' || typeof endingId !== 'string') throw new Error('submission_idempotency.response is not a stored result');
-  if (held !== undefined && held !== 'pending_review') throw new Error('submission_idempotency.response is not a stored result');
-  return { submissionId, endingId, ...(held === undefined ? {} : { held }) };
+  const { submissionId, endingId, held, uniqueId, uniqueIds } = response;
+  const bad = () => new Error('submission_idempotency.response is not a stored result');
+  if (typeof submissionId !== 'string' || typeof endingId !== 'string') throw bad();
+  if (held !== undefined && held !== 'pending_review') throw bad();
+  if (uniqueId !== undefined && typeof uniqueId !== 'string') throw bad();
+  if (uniqueIds !== undefined && (typeof uniqueIds !== 'object' || uniqueIds === null || Object.values(uniqueIds).some((v) => typeof v !== 'string'))) throw bad();
+  return {
+    submissionId,
+    endingId,
+    ...(held === undefined ? {} : { held }),
+    ...(uniqueId === undefined ? {} : { uniqueId }),
+    ...(uniqueIds === undefined ? {} : { uniqueIds: uniqueIds as Record<string, string> }),
+  };
 }
 
 /** The row of a key, or null. The org is the transaction's (RLS); the form is the one the slug resolved to. */
@@ -84,7 +100,7 @@ export async function claimIdempotency(tx: Tx, claim: Claim): Promise<{ owned: t
       submissionId: claim.result.submissionId,
       receivedAt: claim.receivedAt,
       requestHash: claim.requestHash,
-      response: { submissionId: claim.result.submissionId, endingId: claim.result.endingId, ...(claim.result.held === undefined ? {} : { held: claim.result.held }) },
+      response: { ...claim.result },
       expiresAt: new Date(claim.receivedAt.getTime() + IDEMPOTENCY_TTL_MS),
     })
     .onConflictDoNothing()

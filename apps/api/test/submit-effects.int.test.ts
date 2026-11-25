@@ -376,6 +376,38 @@ describe('unique-ID counters', () => {
     expect(await tickets(f.id, 'receipt')).toEqual(['01', '02']);
   });
 
+  it('are returned to the respondent for the ending: only the shown numbers, and the same ones on a replay with no new number taken', async () => {
+    const f = await publishBlocks('Tickets shown', [fieldBlock('name', 'short_text'), uniqueId('ticket'), uniqueId('receipt', { showOnEnding: false })]);
+    const key = randomUUID();
+    const first = await submit(f, { name: short('Asha') }, key);
+    expect(first.statusCode, first.body).toBe(200);
+    // The ticket is shown; the receipt number is not marked and no ending pipes it; the answers themselves never come back.
+    expect(first.json()).toEqual({ ok: true, submissionId: expect.any(String), endingId: 'end_1', uniqueId: 'T-001', uniqueIds: { ticket: 'T-001' } });
+    const replay = await submit(f, { name: short('Asha') }, key);
+    expect(replay.headers['idempotent-replayed']).toBe('true');
+    expect(replay.json()).toEqual(first.json());
+    expect(await tickets(f.id)).toEqual(['T-001']);
+    expect((await owner.query('select next_seq::int as next_seq from form_id_counters where form_id = $1 and block_id = $2', [f.id, 'ticket'])).rows).toEqual([{ next_seq: 2 }]);
+    // The next submission is numbered on from there.
+    expect((await submit(f, { name: short('Ravi') })).json()).toMatchObject({ uniqueId: 'T-002' });
+  });
+
+  it('give 8 concurrent retries of one key the same number, and burn none', async () => {
+    const f = await publishBlocks('Tickets retry race', [fieldBlock('name', 'short_text'), uniqueId('ticket')]);
+    const key = randomUUID();
+    const all = await Promise.all(Array.from({ length: 8 }, () => submit(f, { name: short('Asha') }, key)));
+    expect(all.map((r) => r.statusCode)).toEqual(Array(8).fill(200));
+    expect(new Set(all.map((r) => r.json<{ uniqueId: string }>().uniqueId))).toEqual(new Set(['T-001']));
+    expect(await tickets(f.id)).toEqual(['T-001']);
+    expect((await submit(f, { name: short('Ravi') })).json()).toMatchObject({ uniqueId: 'T-002' });
+  });
+
+  it('are not returned for a number the path did not reach', async () => {
+    const f = await publishBlocks('Tickets hidden shown', [fieldBlock('name', 'short_text'), uniqueId('ticket')], [hideWhenSkip('name', ['ticket'])]);
+    const res = await submit(f, { name: short('skip') });
+    expect(res.json()).toEqual({ ok: true, submissionId: expect.any(String), endingId: 'end_1' });
+  });
+
   it('can be advanced only by a respondent or system context: a member cannot move a counter (the table’s RLS holds)', async () => {
     const f = await publishBlocks('Tickets RLS', [uniqueId('ticket')]);
     expect((await submit(f, {})).statusCode).toBe(200);

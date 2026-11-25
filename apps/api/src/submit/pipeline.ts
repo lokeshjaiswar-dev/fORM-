@@ -8,7 +8,7 @@ import { runtimeStatus } from '../runtime/status.ts';
 import { bindFileRefs, fileUses } from '../submission-files.ts';
 import { checkAnswers, type ClientMeta } from '../validate-submission.ts';
 import { assertOpen, isUnlocked, readAccess, type AccessView } from './access.ts';
-import { recordEffects, takeUniqueIds, type EffectsContext, type EffectsDeps } from './effects.ts';
+import { issuedForEnding, recordEffects, takeUniqueIds, type EffectsContext, type EffectsDeps } from './effects.ts';
 import { claimIdempotency, findIdempotent, hashRequest, type StoredResult } from './idempotency.ts';
 import type { LoadedVersion, VersionLoader } from './live.ts';
 import { buildMeta, evaluationInstant, withoutServerOwned, type ClientDetails } from './meta.ts';
@@ -270,12 +270,34 @@ interface Stage {
  * is searchable but sends no fan-out job, and `review_open()` writes its unit rows right after the INSERT, in the same
  * transaction, so a held response with no review rows cannot exist. The counter counts it, like any held response.
  */
+/** Thrown inside the write transaction by a request that lost the key to its twin: rolls the transaction back, then the replay is returned. */
+class LostKey extends Error {
+  readonly stored: StoredResult;
+  constructor(stored: StoredResult) {
+    super('idempotency key held by a concurrent request');
+    this.stored = stored;
+  }
+}
+
 async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'respondent'; requestId: string }, s: Stage): Promise<SubmitOutcome> {
+  try {
+    return await storeOnce(deps, tenant, s);
+  } catch (err) {
+    if (err instanceof LostKey) return { kind: 'taken', replayed: true, result: { ok: true, ...err.stored } };
+    throw err;
+  }
+}
+
+function storeOnce(deps: SubmitDeps, tenant: { orgId: string; actor: 'respondent'; requestId: string }, s: Stage): Promise<SubmitOutcome> {
   return withTenant(deps.db, tenant, async (tx): Promise<SubmitOutcome> => {
     const review = await readReviewSettings(tx, s.found.formId, s.version.compiled);
     const planInput = { compiled: s.version.compiled, evalState: s.evalState };
     const held = planReviewFrom(review, { ...planInput, answers: s.answers }) !== null;
-    const result: StoredResult = { submissionId: s.submissionId, endingId: s.endingId, ...(held ? { held: 'pending_review' as const } : {}) };
+    // The numbers are taken before the key is claimed, because the key's row is never edited and has to hold them for a
+    // replay (the respondent's ending shows them). A request that then loses the key to a concurrent twin throws, and
+    // the transaction rolls its numbers back, so no number is burned.
+    const answers = await takeUniqueIds(tx, { orgId: s.found.orgId, formId: s.found.formId, receivedAt: s.receivedAt, answers: s.answers, definition: s.version.definition });
+    const result: StoredResult = { submissionId: s.submissionId, endingId: s.endingId, ...(held ? { held: 'pending_review' as const } : {}), ...issuedForEnding(s.version.definition, s.endingId, answers) };
     const claim = await claimIdempotency(tx, {
       orgId: s.found.orgId,
       formId: s.found.formId,
@@ -287,9 +309,8 @@ async function store(deps: SubmitDeps, tenant: { orgId: string; actor: 'responde
     if (!claim.owned) {
       // Another request got the key between the read and here (a double tap): the same answers are its replay.
       if (!claim.stored.requestHash.equals(s.requestHash)) throw new ProblemError('IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was already used for different answers.');
-      return { kind: 'taken', replayed: true, result: { ok: true, ...claim.stored.result } };
+      throw new LostKey(claim.stored.result);
     }
-    const answers = await takeUniqueIds(tx, { orgId: s.found.orgId, formId: s.found.formId, receivedAt: s.receivedAt, answers: s.answers, definition: s.version.definition });
     // The hash of each unit is of the answers as stored, so the plan is made once the unique IDs are numbered.
     const plan = held ? planReviewFrom(review, { ...planInput, answers }) : null;
     if (held && plan === null) throw new Error('the review plan of a held response vanished when its answers were numbered');

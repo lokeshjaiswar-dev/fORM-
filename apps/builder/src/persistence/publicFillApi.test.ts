@@ -103,6 +103,11 @@ describe('submitPublicForm', () => {
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual(BODY);
   });
 
+  it('passes on the reference numbers the server issued, and drops anything else it sent', async () => {
+    stubFetch(json(200, { ok: true, submissionId: 's1', endingId: 'e1', uniqueId: 'T-001', uniqueIds: { ticket: 'T-001' }, extra: 'x' }));
+    await expect(submitPublicForm('feedback', BODY, 'key-1', null)).resolves.toEqual({ kind: 'ok', submissionId: 's1', endingId: 'e1', uniqueId: 'T-001', uniqueIds: { ticket: 'T-001' } });
+  });
+
   it('tells each refusal the page can act on apart by its status and code', async () => {
     const cases: Array<[Response, unknown]> = [
       [problem(422, 'SUBMISSION_INVALID', { errors: [{ path: 'q.sub', message: 'Too short.' }, { path: 'x' }] }), { kind: 'invalid', errors: [{ path: 'q.sub', message: 'Too short.' }] }],
