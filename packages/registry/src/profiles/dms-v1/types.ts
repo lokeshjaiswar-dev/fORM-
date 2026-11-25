@@ -50,6 +50,20 @@ export interface DmsElement {
   [extra: string]: unknown;
 }
 
+/**
+ * A lookup declared on a master element (the picker): "Fill from master" (server-side lookups, contract section 5). It is
+ * stored in the DMS master form JSON as the element key `fp_lookup`, which dms-api keeps untouched, and read into a
+ * `dms_master` lookup of the definition. Ids of the SOURCE master B are DMS field uuids; `to` ids are elements of this form.
+ */
+export interface FpLookup {
+  v: 1;
+  id: string;
+  master_id: string;
+  label_field_id: string;
+  fill: Array<{ from: string; to: string }>;
+  min_chars?: number;
+}
+
 export interface ProfileIssue {
   severity: 'error' | 'warning';
   code: string;

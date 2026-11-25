@@ -1,7 +1,8 @@
 import { jsonPointer, type FieldBlock, type FormDefinition } from '@form/schema';
 import { labelText } from '../../util/text.ts';
-import { DMS_DATE_PATTERN, INT32_MAX, INT32_MIN, PHONE_MAX_LENGTH, PHONE_PATTERN, PRIMARY_TYPES, charsOf, dmsTypeOf, isFieldBlock, nameOf, orderedBlocks } from './shared.ts';
+import { DMS_DATE_PATTERN, INT32_MAX, INT32_MIN, PHONE_MAX_LENGTH, PHONE_PATTERN, PRIMARY_TYPES, charsOf, dmsTypeOf, isFieldBlock, nameOf, orderedBlocks, xDms } from './shared.ts';
 import { legacyOfBlock } from './legacy.ts';
+import { DMS_LOOKUP_LIMITS } from './lookup.ts';
 import type { DmsV1Type, ProfileIssue } from './types.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,6 +98,7 @@ export function checkDmsV1(def: FormDefinition): ProfileIssue[] {
     }
     checkRepresentable(block, id, type, add);
   }
+  checkLookups(def, add);
   if (fields === 0 && !blocks.some((b) => b.block.type === 'unsupported')) add('error', 'no_fields', jsonPointer('pages'), 'Add at least one field.');
   if (primaries > 1) add('error', 'multiple_primary', jsonPointer('blocks'), 'Only one field can be the primary key.');
   return issues;
@@ -162,5 +164,60 @@ function checkLink(block: FieldBlock, id: string, earlier: Map<string, FieldBloc
   const known = new Set((parent.config as unknown as { options: Array<{ id: string }> }).options.map((o) => o.id));
   config.options.forEach((o, i) => {
     if ((o.parentOptionIds ?? []).some((p) => !known.has(p))) add('error', 'link_option_unknown', jsonPointer('blocks', id, 'config', 'options', i, 'parentOptionIds'), 'This option is linked to an option the parent dropdown does not have.', id);
+  });
+}
+
+const LOOKUP_TARGET_TYPES: ReadonlySet<DmsV1Type> = new Set(['textinput', 'multilineinput', 'numberinput']);
+const MASTER_ID = /^[A-Za-z0-9-]{1,64}$/;
+const FIELD_ID = /^[0-9a-fA-F-]{36}$/;
+const LOOKUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * A DMS form's lookups are "Fill from master" only: records of a source master, answered by DMS as the user. An HTTP lookup
+ * (and the old single `lookup`) has no place here, as block API options and API checks have none. Each `dms_master` lookup
+ * is written back as the picker's `fp_lookup`, so what that cannot keep is named.
+ */
+function checkLookups(def: FormDefinition, add: Add): void {
+  const lookups = def.lookups ?? [];
+  if (def.lookup !== undefined) add('error', 'lookup_http_not_supported', jsonPointer('lookup'), 'DMS forms cannot call an outside API. Use "Fill from master" instead.');
+  const dms = lookups.filter((l) => l.source === 'dms_master');
+  lookups.forEach((l, i) => {
+    if (l.source !== 'dms_master') add('error', 'lookup_http_not_supported', jsonPointer('lookups', i), 'DMS forms cannot call an outside API. Use "Fill from master" instead.');
+  });
+  if (dms.length > DMS_LOOKUP_LIMITS.lookups) add('error', 'lookup_too_many', jsonPointer('lookups'), `A DMS form has at most ${DMS_LOOKUP_LIMITS.lookups} lookups.`);
+  const ids = new Set<string>();
+  const targets = new Set<string>();
+  const pickers = new Set<string>();
+  dms.forEach((l) => {
+    if (l.source !== 'dms_master') return;
+    const at = jsonPointer('lookups', lookups.indexOf(l));
+    if (!LOOKUP_ID.test(l.id)) add('error', 'lookup_id_missing', at, 'Every lookup needs an id of letters, digits, "_" or "-".');
+    else if (ids.has(l.id)) add('error', 'lookup_id_duplicate', at, `Two lookups have the id "${l.id}".`);
+    ids.add(l.id);
+    if (!MASTER_ID.test(l.masterId) || !FIELD_ID.test(l.pickerKey) || l.mappings.some((m) => !FIELD_ID.test(m.key))) {
+      add('error', 'lookup_source_invalid', at, 'The source master or one of its fields is not a DMS id.');
+    }
+    if (l.mappings.length > DMS_LOOKUP_LIMITS.mappings) add('error', 'lookup_too_many_mappings', at, `A lookup fills at most ${DMS_LOOKUP_LIMITS.mappings} fields.`);
+    const picker = def.blocks[l.pickerFieldId];
+    if (!picker || !isFieldBlock(picker) || dmsTypeOf(picker) !== 'textinput') {
+      add('error', 'lookup_picker_invalid', jsonPointer('lookups', lookups.indexOf(l), 'pickerFieldId'), 'The field people type into to search must be a text field of this form.');
+    } else if (pickers.has(l.pickerFieldId)) {
+      add('error', 'lookup_picker_invalid', jsonPointer('lookups', lookups.indexOf(l), 'pickerFieldId'), 'A field can be the search field of one lookup only.');
+    }
+    pickers.add(l.pickerFieldId);
+    l.mappings.forEach((m, j) => {
+      const mAt = jsonPointer('lookups', lookups.indexOf(l), 'mappings', j);
+      const target = def.blocks[m.fieldId];
+      const type = target && isFieldBlock(target) ? dmsTypeOf(target) : null;
+      if (!target || !isFieldBlock(target) || type === null || !LOOKUP_TARGET_TYPES.has(type) || m.fieldId === l.pickerFieldId || xDms(target).increment === true || legacyOfBlock(target)) {
+        add('error', 'lookup_target_invalid', mAt, 'A lookup can fill text, multi-line and number fields, but not the search field itself, an auto-number field or a converted OpenForm field.');
+      } else if (targets.has(m.fieldId)) {
+        add('error', 'lookup_target_duplicate', mAt, `"${nameOf(target)}" is filled by two lookups.`, m.fieldId);
+      }
+      targets.add(m.fieldId);
+    });
+    if (l.enabled === false || l.maxRows !== undefined || l.name !== undefined) {
+      add('warning', 'lookup_setting_dropped', at, 'A DMS form keeps only the source, the search field and the fields to fill: a name, a row limit and the on/off switch are left out when you save (a lookup that is off is not saved).');
+    }
   });
 }
