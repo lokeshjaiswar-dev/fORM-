@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { BlockId, ChoiceOption, OptionId } from '@form/schema';
@@ -75,5 +75,37 @@ describe('searchable dropdown', () => {
   it(`shows the search box from ${SEARCH_FROM_OPTIONS} options, labelled as a search`, () => {
     render(<FormRenderer {...props(runtime(dropdown(SEARCH_FROM_OPTIONS)))} />);
     expect(screen.getByRole('searchbox', { name: 'Search options…' })).toHaveAttribute('placeholder', 'Search options…');
+  });
+});
+
+describe('phone country picker', () => {
+  const def = form([field('phone', 'tel', { config: { defaultCountry: 'IN' as never, showCountrySelect: true } })], [page('p1', ['tel'])]);
+
+  it('shows our own flag and +91, lists countries by name, and switches with the calling code', async () => {
+    const submitted: SubmitPayload[] = [];
+    const { container } = render(<FormRenderer {...props(runtime(def), { onSubmit: (p) => void submitted.push(p) })} />);
+    const picker = screen.getByRole('combobox', { name: 'Country calling code' });
+    expect(picker).toHaveValue('IN');
+    expect(container.querySelector('.fr-phone-code')).toHaveTextContent('+91');
+    expect(screen.getByRole('option', { name: 'India (+91)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'United States (+1)' })).toBeInTheDocument();
+    /* No emoji flags anywhere: they show as letters on Windows. */
+    expect(container.textContent).not.toMatch(/[\u{1F1E6}-\u{1F1FF}]/u);
+    await waitFor(() => expect(container.querySelector('.fr-flag img')?.getAttribute('src')).toMatch(/IN\.svg|^data:image\/svg\+xml/));
+
+    fireEvent.change(picker, { target: { value: 'US' } });
+    expect(container.querySelector('.fr-phone-code')).toHaveTextContent('+1');
+    await waitFor(() => expect(container.querySelector('.fr-flag img')?.getAttribute('src')).toMatch(/US\.svg|^data:image\/svg\+xml/));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '2025550123' } });
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Submit' }));
+    expect(submitted[0]?.answers[id<BlockId>('tel')]).toEqual({ type: 'phone', value: { e164: '+12025550123', country: 'US' } });
+  });
+
+  it('every calling-code region has a flag file', async () => {
+    const { CALLING_CODE_REGIONS } = await import('@form/registry');
+    const { flagUrl } = await import('../src/controls/flags/index.ts');
+    const missing: string[] = [];
+    for (const region of CALLING_CODE_REGIONS) if (!(await flagUrl(region))) missing.push(region);
+    expect(missing).toEqual([]);
   });
 });

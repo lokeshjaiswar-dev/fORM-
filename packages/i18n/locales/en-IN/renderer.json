@@ -54,6 +54,7 @@
   "password.label": "Password",
   "password.submit": "Continue",
   "phone.country": "Country calling code",
+  "phone.country_option": "{name} (+{code})",
   "phone.number": "Phone number",
   "progress.percent": "{percent}% complete",
   "ranking.hint": "Order the options with the move buttons.",

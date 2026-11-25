@@ -26,6 +26,7 @@ export const MESSAGES = defineMessages('renderer', {
   'address.country': 'Country',
   'phone.country': 'Country calling code',
   'phone.number': 'Phone number',
+  'phone.country_option': '{name} (+{code})',
   'time.start': 'Start time',
   'time.end': 'End time',
   'datetime.time': 'Time',
