@@ -296,6 +296,33 @@ describe('validateStructure', () => {
     expect(validateStructure(def, { mode: 'publish' })).toEqual([]);
   });
 
+  describe('Step 0 denylist: no credentials in a request the browser sends (review B1)', () => {
+    const url = 'https://hr.example/api/employees' as S.SafeUrl;
+    const bearer: S.ApiAuth = { type: 'bearer', token: 'HR-SECRET-TOKEN' };
+
+    it('a form-level lookup with credentials warns in a draft and is refused at publish', () => {
+      const def = definition();
+      def.lookups = [{ id: 'hr', url, auth: bearer }, { id: 'open', url }];
+      def.lookup = { url, auth: { type: 'basic', username: 'u', password: 'p' } };
+      expect(FormDefinitionSchema.safeParse(def).success).toBe(true);
+      expect(codes(validateStructure(def))).toEqual(['warning:browser_credentials:/lookup/auth', 'warning:browser_credentials:/lookups/0/auth']);
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toEqual(['error:browser_credentials:/lookup/auth', 'error:browser_credentials:/lookups/0/auth']);
+    });
+
+    it('API options and API checks with credentials are refused at publish', () => {
+      const def = definition();
+      blockOf(def, ids.marketing, 'single_choice').apiOptions = { url, auth: { type: 'api_key', header: 'X-Key', value: 'k' } };
+      blockOf(def, ids.name, 'short_text').apiValidation = { url, auth: bearer };
+      expect(codes(validateStructure(def, { mode: 'publish' })).sort()).toEqual([
+        `error:browser_credentials:/blocks/${ids.marketing}/apiOptions/auth`,
+        `error:browser_credentials:/blocks/${ids.name}/apiValidation/auth`,
+      ].sort());
+      delete blockOf(def, ids.marketing, 'single_choice').apiOptions!.auth;
+      delete blockOf(def, ids.name, 'short_text').apiValidation!.auth;
+      expect(validateStructure(def, { mode: 'publish' })).toEqual([]);
+    });
+  });
+
   describe('dependent options', () => {
     const child = id<S.BlockId>('channel_1');
     /** A second choice after "Send updates?" whose options follow its answer: Email only for Yes, Never always. */

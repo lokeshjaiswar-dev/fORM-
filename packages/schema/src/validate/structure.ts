@@ -356,6 +356,23 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
     }
   }
 
+  /*
+   * Step 0 denylist (DEC-03): the respondent's browser sends form-level lookups, API options and API checks itself, so
+   * anything a request carries reaches every respondent. Credentials are a warning in a draft and an error at publish;
+   * the runtime projection strips them as well.
+   */
+  const credentials = (request: { auth?: unknown } | undefined, path: string) => {
+    if (request?.auth === undefined) return;
+    soft('browser_credentials', path, "this API request carries credentials, and every respondent's browser would receive them; remove them and use an API that needs no sign-in");
+  };
+  credentials(def.lookup, jsonPointer('lookup', 'auth'));
+  def.lookups?.forEach((lookup, i) => credentials(lookup, jsonPointer('lookups', i, 'auth')));
+  for (const [id, b] of blocks) {
+    const field = b as { apiOptions?: { auth?: unknown }; apiValidation?: { auth?: unknown } };
+    credentials(field.apiOptions, jsonPointer('blocks', id, 'apiOptions', 'auth'));
+    credentials(field.apiValidation, jsonPointer('blocks', id, 'apiValidation', 'auth'));
+  }
+
   const children = def.privacy.children;
   const guardian = children.mode === 'age_gate' ? (children.underAge.kind === 'parental_consent' ? children.underAge.guardian : null)
     : children.mode === 'lawful_guardian' ? children.guardian : null;

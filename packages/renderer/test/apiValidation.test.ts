@@ -78,7 +78,7 @@ describe('buildApiRequest', () => {
     expect([...parsed.searchParams.keys()]).toEqual(['src']);
   });
 
-  it('POST puts the field key in the JSON body and sends extra body fields', () => {
+  it('POST puts the field key in the JSON body and sends extra body fields, never credentials (review B1)', () => {
     const req = buildApiRequest(
       { url, method: 'POST', body: [{ key: 'source', value: 'builder' }], auth: { type: 'bearer', token: 'secret' } },
       'emp_name',
@@ -86,7 +86,10 @@ describe('buildApiRequest', () => {
     );
     expect(req.init.method).toBe('POST');
     expect(req.init.body).toBe(JSON.stringify({ source: 'builder', emp_name: 'Lokesh' }));
-    expect((req.init.headers as Record<string, string>).Authorization).toBe('Bearer secret');
+    expect(req.init.headers).toEqual({ Accept: 'application/json', 'Content-Type': 'application/json' });
+    for (const auth of [{ type: 'api_key', header: 'X-Key', value: 'k' }, { type: 'basic', username: 'u', password: 'p' }] as const) {
+      expect(JSON.stringify(buildApiRequest({ url, method: 'GET', auth }).init)).not.toMatch(/X-Key|Authorization|"k"/);
+    }
   });
 });
 

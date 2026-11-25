@@ -42,15 +42,20 @@ const M = defineMessages('builder', {
   'lookup.testing': 'Testing…',
   'lookup.turn_off': '{fields} are already used in {name}. Turn {name} off before turning this API on.',
   'lookup.used': 'Used in {name}',
+  'lookup.url_hint': 'The list of records to pick from, for example https://api.example.com/directory.',
 });
 
 const TEXT_TYPES = new Set(['short_text', 'long_text', 'url', 'number']);
 
+/**
+ * A new lookup starts with no URL (review N3). A lookup must have a URL to be stored, so the new one stays in this panel
+ * until the author saves a valid URL.
+ */
 function freshLookup(n: number): ApiLookup {
   return {
     id: APP_IDS.newId(),
     name: `API ${n}`,
-    url: 'http://localhost:3001/directory' as SafeUrl,
+    url: '' as SafeUrl,
     enabled: false,
     method: 'GET',
     parser: 'json',
@@ -118,7 +123,10 @@ function usedElsewhere(sources: ApiLookup[], currentId: string): Map<string, str
 export function LookupSettings() {
   const doc = useDoc((d) => d);
   const sources = sourcesOf(doc.lookups, doc.lookup);
+  const [pending, setPending] = useState<ApiLookup>();
+  const [open, setOpen] = useState(sources[0]?.id ?? '');
   const save = (next: ApiLookup[]) => setLookups(next);
+  const shown = pending ? [...sources, pending] : sources;
   const fields = Object.values(doc.blocks).flatMap((block) => {
     if (!block || !isField(block) || !TEXT_TYPES.has(block.type)) return [];
     const label = block.label;
@@ -129,21 +137,31 @@ export function LookupSettings() {
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-muted-foreground">{t(M['lookup.hint'])}</p>
-      {sources.length ? (
-        <Accordion type="single" collapsible defaultValue={sources[0]?.id} className="space-y-2">
-          {sources.map((source) => (
+      {shown.length ? (
+        <Accordion type="single" collapsible value={open} onValueChange={setOpen} className="space-y-2">
+          {shown.map((source) => (
             <LookupAccordion
               key={source.id}
               source={source}
               fields={fields}
               taken={usedElsewhere(sources, source.id ?? '')}
-              onChange={(next) => save(sources.map((item) => (item.id === source.id ? next : item)))}
-              onRemove={() => save(sources.filter((item) => item.id !== source.id))}
+              onChange={(next) => {
+                if (source === pending) {
+                  if (!isSafeUrl(next.url)) return;
+                  setPending(undefined);
+                  save([...sources, next]);
+                } else save(sources.map((item) => (item.id === source.id ? next : item)));
+              }}
+              onRemove={() => (source === pending ? setPending(undefined) : save(sources.filter((item) => item.id !== source.id)))}
             />
           ))}
         </Accordion>
       ) : null}
-      <Button type="button" variant="outline" size="sm" disabled={sources.length >= 8} onClick={() => save([...sources, freshLookup(sources.length + 1)])}>
+      <Button type="button" variant="outline" size="sm" disabled={sources.length >= 8 || pending !== undefined} onClick={() => {
+          const fresh = freshLookup(sources.length + 1);
+          setPending(fresh);
+          setOpen(fresh.id ?? '');
+        }}>
         {t(M['lookup.add'])}
       </Button>
     </div>
@@ -255,6 +273,7 @@ function LookupAccordion({
           <span>{t(M['lookup.on'])}</span>
           <Switch
             checked={draft.enabled === true}
+            disabled={!isSafeUrl(source.url)}
             aria-label={t(M['lookup.on'])}
             onCheckedChange={(on) => {
               if (on) {
@@ -300,7 +319,8 @@ function LookupAccordion({
         </div>
         <ApiRequestFields
           api={draft}
-          urlHint="GET http://localhost:3001/directory"
+          list
+          urlHint={t(M['lookup.url_hint'])}
           queryHint=""
           bodyHint=""
           urlText={urlText}
@@ -311,7 +331,7 @@ function LookupAccordion({
           <Button type="button" size="sm" disabled={status === 'testing'} onClick={() => void test()}>
             {status === 'testing' ? t(M['lookup.testing']) : t(M['lookup.test'])}
           </Button>
-          <Button type="button" size="sm" onClick={() => onChange(draft)}>
+          <Button type="button" size="sm" disabled={!isSafeUrl(draft.url)} onClick={() => onChange(draft)}>
             {t(M['lookup.save'])}
           </Button>
         </div>

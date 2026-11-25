@@ -1020,7 +1020,9 @@ export interface PublishIssue {
     /** I5/I6: rich text outside the allowed AST (node types, limits, single-paragraph InlineDoc). */
     | 'invalid_rich_text'
     /** WP-2.33 review units: no blocks, a block in two units, a payment block inside a unit, a target that is not in the form. */
-    | 'review_unit_empty' | 'review_unit_overlap' | 'review_unit_contains_payment' | 'review_unit_dangling_target';
+    | 'review_unit_empty' | 'review_unit_overlap' | 'review_unit_contains_payment' | 'review_unit_dangling_target'
+    /** Step 0 denylist: an API request the respondent's browser sends (lookup, API options, API check) carries credentials. */
+    | 'browser_credentials';
   path: string;        // JSON pointer
   message: string;
   fixUrl?: string;     // e.g. '/settings/org-profile#privacy_contact'

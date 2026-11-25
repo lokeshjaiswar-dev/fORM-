@@ -1,10 +1,10 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
-import { isSafeUrl, type ApiAuth, type ApiPair, type ApiRequestConfig, type SafeUrl } from '@form/schema';
+import { isSafeUrl, type ApiPair, type ApiRequestConfig, type SafeUrl } from '@form/schema';
 import { t } from '@/i18n';
 import type { Patch } from '@/lib/patch';
-import { Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
-import { Field, SelectField, TextField } from '@/components/builder/inspector/parts';
+import { Alert, AlertDescription, Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
+import { Field, TextField } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
   'inspector.api_url': 'API URL',
@@ -20,16 +20,10 @@ const M = defineMessages('builder', {
   'inspector.api_add_param': 'Add param',
   'inspector.api_add_body': 'Add field',
   'inspector.api_remove_pair': 'Remove',
-  'inspector.api_auth': 'Authorization',
-  'inspector.api_auth_none': 'None',
-  'inspector.api_auth_bearer': 'Bearer token',
-  'inspector.api_auth_key': 'API key',
-  'inspector.api_auth_basic': 'Username and password',
-  'inspector.api_token': 'Token',
-  'inspector.api_header': 'Header name',
-  'inspector.api_header_value': 'Key',
-  'inspector.api_username': 'Username',
-  'inspector.api_password': 'Password',
+  'inspector.api_credentials': 'This request carries credentials. The live form sends it from each respondent’s browser, so every respondent could read them. Remove them to publish, and use an API that needs no sign-in.',
+  'inspector.api_credentials_remove': 'Remove credentials',
+  'inspector.api_exposure': 'Each respondent’s browser sends this request and receives the whole response. Use an API that needs no sign-in and returns only what any respondent may see.',
+  'inspector.api_exposure_list': 'Each respondent’s browser loads this API and receives the full response list, every row of it. Use an API that needs no sign-in and lists only what any respondent may see.',
   'inspector.api_parser': 'Response format',
   'inspector.api_json': 'JSON',
   'inspector.api_xml': 'XML',
@@ -87,10 +81,6 @@ export function PairList({
   );
 }
 
-function authKind(auth: ApiAuth | undefined): 'none' | ApiAuth['type'] {
-  return auth?.type ?? 'none';
-}
-
 export function ApiRequestFields({
   api,
   urlHint,
@@ -99,8 +89,11 @@ export function ApiRequestFields({
   urlText,
   onUrlText,
   onPatch,
+  list = false,
 }: {
   api: ApiRequestConfig;
+  /** The response is a list the live form shows (lookups, API options): the warning says every row reaches the browser. */
+  list?: boolean;
   urlHint: string;
   queryHint?: string;
   bodyHint?: string;
@@ -110,6 +103,9 @@ export function ApiRequestFields({
 }) {
   return (
     <>
+      <Alert variant="warning" emphasis="subtle">
+        <AlertDescription>{t(M[list ? 'inspector.api_exposure_list' : 'inspector.api_exposure'])}</AlertDescription>
+      </Alert>
       <Field label={t(M['inspector.api_method'])}>
         <ToggleGroup
           type="single"
@@ -146,60 +142,16 @@ export function ApiRequestFields({
           <PairList pairs={api.body ?? []} addLabel={t(M['inspector.api_add_body'])} onChange={(body) => onPatch({ body })} />
         </div>
       ) : null}
-      <SelectField
-        label={t(M['inspector.api_auth'])}
-        value={authKind(api.auth)}
-        options={[
-          { value: 'none', label: t(M['inspector.api_auth_none']) },
-          { value: 'bearer', label: t(M['inspector.api_auth_bearer']) },
-          { value: 'api_key', label: t(M['inspector.api_auth_key']) },
-          { value: 'basic', label: t(M['inspector.api_auth_basic']) },
-        ]}
-        onChange={(kind) => {
-          if (kind === 'none') onPatch({ auth: undefined });
-          else if (kind === 'bearer') onPatch({ auth: { type: 'bearer', token: api.auth?.type === 'bearer' ? api.auth.token : 'token' } });
-          else if (kind === 'api_key') onPatch({ auth: { type: 'api_key', header: 'X-API-Key', value: 'key' } });
-          else onPatch({ auth: { type: 'basic', username: 'user', password: '' } });
-        }}
-      />
-      {api.auth?.type === 'bearer' ? (
-        <TextField label={t(M['inspector.api_token'])} value={api.auth.token} onChange={(token) => token && onPatch({ auth: { type: 'bearer', token } })} />
-      ) : null}
-      {api.auth?.type === 'api_key' ? (
-        <>
-          <TextField
-            label={t(M['inspector.api_header'])}
-            value={api.auth.header}
-            onChange={(header) => {
-              if (header && api.auth?.type === 'api_key') onPatch({ auth: { type: 'api_key', header, value: api.auth.value } });
-            }}
-          />
-          <TextField
-            label={t(M['inspector.api_header_value'])}
-            value={api.auth.value}
-            onChange={(value) => {
-              if (value && api.auth?.type === 'api_key') onPatch({ auth: { type: 'api_key', header: api.auth.header, value } });
-            }}
-          />
-        </>
-      ) : null}
-      {api.auth?.type === 'basic' ? (
-        <>
-          <TextField
-            label={t(M['inspector.api_username'])}
-            value={api.auth.username}
-            onChange={(username) => {
-              if (username && api.auth?.type === 'basic') onPatch({ auth: { type: 'basic', username, password: api.auth.password } });
-            }}
-          />
-          <TextField
-            label={t(M['inspector.api_password'])}
-            value={api.auth.password}
-            onChange={(password) => {
-              if (api.auth?.type === 'basic') onPatch({ auth: { type: 'basic', username: api.auth.username, password } });
-            }}
-          />
-        </>
+      {/* Step 0 denylist (DEC-03): no credentials in a request the browser sends. An old draft that has them can only remove them. */}
+      {api.auth ? (
+        <Alert variant="negative" emphasis="subtle">
+          <AlertDescription className="space-y-2">
+            <p>{t(M['inspector.api_credentials'])}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => onPatch({ auth: undefined })}>
+              {t(M['inspector.api_credentials_remove'])}
+            </Button>
+          </AlertDescription>
+        </Alert>
       ) : null}
       <Field label={t(M['inspector.api_parser'])}>
         <ToggleGroup

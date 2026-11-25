@@ -2,7 +2,7 @@ import { RuntimeFormVersionSchema } from '@form/schema';
 import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import { evalStateJson, evaluate, projectForRuntime, stepKey } from '../src/index.ts';
-import { META, a, ans, bid, cond, field, form, hide, id, num, page, rule, versionOf } from './build.ts';
+import { META, a, ans, bid, choices, cond, field, form, hide, id, num, page, rule, versionOf } from './build.ts';
 import { REVIEW_ASSIGNMENTS, reviewForm } from './corpus/review.ts';
 
 const origin: S.Origin = { bindingId: id<S.TemplateBindingId>('binding_1'), sourceId: 'src_1' };
@@ -128,6 +128,26 @@ describe('projectForRuntime and review units (WP-2.33)', () => {
     const json = JSON.stringify(runtime);
     for (const leak of ['reviewUnits', 'groupId', 'g_secret', 'visibility', 'own_unit', 'x-note', 'internal']) expect(json).not.toContain(leak);
     for (const assignment of REVIEW_ASSIGNMENTS) expect(json).not.toContain(assignment.groupId);
+  });
+
+  it('never carries lookup, API option or API check credentials to the respondent (Step 0 denylist, review B1)', () => {
+    const url = 'https://hr.example/api/employees' as S.SafeUrl;
+    const def = form([
+      { ...field('short_text', 'emp'), apiValidation: { url, auth: { type: 'bearer', token: 'CHECK-SECRET' } } },
+      { ...field('single_choice', 'city', { config: { display: 'dropdown', options: choices('pune') } }), apiOptions: { url, method: 'GET', auth: { type: 'api_key', header: 'X-Key', value: 'OPTIONS-SECRET' } } },
+    ], [page('p1', ['emp', 'city'])], []);
+    def.lookups = [{ id: 'hr', name: 'HR', enabled: true, url, method: 'GET', auth: { type: 'bearer', token: 'HR-SECRET-TOKEN' }, itemsPath: 'data', pickerFieldId: bid('emp'), pickerKey: 'name' }];
+    def.lookup = { url, auth: { type: 'basic', username: 'hr', password: 'LEGACY-SECRET' } };
+    const v = versionOf(def);
+    const before = JSON.stringify(v);
+    const runtime = projectForRuntime(v, { state: 'open' }, publicConfig);
+    const json = JSON.stringify(runtime);
+    for (const secret of ['HR-SECRET-TOKEN', 'LEGACY-SECRET', 'OPTIONS-SECRET', 'CHECK-SECRET', '"auth"']) expect(json).not.toContain(secret);
+    expect(runtime.definition.lookups?.[0]).toMatchObject({ id: 'hr', url, itemsPath: 'data', pickerKey: 'name' });
+    expect(runtime.definition.blocks[bid('city')]).toMatchObject({ apiOptions: { url, method: 'GET' } });
+    const parsed = RuntimeFormVersionSchema.safeParse(JSON.parse(json));
+    expect(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('/')} ${i.message}`)).toEqual([]);
+    expect(JSON.stringify(v)).toBe(before);
   });
 
   it('does not touch the version it projects, and leaves a form without review as it was', () => {

@@ -13,6 +13,17 @@ function stripOrigins<T>(value: T): T {
   return Object.fromEntries(Object.entries(value).flatMap(([key, v]) => (key === 'origin' && isOrigin(v) ? [] : [[key, stripOrigins(v)]]))) as T;
 }
 
+/**
+ * Step 0 denylist (DEC-03): the respondent's browser sends lookups, API options and API checks itself, so a request's
+ * credentials never reach the runtime projection. Publish already refuses them (`browser_credentials`); this is the
+ * second line for a version published before that check.
+ */
+function withoutAuth<T extends { auth?: unknown }>(request: T): T {
+  if (request.auth === undefined) return request;
+  const { auth: _auth, ...rest } = request;
+  return rest as T;
+}
+
 /** Rules keep only client actions; a rule left with no actions is dropped. */
 function clientRules(rules: readonly Rule[]): Array<Rule<ClientAction>> {
   return rules.flatMap((rule) => {
@@ -34,13 +45,22 @@ export const projectForRuntime: ProjectForRuntime = (version, status, publicConf
   const blocks = Object.fromEntries(Object.entries(def.blocks).map(([id, block]) => {
     if (!block || block.type === 'unsupported') return [id, block];
     const { note: _note, ...rest } = block;
-    return [id, rest];
+    const field = rest as typeof rest & { apiOptions?: { auth?: unknown }; apiValidation?: { auth?: unknown } };
+    return [id, {
+      ...rest,
+      ...(field.apiOptions ? { apiOptions: withoutAuth(field.apiOptions) } : {}),
+      ...(field.apiValidation ? { apiValidation: withoutAuth(field.apiValidation) } : {}),
+    }];
   }));
+  const lookups = {
+    ...(def.lookup ? { lookup: withoutAuth(def.lookup) } : {}),
+    ...(def.lookups ? { lookups: def.lookups.map(withoutAuth) } : {}),
+  };
   const rules = clientRules(def.logic.rules);
   /* WP-2.33: the respondent gets each review unit's id and name, never its target (page or block ids), group or visibility. */
   const { review, ...rest } = def;
   const publicReview = review ? { review: { units: review.units.map((unit) => ({ id: unit.id, name: unit.name })) } } : {};
-  const definition = stripOrigins({ ...rest, ...publicReview, blocks, logic: { ...def.logic, rules } }) as PublicFormDefinition;
+  const definition = stripOrigins({ ...rest, ...publicReview, ...lookups, blocks, logic: { ...def.logic, rules } }) as PublicFormDefinition;
   const { dataInventory: _inventory, taint: _taint, reviewUnits: _reviewUnits, reviewUnitMarkers: _reviewUnitMarkers, ruleWrites: _ruleWrites, plan, reads, ...compiled } = version.compiled;
   /* Steps of dropped rules go too: server-only rules, and rules with no actions at all. */
   const kept = new Set<string>(rules.map((r) => r.id));

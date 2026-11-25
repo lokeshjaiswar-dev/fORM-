@@ -147,6 +147,7 @@ export function ApiOptionsSection({ block }: { block: ChoiceBlock }) {
         <>
           <ApiRequestFields
             api={api}
+            list
             urlHint={t(M['inspector.api_url_hint_options'])}
             queryHint={t(M['inspector.api_query_hint_options'])}
             bodyHint={t(M['inspector.api_body_hint_options'])}

@@ -28,8 +28,6 @@ export interface ApiParseResult {
   collections: ApiCollection[];
 }
 
-const HEADER_NAME = /^[\w!#$%&'*+.^`|~-]+$/;
-
 export function parseApiBody(text: string, parser: 'json' | 'xml'): ApiParseResult {
   if (parser === 'xml') return parseXml(text);
   try {
@@ -186,14 +184,11 @@ function parseXml(text: string): ApiParseResult {
   return flattenUnknown(typeof data === 'object' && data !== null && !Array.isArray(data) ? data : { [parsed.name]: data });
 }
 
-function authHeaders(auth: ApiValidation['auth']): Record<string, string> {
-  if (!auth) return {};
-  if (auth.type === 'bearer') return { Authorization: `Bearer ${auth.token}` };
-  if (auth.type === 'api_key') return HEADER_NAME.test(auth.header) ? { [auth.header]: auth.value } : {};
-  const token = btoa(`${auth.username}:${auth.password}`);
-  return { Authorization: `Basic ${token}` };
-}
-
+/**
+ * The request the respondent's (or author's) browser sends. It never carries credentials: whatever the browser sends,
+ * every respondent can read (Step 0 denylist, DEC-03), so `config.auth` on an old draft is ignored here, refused at
+ * publish and stripped from the runtime projection.
+ */
 export function buildApiRequest(config: ApiRequestConfig, fieldKey?: string, value?: unknown): { url: string; init: RequestInit } {
   const method = config.method ?? 'POST';
   const parser = config.parser ?? 'json';
@@ -202,7 +197,7 @@ export function buildApiRequest(config: ApiRequestConfig, fieldKey?: string, val
   for (const pair of config.query ?? []) {
     if (pair.key) url.searchParams.set(pair.key, pair.value);
   }
-  const headers: Record<string, string> = { Accept: accept, ...authHeaders(config.auth) };
+  const headers: Record<string, string> = { Accept: accept };
   if (method === 'GET') {
     if (fieldKey) url.searchParams.set(fieldKey, value == null ? '' : String(value));
     return { url: url.toString(), init: { method: 'GET', headers } };
