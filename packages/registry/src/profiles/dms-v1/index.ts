@@ -12,3 +12,5 @@ export type { DmsV1Tile } from './tiles.ts';
 export { blankDmsDefinition } from './blank.ts';
 export { fnv1a64hex, optionIdOf } from './fnv.ts';
 export { dmsTypeOf, TEXT_PATTERNS } from './shared.ts';
+export { LEGACY_KEY, legacyOfElement, legacyOfBlock, isLegacyReadOnly } from './legacy.ts';
+export type { DmsLegacyMarker } from './legacy.ts';

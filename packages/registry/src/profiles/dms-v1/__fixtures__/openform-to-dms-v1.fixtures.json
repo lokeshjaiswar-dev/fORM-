@@ -1,0 +1,1422 @@
+{
+  "$comment": "Contract for the one-time OpenForm -> classic (dms-v1) master conversion (DESIGN-v2 section 3). Canonical copy: docs/demo1/contract/. Byte-identical copies: dms-api tests/Fixtures/formplus/, fORM- packages/registry/src/profiles/dms-v1/__fixtures__/. Element output key order: id,type,name,value,label,required,placeholder, then type keys. `primary` appears only when true. `placeholder` is always present ('' when OpenForm had none). Columns of _dynamic_master_* and record values are never touched.",
+  "contract": "openform-to-dms-v1",
+  "version": 1,
+  "converterVersion": "openform-dms-v1/1",
+  "classicTypes": [
+    "textinput",
+    "numberinput",
+    "email",
+    "phonenumber",
+    "multilineinput",
+    "dropdown",
+    "date"
+  ],
+  "layoutTypes": [
+    "nf-text",
+    "nf-code",
+    "nf-image",
+    "nf-page-break",
+    "nf-divider",
+    "divider",
+    "heading",
+    "section",
+    "button"
+  ],
+  "layoutNote": "Layout blocks are dropped from json_data (they have no column and no values) and listed in the report; `section` children are flattened in order. `button` is layout unless it has an active master field (Validate PAN).",
+  "legacyMarker": {
+    "key": "legacy",
+    "shape": {
+      "from": "string (OpenForm type)",
+      "readOnly": "true"
+    },
+    "rules": [
+      "readOnly fields are never required and never primary (converter clears both and warns)",
+      "fORM- builder: type, options and legacy marker are locked; rename/reorder allowed; delete allowed (non-destructive G6)",
+      "fORM- record mode: shown read-only with the raw stored value, never sent on create or update",
+      "classic renderer ignores the key"
+    ]
+  },
+  "primaryRules": [
+    "at most one primary: the first primary in canonical (flattened) order wins; others demoted with warning primary_demoted",
+    "primary allowed on textinput, numberinput, email, phonenumber only; else demoted (primary_type_not_allowed)",
+    "masters.primary_key = name of the remaining primary, or null"
+  ],
+  "blockingRules": [
+    "duplicate_field_names: two kept elements whose trimmed names match case-insensitively",
+    "empty_field_name: a kept element whose trimmed name and master field name are both empty"
+  ],
+  "warningCodes": [
+    "phone_format",
+    "decimal_values_possible",
+    "time_dropped_in_ui",
+    "required_dropped_read_only",
+    "unknown_type",
+    "logic_dropped",
+    "hidden_dropped",
+    "primary_demoted",
+    "primary_type_not_allowed",
+    "orphan_master_field",
+    "column_type_differs"
+  ],
+  "typeMap": [
+    {
+      "from": "text",
+      "when": "default",
+      "to": "textinput",
+      "keys": "numeric/specialChars copied when boolean, else true (OpenForm text accepts any characters)",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "text",
+      "when": "multi_lines === true",
+      "to": "multilineinput",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "email",
+      "to": "email",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "phone_number",
+      "to": "phonenumber",
+      "lossless": true,
+      "readOnly": false,
+      "warning": "phone_format"
+    },
+    {
+      "from": "number",
+      "to": "numberinput",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "rating",
+      "to": "numberinput",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "scale",
+      "to": "numberinput",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "slider",
+      "to": "numberinput",
+      "lossless": false,
+      "readOnly": false,
+      "warning": "decimal_values_possible"
+    },
+    {
+      "from": "date",
+      "aliases": [
+        "nf-date"
+      ],
+      "when": "default",
+      "to": "date",
+      "keys": "isDefaultToDate = (prefill_today === true)",
+      "lossless": true,
+      "readOnly": false,
+      "warning": "with_time -> time_dropped_in_ui"
+    },
+    {
+      "from": "date",
+      "when": "date_range === true",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "select",
+      "to": "dropdown",
+      "keys": "options = select.options[].name -> {name,value:name}",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "radio",
+      "to": "dropdown",
+      "keys": "options = radio.options[].name -> {name,value:name}",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "checkbox",
+      "to": "dropdown",
+      "keys": "options = [{name:'Yes',value:'1'},{name:'No',value:'0'}]",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "url",
+      "to": "textinput",
+      "keys": "numeric:true, specialChars:true",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "barcode",
+      "to": "textinput",
+      "keys": "numeric:true, specialChars:true",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "time",
+      "to": "textinput",
+      "keys": "numeric:true, specialChars:true",
+      "lossless": true,
+      "readOnly": false
+    },
+    {
+      "from": "multi_select",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "rich_text",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "files",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "signature",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "image",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "matrix",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "full_name",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "address",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "button",
+      "when": "has an active master field (Validate PAN)",
+      "to": "textinput",
+      "keys": "numeric:true, specialChars:true",
+      "lossless": false,
+      "readOnly": true
+    },
+    {
+      "from": "*",
+      "when": "any other type with an active master field",
+      "to": "multilineinput",
+      "lossless": false,
+      "readOnly": true,
+      "warning": "unknown_type"
+    },
+    {
+      "from": "textinput|numberinput|email|phonenumber|multilineinput|dropdown|date",
+      "when": "already a classic name inside an OpenForm-dialect master",
+      "to": "same",
+      "lossless": true,
+      "readOnly": false
+    }
+  ],
+  "dialectCases": [
+    {
+      "elements": [],
+      "expected": "empty"
+    },
+    {
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "value": "A"
+        }
+      ],
+      "expected": "classic"
+    },
+    {
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "value": "A",
+          "name": "A"
+        }
+      ],
+      "expected": "classic"
+    },
+    {
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000001",
+          "type": "email",
+          "name": "Email"
+        }
+      ],
+      "expected": "openform",
+      "why": "no value key"
+    },
+    {
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000001",
+          "type": "email",
+          "name": "Email",
+          "value": "x@y.z"
+        }
+      ],
+      "expected": "openform",
+      "why": "value differs from name (OpenForm default value)"
+    },
+    {
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "value": "A"
+        },
+        {
+          "id": "c2000000-0000-4000-8000-000000000002",
+          "type": "text",
+          "name": "B"
+        }
+      ],
+      "expected": "openform",
+      "why": "any non-classic type"
+    }
+  ],
+  "elementCases": [
+    {
+      "name": "text",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000001",
+        "type": "text",
+        "name": "Vendor Name",
+        "required": true,
+        "primary": true,
+        "placeholder": "Acme"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "name": "Vendor Name",
+          "value": "Vendor Name",
+          "label": "Vendor Name",
+          "required": true,
+          "placeholder": "Acme",
+          "primary": true,
+          "numeric": true,
+          "specialChars": true
+        },
+        "masterField": {
+          "type": "textinput"
+        }
+      }
+    },
+    {
+      "name": "text-flags-kept",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000002",
+        "type": "text",
+        "name": " Code ",
+        "numeric": true,
+        "specialChars": false
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000002",
+          "type": "textinput",
+          "name": "Code",
+          "value": "Code",
+          "label": "Code",
+          "required": false,
+          "placeholder": "",
+          "numeric": true,
+          "specialChars": false
+        },
+        "masterField": {
+          "type": "textinput"
+        }
+      }
+    },
+    {
+      "name": "text-multiline",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000003",
+        "type": "text",
+        "name": "Address",
+        "multi_lines": true
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000003",
+          "type": "multilineinput",
+          "name": "Address",
+          "value": "Address",
+          "label": "Address",
+          "required": false,
+          "placeholder": ""
+        },
+        "masterField": {
+          "type": "multilineinput"
+        }
+      }
+    },
+    {
+      "name": "email",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000004",
+        "type": "email",
+        "name": "Email",
+        "required": true
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000004",
+          "type": "email",
+          "name": "Email",
+          "value": "Email",
+          "label": "Email",
+          "required": true,
+          "placeholder": ""
+        },
+        "masterField": {
+          "type": "email"
+        }
+      }
+    },
+    {
+      "name": "phone",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000005",
+        "type": "phone_number",
+        "name": "Phone",
+        "use_simple_text_input": false
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000005",
+          "type": "phonenumber",
+          "name": "Phone",
+          "value": "Phone",
+          "label": "Phone",
+          "required": false,
+          "placeholder": ""
+        },
+        "masterField": {
+          "type": "phonenumber"
+        },
+        "warnings": [
+          "phone_format"
+        ]
+      }
+    },
+    {
+      "name": "number",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000006",
+        "type": "number",
+        "name": "Amount"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000006",
+          "type": "numberinput",
+          "name": "Amount",
+          "value": "Amount",
+          "label": "Amount",
+          "required": false,
+          "placeholder": ""
+        },
+        "masterField": {
+          "type": "numberinput"
+        }
+      }
+    },
+    {
+      "name": "rating",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000007",
+        "type": "rating",
+        "name": "Score",
+        "rating_max_value": 5
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000007",
+          "type": "numberinput",
+          "name": "Score",
+          "value": "Score",
+          "label": "Score",
+          "required": false,
+          "placeholder": ""
+        },
+        "masterField": {
+          "type": "numberinput"
+        }
+      }
+    },
+    {
+      "name": "slider",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000008",
+        "type": "slider",
+        "name": "Level",
+        "slider_step_value": 0.5
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000008",
+          "type": "numberinput",
+          "name": "Level",
+          "value": "Level",
+          "label": "Level",
+          "required": false,
+          "placeholder": ""
+        },
+        "masterField": {
+          "type": "numberinput"
+        },
+        "warnings": [
+          "decimal_values_possible"
+        ]
+      }
+    },
+    {
+      "name": "date-today",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000009",
+        "type": "date",
+        "name": "Joined",
+        "prefill_today": true,
+        "with_time": true,
+        "date_format": "dd/MM/yyyy"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000009",
+          "type": "date",
+          "name": "Joined",
+          "value": "Joined",
+          "label": "Joined",
+          "required": false,
+          "placeholder": "",
+          "isDefaultToDate": true
+        },
+        "masterField": {
+          "type": "date"
+        },
+        "warnings": [
+          "time_dropped_in_ui"
+        ]
+      }
+    },
+    {
+      "name": "date-range",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000010",
+        "type": "date",
+        "name": "Period",
+        "date_range": true
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000010",
+          "type": "multilineinput",
+          "name": "Period",
+          "value": "Period",
+          "label": "Period",
+          "required": false,
+          "placeholder": "",
+          "legacy": {
+            "from": "date",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "multilineinput"
+        }
+      }
+    },
+    {
+      "name": "select",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000011",
+        "type": "select",
+        "name": "Tier",
+        "select": {
+          "options": [
+            {
+              "id": "Gold",
+              "name": "Gold"
+            },
+            {
+              "id": "Silver",
+              "name": "Silver"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000011",
+          "type": "dropdown",
+          "name": "Tier",
+          "value": "Tier",
+          "label": "Tier",
+          "required": false,
+          "placeholder": "",
+          "options": [
+            {
+              "name": "Gold",
+              "value": "Gold"
+            },
+            {
+              "name": "Silver",
+              "value": "Silver"
+            }
+          ],
+          "select": {
+            "options": [
+              {
+                "name": "Gold",
+                "value": "Gold"
+              },
+              {
+                "name": "Silver",
+                "value": "Silver"
+              }
+            ]
+          }
+        },
+        "masterField": {
+          "type": "dropdown",
+          "options": [
+            {
+              "name": "Gold",
+              "value": "Gold"
+            },
+            {
+              "name": "Silver",
+              "value": "Silver"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "radio",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000012",
+        "type": "radio",
+        "name": "Tier2",
+        "radio": {
+          "options": [
+            {
+              "id": "Gold",
+              "name": "Gold"
+            },
+            {
+              "id": "Silver",
+              "name": "Silver"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000012",
+          "type": "dropdown",
+          "name": "Tier2",
+          "value": "Tier2",
+          "label": "Tier2",
+          "required": false,
+          "placeholder": "",
+          "options": [
+            {
+              "name": "Gold",
+              "value": "Gold"
+            },
+            {
+              "name": "Silver",
+              "value": "Silver"
+            }
+          ],
+          "select": {
+            "options": [
+              {
+                "name": "Gold",
+                "value": "Gold"
+              },
+              {
+                "name": "Silver",
+                "value": "Silver"
+              }
+            ]
+          }
+        },
+        "masterField": {
+          "type": "dropdown",
+          "options": [
+            {
+              "name": "Gold",
+              "value": "Gold"
+            },
+            {
+              "name": "Silver",
+              "value": "Silver"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "checkbox",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000013",
+        "type": "checkbox",
+        "name": "Active"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000013",
+          "type": "dropdown",
+          "name": "Active",
+          "value": "Active",
+          "label": "Active",
+          "required": false,
+          "placeholder": "",
+          "options": [
+            {
+              "name": "Yes",
+              "value": "1"
+            },
+            {
+              "name": "No",
+              "value": "0"
+            }
+          ],
+          "select": {
+            "options": [
+              {
+                "name": "Yes",
+                "value": "1"
+              },
+              {
+                "name": "No",
+                "value": "0"
+              }
+            ]
+          }
+        },
+        "masterField": {
+          "type": "dropdown",
+          "options": [
+            {
+              "name": "Yes",
+              "value": "1"
+            },
+            {
+              "name": "No",
+              "value": "0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "url",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000014",
+        "type": "url",
+        "name": "Website"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000014",
+          "type": "textinput",
+          "name": "Website",
+          "value": "Website",
+          "label": "Website",
+          "required": false,
+          "placeholder": "",
+          "numeric": true,
+          "specialChars": true
+        },
+        "masterField": {
+          "type": "textinput"
+        }
+      }
+    },
+    {
+      "name": "multi-select",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000015",
+        "type": "multi_select",
+        "name": "Tags",
+        "required": true,
+        "multi_select": {
+          "options": [
+            {
+              "id": "a",
+              "name": "a"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000015",
+          "type": "multilineinput",
+          "name": "Tags",
+          "value": "Tags",
+          "label": "Tags",
+          "required": false,
+          "placeholder": "",
+          "legacy": {
+            "from": "multi_select",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "multilineinput"
+        },
+        "warnings": [
+          "required_dropped_read_only"
+        ]
+      }
+    },
+    {
+      "name": "rich-text",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000016",
+        "type": "rich_text",
+        "name": "Notes"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000016",
+          "type": "multilineinput",
+          "name": "Notes",
+          "value": "Notes",
+          "label": "Notes",
+          "required": false,
+          "placeholder": "",
+          "legacy": {
+            "from": "rich_text",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "multilineinput"
+        }
+      }
+    },
+    {
+      "name": "files",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000017",
+        "type": "files",
+        "name": "Docs",
+        "multiple": true
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000017",
+          "type": "multilineinput",
+          "name": "Docs",
+          "value": "Docs",
+          "label": "Docs",
+          "required": false,
+          "placeholder": "",
+          "legacy": {
+            "from": "files",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "multilineinput"
+        }
+      }
+    },
+    {
+      "name": "signature",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000018",
+        "type": "signature",
+        "name": "Sign"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000018",
+          "type": "multilineinput",
+          "name": "Sign",
+          "value": "Sign",
+          "label": "Sign",
+          "required": false,
+          "placeholder": "",
+          "legacy": {
+            "from": "signature",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "multilineinput"
+        }
+      }
+    },
+    {
+      "name": "pan-button",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000019",
+        "type": "button",
+        "name": "Validate PAN"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000019",
+          "type": "textinput",
+          "name": "Validate PAN",
+          "value": "Validate PAN",
+          "label": "Validate PAN",
+          "required": false,
+          "placeholder": "",
+          "numeric": true,
+          "specialChars": true,
+          "legacy": {
+            "from": "button",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "textinput"
+        }
+      }
+    },
+    {
+      "name": "unknown",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000020",
+        "type": "gstin_lookup",
+        "name": "GSTIN"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000020",
+          "type": "multilineinput",
+          "name": "GSTIN",
+          "value": "GSTIN",
+          "label": "GSTIN",
+          "required": false,
+          "placeholder": "",
+          "legacy": {
+            "from": "gstin_lookup",
+            "readOnly": true
+          }
+        },
+        "masterField": {
+          "type": "multilineinput"
+        },
+        "warnings": [
+          "unknown_type"
+        ]
+      }
+    },
+    {
+      "name": "increment-kept",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000021",
+        "type": "text",
+        "name": "Ref",
+        "increment": true,
+        "incrementOption": "prefix",
+        "prefix": "V-",
+        "autoIncrementPattern": "0000",
+        "autoIncrementValue": "V-0042"
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000021",
+          "type": "textinput",
+          "name": "Ref",
+          "value": "Ref",
+          "label": "Ref",
+          "required": false,
+          "placeholder": "",
+          "increment": true,
+          "incrementOption": "prefix",
+          "prefix": "V-",
+          "autoIncrementPattern": "0000",
+          "numeric": true,
+          "specialChars": true
+        },
+        "masterField": {
+          "type": "textinput"
+        }
+      }
+    },
+    {
+      "name": "classic-name-in-openform",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000022",
+        "type": "dropdown",
+        "name": "Region",
+        "options": [
+          {
+            "name": "North",
+            "value": "N"
+          }
+        ]
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000022",
+          "type": "dropdown",
+          "name": "Region",
+          "value": "Region",
+          "label": "Region",
+          "required": false,
+          "placeholder": "",
+          "options": [
+            {
+              "name": "North",
+              "value": "N"
+            }
+          ],
+          "select": {
+            "options": [
+              {
+                "name": "North",
+                "value": "N"
+              }
+            ]
+          }
+        },
+        "masterField": {
+          "type": "dropdown",
+          "options": [
+            {
+              "name": "North",
+              "value": "N"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "logic-hidden-dropped",
+      "input": {
+        "id": "c2000000-0000-4000-8000-000000000023",
+        "type": "text",
+        "name": "Secret",
+        "hidden": true,
+        "logic": {
+          "conditions": {},
+          "actions": [
+            "hide-block"
+          ]
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c2000000-0000-4000-8000-000000000023",
+          "type": "textinput",
+          "name": "Secret",
+          "value": "Secret",
+          "label": "Secret",
+          "required": false,
+          "placeholder": "",
+          "numeric": true,
+          "specialChars": true
+        },
+        "masterField": {
+          "type": "textinput"
+        },
+        "warnings": [
+          "logic_dropped",
+          "hidden_dropped"
+        ]
+      }
+    }
+  ],
+  "masterCases": [
+    {
+      "name": "openform-master-converted",
+      "master": {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "source": "dms",
+        "primary_key": "Vendor Name"
+      },
+      "elements": [
+        {
+          "id": "nf-text-1",
+          "type": "nf-text",
+          "content": "<p>Intro</p>"
+        },
+        {
+          "id": "c2000000-0000-4000-8000-000000000101",
+          "type": "text",
+          "name": "Vendor Name",
+          "primary": true,
+          "required": true
+        },
+        {
+          "id": "sec-1",
+          "type": "section",
+          "name": "More",
+          "elements": [
+            {
+              "id": "c2000000-0000-4000-8000-000000000102",
+              "type": "select",
+              "name": "Tier",
+              "select": {
+                "options": [
+                  {
+                    "id": "Gold",
+                    "name": "Gold"
+                  }
+                ]
+              },
+              "primary": true
+            },
+            {
+              "id": "c2000000-0000-4000-8000-000000000103",
+              "type": "files",
+              "name": "Docs"
+            }
+          ]
+        },
+        {
+          "id": "pb-1",
+          "type": "nf-page-break",
+          "name": "Page 2"
+        },
+        {
+          "id": "no-uuid",
+          "type": "text",
+          "name": "Ghost"
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000101",
+          "name": "Vendor Name",
+          "type": "text",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": true
+          }
+        },
+        {
+          "id": "c2000000-0000-4000-8000-000000000102",
+          "name": "Tier",
+          "type": "select",
+          "dynamic_field_name": "field_2",
+          "options": [
+            {
+              "id": "Gold",
+              "name": "Gold"
+            }
+          ],
+          "properties": {
+            "is_required": false,
+            "is_primary": true
+          }
+        },
+        {
+          "id": "c2000000-0000-4000-8000-000000000103",
+          "name": "Docs",
+          "type": "files",
+          "dynamic_field_name": "field_3",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "converted",
+        "dialect": "openform",
+        "source": "formplus",
+        "primary_key": "Vendor Name",
+        "elements": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "name": "Vendor Name",
+            "value": "Vendor Name",
+            "label": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": true,
+            "specialChars": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "dropdown",
+            "name": "Tier",
+            "value": "Tier",
+            "label": "Tier",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Gold",
+                "value": "Gold"
+              }
+            ],
+            "select": {
+              "options": [
+                {
+                  "name": "Gold",
+                  "value": "Gold"
+                }
+              ]
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "multilineinput",
+            "name": "Docs",
+            "value": "Docs",
+            "label": "Docs",
+            "required": false,
+            "placeholder": "",
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput"
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "dropdown",
+            "options": [
+              {
+                "name": "Gold",
+                "value": "Gold"
+              }
+            ],
+            "properties": {
+              "is_required": false,
+              "is_primary": false
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "multilineinput"
+          }
+        ],
+        "dropped": [
+          {
+            "id": "nf-text-1",
+            "type": "nf-text",
+            "reason": "layout"
+          },
+          {
+            "id": "sec-1",
+            "type": "section",
+            "reason": "layout"
+          },
+          {
+            "id": "pb-1",
+            "type": "nf-page-break",
+            "reason": "layout"
+          },
+          {
+            "id": "no-uuid",
+            "type": "text",
+            "reason": "no_master_field"
+          }
+        ],
+        "warnings": [
+          {
+            "field_id": "c2000000-0000-4000-8000-000000000102",
+            "code": "primary_demoted"
+          }
+        ],
+        "columnsTouched": false,
+        "recordsTouched": false
+      }
+    },
+    {
+      "name": "duplicate-names-blocked",
+      "master": {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "source": "dms",
+        "primary_key": null
+      },
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000201",
+          "type": "text",
+          "name": "Code"
+        },
+        {
+          "id": "c2000000-0000-4000-8000-000000000202",
+          "type": "number",
+          "name": "code "
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000201",
+          "name": "Code",
+          "type": "text",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false
+          }
+        },
+        {
+          "id": "c2000000-0000-4000-8000-000000000202",
+          "name": "code ",
+          "type": "number",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "blocked",
+        "reason": "duplicate_field_names",
+        "dialect": "openform",
+        "source": "dms",
+        "unchanged": true
+      }
+    },
+    {
+      "name": "classic-native-skipped",
+      "master": {
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "source": "dms",
+        "primary_key": "Name"
+      },
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000301",
+          "type": "textinput",
+          "value": "Name",
+          "label": "Name",
+          "required": true
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000301",
+          "name": "Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "skipped_classic",
+        "dialect": "classic",
+        "source": "dms",
+        "unchanged": true
+      }
+    },
+    {
+      "name": "formplus-skipped-idempotent",
+      "master": {
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "source": "formplus",
+        "primary_key": null
+      },
+      "elements": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000401",
+          "type": "textinput",
+          "name": "Name",
+          "value": "Name",
+          "label": "Name",
+          "required": false,
+          "placeholder": "",
+          "numeric": true,
+          "specialChars": true
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c2000000-0000-4000-8000-000000000401",
+          "name": "Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "skipped_formplus",
+        "source": "formplus",
+        "unchanged": true
+      }
+    },
+    {
+      "name": "empty-skipped",
+      "master": {
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "source": "forms",
+        "primary_key": null
+      },
+      "elements": [],
+      "masterFields": [],
+      "expected": {
+        "action": "skipped_empty",
+        "dialect": "empty",
+        "source": "forms",
+        "unchanged": true
+      }
+    }
+  ]
+}
