@@ -26,7 +26,7 @@ const descriptor = (over: Partial<LaunchDescriptor> = {}): LaunchDescriptor => (
   profile: 'dms-v1',
   tenantId: 'acme',
   workspaceId: 'ws_1',
-  master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null },
+  master: { name: 'Vendor', doctypeIds: [], folderIds: [] },
   returnUrl: `${ORIGIN}/dms-v2/acme/metadata`,
   apiBase: `${ORIGIN}/api`,
   ...over,
@@ -58,12 +58,14 @@ const resetLaunchMemoOnly = () => {
 };
 
 beforeEach(() => {
+  vi.stubEnv('VITE_FP_DMS_API_BASE', `${ORIGIN}/api`);
   resetLaunchMemo();
   setCustomFieldRepository(new MemoryCustomFieldRepository());
   localStorage.setItem('token', 'user-token');
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   localStorage.clear();
 });
 

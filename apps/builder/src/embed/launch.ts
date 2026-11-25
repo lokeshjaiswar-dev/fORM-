@@ -4,7 +4,7 @@ import { z } from 'zod';
  * The launch descriptor (DESIGN section 2): DMS opens fORM- at `<FP>/embed/<mode>#fp=<base64url(JSON)>`. It carries no
  * authority: every read and write goes to dms-api with the user's own DMS token, which enforces permissions. Two
  * fields are dangerous and are checked against allowlists here: `returnUrl` (open redirect) and `apiBase` (the DMS
- * token is only ever sent to an allowlisted `apiBase`).
+ * token is only ever sent to a configured `apiBase`, matched exactly, path included).
  */
 
 export const LAUNCH_MODES = ['dms-master', 'dms-upload', 'dms-record'] as const;
@@ -28,7 +28,6 @@ export const LaunchDescriptorSchema = z.strictObject({
       name: z.string().max(255),
       doctypeIds: z.array(uuid).max(500),
       folderIds: z.array(uuid).max(500),
-      classification: z.string().max(100).nullable().optional(),
     })
     .optional(),
   returnUrl: z.string().max(2048),
@@ -48,8 +47,12 @@ export interface LaunchEnv {
   origin: string;
   /** `VITE_FP_RETURN_ORIGINS`: origins `returnUrl` may point at, besides this page's own. */
   returnOrigins: readonly string[];
-  /** `VITE_FP_DMS_API_ORIGINS`: origins `apiBase` may point at, besides this page's own. */
-  apiOrigins: readonly string[];
+  /**
+   * `VITE_FP_DMS_API_BASE`: the exact DMS API bases (origin and path, comma separated; a root-relative path resolves
+   * against this page's origin). The descriptor's `apiBase` must equal one of them: a link carries no authority over where
+   * the DMS token goes, not even the path on an allowed origin.
+   */
+  apiBases: readonly string[];
   /** `VITE_FP_DEV_OVERRIDES=1`: honours `?fp_profile=`. Dead code in a production build. */
   devOverrides: boolean;
 }
@@ -64,7 +67,10 @@ export function launchEnv(): LaunchEnv {
   return {
     origin: globalThis.location?.origin ?? '',
     returnOrigins: originList(env.VITE_FP_RETURN_ORIGINS),
-    apiOrigins: originList(env.VITE_FP_DMS_API_ORIGINS),
+    apiBases: originList(env.VITE_FP_DMS_API_BASE).flatMap((b) => {
+      const url = absoluteUrl(b, globalThis.location?.origin ?? '', true);
+      return url ? [normalBase(url)] : [];
+    }),
     devOverrides: env.VITE_FP_DEV_OVERRIDES === '1',
   };
 }
@@ -108,6 +114,9 @@ function absoluteUrl(raw: string, origin: string, relativeOk: boolean): URL | nu
   }
 }
 
+/** `origin + path`, no trailing slash: the form bases are compared in. */
+const normalBase = (url: URL): string => `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+
 const allowed = (url: URL, env: LaunchEnv, extra: readonly string[]): boolean => url.origin === env.origin || extra.includes(url.origin);
 
 /** Validates a decoded descriptor for the route `mode`. */
@@ -117,14 +126,14 @@ export function validateDescriptor(raw: unknown, mode: LaunchMode, env: LaunchEn
   const d = parsed.data;
   if (d.mode !== mode) return { ok: false, reason: 'wrong_mode', detail: `${d.mode} on the ${mode} route` };
   const api = absoluteUrl(d.apiBase, env.origin, true);
-  if (!api || !allowed(api, env, env.apiOrigins)) return { ok: false, reason: 'api_origin_rejected', detail: api?.origin ?? d.apiBase };
+  if (!api || api.search !== '' || api.hash !== '' || !env.apiBases.includes(normalBase(api))) return { ok: false, reason: 'api_origin_rejected', detail: api ? normalBase(api) : d.apiBase };
   const back = absoluteUrl(d.returnUrl, env.origin, false);
   const { returnUrl: _r, apiBase: _a, ...rest } = d;
   return {
     ok: true,
     launch: {
       ...rest,
-      apiBase: `${api.origin}${api.pathname}`.replace(/\/+$/, ''),
+      apiBase: normalBase(api),
       returnUrl: back && allowed(back, env, env.returnOrigins) ? back.toString() : null,
     },
   };

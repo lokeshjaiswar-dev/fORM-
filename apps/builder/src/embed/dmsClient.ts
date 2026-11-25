@@ -106,6 +106,8 @@ export function createDmsClient(options: DmsClientOptions): DmsClient {
           method,
           // The token is sent as a header, never as a cookie: nothing else rides along to another origin.
           credentials: 'omit',
+          // A redirect would carry the bearer to wherever the first answer points.
+          redirect: 'error',
           referrerPolicy: 'no-referrer',
           signal: controller.signal,
           headers: {

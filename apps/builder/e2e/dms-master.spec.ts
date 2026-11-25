@@ -17,7 +17,7 @@ const descriptor = (over: Record<string, unknown> = {}) => ({
   profile: 'dms-v1',
   tenantId: 'acme',
   workspaceId: 'ws_1',
-  master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null },
+  master: { name: 'Vendor', doctypeIds: [], folderIds: [] },
   returnUrl: `${ORIGIN}/dms-return`,
   apiBase: `${ORIGIN}/api`,
   ...over,

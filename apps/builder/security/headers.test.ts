@@ -124,8 +124,9 @@ describe('builder security headers (FND-20)', () => {
   it('only /embed/dms-upload is framable; /embed/dms-master is a top-level page', () => {
     expect(isFramablePath('/embed/dms-upload')).toBe(true);
     expect(isFramablePath('/embed/dms-upload?fp_parent=x#y')).toBe(true);
+    expect(isFramablePath('/embed/dms-upload/')).toBe(true);
     expect(isFramablePath('/formplus/embed/dms-upload', '/formplus/')).toBe(true);
-    for (const url of ['/embed/dms-master', '/embed/dms-master?x=1', '/embed', '/embed/', '/embed/dms-uploads', '/embed/dms-record', '/forms', '/formplus/embed/dms-upload', undefined]) {
+    for (const url of ['/embed/dms-master', '/embed/dms-master?x=1', '/embed', '/embed/', '/embed/dms-uploads', '/embed/dms-record', '/forms', '/formplus/embed/dms-upload', '/embed/dms-upload/x', '/embed/dms-upload/..%2Fdms-master', '/embed/dms-upload/x/', undefined]) {
       expect(isFramablePath(url as string | undefined), String(url)).toBe(false);
     }
   });

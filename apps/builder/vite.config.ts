@@ -101,6 +101,14 @@ export default defineConfig(({ mode }) => {
   const apiUrl = env.VITE_API_URL;
   /* VITE_FP_DMS_API_ORIGINS: DMS API origins the /embed pages may call (the DMS token is sent to those only; see src/embed/launch.ts). */
   const dmsOrigins = (env.VITE_FP_DMS_API_ORIGINS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
+  /* VITE_FP_DMS_API_BASE: the exact DMS API base(s) the descriptor's apiBase must equal; absolute ones add their origin to connect-src. */
+  for (const b of (env.VITE_FP_DMS_API_BASE ?? '').split(',')) {
+    try {
+      if (/^https?:/i.test(b.trim())) dmsOrigins.push(new URL(b.trim()).origin);
+    } catch {
+      /* ignored: launch.ts refuses it too */
+    }
+  }
   /* Dev preview POSTs field API checks from the browser; CSP connect-src must allow the demo validator. */
   const demoValidate = mode === 'development' ? ['http://localhost:3001', 'http://127.0.0.1:3001'] : [];
   const connectOrigins = [...(apiUrl ? [apiUrl] : []), ...dmsOrigins, ...demoValidate];

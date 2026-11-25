@@ -41,6 +41,12 @@ describe('createDmsClient', () => {
     expect(init.headers).toEqual({ Authorization: 'Bearer tok', 'X-Tenant-Id': 'acme', 'X-Workspace-Id': 'ws_1', Accept: 'application/json', 'Content-Type': 'application/json' });
   });
 
+  it("never follows a redirect (the bearer must not travel on to another place)", async () => {
+    const fetch = vi.fn().mockResolvedValue(json(200, {}));
+    await createDmsClient({ ...base, fetch, token: () => 'tok' }).request('GET', '/x');
+    expect((fetch.mock.calls[0]![1] as RequestInit).redirect).toBe('error');
+  });
+
   it('sends no body and no content type on a GET', async () => {
     const fetch = vi.fn().mockResolvedValue(json(200, {}));
     await createDmsClient({ ...base, fetch, token: () => 'tok' }).request('GET', '/x');

@@ -14,7 +14,7 @@ const launch = (over: Partial<ResolvedLaunch> = {}): ResolvedLaunch => ({
   profile: 'dms-v1',
   tenantId: 'acme',
   workspaceId: 'ws_1',
-  master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null },
+  master: { name: 'Vendor', doctypeIds: [], folderIds: [] },
   returnUrl: 'https://dms.example.test/back',
   apiBase: 'https://dms.example.test/api',
   ...over,
@@ -127,9 +127,9 @@ describe('DmsMasterRepository: Save to DMS', () => {
 
   it('carries the doctype and folder ids the descriptor chose', async () => {
     const dms = fakeDms(() => json(201, show()));
-    const ids = { doctypeIds: ['d1000000-0000-4000-8000-000000000001'], folderIds: ['f1000000-0000-4000-8000-000000000001'], classification: 'internal', name: 'Vendor' };
+    const ids = { doctypeIds: ['d1000000-0000-4000-8000-000000000001'], folderIds: ['f1000000-0000-4000-8000-000000000001'], name: 'Vendor' };
     await new DmsMasterRepository(launch({ master: ids }), dms.client).commit(docFor(create));
-    expect(dms.calls[0]!.body).toMatchObject({ doctype_ids: ids.doctypeIds, folder_ids: ids.folderIds, classification: 'internal' });
+    expect(dms.calls[0]!.body).toMatchObject({ doctype_ids: ids.doctypeIds, folder_ids: ids.folderIds, classification: null });
   });
 
   it('after a create, the next save is a PATCH of the same master with the updated_at the server gave', async () => {

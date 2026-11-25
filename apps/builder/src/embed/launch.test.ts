@@ -5,7 +5,7 @@ import {
 } from '@/embed/launch';
 
 const ORIGIN = 'https://dms.example.test';
-const env: LaunchEnv = { origin: ORIGIN, returnOrigins: [], apiOrigins: [], devOverrides: false };
+const env: LaunchEnv = { origin: ORIGIN, returnOrigins: [], apiBases: [`${ORIGIN}/api`], devOverrides: false };
 
 const descriptor = (over: Partial<LaunchDescriptor> = {}): LaunchDescriptor => ({
   v: 1,
@@ -13,7 +13,7 @@ const descriptor = (over: Partial<LaunchDescriptor> = {}): LaunchDescriptor => (
   profile: 'dms-v1',
   tenantId: 'acme',
   workspaceId: 'ws_1',
-  master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null },
+  master: { name: 'Vendor', doctypeIds: [], folderIds: [] },
   returnUrl: `${ORIGIN}/dms-v2/acme/metadata`,
   apiBase: `${ORIGIN}/api/`,
   ...over,
@@ -69,11 +69,25 @@ describe('validateDescriptor', () => {
   describe('apiBase allowlist (the token goes only here)', () => {
     it('refuses an origin that is not this page or on the list', () => {
       const r = validateDescriptor(descriptor({ apiBase: 'https://evil.example.test/api' }), 'dms-master', env);
-      expect(r).toMatchObject({ ok: false, reason: 'api_origin_rejected', detail: 'https://evil.example.test' });
+      expect(r).toMatchObject({ ok: false, reason: 'api_origin_rejected', detail: 'https://evil.example.test/api' });
     });
-    it('accepts a listed origin, including one with a trailing slash in the list', () => {
-      const listed: LaunchEnv = { ...env, apiOrigins: ['https://api.dms.example.test'] };
-      expect(validateDescriptor(descriptor({ apiBase: 'https://api.dms.example.test/v1' }), 'dms-master', listed)).toMatchObject({ ok: true, launch: { apiBase: 'https://api.dms.example.test/v1' } });
+    it('accepts a configured base, matched exactly (trailing slash in the descriptor is fine)', () => {
+      const listed: LaunchEnv = { ...env, apiBases: ['https://api.dms.example.test/v1'] };
+      expect(validateDescriptor(descriptor({ apiBase: 'https://api.dms.example.test/v1/' }), 'dms-master', listed)).toMatchObject({ ok: true, launch: { apiBase: 'https://api.dms.example.test/v1' } });
+    });
+    it('refuses a different path on an allowed origin (the token must not go to /files/public/...)', () => {
+      expect(validateDescriptor(descriptor({ apiBase: `${ORIGIN}/files/public/attacker-bucket` }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
+      expect(validateDescriptor(descriptor({ apiBase: `${ORIGIN}/api/sub` }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
+      expect(validateDescriptor(descriptor({ apiBase: `${ORIGIN}/api?x=1` }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
+      const listed: LaunchEnv = { ...env, apiBases: ['https://gw.example/dms'] };
+      expect(validateDescriptor(descriptor({ apiBase: 'https://gw.example/some-other-service' }), 'dms-master', listed)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
+    });
+    it('refuses everything when no base is configured', () => {
+      expect(validateDescriptor(descriptor(), 'dms-master', { ...env, apiBases: [] })).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
+    });
+    it('a descriptor carrying a classification is invalid (the link does not choose it)', () => {
+      const d = { ...descriptor(), master: { name: 'V', doctypeIds: [], folderIds: [], classification: 'attacker-chosen' } };
+      expect(validateDescriptor(d, 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
     });
     it.each(['javascript:alert(1)', 'ftp://dms.example.test/api', 'https://user:pw@dms.example.test/api', 'data:text/html,x', '//evil.example.test/api', 'https://dms.example.test.evil.test/api'])('refuses %s', (apiBase) => {
       expect(validateDescriptor(descriptor({ apiBase }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
@@ -113,7 +127,7 @@ describe('currentLaunch', () => {
   const here = (h: string) => ({ hash: h, pathname: '/embed/dms-master', search: '?a=1' });
 
   it('parses the fragment once, clears it from the address bar, and remembers the result for a remount or reload', () => {
-    const envHere: LaunchEnv = { ...env, origin: window.location.origin };
+    const envHere: LaunchEnv = { ...env, origin: window.location.origin, apiBases: [`${window.location.origin}/api`] };
     const d = descriptor({ returnUrl: `${window.location.origin}/back`, apiBase: `${window.location.origin}/api` });
     window.history.replaceState(null, '', `/embed/dms-master${hash(d)}`);
     const first = currentLaunch('dms-master', envHere, { hash: window.location.hash, pathname: '/embed/dms-master', search: '' });

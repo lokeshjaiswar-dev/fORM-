@@ -192,7 +192,7 @@ export class DmsMasterRepository implements DocumentRepository {
         ? await this.client.request('POST', MASTER_FORM_PATH, {
             name,
             source: 'formplus',
-            classification: this.launch.master?.classification ?? null,
+            classification: null, // never from the link: dms-ui sends null too
             doctype_ids: this.launch.master?.doctypeIds ?? [],
             folder_ids: this.launch.master?.folderIds ?? [],
             form_builder_fields: fields,

@@ -71,7 +71,7 @@ describe('embedFraming', () => {
   });
 
   it('leaves every other route as it was (/embed/dms-master is a top-level page, not framable)', () => {
-    for (const url of ['/forms', '/f/embed', '/', '/builder/1', '/embed/dms-master', '/embed/dms-master?x=1', '/embed/dms-record']) {
+    for (const url of ['/forms', '/f/embed', '/', '/builder/1', '/embed/dms-master', '/embed/dms-master?x=1', '/embed/dms-record', '/embed/dms-upload/x', '/embed/dms-upload/..%2Fdms-master']) {
       const r = run(url);
       expect(r.nexted).toBe(1);
       expect(r.set.get('X-Frame-Options')).toBe('DENY');

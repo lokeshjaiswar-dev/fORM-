@@ -195,7 +195,7 @@ test.describe('what the page refuses', () => {
     const embed = await request.get('/embed/dms-upload');
     expect(embed.headers()['content-security-policy']).toContain("frame-ancestors 'self'");
     expect(embed.headers()['x-frame-options']).toBeUndefined();
-    for (const url of ['/forms', '/embed/dms-master']) {
+    for (const url of ['/forms', '/embed/dms-master', '/embed/dms-upload/x', '/embed/dms-upload/..%2Fdms-master']) {
       const other = await request.get(url);
       expect(other.headers()['content-security-policy'], url).toContain("frame-ancestors 'none'");
       expect(other.headers()['x-frame-options'], url).toBe('DENY');

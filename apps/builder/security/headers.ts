@@ -127,12 +127,12 @@ export function productionEmbedHeaders(env: {
 /** The embed routes that run inside a frame. Every other `/embed/*` route (`dms-master`) is a top-level page and stays unframable. */
 export const FRAMABLE_EMBED_ROUTES: readonly string[] = ['dms-upload'];
 
-/** True for `<base>embed/<framable route>` (and below it). Nothing else is framable. */
+/** True for `<base>embed/<framable route>` exactly (a trailing slash is fine, a sub-path is not). Nothing else is framable. */
 export function isFramablePath(url: string | undefined, base = '/'): boolean {
   const path = (url ?? '').split(/[?#]/)[0] ?? '';
   return FRAMABLE_EMBED_ROUTES.some((route) => {
     const prefix = `${base.replace(/\/+$/, '')}/embed/${route}`;
-    return path === prefix || path.startsWith(`${prefix}/`);
+    return path === prefix || path === `${prefix}/`;
   });
 }
 

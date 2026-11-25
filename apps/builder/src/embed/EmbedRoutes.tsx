@@ -3,6 +3,17 @@ import { DmsRecordUnavailable } from '@/embed/DmsRecordUnavailable';
 import { DmsMasterPage } from '@/embed/master/DmsMasterPage';
 import DmsUploadPage from '@/embed/upload/DmsUploadPage';
 
+const framed = (): boolean => typeof window !== 'undefined' && window.parent !== window;
+
+/** An unknown /embed path inside a frame: never navigate on to the full builder in a frame the host owns. */
+function NotAvailableHere() {
+  return (
+    <main role="alert" style={{ padding: 24, fontFamily: 'system-ui, sans-serif' }}>
+      This page is not available here.
+    </main>
+  );
+}
+
 /**
  * `/embed/*`: fORM- hosted inside another product (DMS+). These routes sit outside `RequireSession`: the host's own
  * session is what counts, not a fORM- account, and the persistence adapters never touch the fORM- API. Anything
@@ -14,7 +25,7 @@ export function EmbedRoutes() {
       <Route path="dms-master" element={<DmsMasterPage />} />
       <Route path="dms-upload" element={<DmsUploadPage />} />
       <Route path="dms-record" element={<DmsRecordUnavailable />} />
-      <Route path="*" element={<Navigate to="/forms" replace />} />
+      <Route path="*" element={framed() ? <NotAvailableHere /> : <Navigate to="/forms" replace />} />
     </Routes>
   );
 }
