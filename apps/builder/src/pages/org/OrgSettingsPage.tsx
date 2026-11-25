@@ -21,6 +21,8 @@ const M = defineMessages('builder', {
   'org_settings.invite_days': 'Invitations expire after (days)',
   'org_settings.review_mfa': 'Checkers must use two-factor sign-in',
   'org_settings.review_mfa_hint': 'A checker who has not turned on two-factor sign-in for their own account cannot approve or reject part of a response. Turn this off to let them decide without it.',
+  'org_settings.api_credentials_hint': 'The sign-ins your forms use to call outside APIs are kept here.',
+  'org_settings.api_credentials': 'API credentials',
   'org_settings.email_senders': 'Email senders',
   'org_settings.email_senders_hint': 'The addresses your forms send emails from.',
   'org_settings.save': 'Save',
@@ -142,6 +144,12 @@ export function OrgSettingsPage() {
             {t(M['org_settings.email_senders_hint'])}{' '}
             <TextLink asChild>
               <Link to="/org/email-senders">{t(M['org_settings.email_senders'])}</Link>
+            </TextLink>
+          </p>
+          <p className="text-[13px] text-muted-foreground">
+            {t(M['org_settings.api_credentials_hint'])}{' '}
+            <TextLink asChild>
+              <Link to="/org/api-credentials">{t(M['org_settings.api_credentials'])}</Link>
             </TextLink>
           </p>
           <FormError message={error} />

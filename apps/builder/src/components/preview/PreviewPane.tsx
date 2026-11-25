@@ -10,6 +10,8 @@ import { BUILDER_LOCALE, t } from '@/i18n';
 import { Alert, AlertDescription, Button, TextLink } from '@dmacq/ui';
 import { Tooltip } from '@/components/Tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
+import { useActiveOrg } from '@/auth/client';
+import { previewRemoteSource } from '@/components/preview/previewRemoteSource';
 import { useEdition } from '@/edition/edition';
 import { useAccessPreviewStatus } from '@/components/builder/access/accessPreview';
 import { previewUploader, previewVersion } from '@/lib/preview';
@@ -56,6 +58,9 @@ export function PreviewPane({ definition, status = OPEN }: { definition: FormDef
   const [now] = useState(() => new Date().toISOString() as IsoInstant);
   const edition = runtimeEdition(useEdition());
   const submissions = useOptionalSubmissions();
+  const org = useActiveOrg()?.id ?? null;
+  /** Lookups, API options and API checks in the preview go through the author route; without an organisation they stay inert. */
+  const remote = useMemo(() => (org === null ? undefined : previewRemoteSource(org, definition)), [org, definition]);
   const build = useMemo(() => previewVersion(definition, OPEN, now, edition), [definition, now, edition]);
   const session = useMemo(() => ({ startedAt: now, device }), [now, device]);
   const shown = status.state === 'password' && unlocked ? OPEN : status;
@@ -68,6 +73,7 @@ export function PreviewPane({ definition, status = OPEN }: { definition: FormDef
       locale={BUILDER_LOCALE}
       uploader={previewUploader}
       session={session}
+      {...(remote ? { remote } : {})}
       onSubmit={(payload: SubmitPayload) => {
         window.dispatchEvent(new CustomEvent('form-preview-submit', { detail: payload }));
         if (!submissions) return;

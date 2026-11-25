@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { defineMessages } from '@form/i18n';
-import { buildApiRequest, displayOptionPath, getAtPath, guessMapping, mapApiOptions, parseApiBody, pickFromTree } from '@form/renderer/author';
+import { displayOptionPath, getAtPath, guessMapping, mapApiOptions, pickFromTree } from '@form/renderer/author';
 import {
   isSafeUrl,
   type ApiOptions,
@@ -19,16 +19,17 @@ import { Alert, AlertDescription, Badge, Button, Label, Separator, Table, TableB
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
 import { ApiResponseTree, type TreePart } from '@/components/builder/inspector/ApiResponseTree';
 import { ToggleRow } from '@/components/builder/inspector/parts';
+import { useRemoteTest } from '@/components/builder/inspector/useRemoteTest';
 
 const M = defineMessages('builder', {
   'inspector.api_options': 'Load options from an API',
-  'inspector.api_options_hint': 'The live form fetches this list. The options above are the fallback.',
+  'inspector.api_options_hint': 'The server fetches this list for the live form. The options above are the fallback.',
   'inspector.api_url_hint_options': 'GET or POST this URL. The field answer is not sent.',
   'inspector.api_query_hint_options': 'Optional extra query values.',
   'inspector.api_body_hint_options': 'Optional extra JSON fields.',
   'inspector.api_test': 'Test',
   'inspector.api_testing': 'Testing…',
-  'inspector.api_test_fail': 'The request could not be sent. Check the URL and that the API allows this origin.',
+  'inspector.api_test_fail': 'The server could not get an answer from this API. Check the URL, the credential, and that the form is saved.',
   'inspector.api_parse_fail': 'The response could not be parsed as {format}.',
   'inspector.api_empty': 'The response had no keys to pick.',
   'inspector.api_label_key': 'Option text',
@@ -73,6 +74,7 @@ export function ApiOptionsSection({ block }: { block: ChoiceBlock }) {
   const [data, setData] = useState<unknown>();
   const [picked, setPicked] = useState<{ path: string; part: TreePart }>();
 
+  const runTest = useRemoteTest();
   const on = api !== undefined;
   const preview = api && data !== undefined && api.itemsPath !== undefined ? mapApiOptions(data, api) : [];
   const labelPath = api?.itemsPath !== undefined ? displayOptionPath(api.itemsPath, api.labelKey ?? '$self') : undefined;
@@ -114,17 +116,14 @@ export function ApiOptionsSection({ block }: { block: ChoiceBlock }) {
     setData(undefined);
     setPicked(undefined);
     try {
-      const { url, init } = buildApiRequest(api);
-      const res = await fetch(url, init);
-      const text = await res.text();
-      const parsed = parseApiBody(text, api.parser ?? 'json');
-      if (parsed.data === undefined) {
-        setStatus(text.trim() ? 'parse' : 'empty');
+      const { data: tree } = await runTest(api);
+      if (tree === undefined || tree === null) {
+        setStatus('empty');
         return;
       }
-      setData(parsed.data);
+      setData(tree);
       setStatus('ok');
-      if (api.itemsPath !== undefined) applyOptions(mapApiOptions(parsed.data, api));
+      if (api.itemsPath !== undefined) applyOptions(mapApiOptions(tree, api));
     } catch {
       setStatus('fail');
     }

@@ -14,6 +14,7 @@ import { carryAnswers } from '@/lib/carryAnswers';
 import { previewVersion } from '@/lib/preview';
 import { answerRows } from '@/persistence/answerRows';
 import { publicUploader } from '@/persistence/filesApi';
+import { proxySource } from '@/persistence/remoteApi';
 import {
   addressWithoutQuery,
   browserTimeZone,
@@ -151,6 +152,14 @@ export function PublicFillPage() {
       live = false;
     };
   }, [slug, reloads, navigate]);
+
+  /** The respondent's lookups, API option lists and API checks: ids and typed values to the proxy, for the version this page loaded. */
+  const readySlug = page.kind === 'ready' ? page.slug : null;
+  const readyVersionId = page.kind === 'ready' ? (page.version?.versionId ?? null) : null;
+  const remote = useMemo(
+    () => (readySlug !== null && readyVersionId !== null ? proxySource({ slug: readySlug, versionId: readyVersionId, token: () => token.current }) : undefined),
+    [readySlug, readyVersionId],
+  );
 
   /** Asks the API again, from the top: a status that changed, a token that ended, a form that was unpublished. */
   const reload = () => {
@@ -332,6 +341,7 @@ export function PublicFillPage() {
         locale={locale}
         uploader={uploader}
         session={session}
+        {...(remote ? { remote } : {})}
         {...(page.answers ? { initialAnswers: page.answers } : {})}
         onSubmit={submit}
         onEvent={(event) => {
