@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { bigint, boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import type { WebhookPayloadMapping } from '@form/schema';
 import { bytea, ts, tsNull } from './columns.ts';
 import { forms } from './forms.ts';
 import { orgs } from './identity.ts';
@@ -182,6 +183,7 @@ export const WEBHOOK_EVENTS = ['submission.created', 'submission.updated', 'subm
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 export const WEBHOOK_KEY_BY = ['key', 'id'] as const;
+export const WEBHOOK_BODY_FORMATS = ['json', 'xml'] as const;
 export const WEBHOOK_FILES = ['signed_urls', 'none'] as const;
 
 /**
@@ -207,6 +209,10 @@ export const webhooks = pgTable(
     fieldKeys: jsonb('field_keys').$type<string[] | 'all_in_purposes'>().notNull().default(sql`'"all_in_purposes"'::jsonb`),
     purposeIds: text('purpose_ids').array().notNull(),
     files: text('files', { enum: WEBHOOK_FILES }).notNull().default('none'),
+    /** 'json' (the standard payload when `payloadMapping` is null) or 'xml'. Migration 0025. */
+    bodyFormat: text('body_format', { enum: WEBHOOK_BODY_FORMATS }).notNull().default('json'),
+    /** `WebhookPayloadMapping` of @form/schema, validated by the API on save and again by the worker. Null = the standard payload. */
+    payloadMapping: jsonb('payload_mapping').$type<WebhookPayloadMapping | null>(),
     consecutiveFailures: integer('consecutive_failures').notNull().default(0),
     disabledReason: text('disabled_reason'),
     rev: integer('rev').notNull().default(1),

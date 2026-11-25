@@ -14,6 +14,8 @@ export const WEBHOOKS_PROBLEMS = {
   // The URL fails the edition's egress policy: a scheme the deployment does not allow, a host that is not on the
   // allowlist, or an address that is private, loopback or link-local (the cloud metadata address among them).
   EGRESS_DENIED: { status: 422, title: 'That address cannot be reached from this installation' },
+  // The custom body is not usable: a path that is not names, dots and [], a path that is both a value and a parent, a bad XML root.
+  INVALID_PAYLOAD_MAPPING: { status: 422, title: 'The payload mapping is not valid' },
   // PUT .../webhooks/:id without If-Match: a save that does not say which revision it read would overwrite blindly.
   WEBHOOK_REV_REQUIRED: { status: 428, title: 'Send the revision you read in If-Match' },
   // PUT .../webhooks/:id named a revision that is no longer the stored one: someone else saved first, so reload and merge.

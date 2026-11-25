@@ -72,6 +72,25 @@ export interface WebhookConfig {   // INT-01
   purposeIds: PurposeId[];
   files: 'signed_urls' | 'none';
   filter?: ConditionGroup;
+  /** Body format; absent = 'json'. */
+  bodyFormat?: 'json' | 'xml';
+  /** Optional custom body: paths -> answer/meta sources. Absent = the standard payload. Still filtered by purposes/redaction. */
+  payloadMapping?: WebhookPayloadMapping;
+}
+
+export const WEBHOOK_PAYLOAD_META = ['event', 'eventId', 'createdAt', 'formId', 'submissionId', 'submittedAt'] as const;
+export type WebhookPayloadMeta = (typeof WEBHOOK_PAYLOAD_META)[number];
+
+/** Where one mapped value comes from: a field's answer by FIELD KEY (whatever `keyBy` is), or an envelope fact. */
+export type WebhookPayloadSource = { kind: 'answer'; key: string } | { kind: 'meta'; name: WebhookPayloadMeta };
+
+/** `path` is dotted: `customer.name`, `order.lines[].item` (a `[]` segment spreads an array answer). */
+export interface WebhookPayloadMappingEntry { path: string; source: WebhookPayloadSource }
+
+export interface WebhookPayloadMapping {
+  /** XML root element name; default 'submission'. */
+  root?: string;
+  entries: WebhookPayloadMappingEntry[];
 }
 
 /** Every one needs egress; @form/config gates them per edition (`integration:<provider>`, INTEGRATIONS_ENABLED). */

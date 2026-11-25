@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { INTEGRATION_PROVIDERS } from '../ops.ts';
+import { INTEGRATION_PROVIDERS, WEBHOOK_PAYLOAD_META } from '../ops.ts';
 import { guarded, keyed, richTextLimitError } from './_util.ts';
 import { DataClassificationSchema } from './compliance.ts';
 import { ConditionGroupSchema, RecipientSchema } from './logic.ts';
@@ -96,6 +96,17 @@ export const NotificationConfigSchema = z.strictObject({
   origin: OriginSchema.exactOptional(),
 });
 
+export const WebhookPayloadMetaSchema = z.enum(WEBHOOK_PAYLOAD_META);
+export const WebhookPayloadSourceSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('answer'), key: z.string().min(1).max(200) }),
+  z.strictObject({ kind: z.literal('meta'), name: WebhookPayloadMetaSchema }),
+]);
+export const WebhookPayloadMappingEntrySchema = z.strictObject({ path: z.string().min(1).max(200), source: WebhookPayloadSourceSchema });
+export const WebhookPayloadMappingSchema = z.strictObject({
+  root: z.string().min(1).max(64).exactOptional(),
+  entries: z.array(WebhookPayloadMappingEntrySchema).max(200),
+});
+
 export const WebhookConfigSchema = z.strictObject({
   id: WebhookIdSchema,
   url: SafeUrlSchema,
@@ -107,6 +118,8 @@ export const WebhookConfigSchema = z.strictObject({
   purposeIds: z.array(PurposeIdSchema).min(1),
   files: z.enum(['signed_urls', 'none']),
   filter: ConditionGroupSchema.exactOptional(),
+  bodyFormat: z.enum(['json', 'xml']).exactOptional(),
+  payloadMapping: WebhookPayloadMappingSchema.exactOptional(),
 });
 
 export const IntegrationProviderSchema = z.enum(INTEGRATION_PROVIDERS);

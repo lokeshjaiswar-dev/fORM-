@@ -58,6 +58,8 @@ export interface BuiltWebhookPayload {
   payload: WebhookPayload;
   /** The keys of the fields whose value is in the body: what the disclosures row names. A masked or unanswered field is not in it. */
   sentKeys: string[];
+  /** The same entries as `payload.submission.answers`, by FIELD KEY whatever `keyBy` is: what a payload mapping reads from. Null-prototype. */
+  byKey: Readonly<Record<string, unknown>>;
 }
 
 type Json = Record<string, unknown>;
@@ -134,7 +136,12 @@ export function buildWebhookPayload(input: WebhookPayloadInput): BuiltWebhookPay
     ...(webhook.fieldKeys === 'all_in_purposes' ? {} : { fieldKeys: webhook.fieldKeys }),
   });
   const answers: Record<string, unknown> = {};
-  for (const field of fields) answers[webhook.keyBy === 'key' ? field.key : field.blockId] = entryOf(field, definition, webhook.keyBy);
+  const byKey: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const field of fields) {
+    const entry = entryOf(field, definition, webhook.keyBy);
+    answers[webhook.keyBy === 'key' ? field.key : field.blockId] = entry;
+    byKey[field.key] = entry;
+  }
   return {
     payload: {
       id: input.eventId,
@@ -144,5 +151,6 @@ export function buildWebhookPayload(input: WebhookPayloadInput): BuiltWebhookPay
       submission: { id: input.submission.id, submittedAt: input.submission.receivedAt.toISOString(), answers },
     },
     sentKeys: disclosedFieldKeys(fields),
+    byKey,
   };
 }

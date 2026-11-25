@@ -22,7 +22,7 @@ import {
   type Tx,
 } from '@form/db';
 import { isPortError, type EgressGuard, type OrgSecrets, type Queue } from '@form/ports';
-import { FieldKeySchema, PurposeIdSchema, WebhookConfigSchema } from '@form/schema';
+import { FieldKeySchema, PurposeIdSchema, validateMapping, WebhookConfigSchema, WebhookPayloadMappingSchema } from '@form/schema';
 import { accountOf, clientInfo, tenantOf } from '../auth.ts';
 import { MAX_CURSOR_LENGTH, readCursor, signCursor } from '../cursor.ts';
 import { ProblemError } from '../errors.ts';
@@ -74,6 +74,10 @@ const webhookBody = z.strictObject({
   fieldKeys: z.union([z.array(FieldKeySchema).max(500), z.literal('all_in_purposes')]).default('all_in_purposes'),
   purposeIds: z.array(PurposeIdSchema).max(100),
   files: WebhookConfigSchema.shape.files.default('none'),
+  /** The format of the body; 'json' with no mapping is the standard payload. */
+  bodyFormat: WebhookConfigSchema.shape.bodyFormat.unwrap().default('json'),
+  /** Paths -> answer/meta sources; applied by the worker AFTER the disclosure filter, so it cannot widen what is sent. */
+  payloadMapping: WebhookPayloadMappingSchema.nullable().default(null),
 });
 type WebhookBody = z.infer<typeof webhookBody>;
 
@@ -93,6 +97,8 @@ const webhookView = z.object({
   fieldKeys: z.union([z.array(z.string()), z.literal('all_in_purposes')]),
   purposeIds: z.array(z.string()),
   files: z.enum(['signed_urls', 'none']),
+  bodyFormat: z.enum(['json', 'xml']),
+  payloadMapping: WebhookPayloadMappingSchema.nullable(),
   secretHint: z.string(),
   secretRotatedAt: isoOrNull,
   consecutiveFailures: z.number().int().min(0),
@@ -231,6 +237,8 @@ const webhookColumns = {
   fieldKeys: webhooks.fieldKeys,
   purposeIds: webhooks.purposeIds,
   files: webhooks.files,
+  bodyFormat: webhooks.bodyFormat,
+  payloadMapping: webhooks.payloadMapping,
   secretId: webhooks.secretId,
   consecutiveFailures: webhooks.consecutiveFailures,
   disabledReason: webhooks.disabledReason,
@@ -252,6 +260,8 @@ interface StoredWebhook {
   fieldKeys: WebhookView['fieldKeys'];
   purposeIds: string[];
   files: WebhookView['files'];
+  bodyFormat: WebhookView['bodyFormat'];
+  payloadMapping: WebhookView['payloadMapping'];
   secretId: string;
   consecutiveFailures: number;
   disabledReason: string | null;
@@ -306,7 +316,7 @@ function deliveryOf(row: { createdAt: Date; nextAttemptAt: Date | null } & Omit<
 }
 
 /** The top-level keys of the settings that differ, in a fixed order; lists compare as sets, so reordering them is no change. */
-function changedKeys(before: WebhookView, next: Pick<WebhookView, 'url' | 'enabled' | 'events' | 'keyBy' | 'fieldKeys' | 'purposeIds' | 'files'>): string[] {
+function changedKeys(before: WebhookView, next: Pick<WebhookView, 'url' | 'enabled' | 'events' | 'keyBy' | 'fieldKeys' | 'purposeIds' | 'files' | 'bodyFormat' | 'payloadMapping'>): string[] {
   const set = (v: readonly string[] | 'all_in_purposes') => (typeof v === 'string' ? v : JSON.stringify([...v].sort()));
   const keys: string[] = [];
   if (before.url !== next.url) keys.push('url');
@@ -316,11 +326,17 @@ function changedKeys(before: WebhookView, next: Pick<WebhookView, 'url' | 'enabl
   if (set(before.fieldKeys) !== set(next.fieldKeys)) keys.push('fieldKeys');
   if (set(before.purposeIds) !== set(next.purposeIds)) keys.push('purposeIds');
   if (before.files !== next.files) keys.push('files');
+  if (before.bodyFormat !== next.bodyFormat) keys.push('bodyFormat');
+  if (JSON.stringify(before.payloadMapping) !== JSON.stringify(next.payloadMapping)) keys.push('payloadMapping');
   return keys;
 }
 
-/** The settings of a body as stored: lists with each value once. */
+/** The settings of a body as stored: lists with each value once. A mapping that cannot be used is a 422, nothing written. */
 function settingsOf(body: WebhookBody) {
+  if (body.payloadMapping !== null) {
+    const issues = validateMapping(body.payloadMapping);
+    if (issues.length > 0) throw new ProblemError('INVALID_PAYLOAD_MAPPING', issues.slice(0, 5).join('; '));
+  }
   return {
     url: body.url,
     enabled: body.enabled,
@@ -329,6 +345,8 @@ function settingsOf(body: WebhookBody) {
     fieldKeys: typeof body.fieldKeys === 'string' ? body.fieldKeys : unique(body.fieldKeys),
     purposeIds: unique(body.purposeIds),
     files: body.files,
+    bodyFormat: body.bodyFormat,
+    payloadMapping: body.payloadMapping,
   };
 }
 

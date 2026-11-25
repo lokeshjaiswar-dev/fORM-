@@ -39,6 +39,8 @@ type Row = {
   fieldKeys: string[] | 'all_in_purposes';
   purposeIds: string[];
   files: 'signed_urls' | 'none';
+  bodyFormat?: 'json' | 'xml';
+  payloadMapping?: unknown;
   secretHint: string;
   secretRotatedAt: string | null;
   consecutiveFailures: number;
@@ -370,9 +372,50 @@ describe('WebhooksPanel: the editor', () => {
       fieldKeys: ['email'],
       purposeIds: [OPS, MARKETING],
       files: 'none',
+      bodyFormat: 'json',
+      payloadMapping: null,
     });
     expect(post?.headers['x-fr-org']).toBe('o1');
     expect(post?.headers['x-fr-client']).toBe('builder');
+  });
+
+  it('builds a custom body: paths mapped to fields with a live preview of sample values, in JSON and in XML, and sends the mapping', async () => {
+    const api = fakeApi();
+    const user = userEvent.setup();
+    render(<WebhooksPanel formId={FORM} />);
+    await openNew(user);
+
+    await user.type(url(), 'https://hooks.example.com/form');
+    await user.click(screen.getByRole('checkbox', { name: 'Order handling' }));
+    await user.click(screen.getByRole('switch', { name: 'Choose the shape of the body myself' }));
+    // Nothing mapped yet: not saveable.
+    expect(save()).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Add a value' }));
+    expect(save()).toBeDisabled();
+    await user.type(screen.getByRole('textbox', { name: 'Path' }), 'customer.name');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Field' }), 'full_name');
+    expect(screen.getByLabelText('Preview with sample values').textContent).toBe('{\n  "customer": {\n    "name": "Full name (sample)"\n  }\n}');
+
+    // A bad path is reported and blocks the save.
+    await user.clear(screen.getByRole('textbox', { name: 'Path' }));
+    await user.type(screen.getByRole('textbox', { name: 'Path' }), 'bad path');
+    expect(screen.getByRole('alert')).toHaveTextContent('"bad path" is not a valid path');
+    expect(save()).toBeDisabled();
+    await user.clear(screen.getByRole('textbox', { name: 'Path' }));
+    await user.type(screen.getByRole('textbox', { name: 'Path' }), 'people[[].name');
+
+    await user.click(screen.getByRole('radio', { name: 'XML' }));
+    expect(screen.getByLabelText('Preview with sample values').textContent).toContain('<people>\n    <name>Full name (sample) 1</name>\n  </people>\n  <people>');
+    await user.type(screen.getByRole('textbox', { name: 'XML root element' }), 'order');
+    expect(save()).toBeEnabled();
+    await user.click(save());
+
+    await screen.findByRole('dialog');
+    const [post] = api.called('POST', `/v1/forms/${FORM}/webhooks`);
+    expect(post?.body).toMatchObject({
+      bodyFormat: 'xml',
+      payloadMapping: { root: 'order', entries: [{ path: 'people[].name', source: { kind: 'answer', key: 'full_name' } }] },
+    });
   });
 });
 
@@ -519,6 +562,8 @@ describe('WebhooksPanel: changing and deleting', () => {
       fieldKeys: 'all_in_purposes',
       purposeIds: [OPS, MARKETING],
       files: 'none',
+      bodyFormat: 'json',
+      payloadMapping: null,
     });
     const item = screen.getByRole('listitem');
     expect(item).toHaveTextContent('Order handling, Marketing');
