@@ -1,4 +1,5 @@
 import type { StoredBlock } from '@form/schema';
+import { xDms } from './shared.ts';
 import type { DmsElement } from './types.ts';
 
 /*
@@ -23,20 +24,25 @@ export interface DmsLegacyMarker {
   readOnly: true;
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+function markerOf(v: unknown): DmsLegacyMarker | null {
+  if (!isRecord(v) || v.readOnly !== true) return null;
+  if (typeof v.from !== 'string' || v.from === '') return null;
+  return { from: v.from, readOnly: true };
+}
+
 /** The legacy marker of a DMS element, or `null` when it has none or it is malformed. */
 export function legacyOfElement(element: DmsElement): DmsLegacyMarker | null {
-  void element;
-  throw new Error('dms-v1 legacyOfElement: not implemented (lane form-core)');
+  return markerOf(element[LEGACY_KEY]);
 }
 
 /** The legacy marker a block carries in `x-dms`, or `null`. */
 export function legacyOfBlock(block: StoredBlock): DmsLegacyMarker | null {
-  void block;
-  throw new Error('dms-v1 legacyOfBlock: not implemented (lane form-core)');
+  return markerOf(xDms(block)[LEGACY_KEY]);
 }
 
 /** True when the block must render read-only and must never be written (record mode, upload step 2). */
 export function isLegacyReadOnly(block: StoredBlock): boolean {
-  void block;
-  throw new Error('dms-v1 isLegacyReadOnly: not implemented (lane form-core)');
+  return legacyOfBlock(block) !== null;
 }

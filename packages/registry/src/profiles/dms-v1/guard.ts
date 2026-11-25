@@ -1,6 +1,7 @@
 import { jsonPointer, type FieldBlock, type FormDefinition } from '@form/schema';
 import { labelText } from '../../util/text.ts';
 import { DMS_DATE_PATTERN, INT32_MAX, INT32_MIN, PHONE_MAX_LENGTH, PHONE_PATTERN, PRIMARY_TYPES, charsOf, dmsTypeOf, isFieldBlock, nameOf, orderedBlocks } from './shared.ts';
+import { legacyOfBlock } from './legacy.ts';
 import type { DmsV1Type, ProfileIssue } from './types.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,6 +82,7 @@ export function checkDmsV1(def: FormDefinition): ProfileIssue[] {
     fields += 1;
     if (!UUID.test(id)) add('error', 'block_id_not_uuid', jsonPointer('blocks', id, 'id'), 'DMS field ids are UUIDs.', id);
     checkName(block, id, names, add);
+    checkLegacy(block, id, add);
     checkPrimary(block, id, type, add, () => (primaries += 1));
     if (type === 'dropdown') checkOptions(block, id, add);
     checkRepresentable(block, id, type, add);
@@ -102,10 +104,18 @@ function checkName(block: FieldBlock, id: string, names: Map<string, string>, ad
   else names.set(folded, id);
 }
 
+/** A converted OpenForm field with no lossless target is read-only: it can be neither required nor the primary key. */
+function checkLegacy(block: FieldBlock, id: string, add: Add): void {
+  const legacy = legacyOfBlock(block);
+  if (!legacy) return;
+  if (block.required) add('error', 'LEGACY_READ_ONLY_REQUIRED', jsonPointer('blocks', id, 'required'), `"${nameOf(block)}" was converted from a ${legacy.from} field and is read-only, so it cannot be required.`, id);
+  if (block.unique) add('error', 'LEGACY_READ_ONLY_PRIMARY', jsonPointer('blocks', id, 'unique'), `"${nameOf(block)}" was converted from a ${legacy.from} field and is read-only, so it cannot be the primary key.`, id);
+}
+
 function checkPrimary(block: FieldBlock, id: string, type: DmsV1Type, add: Add, count: () => void): void {
   if (!block.unique) return;
   count();
-  if (!PRIMARY_TYPES.has(type)) add('error', 'primary_not_allowed', jsonPointer('blocks', id, 'unique'), 'Only a text, number, email or phone field can be the primary key.', id);
+  if (!PRIMARY_TYPES.has(type) && !legacyOfBlock(block)) add('error', 'primary_not_allowed', jsonPointer('blocks', id, 'unique'), 'Only a text, number, email or phone field can be the primary key.', id);
 }
 
 function checkOptions(block: FieldBlock, id: string, add: Add): void {
