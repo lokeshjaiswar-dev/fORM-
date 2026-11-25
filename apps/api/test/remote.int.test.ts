@@ -37,7 +37,8 @@ const SENTINEL_CELL = 'SENTINEL-CELL-VALUE-77';
 let owner: pg.Pool;
 let orgId: string;
 let otherOrgId: string;
-const user = { owner: randomUUID(), editor: randomUUID(), viewer: randomUUID(), otherOwner: randomUUID() };
+/** `budgetEditor` is used only by the preview-budget test, so earlier tests' Test calls in the same window do not count against it. */
+const user = { owner: randomUUID(), editor: randomUUID(), viewer: randomUUID(), otherOwner: randomUUID(), budgetEditor: randomUUID() };
 let orgSecrets: OrgSecrets;
 let urls: { fr_app: string };
 let database: string;
@@ -132,7 +133,7 @@ beforeAll(async () => {
   orgId = randomUUID();
   otherOrgId = randomUUID();
   await owner.query('insert into orgs (id, slug, name) values ($1, $2, $2), ($3, $4, $4)', [orgId, 'remote-a', otherOrgId, 'remote-b']);
-  for (const [id, role, org] of [[user.owner, 'owner', orgId], [user.editor, 'editor', orgId], [user.viewer, 'viewer', orgId], [user.otherOwner, 'owner', otherOrgId]] as const) {
+  for (const [id, role, org] of [[user.owner, 'owner', orgId], [user.editor, 'editor', orgId], [user.budgetEditor, 'editor', orgId], [user.viewer, 'viewer', orgId], [user.otherOwner, 'owner', otherOrgId]] as const) {
     await owner.query('insert into users (id, email, email_norm) values ($1, $2, $2)', [id, `${role}-${id.slice(0, 8)}@remote.test`]);
     await owner.query('insert into memberships (org_id, user_id, role) values ($1, $2, $3)', [org, id, role]);
   }
@@ -283,9 +284,12 @@ describe('the public proxy: lookup, options and check', () => {
     calls = [];
     upstream = () => ({ status: 200, body: JSON.stringify(people(2)) });
     const first = await lookup(app, form, 'cache me');
-    const second = await lookup(app, form, '  CACHE ME ');
+    const second = await lookup(app, form, '  cache me ');
     expect(first.body).toBe(second.body);
     expect(calls).toHaveLength(1);
+    // With a searchParam the upstream does the search, so another casing is another query (review finding 9).
+    await lookup(app, form, 'CACHE ME');
+    expect(calls).toHaveLength(2);
   });
 
   it('with fewer characters than minChars it answers no rows and calls nothing', async () => {
@@ -581,11 +585,11 @@ describe('the author route and the SSRF guard (T-LK-02, T-LK-13)', () => {
     const limited = await startApp({ tenantHttp: stubHttp }, {}, { auth_remote_test: { max: 2, windowSeconds: window }, auth_remote_preview: { max: 2, windowSeconds: window } });
     upstream = () => ({ status: 200, body: '{}' });
     const req = { request: { url: 'https://hr.example.test/x' } };
-    for (let i = 0; i < 2; i++) expect((await author(limited, user.editor, formId, req)).statusCode).toBe(200);
-    expect((await author(limited, user.editor, formId, req)).statusCode).toBe(429);
-    for (let i = 0; i < 2; i++) expect((await author(limited, user.editor, formId, { ...req, purpose: 'preview' })).statusCode).toBe(200);
-    expect((await author(limited, user.editor, formId, { ...req, purpose: 'preview' })).statusCode).toBe(429);
-    expect((await author(limited, user.editor, formId, { ...req, purpose: 'other' })).statusCode).toBe(400);
+    for (let i = 0; i < 2; i++) expect((await author(limited, user.budgetEditor, formId, req)).statusCode).toBe(200);
+    expect((await author(limited, user.budgetEditor, formId, req)).statusCode).toBe(429);
+    for (let i = 0; i < 2; i++) expect((await author(limited, user.budgetEditor, formId, { ...req, purpose: 'preview' })).statusCode).toBe(200);
+    expect((await author(limited, user.budgetEditor, formId, { ...req, purpose: 'preview' })).statusCode).toBe(429);
+    expect((await author(limited, user.budgetEditor, formId, { ...req, purpose: 'other' })).statusCode).toBe(400);
   });
 
 

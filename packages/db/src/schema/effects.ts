@@ -211,16 +211,16 @@ export const webhooks = pgTable(
     fieldKeys: jsonb('field_keys').$type<string[] | 'all_in_purposes'>().notNull().default(sql`'"all_in_purposes"'::jsonb`),
     purposeIds: text('purpose_ids').array().notNull(),
     files: text('files', { enum: WEBHOOK_FILES }).notNull().default('none'),
-    /** 'json' (the standard payload when `payloadMapping` is null) or 'xml'. Migration 0025. */
-    bodyFormat: text('body_format', { enum: WEBHOOK_BODY_FORMATS }).notNull().default('json'),
-    /** `WebhookPayloadMapping` of @form/schema, validated by the API on save and again by the worker. Null = the standard payload. */
-    payloadMapping: jsonb('payload_mapping').$type<WebhookPayloadMapping | null>(),
     consecutiveFailures: integer('consecutive_failures').notNull().default(0),
     disabledReason: text('disabled_reason'),
     rev: integer('rev').notNull().default(1),
     createdAt: ts('created_at'),
     updatedAt: ts('updated_at'),
     updatedBy: uuid('updated_by'),
+    /** 'json' (the standard payload when `payloadMapping` is null) or 'xml'. Migration 0025 appends both columns, so they come last. */
+    bodyFormat: text('body_format', { enum: WEBHOOK_BODY_FORMATS }).notNull().default('json'),
+    /** `WebhookPayloadMapping` of @form/schema, validated by the API on save and again by the worker. Null = the standard payload. */
+    payloadMapping: jsonb('payload_mapping').$type<WebhookPayloadMapping | null>(),
   },
   (t) => [
     unique('webhooks_org_id_id_key').on(t.orgId, t.id),
