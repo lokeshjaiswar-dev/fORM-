@@ -5,7 +5,7 @@ import type { BlockId, BlockOf, ChoiceOption, FormDefinition, OptionId } from '@
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { patchBlockConfig } from '@/fields/configSink';
-import { APP_IDS, blockOrder, blockText } from '@/lib/definition';
+import { APP_IDS, blockOrder, blockText, childrenOf } from '@/lib/definition';
 import { importPairs, pasteIntoGroup, type PasteResult } from '@/lib/pasteOptions';
 import { cn } from '@/lib/utils';
 import { currentDoc, useDoc } from '@/state/documentStore';
@@ -27,6 +27,7 @@ const M = defineMessages('builder', {
   'linked.hint_none': 'Pick the earlier question whose answer decides which options show.',
   'linked.no_candidates': 'Add a choice question above this one first, such as Country before State.',
   'linked.parent_missing': 'The question these options were linked to was deleted. Pick another one or turn this off.',
+  'linked.in_group': 'Options inside a configurable list, or linked to a question inside one, cannot follow another answer yet. Turn this off to publish.',
   'linked.untitled': 'Untitled question',
   'linked.untitled_answer': 'Untitled answer',
   'linked.every': 'Shown for every {parent}',
@@ -66,10 +67,27 @@ export type DependentBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'>;
 const isChoice = (block: unknown): block is DependentBlock =>
   !!block && typeof block === 'object' && ((block as { type?: string }).type === 'single_choice' || (block as { type?: string }).type === 'multi_choice');
 
-/** Single and multi choice questions placed before `id`: the questions its options may be linked to. */
+/** Blocks inside a repeating group (a configurable list), at any depth: each row has its own answer. */
+export function repeatingMembers(def: Pick<FormDefinition, 'blocks'>): Set<BlockId> {
+  const out = new Set<BlockId>();
+  const visit = (id: BlockId) => {
+    if (out.has(id)) return;
+    out.add(id);
+    childrenOf(def.blocks[id]).forEach(visit);
+  };
+  for (const block of Object.values(def.blocks)) if (block?.type === 'repeating_group') block.config.children.forEach(visit);
+  return out;
+}
+
+/**
+ * Single and multi choice questions placed before `id`: the questions its options may be linked to. Nothing inside a
+ * repeating group links or is linked to: the engine reads one answer for the parent, and a list has one per row (review S3).
+ */
 export function parentCandidates(def: FormDefinition, id: BlockId): DependentBlock[] {
   const order = blockOrder(def);
-  return order.slice(0, Math.max(0, order.indexOf(id))).map((b) => def.blocks[b]).filter(isChoice);
+  const inLists = repeatingMembers(def);
+  if (inLists.has(id)) return [];
+  return order.slice(0, Math.max(0, order.indexOf(id))).filter((b) => !inLists.has(b)).map((b) => def.blocks[b]).filter(isChoice);
 }
 
 /** The question a block's options are linked to, when the block has one and it still exists. */
@@ -99,6 +117,10 @@ export function LinkSetting({ block }: { block: DependentBlock }) {
   const [opened, setOpened] = useState(linked);
   const on = linked || opened;
   const missing = linked && !parent;
+  const inLists = repeatingMembers(def);
+  const inList = inLists.has(block.id) || (parent !== undefined && inLists.has(parent.id));
+  /* Inside a configurable list there is nothing to link to; a link made before stays visible so it can be turned off. */
+  if (inList && !linked) return null;
   const relink = (dependsOn: BlockId) => {
     const next = def.blocks[dependsOn];
     const answers = new Set<string>(isChoice(next) ? next.config.options.map((o) => o.id) : []);
@@ -125,7 +147,7 @@ export function LinkSetting({ block }: { block: DependentBlock }) {
         <Field
           label={t(M['linked.label'])}
           hint={missing ? undefined : parent ? t(M['linked.hint'], { parent: nameOf(parent) }) : t(M['linked.hint_none'])}
-          error={missing ? t(M['linked.parent_missing']) : undefined}
+          error={missing ? t(M['linked.parent_missing']) : inList ? t(M['linked.in_group']) : undefined}
         >
           <NiceSelect
             size="sm"

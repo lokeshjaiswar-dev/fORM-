@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BlockId, ChoiceOption, ConditionId, IsoInstant, OptionId, Rule, RuleId } from '@form/schema';
 import { BlockInspector } from '@/components/builder/BlockInspector';
@@ -676,6 +676,26 @@ describe('BlockInspector linked options', () => {
     await pick(user, 'Linked to', 'Region');
     expect(get('state').config['dependsOn']).toBe('region');
     expect(stateOptions()).toEqual([{ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] }, { id: 's2', label: 'Texas' }]);
+  });
+
+  it('nothing inside a configurable list links or is linked to (review S3)', async () => {
+    const list = (children: string[]) => block('repeating_group', 'items', { label: 'Items', config: { children: children as BlockId[] } });
+    resetStore([list(['country', 'state']), country(), state(), block('single_choice', 'later', { label: 'Later' })]);
+    const user = open('later');
+    await user.click(screen.getByRole('switch', { name: 'Link to an earlier question' }));
+    expect(screen.getByText(/Add a choice question above this one first/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Linked to' })).not.toBeInTheDocument();
+    act(() => useUiStore.getState().openInspector('state' as BlockId));
+    expect(screen.getByRole('button', { name: 'Add option' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Link to an earlier question' })).not.toBeInTheDocument();
+  });
+
+  it('a link made inside a configurable list before stays visible with a publish error, so it can be turned off (review S3)', () => {
+    const list = block('repeating_group', 'items', { label: 'Items', config: { children: ['country', 'state'] as BlockId[] } });
+    resetStore([list, country(), linkedState([{ id: 's1', label: 'Maharashtra', parentOptionIds: ['in'] }])]);
+    open('state');
+    expect(screen.getByRole('switch', { name: 'Link to an earlier question' })).toBeChecked();
+    expect(screen.getByText(/cannot follow another answer yet/)).toBeInTheDocument();
   });
 
   it('with no earlier choice question, the switch explains what to add first', async () => {

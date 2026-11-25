@@ -204,9 +204,11 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
   /* Pre-order, depth first: a section's children come before the section's next sibling, as rendered. */
   const placedAt = new Map<string, string>();
   const documentOrder: string[] = [];
+  /* Blocks placed inside a repeating group, at any depth: they are answered once per row. */
+  const inRepeating = new Set<string>();
   def.pages.forEach((p, pageIndex) => {
-    const frames: Array<{ ids: readonly string[]; path: string; next: number; seen: Set<string> }> = [
-      { ids: p.children, path: jsonPointer('pages', pageIndex, 'children'), next: 0, seen: new Set() },
+    const frames: Array<{ ids: readonly string[]; path: string; next: number; seen: Set<string>; repeating: boolean }> = [
+      { ids: p.children, path: jsonPointer('pages', pageIndex, 'children'), next: 0, seen: new Set(), repeating: false },
     ];
     for (let frame = frames.at(-1); frame; frame = frames.at(-1)) {
       if (frame.next >= frame.ids.length) {
@@ -234,8 +236,10 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
       }
       placedAt.set(id, at);
       documentOrder.push(id);
+      if (frame.repeating) inRepeating.add(id);
       const grandChildren = childIdsOf(child);
-      if (grandChildren.length) frames.push({ ids: grandChildren, path: jsonPointer('blocks', id, 'config', 'children'), next: 0, seen: new Set() });
+      const repeating = frame.repeating || child.type === 'repeating_group';
+      if (grandChildren.length) frames.push({ ids: grandChildren, path: jsonPointer('blocks', id, 'config', 'children'), next: 0, seen: new Set(), repeating });
     }
   });
   for (const id of blocks.keys()) {
@@ -311,6 +315,11 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
     const parent = blocks.get(parentId);
     if (parentId === id || (parent?.type !== 'single_choice' && parent?.type !== 'multi_choice')) {
       soft('dangling_ref', at('config', 'dependsOn'), `'${parentId}' is not another single or multi choice block`);
+      return;
+    }
+    /* The engine reads one form-level answer for the parent; inside a repeating group each row has its own, so the child could never be answered (review S3). */
+    if (inRepeating.has(id) || inRepeating.has(parentId)) {
+      soft('missing_capability', at('config', 'dependsOn'), `options of '${id}' cannot depend on '${parentId}': dependent options inside a repeating group are not available yet`);
       return;
     }
     const childAt = orderOf.get(id);

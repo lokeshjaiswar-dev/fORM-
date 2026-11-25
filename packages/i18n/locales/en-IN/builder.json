@@ -1028,6 +1028,7 @@
   "linked.import": "Import pairs",
   "linked.import_help": "Paste two columns from a spreadsheet: the {parent} answer, then the option, one pair per line. A line with one cell is shown for every {parent}.",
   "linked.import_title": "Import {parent} and option pairs",
+  "linked.in_group": "Options inside a configurable list, or linked to a question inside one, cannot follow another answer yet. Turn this off to publish.",
   "linked.label": "Linked to",
   "linked.no_candidates": "Add a choice question above this one first, such as Country before State.",
   "linked.orphans": "Linked to a removed answer",

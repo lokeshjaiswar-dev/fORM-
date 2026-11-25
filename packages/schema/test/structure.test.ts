@@ -370,5 +370,37 @@ describe('validateStructure', () => {
     it('refuses a parent placed after the child, so a chain can never loop', () => {
       expect(codes(validateStructure(withChild('before')))).toContain('error:page_order_violation:/blocks/channel_1/config/dependsOn');
     });
+
+    /** Puts `members` inside a repeating group, in place of the section's children. */
+    const inGroup = (def: S.FormDefinition, members: S.BlockId[]) => {
+      const list = id<S.BlockId>('list_1');
+      def.blocks[list] = {
+        id: list, type: 'repeating_group', key: id<S.FieldKey>('items'), label: inline('Items'), required: false,
+        compliance: { ...blockOf(def, ids.name, 'short_text').compliance, classification: 'none', purposeIds: [] },
+        config: { children: members, minRows: 1, maxRows: 10, layout: 'stacked' },
+      };
+      const section = blockOf(def, ids.section, 'section');
+      section.config.children = [...section.config.children.filter((c) => !members.includes(c)), list];
+    };
+
+    it('refuses dependent options inside a repeating group, for the child or the parent (review S3)', () => {
+      const both = withChild();
+      inGroup(both, [ids.marketing, child]);
+      expect(FormDefinitionSchema.safeParse(both).success).toBe(true);
+      expect(codes(validateStructure(both))).toEqual(['warning:missing_capability:/blocks/channel_1/config/dependsOn']);
+      expect(codes(validateStructure(both, { mode: 'publish' }))).toEqual(['error:missing_capability:/blocks/channel_1/config/dependsOn']);
+      const parentInGroup = withChild();
+      inGroup(parentInGroup, [ids.marketing]);
+      expect(codes(validateStructure(parentInGroup, { mode: 'publish' }))).toEqual(['error:missing_capability:/blocks/channel_1/config/dependsOn']);
+      const childInGroup = withChild();
+      inGroup(childInGroup, [child]);
+      expect(codes(validateStructure(childInGroup, { mode: 'publish' }))).toEqual(['error:missing_capability:/blocks/channel_1/config/dependsOn']);
+    });
+
+    it('refuses options that both load from an API and depend on another question at publish (review N6)', () => {
+      const def = withChild();
+      blockOf(def, child, 'single_choice').apiOptions = { url: 'https://api.example.com/channels' as S.SafeUrl };
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toEqual(['error:dangling_ref:/blocks/channel_1/apiOptions']);
+    });
   });
 });
