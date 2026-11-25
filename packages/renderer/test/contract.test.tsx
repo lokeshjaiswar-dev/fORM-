@@ -593,6 +593,21 @@ describe('control contract', () => {
     expect(submitted[0]?.answers['q' as never]).toEqual({ type: 'phone', value: { e164: '+442079460958', country: 'GB' } });
   });
 
+  it('dynamic_table: with no minimum, removing the last row leaves the table empty instead of adding the starting rows back (review N5)', async () => {
+    const block = field('dynamic_table', 'q', { config: {
+      columns: [{ id: 'column_1', label: 'Item', input: 'text' }] as never,
+      minRows: 0, maxRows: 5, initialRows: 1, allowAddColumns: false, addableInputs: [], maxColumns: 5,
+    } });
+    const version = runtime(form([block], [page('p1', ['q'])]));
+    render(<FormRenderer {...props(version)} />);
+    const user = userEvent.setup();
+    await screen.findByRole('textbox', { name: /item 1/i });
+    await user.click(screen.getByRole('button', { name: 'Remove Row 1' }));
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: /item 1/i })).not.toBeInTheDocument());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('textbox', { name: /item 1/i })).not.toBeInTheDocument();
+  });
+
   it('calculation: shows a captured number without the respondent typing', async () => {
     const submitted: SubmitPayload[] = [];
     const block = field('calculation', 'total');

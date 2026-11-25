@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { summarize, withFormulaCells } from '@form/registry';
 import type { DynamicAddableInput, DynamicColumnId, DynamicColumnInput, DynamicSummary, DynamicTableValue, GroupRowId } from '@form/schema';
 import { useRenderer } from '../context.ts';
@@ -58,7 +58,11 @@ export function DynamicTable({ block, field }: ControlProps<'dynamic_table'>) {
   const [newLabel, setNewLabel] = useState('');
   const [newType, setNewType] = useState<DynamicAddableInput>(addable[0] ?? 'text');
 
+  /* The starting rows are added once, when the table first shows empty: removing the last row later leaves it empty (review N5). */
+  const seeded = useRef(false);
   useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
     if (answer.value === undefined && initial > 0) {
       answer.set({ rows: Array.from({ length: initial }, (_, i) => ({ rowId: `row_${i + 1}` as GroupRowId, cells: {} })) });
     }
