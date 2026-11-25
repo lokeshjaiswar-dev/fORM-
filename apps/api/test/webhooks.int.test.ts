@@ -676,6 +676,49 @@ describe('create, read, save and delete', () => {
     expect(await webhookRows(formId)).toBe(before);
   });
 
+  it('refuses a mapping too big for the column with 422 INVALID_PAYLOAD_MAPPING (not a 500), and stores one just under the cap', async () => {
+    const formId = await newForm();
+    // 200 entries with 194-character paths: schema-valid at every key size below, so only the serialized size decides.
+    const sized = (keyLength: number) => ({
+      root: 'r',
+      entries: Array.from({ length: 200 }, (_, i) => ({
+        path: [`s${i}_`.padEnd(64, 'a'), 'b'.repeat(64), 'c'.repeat(64)].join('.'),
+        source: { kind: 'answer', key: `k${i}_`.padEnd(keyLength, 'y') },
+      })),
+    });
+    const before = await webhookRows(formId);
+    for (const big of [sized(200), sized(60)]) {
+      const res = await call('POST', base(formId), { body: hook({ payloadMapping: big }) });
+      expect(res.statusCode, res.body.slice(0, 300)).toBe(422);
+      expect(res.json()).toMatchObject({ code: 'INVALID_PAYLOAD_MAPPING' });
+    }
+    expect(await webhookRows(formId)).toBe(before);
+
+    const fits = sized(40);
+    expect(Buffer.byteLength(JSON.stringify(fits))).toBeLessThanOrEqual(56 * 1024);
+    const made = await create(formId, hook({ payloadMapping: fits }));
+    expect(made.payloadMapping?.entries).toHaveLength(200);
+    const tooBig = await call('PUT', `${base(formId)}/${made.id}`, { ifMatch: String(made.rev), body: hook({ payloadMapping: sized(200) }) });
+    expect(tooBig.statusCode).toBe(422);
+    expect(tooBig.json()).toMatchObject({ code: 'INVALID_PAYLOAD_MAPPING' });
+  });
+
+  it('keeps the stored body format and mapping when a save leaves those keys out; null still clears the mapping', async () => {
+    const formId = await newForm();
+    const mapping = { root: 'order', entries: [{ path: 'customer.name', source: { kind: 'answer', key: 'name' } }] };
+    const made = await create(formId, hook({ bodyFormat: 'xml', payloadMapping: mapping }));
+    // A stale builder tab (or a script) that does not know the new keys edits the URL only.
+    const stale = await call('PUT', `${base(formId)}/${made.id}`, { ifMatch: '1', body: hook({ url: `${HOOK}?v=2` }) });
+    expect(stale.statusCode, stale.body).toBe(200);
+    expect(stale.json()).toMatchObject({ url: `${HOOK}?v=2`, bodyFormat: 'xml', payloadMapping: mapping, rev: 2 });
+    const events = await auditEvents(orgId, 'webhook.saved', formId);
+    expect((events.at(-1)?.metadata as { changedKeys?: string[] } | undefined)?.changedKeys).toEqual(['url']);
+
+    const cleared = await call('PUT', `${base(formId)}/${made.id}`, { ifMatch: '2', body: hook({ url: `${HOOK}?v=2`, payloadMapping: null }) });
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    expect(cleared.json()).toMatchObject({ bodyFormat: 'xml', payloadMapping: null, rev: 3 });
+  });
+
   it('lists a form’s webhooks oldest first, reads one with its ETag, and 404s for a webhook of another form', async () => {
     const formId = await newForm();
     const otherForm = await newForm();

@@ -81,6 +81,26 @@ const webhookBody = z.strictObject({
 });
 type WebhookBody = z.infer<typeof webhookBody>;
 
+/**
+ * A save (PUT) takes the same body, except that `bodyFormat` and `payloadMapping` have no default: a client that leaves them
+ * out (a builder tab loaded before they existed, an API script) keeps what is stored instead of resetting the receiver to the
+ * standard payload. `payloadMapping: null` still clears the mapping.
+ */
+const webhookSaveBody = webhookBody.extend({
+  bodyFormat: WebhookConfigSchema.shape.bodyFormat.unwrap().optional(),
+  payloadMapping: WebhookPayloadMappingSchema.nullable().optional(),
+});
+type WebhookSaveBody = z.infer<typeof webhookSaveBody>;
+type BodySettings = Pick<WebhookBody, 'bodyFormat' | 'payloadMapping'>;
+
+/** The body format and mapping a save stores: what it sent, or what is stored for a key it left out. */
+export function bodyOnSave(sent: Partial<{ [K in keyof BodySettings]: BodySettings[K] | undefined }>, stored: BodySettings): BodySettings {
+  return {
+    bodyFormat: sent.bodyFormat ?? stored.bodyFormat,
+    payloadMapping: sent.payloadMapping === undefined ? stored.payloadMapping : sent.payloadMapping,
+  };
+}
+
 const isoOrNull = z.string().nullable();
 
 /**
@@ -331,9 +351,13 @@ function changedKeys(before: WebhookView, next: Pick<WebhookView, 'url' | 'enabl
   return keys;
 }
 
-/** The settings of a body as stored: lists with each value once. A mapping that cannot be used is a 422, nothing written. */
-function settingsOf(body: WebhookBody) {
-  if (body.payloadMapping !== null) {
+/**
+ * The settings of a body as stored: lists with each value once. A mapping that cannot be used (including one too large for
+ * the column, MAX_MAPPING_BYTES) is a 422, nothing written. On a save, a format or mapping left out stays undefined here and
+ * `bodyOnSave` fills it from the stored row.
+ */
+function settingsOf<B extends WebhookBody | WebhookSaveBody>(body: B) {
+  if (body.payloadMapping != null) {
     const issues = validateMapping(body.payloadMapping);
     if (issues.length > 0) throw new ProblemError('INVALID_PAYLOAD_MAPPING', issues.slice(0, 5).join('; '));
   }
@@ -345,8 +369,8 @@ function settingsOf(body: WebhookBody) {
     fieldKeys: typeof body.fieldKeys === 'string' ? body.fieldKeys : unique(body.fieldKeys),
     purposeIds: unique(body.purposeIds),
     files: body.files,
-    bodyFormat: body.bodyFormat,
-    payloadMapping: body.payloadMapping,
+    bodyFormat: body.bodyFormat as B['bodyFormat'],
+    payloadMapping: body.payloadMapping as B['payloadMapping'],
   };
 }
 
@@ -517,10 +541,10 @@ export function webhookRoutes(app: FastifyInstance, deps: WebhookRouteDeps): voi
         tags: TAGS,
         summary: 'Save a webhook',
         description:
-          'Replaces the settings (a key left out takes its default) if `If-Match` names the revision that was read, else 409 `WEBHOOK_REV_CONFLICT`; without it, 428. The same checks as creating: declared purposes (422 `MISSING_PURPOSE`) and the egress check of the URL (422 `EGRESS_DENIED`), every time. Switching a webhook that was off back on, or changing its URL, clears the failure count and the reason it was switched off. The signing secret is not touched (see `rotate-secret`). Audited as `webhook.saved` with the keys that changed.',
+          'Replaces the settings (a key left out takes its default, except `bodyFormat` and `payloadMapping`, which keep their stored values; `payloadMapping: null` clears the mapping) if `If-Match` names the revision that was read, else 409 `WEBHOOK_REV_CONFLICT`; without it, 428. The same checks as creating: declared purposes (422 `MISSING_PURPOSE`) and the egress check of the URL (422 `EGRESS_DENIED`), every time. Switching a webhook that was off back on, or changing its URL, clears the failure count and the reason it was switched off. The signing secret is not touched (see `rotate-secret`). Audited as `webhook.saved` with the keys that changed.',
         security: SECURITY,
         params: webhookParams,
-        body: webhookBody,
+        body: webhookSaveBody,
         response: { 200: webhookView },
       },
     },
@@ -529,7 +553,7 @@ export function webhookRoutes(app: FastifyInstance, deps: WebhookRouteDeps): voi
       const tenant = tenantOf(request);
       const who = client(request);
       const expected = expectedRev(request);
-      const next = settingsOf(request.body);
+      const sent = settingsOf(request.body);
       const stale = () => new ProblemError('WEBHOOK_REV_CONFLICT', 'The webhook changed since you read it. Reload it and apply your change again.');
 
       const declared = await withTenant(deps.db, { ...tenant, readOnly: true }, async (tx) => {
@@ -538,9 +562,9 @@ export function webhookRoutes(app: FastifyInstance, deps: WebhookRouteDeps): voi
         if (current.rev !== expected) throw stale();
         return declaredPurposeIds(tx, formId);
       });
-      assertPurposes(next.purposeIds, declared);
-      await assertUrlAllowed(next.url, deps);
-      const host = hostOf(next.url);
+      assertPurposes(sent.purposeIds, declared);
+      await assertUrlAllowed(sent.url, deps);
+      const host = hostOf(sent.url);
 
       const saved = await withTenant(deps.db, tenant, async (tx) => {
         await requireForm(tx, formId);
@@ -548,6 +572,8 @@ export function webhookRoutes(app: FastifyInstance, deps: WebhookRouteDeps): voi
         const current = await loadWebhook(tx, formId, id, { forUpdate: true });
         if (current.rev !== expected) throw stale();
         const before = viewOf(current);
+        // Read under the row lock, so a format or mapping the save left out is the one in force now.
+        const next = { ...sent, ...bodyOnSave(sent, before) };
         // A webhook that was switched off (by the worker after repeated failures, or by a member) starts afresh when it is
         // switched on, and one that is sent somewhere else has no use for the failures of the old address.
         const fresh = (!current.enabled && next.enabled) || current.url !== next.url;
