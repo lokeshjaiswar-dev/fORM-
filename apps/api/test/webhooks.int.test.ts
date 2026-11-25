@@ -35,6 +35,8 @@ interface WebhookJson {
   fieldKeys: string[] | 'all_in_purposes';
   purposeIds: string[];
   files: string;
+  bodyFormat: string;
+  payloadMapping: { root?: string; entries: Array<{ path: string; source: Record<string, string> }> } | null;
   secretHint: string;
   secretRotatedAt: string | null;
   consecutiveFailures: number;
@@ -593,6 +595,8 @@ describe('create, read, save and delete', () => {
       fieldKeys: 'all_in_purposes',
       purposeIds: ['pur_1'],
       files: 'none',
+      bodyFormat: 'json',
+      payloadMapping: null,
       consecutiveFailures: 0,
       disabledReason: null,
       rev: 1,
@@ -641,6 +645,35 @@ describe('create, read, save and delete', () => {
       hook({ events: ['submission.created', 'submission.updated', 'submission.created'], fieldKeys: ['name', 'email', 'name'], keyBy: 'id', files: 'signed_urls', enabled: false }),
     );
     expect(made).toMatchObject({ events: ['submission.created', 'submission.updated'], fieldKeys: ['name', 'email'], keyBy: 'id', files: 'signed_urls', enabled: false });
+  });
+
+  it('stores a body format and a payload mapping, audits the change, and refuses a mapping that cannot be used (422, nothing written)', async () => {
+    const formId = await newForm();
+    const mapping = { root: 'order', entries: [{ path: 'customer.name', source: { kind: 'answer', key: 'name' } }, { path: 'lines[].item', source: { kind: 'answer', key: 'items' } }, { path: 'ref', source: { kind: 'meta', name: 'submissionId' } }] };
+    const made = await create(formId, hook({ bodyFormat: 'xml', payloadMapping: mapping }));
+    expect(made).toMatchObject({ bodyFormat: 'xml', payloadMapping: mapping });
+    const saved = await call('PUT', `${base(formId)}/${made.id}`, { ifMatch: '1', body: hook({ bodyFormat: 'json', payloadMapping: null }) });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json()).toMatchObject({ bodyFormat: 'json', payloadMapping: null });
+    const events = await auditEvents(orgId, 'webhook.saved', formId);
+    expect(JSON.stringify(events.at(-1))).toContain('bodyFormat');
+    expect(JSON.stringify(events.at(-1))).toContain('payloadMapping');
+
+    const before = await webhookRows(formId);
+    for (const bad of [
+      { entries: [{ path: 'a b', source: { kind: 'answer', key: 'x' } }] },
+      { entries: [{ path: '__proto__.x', source: { kind: 'answer', key: 'x' } }] },
+      { entries: [{ path: 'a', source: { kind: 'answer', key: 'x' } }, { path: 'a.b', source: { kind: 'answer', key: 'y' } }] },
+      { root: 'bad root', entries: [] },
+    ]) {
+      const res = await call('POST', base(formId), { body: hook({ payloadMapping: bad }) });
+      expect(res.statusCode, JSON.stringify(bad)).toBe(422);
+      expect(res.json()).toMatchObject({ code: 'INVALID_PAYLOAD_MAPPING' });
+    }
+    // Shape errors are the usual 400.
+    expect((await call('POST', base(formId), { body: hook({ bodyFormat: 'yaml' }) })).statusCode).toBe(400);
+    expect((await call('POST', base(formId), { body: hook({ payloadMapping: { entries: [{ path: 'a', source: { kind: 'answer', key: 'x', extra: 1 } }] } }) })).statusCode).toBe(400);
+    expect(await webhookRows(formId)).toBe(before);
   });
 
   it('lists a form’s webhooks oldest first, reads one with its ETag, and 404s for a webhook of another form', async () => {
