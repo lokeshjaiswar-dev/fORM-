@@ -1,0 +1,82 @@
+import { BUILDER_LOCALE } from '@/i18n';
+import { compile, projectForRuntime } from '@form/logic';
+import { REGISTRY } from '@form/registry';
+import { blankDmsDefinition, dmsToAnswer, elementsToDefinition, type DmsElement } from '@form/registry/profiles/dms-v1';
+import type {
+  AnswerValue, Answers, BlockId, FieldBlock, FormDefinition, FormVersion, FormVersionId, IsoInstant, OrgId, RuntimeFormVersion, StoredBlock, UserId,
+} from '@form/schema';
+import { fieldNameOf, isIncrementElement, isLegacyElement, type DmsRecordValues } from './contract';
+
+/*
+ * The renderer form of one record: the master's elements (profile dms-v1) in canvas order, legacy and auto-increment
+ * fields locked read-only, the loaded values as the starting answers. A pure function of its inputs.
+ */
+
+const FORM_ID = 'fp_record';
+const LOCALE = BUILDER_LOCALE;
+
+export interface RecordForm {
+  version: RuntimeFormVersion;
+  initialAnswers: Answers;
+  /** Element id -> its starting answer as JSON, to tell which fields a person changed. */
+  baseline: Record<string, string>;
+  /** Element id -> the translated block, for `answerToDms`. */
+  blocks: Record<string, FieldBlock>;
+}
+
+export type RecordFormResult = { ok: true; form: RecordForm } | { ok: false; message: string };
+
+/** Auto-increment fields are read-only text whatever the counter's format (a prefix makes it text). */
+const forRender = (el: DmsElement): DmsElement =>
+  isIncrementElement(el) ? { ...el, type: 'textinput', numeric: true, specialChars: true, required: false, primary: false } : el;
+
+export function planRecordForm(elements: readonly DmsElement[], values: DmsRecordValues, title: string, today: IsoInstant): RecordFormResult {
+  const translated = elements.map(forRender);
+  let def: FormDefinition = elementsToDefinition(translated, { formId: FORM_ID, title, locale: LOCALE, base: blankDmsDefinition(FORM_ID, title, LOCALE) });
+  const blocks: Partial<Record<BlockId, StoredBlock>> = { ...def.blocks };
+  const answers: Record<string, AnswerValue> = {};
+  const baseline: Record<string, string> = {};
+  const byId: Record<string, FieldBlock> = {};
+  for (const el of elements) {
+    const id = String(el.id) as BlockId;
+    const block = blocks[id];
+    if (!block || block.type === 'unsupported') return { ok: false, message: `The field "${fieldNameOf(el)}" could not be shown.` };
+    const locked = isLegacyElement(el) || isIncrementElement(el);
+    const field = (locked ? { ...block, readOnly: true, required: false } : block) as FieldBlock;
+    blocks[id] = field as StoredBlock;
+    byId[id] = field;
+    const answer = dmsToAnswer(field, values[fieldNameOf(el)] ?? '');
+    if (answer !== undefined) answers[id] = { type: field.type, value: answer } as AnswerValue;
+    baseline[id] = JSON.stringify(answers[id] ?? null);
+  }
+  def = { ...def, blocks, theme: { ...def.theme, tokens: { ...def.theme.tokens, density: 'compact', formWidth: 'wide' } } };
+  const compiled = (() => {
+    try {
+      return compile(def, REGISTRY);
+    } catch (e) {
+      return { ok: false as const, issues: [{ message: e instanceof Error ? e.message : String(e) }] };
+    }
+  })();
+  if (!compiled.ok) return { ok: false, message: compiled.issues.map((i) => i.message).slice(0, 3).join('; ') || 'The form could not be compiled.' };
+  const stored: FormVersion = {
+    id: 'fp-record' as FormVersionId,
+    orgId: 'fp-record' as OrgId,
+    formId: def.formId,
+    number: 0,
+    schemaVersion: def.schemaVersion,
+    publishedAt: today,
+    publishedBy: 'fp-record' as UserId,
+    definition: def,
+    compiled: compiled.compiled,
+    contentHash: compiled.compiled.definitionHash,
+    templateLineage: [],
+    variablesSnapshot: { variables: {} },
+  };
+  const version = projectForRuntime(stored, { state: 'open' }, {
+    edition: 'airgapped',
+    upload: { presignUrl: '', maxFileBytes: 0 },
+    branding: false,
+    thirdPartyTrackingAllowed: false,
+  });
+  return { ok: true, form: { version, initialAnswers: answers as Answers, baseline, blocks: byId } };
+}

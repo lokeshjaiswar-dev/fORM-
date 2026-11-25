@@ -1,4 +1,4 @@
-import { parseDmsDate, type DmsElement } from '@form/registry/profiles/dms-v1';
+import { legacyOfElement, parseDmsDate, type DmsElement } from '@form/registry/profiles/dms-v1';
 
 /*
  * v2 contract stub for `/embed/dms-record` (DESIGN-v2 section 4, contract/dms-record.fixtures.json).
@@ -59,8 +59,7 @@ export function fieldNameOf(el: DmsElement): string {
 
 /** A field converted from OpenForm with no lossless target: shown as stored, never written (`legacy: {from, readOnly: true}`). */
 export function isLegacyElement(el: DmsElement): boolean {
-  const marker = el['legacy'];
-  return isRecord(marker) && marker['readOnly'] === true && typeof marker['from'] === 'string';
+  return legacyOfElement(el) !== null;
 }
 
 /** An auto-increment text or number field: the server assigns it, so it is shown read-only and never written. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseDmsDate } from '@form/registry/profiles/dms-v1';
 import { DmsApiError, DmsAuthError, createDmsClient } from '@/embed/dmsClient';
 import fixtures from './__fixtures__/dms-record.fixtures.json' with { type: 'json' };
 import type { DmsRecordValues } from './contract';
@@ -44,7 +45,12 @@ describe('DmsRecordRepository.load', () => {
     const { repo, calls } = dms();
     const loaded = await repo.load(MASTER, RECORD);
     expect(calls.map((c) => `${c.method} ${c.url.slice(API.length)}`)).toEqual([`GET ${fixtures.loadMaster.request.path}`, `GET ${fixtures.loadRecord.request.path}`]);
-    for (const el of loaded.elements) expect(loaded.values[el.value as string]).toBe((fixtures.loadRecord.expectedValuesById as Record<string, string>)[el.id]);
+    const expected = fixtures.loadRecord.expectedValuesById as Record<string, string>;
+    for (const el of loaded.elements) {
+      const got = loaded.values[el.value as string]!;
+      // Dates are stored DD-MM-YYYY and accepted either way (dmsToAnswer).
+      expect(el.type === 'date' ? parseDmsDate(got) : got).toBe(el.type === 'date' ? parseDmsDate(expected[el.id]!) : expected[el.id]);
+    }
   });
 
   it('a master that is not Forms+ has no elements and its record is never read', async () => {
@@ -101,12 +107,12 @@ describe('DmsRecordRepository.save', () => {
     expect(calls).toHaveLength(2);
   });
 
-  it('422 surfaces as a DmsApiError carrying errors.json_data; nothing is retried', async () => {
-    const { repo, calls } = dms({ patch: new Response(JSON.stringify(fixtures.validationError.response.body), { status: 422 }) });
+  it.each([200, 422])('a validation error answered with HTTP %i is a DmsApiError carrying errors.json_data; nothing is retried', async (status) => {
+    const { repo, calls } = dms({ patch: new Response(JSON.stringify(fixtures.validationError.response.body), { status }) });
     const loaded = await repo.load(MASTER, RECORD);
     const err = await repo.save(loaded, { ...loaded.values, Tier: 'Bronze' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DmsApiError);
-    expect((err as DmsApiError).status).toBe(422);
+    expect((err as DmsApiError).status).toBe(status);
     expect((err as DmsApiError).body).toEqual(fixtures.validationError.response.body);
     expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(1);
   });

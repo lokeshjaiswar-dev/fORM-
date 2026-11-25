@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { DmsRecordUnavailable } from '@/embed/DmsRecordUnavailable';
 import { DmsMasterPage } from '@/embed/master/DmsMasterPage';
+import { DmsRecordPage } from '@/embed/record/DmsRecordPage';
 import DmsUploadPage from '@/embed/upload/DmsUploadPage';
 
 const framed = (): boolean => typeof window !== 'undefined' && window.parent !== window;
@@ -24,7 +24,7 @@ export function EmbedRoutes() {
     <Routes>
       <Route path="dms-master" element={<DmsMasterPage />} />
       <Route path="dms-upload" element={<DmsUploadPage />} />
-      <Route path="dms-record" element={<DmsRecordUnavailable />} />
+      <Route path="dms-record" element={<DmsRecordPage />} />
       <Route path="*" element={framed() ? <NotAvailableHere /> : <Navigate to="/forms" replace />} />
     </Routes>
   );

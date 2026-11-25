@@ -29,3 +29,18 @@ describe('EmbedRoutes unknown paths', () => {
     expect(screen.queryByText('forms list')).toBeNull();
   });
 });
+
+describe('EmbedRoutes dms-record', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('/embed/dms-record is the record page: with no launch it asks to start from DMS and never goes to the forms list', () => {
+    window.history.replaceState(null, '', '/embed/dms-record');
+    renderAt('/embed/dms-record');
+    expect(screen.getByText(/Open this page from DMS/)).toBeTruthy();
+    expect(screen.queryByText('forms list')).toBeNull();
+    expect(screen.queryByText(/not available here yet/)).toBeNull();
+  });
+});
