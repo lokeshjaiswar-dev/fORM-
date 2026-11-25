@@ -21,7 +21,7 @@ export function dependsOnOf(def: Pick<FormDefinition, 'blocks'>): Partial<Record
   const out: Partial<Record<BlockId, BlockId>> = {};
   for (const [id, block] of Object.entries(def.blocks)) {
     if (!isChoice(block)) continue;
-    const parent = (block?.config as { dependsOn?: BlockId }).dependsOn;
+    const parent = ((block as { config?: { dependsOn?: BlockId } } | undefined)?.config)?.dependsOn;
     if (parent !== undefined && parent !== id && isChoice(def.blocks[parent])) out[id as BlockId] = parent;
   }
   return out;
