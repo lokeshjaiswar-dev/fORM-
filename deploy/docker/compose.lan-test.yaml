@@ -1,0 +1,84 @@
+# LAN TEST DEPLOY, NOT PRODUCTION. A throwaway stack for trying the lan121/dev-lokesh features on the LAN with synthetic
+# data only. It is not a production setup and must not hold real personal data: the database passwords are literals,
+# Postgres has no backups, mail is only logged and the master key is a local file. Production images and their
+# deployment are the G0 artefacts (plan 8.1).
+#
+# Users sign in (no open-access mode: dev refuses AUTH_DEV_HEADERS in production). The builder image is the real one,
+# apps/builder/Dockerfile, so its nginx sends the security headers and CSP (docs/platform/builder-security-headers.md);
+# it serves the SPA under /formplus/ and talks to the API on its own port (CORS allows PUBLIC_BUILDER_URL only).
+#
+# Ports bind to 127.0.0.1 unless LAN_BIND says otherwise; LAN_HOST is the name or address browsers use for this host.
+#   AUTH_SECRET=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=') \
+#   LAN_BIND=0.0.0.0 LAN_HOST=192.168.1.54 \
+#   docker compose -f deploy/docker/compose.lan-test.yaml up -d --build
+# Builder: http://$LAN_HOST:8080/formplus/   API: http://$LAN_HOST:8081
+# First boot, from the repo, with the database reachable:
+#   NODE_ENV=development DATABASE_ADMIN_URL=postgres://postgres:postgres@127.0.0.1:5432/form pnpm dev:setup
+# The master key lives in deploy/docker/secrets/form-master.key (git-ignored). Back it up: losing it makes 2FA secrets unreadable.
+name: form-lan-test
+
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: form
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d form]
+      interval: 2s
+      retries: 30
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+    environment:
+      NODE_ENV: production
+      DEPLOYMENT_MODE: onprem
+      HOST: 0.0.0.0
+      PORT: 8080
+      DATABASE_URL: postgres://fr_app:fr_app_dev@postgres:5432/form
+      # No default: the stack does not start without a real secret (a known default would pass config validation).
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET to 32 random bytes, base64url}
+      KMS_DRIVER: keyfile
+      KMS_KEYFILE_PATH: /run/secrets/form-master.key
+      PUBLIC_BUILDER_URL: http://${LAN_HOST:-localhost}:8080/formplus/
+      PUBLIC_API_URL: http://${LAN_HOST:-localhost}:8081
+      PRIVACY_CONTACT_EMAIL: privacy@form.local
+      MAILER_DRIVER: log
+    ports:
+      - ${LAN_BIND:-127.0.0.1}:8081:8080
+    volumes:
+      - apidata:/app/apps/api/.data
+      - ./secrets/form-master.key:/run/secrets/form-master.key:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  builder:
+    build:
+      context: ../..
+      dockerfile: apps/builder/Dockerfile
+      args:
+        VITE_API_URL: http://${LAN_HOST:-localhost}:8081
+    ports:
+      - ${LAN_BIND:-127.0.0.1}:8080:8080
+    depends_on:
+      - api
+
+  # A sample no-auth API for API options, API checks and lookups (tools/demo-validate-api).
+  demo-validate-api:
+    image: node:24-bookworm-slim
+    working_dir: /app
+    command: ["node", "tools/demo-validate-api/server.mjs"]
+    volumes:
+      - ../..:/app:ro
+    ports:
+      - ${LAN_BIND:-127.0.0.1}:3001:3001
+
+volumes:
+  pgdata:
+  apidata:
