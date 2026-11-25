@@ -17,13 +17,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
  * the ratchets were set to the measured sizes; the growth since the original 132/97 KB is real field code (repeating-group sum, multi-slot
  * appointments, UTM context facts, section breaks). 25 Nov 2026: 161 -> 162 KB for the pattern-aware date field (DD-MM-YYYY text
  * with the browser calendar, DMS parity; about 0.8 KB); 162 -> 163 KB for the phone picker with our own flags (the
- * flag images are lazy chunks, never in the initial load; Windows shows emoji flags as letters). BL-129a tracks getting back under (zod/mini, export-only registry split).
+ * flag images are lazy chunks, never in the initial load; Windows shows emoji flags as letters). 25 Nov 2026, founder:
+ * 163 -> 173 KB initial and 107 -> 110 KB engines for the lan121/dev-lokesh merge (dynamic table, dependent options,
+ * form-level lookups; measured 172.2 / 109.9 KB with static entry imports counted). BL-129a tracks getting back under (zod/mini, export-only registry split).
  */
 
 const KB = 1024;
 const SPEC_BUDGET = 90 * KB;
-const INITIAL_RATCHET = 163 * KB;
-const ENGINES_RATCHET = 107 * KB;
+const INITIAL_RATCHET = 173 * KB;
+const ENGINES_RATCHET = 110 * KB;
 const REGEX_CHUNK_CEILING = 50 * KB;
 
 const ENTRY = fileURLToPath(new URL('../src/index.ts', import.meta.url));
