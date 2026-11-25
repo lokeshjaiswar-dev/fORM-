@@ -1,4 +1,4 @@
-import type { DmsElement } from '@form/registry/profiles/dms-v1';
+import { parseDmsDate, type DmsElement } from '@form/registry/profiles/dms-v1';
 
 /*
  * v2 contract stub for `/embed/dms-record` (DESIGN-v2 section 4, contract/dms-record.fixtures.json).
@@ -49,15 +49,79 @@ export interface DmsRecordRepository {
   save(loaded: LoadedDmsRecord, next: DmsRecordValues): Promise<{ recordId: string }>;
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** The field name of an element: the key of its value in a record (classic `value`, else `name`, else `label`). */
+export function fieldNameOf(el: DmsElement): string {
+  for (const v of [el.value, el.name, el.label]) if (typeof v === 'string' && v !== '') return v;
+  return '';
+}
+
+/** A field converted from OpenForm with no lossless target: shown as stored, never written (`legacy: {from, readOnly: true}`). */
+export function isLegacyElement(el: DmsElement): boolean {
+  const marker = el['legacy'];
+  return isRecord(marker) && marker['readOnly'] === true && typeof marker['from'] === 'string';
+}
+
+/** An auto-increment text or number field: the server assigns it, so it is shown read-only and never written. */
+export function isIncrementElement(el: DmsElement): boolean {
+  return el.increment === true && (el.type === 'textinput' || el.type === 'numberinput');
+}
+
+/** The elements a record save may write: not legacy, not auto-increment. */
+export const writableElements = (elements: readonly DmsElement[]): DmsElement[] => elements.filter((el) => !isLegacyElement(el) && !isIncrementElement(el));
+
 /** `json_data` of a master-records response is a JSON string or an object; returns field name -> DMS string. */
 export function parseRecordJson(raw: unknown): DmsRecordValues {
-  void raw;
-  throw new Error('dms-record parseRecordJson: not implemented (lane form-record)');
+  let data: unknown = raw;
+  if (typeof data === 'string') {
+    if (data.trim() === '') return {};
+    try {
+      data = JSON.parse(data);
+    } catch {
+      throw new Error('DMS sent a record this page cannot read.');
+    }
+  }
+  // PHP encodes an empty array as `[]`.
+  if (data === null || data === undefined || (Array.isArray(data) && data.length === 0)) return {};
+  if (!isRecord(data)) throw new Error('DMS sent a record this page cannot read.');
+  const out: DmsRecordValues = {};
+  for (const [name, v] of Object.entries(data)) {
+    if (typeof v === 'string') out[name] = v;
+    else if (typeof v === 'number' || typeof v === 'boolean') out[name] = String(v);
+    else if (v === null || v === undefined) out[name] = '';
+    else out[name] = JSON.stringify(v);
+  }
+  return out;
+}
+
+/** Two DMS strings for one field are the same value; a date is the same date in `DD-MM-YYYY` and `YYYY-MM-DD`. */
+function sameValue(el: DmsElement, a: string, b: string): boolean {
+  if (a === b) return true;
+  if (el.type === 'date') {
+    const x = parseDmsDate(a);
+    return x !== undefined && x === parseDmsDate(b);
+  }
+  return false;
 }
 
 /** The update body: only changed, non-legacy fields; `null` when nothing changed. */
 export function diffRecordValues(loaded: LoadedDmsRecord, next: DmsRecordValues): DmsRecordValues | null {
-  void loaded;
-  void next;
-  throw new Error('dms-record diffRecordValues: not implemented (lane form-record)');
+  const changed: DmsRecordValues = {};
+  for (const el of writableElements(loaded.elements)) {
+    const name = fieldNameOf(el);
+    const was = loaded.values[name] ?? '';
+    const now = next[name] ?? '';
+    if (!sameValue(el, was, now)) changed[name] = now;
+  }
+  return Object.keys(changed).length === 0 ? null : changed;
+}
+
+/** `returnUrl` with the outcome appended (`fp_status`, `fp_master_id`, and `fp_record_id` when saved). */
+export function recordReturnTarget(returnUrl: string, status: 'saved' | 'cancelled', masterId: string, recordId?: string): string {
+  const url = new URL(returnUrl);
+  url.searchParams.set('fp_status', status);
+  url.searchParams.set('fp_master_id', masterId);
+  if (status === 'saved' && recordId) url.searchParams.set('fp_record_id', recordId);
+  return url.toString();
 }
