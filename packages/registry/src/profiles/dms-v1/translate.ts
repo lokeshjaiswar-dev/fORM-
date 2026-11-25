@@ -6,7 +6,7 @@ import { optionIdOf } from './fnv.ts';
 import {
   DMS_DATE_PATTERN, DMS_PHONE_DEFAULTS, INT32_MAX, INT32_MIN, MODELLED_KEYS, PRIMARY_TYPES, X_DMS, charsOf, dmsTypeOf, isFieldBlock, nameOf, patternFor, xDms,
 } from './shared.ts';
-import { isDmsV1Type, type DmsElement, type DmsOption, type DmsTranslateOptions, type DmsV1Type } from './types.ts';
+import { isDmsV1Type, type DmsElement, type DmsOption, type DmsTranslateOptions, type DmsV1Type, type ProfileIssue } from './types.ts';
 
 /*
  * fORM- definition <-> DMS `form_builder_fields` (DESIGN section 1). One flat page, canvas order = element order.
@@ -109,6 +109,7 @@ export function elementsToDefinition(elements: readonly DmsElement[], options: D
     blocks[block.id] = block;
     children.push(block.id);
   }
+  applyLinks(elements, blocks, options.issues);
   const [first, ...later] = base.pages;
   const page = first ?? blankDmsDefinition(options.formId, options.title, options.locale).pages[0]!;
   return {
@@ -120,10 +121,74 @@ export function elementsToDefinition(elements: readonly DmsElement[], options: D
   };
 }
 
+/**
+ * Second pass: `linkedTo` / `optionParents` on a dropdown element become `dependsOn` / `parentOptionIds`. A parent that is
+ * not an earlier dropdown, or an option value that is not in the list, drops that part of the link and says so.
+ */
+function applyLinks(elements: readonly DmsElement[], blocks: Partial<Record<BlockId, StoredBlock>>, issues: ProfileIssue[] | undefined): void {
+  const earlier = new Map<string, BlockId>();
+  const byValue = (block: FieldBlock): Map<string, OptionId> => {
+    const m = new Map<string, OptionId>();
+    for (const o of (block.config as { options: ChoiceOption[] }).options) if (!m.has(o.code ?? labelText(o.label))) m.set(o.code ?? labelText(o.label), o.id);
+    return m;
+  };
+  const report = (el: DmsElement, code: string, message: string) =>
+    issues?.push({ severity: 'warning', code, path: `/blocks/${String(el.id)}`, message, blockId: String(el.id) });
+  for (const el of elements) {
+    const id = String(el.id) as BlockId;
+    const block = blocks[id];
+    if (block && block.type === 'single_choice' && el.linkedTo !== undefined) {
+      const parentKey = typeof el.linkedTo === 'string' ? el.linkedTo.toLowerCase() : '';
+      const parentId = earlier.get(parentKey);
+      const parent = parentId === undefined ? undefined : blocks[parentId];
+      if (parentId === undefined || !parent || parent.type !== 'single_choice') {
+        report(el, 'link_parent_unknown', `"${String(el.name)}" is linked to a field that is not an earlier dropdown, so the link is ignored.`);
+      } else {
+        const own = byValue(block as FieldBlock);
+        const theirs = byValue(parent as FieldBlock);
+        const links = isRecord(el.optionParents) ? el.optionParents : {};
+        const parents = new Map<OptionId, OptionId[]>();
+        for (const [childValue, parentValues] of Object.entries(links)) {
+          const childId = own.get(childValue);
+          if (childId === undefined) { report(el, 'link_option_unknown', `"${String(el.name)}" has link data for the option "${childValue}", which is not in its list.`); continue; }
+          const ids: OptionId[] = [];
+          for (const pv of Array.isArray(parentValues) ? parentValues : []) {
+            const pid = typeof pv === 'string' ? theirs.get(pv) : undefined;
+            if (pid === undefined) report(el, 'link_option_unknown', `The option "${childValue}" is linked to "${String(pv)}", which is not an option of the parent.`);
+            else if (!ids.includes(pid)) ids.push(pid);
+          }
+          if (ids.length > 0) parents.set(childId, ids);
+        }
+        const config = block.config as unknown as { dependsOn?: BlockId; options: ChoiceOption[] };
+        config.dependsOn = parentId;
+        config.options = config.options.map((o) => (parents.has(o.id) ? { ...o, parentOptionIds: parents.get(o.id)! } : o));
+      }
+    }
+    if (block && block.type === 'single_choice') earlier.set(id.toLowerCase(), id);
+  }
+}
+
 const optionName = (o: ChoiceOption): string => labelText(o.label);
 const optionValue = (o: ChoiceOption): string => o.code ?? labelText(o.label);
 
-function blockToElement(block: FieldBlock, type: DmsV1Type): DmsElement {
+/** `dependsOn` / `parentOptionIds` as `linkedTo` / `optionParents` (option VALUES, DMS's option identity). */
+function writeLink(el: DmsElement, block: FieldBlock, def: FormDefinition): void {
+  const config = block.config as BlockConfigMap['single_choice'];
+  const parentId = config.dependsOn;
+  if (parentId === undefined) return;
+  const parent = def.blocks[parentId];
+  if (!parent || parent.type !== 'single_choice') return;
+  const valueOfParent = new Map(parent.config.options.map((o) => [o.id as string, optionValue(o)]));
+  const optionParents: Record<string, string[]> = {};
+  for (const o of config.options) {
+    const values = (o.parentOptionIds ?? []).map((p) => valueOfParent.get(p)).filter((v): v is string => v !== undefined);
+    if (values.length > 0) optionParents[optionValue(o)] = values;
+  }
+  el.linkedTo = parentId;
+  if (Object.keys(optionParents).length > 0) el.optionParents = optionParents;
+}
+
+function blockToElement(block: FieldBlock, type: DmsV1Type, def: FormDefinition): DmsElement {
   const name = nameOf(block);
   const rest: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(xDms(block))) if (k !== 'type' && !MODELLED_KEYS.has(k)) rest[k] = v;
@@ -149,6 +214,7 @@ function blockToElement(block: FieldBlock, type: DmsV1Type): DmsElement {
     el.options = options;
     el.select = { options: options.map((o) => ({ ...o })) };
   }
+  if (type === 'dropdown') writeLink(el, block, def);
   if (type === 'date') el.isDefaultToDate = (block.config as BlockConfigMap['date']).defaultValue?.kind === 'today';
   return el;
 }
@@ -166,7 +232,7 @@ export function definitionToElements(def: FormDefinition): DmsElement[] {
       }
       if (!isFieldBlock(block)) continue;
       const type = dmsTypeOf(block);
-      if (type) out.push(blockToElement(block, type));
+      if (type) out.push(blockToElement(block, type, def));
     }
   }
   return out;
