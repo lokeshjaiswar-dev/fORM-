@@ -30,6 +30,17 @@ describe('PreviewPane', () => {
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
   });
 
+  it('says Fill from master does not run here when the page has no DMS launch (review nit)', () => {
+    const def = {
+      ...formWith([block('short_text', 'vendor', { label: 'Vendor' })]),
+      lookups: [{ id: 'vendor', source: 'dms_master', enabled: true, masterId: 'm-vendors', pickerFieldId: 'vendor', pickerKey: 'b2000000-0000-4000-8000-000000000001', mappings: [] }],
+    } as never;
+    render(<PreviewPane definition={def} />);
+    expect(screen.getByText('Fill from master does not run in this preview. Open the master from DMS to try it.')).toBeInTheDocument();
+    render(<PreviewPane definition={formWith([block('short_text', 'name', { label: 'Name' })])} />);
+    expect(screen.getAllByText(/Fill from master does not run/)).toHaveLength(1);
+  });
+
   it('WP-1.07: a password form shows the password screen, and the preview lets any entry through without checking it', async () => {
     const error = vi.spyOn(toast, 'error').mockImplementation(() => 0);
     const password: RuntimeStatus = { state: 'password', screen: { type: 'doc', content: [] } };

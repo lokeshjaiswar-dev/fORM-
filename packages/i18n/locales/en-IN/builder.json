@@ -1451,6 +1451,7 @@
   "picker.search": "Search",
   "preview.desktop": "Desktop",
   "preview.mobile": "Mobile",
+  "preview.no_master_lookups": "Fill from master does not run in this preview. Open the master from DMS to try it.",
   "preview.open_redirect": "Open in a new tab",
   "preview.redirect": "After submit, respondents go to {url}",
   "preview.refused": "This form cannot be previewed yet.",

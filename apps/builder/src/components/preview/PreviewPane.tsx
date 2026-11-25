@@ -11,6 +11,7 @@ import { Alert, AlertDescription, Button, TextLink } from '@dmacq/ui';
 import { Tooltip } from '@/components/Tooltip';
 import { DeviceFrame, type PreviewDevice } from '@/components/preview/DeviceFrame';
 import { useActiveOrg } from '@/auth/client';
+import { previewDmsSource } from '@/components/preview/previewDmsSource';
 import { previewRemoteSource } from '@/components/preview/previewRemoteSource';
 import { useEdition } from '@/edition/edition';
 import { useAccessPreviewStatus } from '@/components/builder/access/accessPreview';
@@ -27,6 +28,7 @@ const M = defineMessages('builder', {
   'preview.redirect': 'After submit, respondents go to {url}',
   'preview.open_redirect': 'Open in a new tab',
   'preview.saved_response': 'Response saved',
+  'preview.no_master_lookups': 'Fill from master does not run in this preview. Open the master from DMS to try it.',
 });
 
 const OPEN: RuntimeStatus = { state: 'open' };
@@ -59,9 +61,13 @@ export function PreviewPane({ definition, status = OPEN }: { definition: FormDef
   const edition = runtimeEdition(useEdition());
   const submissions = useOptionalSubmissions();
   const org = useActiveOrg()?.id ?? null;
-  /** Lookups, API options and API checks in the preview go through the author route; without an organisation they stay inert. */
-  const remote = useMemo(() => (org === null ? undefined : previewRemoteSource(org, definition)), [org, definition]);
   const build = useMemo(() => previewVersion(definition, OPEN, now, edition), [definition, now, edition]);
+  const publicLookups = build.ok ? build.version.definition.lookups : undefined;
+  /** "Fill from master" lookups ask DMS as the user when the builder was opened from DMS (as /embed/dms-record does). */
+  const dms = useMemo(() => previewDmsSource(publicLookups), [publicLookups]);
+  const masterLookupsInert = dms === null && (publicLookups ?? []).some((l) => l.source === 'dms_master');
+  /** Lookups, API options and API checks in the preview go through the author route; without an organisation they stay inert. */
+  const remote = useMemo(() => (org === null ? (dms ?? undefined) : previewRemoteSource(org, definition, dms)), [org, definition, dms]);
   const session = useMemo(() => ({ startedAt: now, device }), [now, device]);
   const shown = status.state === 'password' && unlocked ? OPEN : status;
 
@@ -121,6 +127,7 @@ export function PreviewPane({ definition, status = OPEN }: { definition: FormDef
           </AlertDescription>
         </Alert>
       ) : null}
+      {masterLookupsInert ? <p className="mx-4 text-center text-[13px] text-muted-foreground">{t(M['preview.no_master_lookups'])}</p> : null}
       <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden px-4 py-4">
         <DeviceFrame device={device}>{screen}</DeviceFrame>
       </div>
