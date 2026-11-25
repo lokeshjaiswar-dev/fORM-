@@ -82,6 +82,28 @@ function metaOf(name: string, host: string, auth: ApiAuth): Record<string, unkno
 
 type Row = { id: string; meta: Record<string, unknown>; createdAt: Date; rotatedAt: Date | null };
 
+/**
+ * What a PUT changes. The host binding is what keeps a credential from being aimed elsewhere, so a new host is taken only with
+ * the secret sent again in the same request: re-binding without it would let any `org.settings` holder (or a stolen session)
+ * move an admin's stored token to their own server and have the proxy send it there. A host change is its own audit kind.
+ */
+export function planCredentialUpdate(
+  before: Record<string, unknown>,
+  change: { name?: string | undefined; host?: string | undefined; auth?: ApiAuth | undefined },
+): { meta: Record<string, unknown>; changedKeys: string[]; change: 'rebound' | 'rotated' | 'updated' } {
+  const oldHost = typeof before['host'] === 'string' ? before['host'] : '';
+  const rebound = change.host !== undefined && change.host !== oldHost;
+  if (rebound && change.auth === undefined) {
+    throw new ProblemError('BAD_REQUEST', 'Send the secret again to bind this credential to a new host.');
+  }
+  const name = change.name ?? (typeof before['name'] === 'string' ? before['name'] : '');
+  const host = change.host ?? oldHost;
+  // Without a new secret the type, header and last characters stay as they were.
+  const meta = change.auth ? metaOf(name, host, change.auth) : { ...before, name, host };
+  const changedKeys = [...(change.name !== undefined ? ['name'] : []), ...(rebound ? ['host'] : []), ...(change.auth !== undefined ? ['auth'] : [])];
+  return { meta, changedKeys, change: rebound ? 'rebound' : change.auth !== undefined ? 'rotated' : 'updated' };
+}
+
 function viewOf(row: Row): View {
   const m = row.meta;
   const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -194,7 +216,7 @@ export function apiCredentialRoutes(app: FastifyInstance, deps: ApiCredentialRou
       schema: {
         tags: TAGS,
         summary: 'Rename, re-bind or rotate an API credential',
-        description: 'Any of `name`, `host` and `auth`. A new `auth` seals the new secret in place (the id stays, so forms keep working) and sets `rotatedAt`. Audited as `api_credential.saved`, never the value.',
+        description: 'Any of `name`, `host` and `auth`. A new `auth` seals the new secret in place (the id stays, so forms keep working) and sets `rotatedAt`. A new `host` is taken only together with `auth` (400 otherwise): a stored secret is never re-aimed at another host. Audited as `api_credential.saved` (change `rebound`, `rotated` or `updated`), never the value.',
         security: SECURITY,
         params: idParam,
         body: putBody,
@@ -217,13 +239,8 @@ export function apiCredentialRoutes(app: FastifyInstance, deps: ApiCredentialRou
       return withTenant(deps.db, tenant, async (tx) => {
         const [before] = await tx.select(columns).from(secrets).where(and(eq(secrets.id, id), eq(secrets.kind, 'api_credential'))).limit(1).for('update');
         if (!before) throw new ProblemError('NOT_FOUND', 'That API credential is not in this organisation.');
-        const m = before.meta;
-        const name = body.name ?? (typeof m['name'] === 'string' ? m['name'] : '');
-        const boundHost = host ?? (typeof m['host'] === 'string' ? m['host'] : '');
-        // Without a new secret the type, header and last characters stay as they were.
-        const meta = body.auth ? metaOf(name, boundHost, body.auth) : { ...m, name, host: boundHost };
-        const rotated = enc !== undefined;
-        const changedKeys = [...(body.name !== undefined ? ['name'] : []), ...(host !== undefined ? ['host'] : []), ...(rotated ? ['auth'] : [])];
+        const plan = planCredentialUpdate(before.meta, { name: body.name, host, auth: body.auth });
+        const { meta, changedKeys } = plan;
         await tx
           .update(secrets)
           .set({ meta, ...(enc ? { enc: enc as unknown as Record<string, unknown>, rotatedAt: now } : {}) })
@@ -237,7 +254,7 @@ export function apiCredentialRoutes(app: FastifyInstance, deps: ApiCredentialRou
           resourceType: 'api_credential',
           resourceId: id,
           outcome: 'success',
-          metadata: { change: rotated ? 'rotated' : 'updated', changedKeys },
+          metadata: { change: plan.change, changedKeys },
         });
         const [row] = await tx.select(columns).from(secrets).where(eq(secrets.id, id)).limit(1);
         return viewOf(row!);

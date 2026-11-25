@@ -189,13 +189,32 @@ describe('org API credentials (/v1/org/api-credentials)', () => {
     expect(rot.json<{ rotatedAt: string | null }>().rotatedAt).not.toBeNull();
     const after = (await owner.query('select enc from secrets where id = $1', [id])).rows[0] as { enc: unknown };
     expect(after.enc).not.toEqual(before.enc);
-    const rebound = await api(app, user.owner, 'PUT', `/v1/org/api-credentials/${id}`, { host: 'other.example.test:8443', name: 'renamed' });
+    const rebound = await api(app, user.owner, 'PUT', `/v1/org/api-credentials/${id}`, { host: 'other.example.test:8443', name: 'renamed', auth: { type: 'basic', username: 'svc', password: 'third-password-abcdef' } });
     expect(rebound.json()).toMatchObject({ host: 'other.example.test:8443', name: 'renamed', type: 'basic' });
     expect((await api(app, user.owner, 'DELETE', `/v1/org/api-credentials/${id}`)).statusCode).toBe(204);
     expect((await api(app, user.owner, 'DELETE', `/v1/org/api-credentials/${id}`)).statusCode).toBe(404);
     const events = (await owner.query(`select event from audit_pending where org_key = $1 and event->>'resourceId' = $2 order by id`, [orgId, id])).rows.map((r: { event: Record<string, unknown> }) => r.event);
     expect(events.map((e) => e['action'])).toEqual(['api_credential.saved', 'api_credential.saved', 'api_credential.saved', 'api_credential.deleted']);
-    expect(JSON.stringify(events)).not.toMatch(/new-password|SENTINEL|svc/);
+    expect(events.map((e) => (e['metadata'] as { change?: string } | undefined)?.change)).toEqual(['created', 'rotated', 'rebound', undefined]);
+    expect(JSON.stringify(events)).not.toMatch(/new-password|third-password|SENTINEL|svc/);
+  });
+
+  it('a new host without the secret is refused, and the stored secret is never sent to the new host (review should-fix)', async () => {
+    const id = await credential(app, 'payroll.example.test');
+    const moved = await api(app, user.owner, 'PUT', `/v1/org/api-credentials/${id}`, { host: 'evil.example.test' });
+    expect(moved.statusCode).toBe(400);
+    expect(moved.body).toContain('Send the secret again');
+    const list = (await api(app, user.owner, 'GET', '/v1/org/api-credentials')).json<{ items: Array<{ id: string; host: string }> }>().items;
+    expect(list.find((c) => c.id === id)?.host).toBe('payroll.example.test');
+    // The same host, spelled differently, is no re-bind.
+    expect((await api(app, user.owner, 'PUT', `/v1/org/api-credentials/${id}`, { host: 'PAYROLL.example.test:443', name: 'same' })).statusCode).toBe(200);
+    // The author route aimed at the would-be host: refused before any connection, no Authorization anywhere.
+    const created = await api(app, user.owner, 'POST', '/v1/forms', { title: 'Rebind' });
+    const formId = created.json<{ id: string }>().id;
+    calls = [];
+    const test = await api(app, user.editor, 'POST', `/v1/forms/${formId}/remote/test`, { request: { url: 'https://evil.example.test/x', method: 'GET', credentialRef: { secretId: id } } });
+    expect(test.statusCode).toBe(502);
+    expect(calls).toHaveLength(0);
   });
 
   it('answers 503 when the deployment has no key service', async () => {
