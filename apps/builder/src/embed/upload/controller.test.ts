@@ -384,3 +384,58 @@ describe('dispose', () => {
     expect(h.ofType('change')).toHaveLength(0);
   });
 });
+
+describe('legacy read-only fields (converted from OpenForm)', () => {
+  const LEGACY = 'c2000000-0000-4000-8000-000000000017';
+  const STORED = '[{"name":"a.pdf"}]';
+  const withLegacy = (over: Record<string, unknown> = {}) => {
+    const init = initPayload();
+    init.masterFields = [...init.masterFields, { id: LEGACY, type: 'multilineinput', name: 'Docs', value: 'Docs', label: 'Docs', required: true, primary: true, placeholder: '', legacy: { from: 'files', readOnly: true }, ...over } as never];
+    init.values = { ...init.values, [LEGACY]: STORED };
+    return init;
+  };
+
+  it('renders the stored string read-only, never required, and still supported (no fallback)', () => {
+    const h = harness();
+    h.init(withLegacy());
+    expect(h.ofType('initialized')[0]!.payload).toMatchObject({ fieldCount: 15, unsupported: [] });
+    const block = h.view().plan.version.definition.blocks[LEGACY as BlockId] as FieldBlock;
+    expect(block.readOnly).toBe(true);
+    expect(block.required).toBe(false);
+    expect(block.unique).toBeUndefined();
+    expect(h.view().plan.initialAnswers[LEGACY as BlockId]).toEqual({ type: 'long_text', value: STORED });
+  });
+
+  it('is never in change or validated values, never validated, and an edit elsewhere does not report it', async () => {
+    const h = harness();
+    h.init(withLegacy());
+    h.options(h.ofType('options.request')[0]!, categoryOptions);
+    h.edit(fixtures.cases[0]!.userInput);
+    vi.advanceTimersByTime(150);
+    expect(Object.keys((h.ofType('change')[0]!.payload as { values: Record<string, string> }).values)).not.toContain(LEGACY);
+    // A renderer answer for the legacy block (changed, or removed) is ignored.
+    h.edit(fixtures.cases[0]!.userInput, { [LEGACY]: { type: 'long_text', value: 'tampered' } as AnswerValue });
+    h.edit(fixtures.cases[0]!.userInput, { [LEGACY]: null });
+    vi.advanceTimersByTime(150);
+    h.validate();
+    await vi.advanceTimersByTimeAsync(0);
+    const validated = h.ofType('validated')[0]!.payload as { valid: boolean; errors: Array<{ fieldId: string }>; values: Record<string, string> };
+    expect(validated.valid).toBe(true);
+    expect(validated.errors.map((e) => e.fieldId)).not.toContain(LEGACY);
+    expect(validated.values).not.toHaveProperty(LEGACY);
+    for (const c of h.ofType('change')) expect((c.payload as { values: Record<string, string> }).values).not.toHaveProperty(LEGACY);
+  });
+
+  it('a legacy field with no stored value shows empty and is still not required', async () => {
+    const h = harness();
+    const init = withLegacy();
+    delete (init.values as Record<string, string>)[LEGACY];
+    h.init(init);
+    expect(h.view().plan.initialAnswers[LEGACY as BlockId]).toBeUndefined();
+    h.options(h.ofType('options.request')[0]!, categoryOptions);
+    h.edit(fixtures.cases[0]!.userInput);
+    h.validate();
+    await vi.advanceTimersByTimeAsync(0);
+    expect((h.ofType('validated')[0]!.payload as { valid: boolean }).valid).toBe(true);
+  });
+});

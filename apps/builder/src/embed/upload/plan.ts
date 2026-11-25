@@ -4,7 +4,7 @@ import { blankDmsDefinition, dmsToAnswer, elementsToDefinition, type DmsElement 
 import type {
   AnswerValue, Answers, BlockId, FieldBlock, FormDefinition, FormVersion, FormVersionId, InlineDoc, IsoInstant, OrgId, RuntimeFormVersion, StoredBlock, UserId,
 } from '@form/schema';
-import { editableFields, incrementDisplay, optionsFor, type Option, type UploadField, type UploadModel } from './model.ts';
+import { editableFields, givenValue, incrementDisplay, optionsFor, type Option, type UploadField, type UploadModel } from './model.ts';
 
 /*
  * The form the renderer shows for an `init`: the translator's blocks (profile dms-v1) in two titled sections, with
@@ -35,6 +35,8 @@ function toElement(field: UploadField, options: readonly Option[]): DmsElement {
     // Read-only text whatever the number format of the counter (a prefix makes it text): no pattern, no range.
     return { ...base, type: 'textinput', numeric: true, specialChars: true, required: false, primary: false };
   }
+  // A legacy field is never required or primary here: it is shown as stored and nothing is written back.
+  if (field.legacy) return { ...base, required: false, primary: false };
   if (field.type === 'dropdown') return { ...base, options: options.map((o) => ({ name: o.name, value: o.value })) };
   return base;
 }
@@ -63,12 +65,18 @@ export function planRender(
   for (const field of model.fields) {
     const block = blocks[field.id as BlockId];
     if (!block || block.type === 'unsupported') return { ok: false, message: `field ${field.id} could not be translated` };
-    const locked = field.increment || model.readOnly;
+    const locked = field.increment || field.legacy !== null || model.readOnly;
     const fieldBlock = block as FieldBlock;
     blocks[field.id as BlockId] = { ...fieldBlock, ...(locked ? { readOnly: true, required: false } : {}) } as StoredBlock;
     if (field.increment) {
       const shown = incrementDisplay(model, field, given);
       if (shown !== '') answers[field.id] = wrapAnswer(fieldBlock, shown);
+      continue;
+    }
+    if (field.legacy) {
+      const raw = givenValue(given, field.id);
+      const shown = raw === '' ? undefined : dmsToAnswer(fieldBlock, raw);
+      if (shown !== undefined) answers[field.id] = wrapAnswer(fieldBlock, shown);
       continue;
     }
     if (!editable.has(field.id)) continue;

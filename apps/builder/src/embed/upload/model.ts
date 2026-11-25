@@ -1,4 +1,4 @@
-import { isDmsV1Type, parseDmsDate, type DmsV1Type } from '@form/registry/profiles/dms-v1';
+import { isDmsV1Type, legacyOfElement, parseDmsDate, type DmsLegacyMarker, type DmsV1Type } from '@form/registry/profiles/dms-v1';
 import type { BridgeElement, FieldError, FieldErrorCode, InitPayload } from '../bridge/protocol.ts';
 
 /*
@@ -23,6 +23,11 @@ export interface UploadField {
   required: boolean;
   /** An auto-increment text or number field: shown read-only, never in `values`, never validated. */
   increment: boolean;
+  /**
+   * A field converted from OpenForm with no lossless target (`legacy.readOnly`): shown read-only with the raw stored
+   * string from `init.values`, never required, never in `values`, never validated, never reported as changed.
+   */
+  legacy: DmsLegacyMarker | null;
   /** The element as DMS sent it. */
   element: BridgeElement;
   /** A dropdown whose options come from the parent (none sent, or tied to another field). */
@@ -59,8 +64,9 @@ export function buildModel(init: InitPayload): ModelResult {
       type: element.type,
       supported,
       section,
-      required: element.required === true,
+      required: element.required === true && legacyOfElement(element as never) === null,
       increment,
+      legacy: legacyOfElement(element as never),
       element,
       remoteOptions: element.type === 'dropdown' && ((element.options ?? []).length === 0 || element.parent_field_id !== undefined),
       parentId: element.type === 'dropdown' && element.parent_field_id !== undefined ? element.parent_field_id : null,
@@ -97,7 +103,14 @@ export function buildModel(init: InitPayload): ModelResult {
 }
 
 /** The fields whose value the parent receives. */
-export const editableFields = (model: UploadModel): UploadField[] => model.fields.filter((f) => f.supported && !f.increment);
+export const editableFields = (model: UploadModel): UploadField[] => model.fields.filter((f) => f.supported && !f.increment && f.legacy === null);
+
+/** The stored DMS string for a field in `init.values` (ids compare case-insensitively), `""` when none. */
+export function givenValue(given: Readonly<Record<string, string>>, id: string): string {
+  const key = id.toLowerCase();
+  for (const [k, v] of Object.entries(given)) if (k.toLowerCase() === key) return v;
+  return '';
+}
 
 /** The field with this id (compared case-insensitively, as a uuid is). */
 export const fieldOf = (model: UploadModel, id: string): UploadField | undefined => model.byId.get(id.toLowerCase());
@@ -125,8 +138,7 @@ export function incrementDisplay(model: UploadModel, field: UploadField, given: 
     const next = field.element.autoIncrementValue;
     return next === null || next === undefined ? '' : String(next);
   }
-  const lower = Object.entries(given).find(([k]) => k.toLowerCase() === field.id.toLowerCase());
-  return lower?.[1] ?? '';
+  return givenValue(given, field.id);
 }
 
 const INT_MIN = -2147483648;
