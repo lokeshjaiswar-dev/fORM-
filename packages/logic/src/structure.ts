@@ -10,6 +10,21 @@ export interface Placement {
   pageIndex: ReadonlyMap<string, number>;
   /** Pages and blocks in render order: page, its blocks, next page, … (plan tie-break). */
   elementOrder: ReadonlyMap<string, number>;
+  /** Dependent options: each single or multi choice whose options follow another choice, mapped to that parent. */
+  dependsOn?: Partial<Record<BlockId, BlockId>>;
+}
+
+const isChoice = (block: StoredBlock | undefined): boolean => block?.type === 'single_choice' || block?.type === 'multi_choice';
+
+/** Child → parent of dependent options; links to something that is not another choice are left out (structure reports them). */
+export function dependsOnOf(def: Pick<FormDefinition, 'blocks'>): Partial<Record<BlockId, BlockId>> {
+  const out: Partial<Record<BlockId, BlockId>> = {};
+  for (const [id, block] of Object.entries(def.blocks)) {
+    if (!isChoice(block)) continue;
+    const parent = (block?.config as { dependsOn?: BlockId }).dependsOn;
+    if (parent !== undefined && parent !== id && isChoice(def.blocks[parent])) out[id as BlockId] = parent;
+  }
+  return out;
 }
 
 const childrenOf = (block: StoredBlock): readonly BlockId[] =>
@@ -44,7 +59,7 @@ export function placementOf(def: FormDefinition): Placement {
       if (children.length) stack.push({ ids: children, parent: id, next: 0 });
     }
   });
-  return { documentOrder, parentOf, pageOf, pageIndex, elementOrder };
+  return { documentOrder, parentOf, pageOf, pageIndex, elementOrder, dependsOn: dependsOnOf(def) };
 }
 
 /** Ancestors of a block up to and including its page, nearest first. */
@@ -58,10 +73,20 @@ export function ancestorsOf(placement: Pick<Placement, 'parentOf'>, blockId: Blo
   return out;
 }
 
-/** `value(b)` also reads `visible` of b and every ancestor, and `onPath` of its page (schema §3.3.2). */
-export function valueReadsOf(placement: Pick<Placement, 'parentOf' | 'pageOf'>, blockId: BlockId): string[] {
-  const reads = [cell.value(blockId), cell.visible(blockId), ...ancestorsOf(placement, blockId).map((a) => cell.visible(a))];
-  const page = placement.pageOf[blockId];
-  if (page !== undefined) reads.push(cell.onPath(page));
-  return reads;
+/**
+ * `value(b)` also reads `visible` of b and every ancestor, and `onPath` of its page (schema §3.3.2). A dependent choice
+ * reads as answered only while its parent is shown, enabled and answered (review S4), so its value also reads the
+ * parent's value, visibility and `enabled`, up the chain.
+ */
+export function valueReadsOf(placement: Pick<Placement, 'parentOf' | 'pageOf' | 'dependsOn'>, blockId: BlockId): string[] {
+  const reads: string[] = [];
+  const seen = new Set<string>();
+  for (let id: BlockId | undefined = blockId; id !== undefined && !seen.has(id); id = placement.dependsOn?.[id]) {
+    seen.add(id);
+    reads.push(cell.value(id), cell.visible(id), ...ancestorsOf(placement, id).map((a) => cell.visible(a)));
+    const page = placement.pageOf[id];
+    if (page !== undefined) reads.push(cell.onPath(page));
+    if (id !== blockId) reads.push(cell.enabled(id));
+  }
+  return [...new Set(reads)];
 }

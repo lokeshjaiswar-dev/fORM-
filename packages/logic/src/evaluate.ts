@@ -11,7 +11,7 @@ import { admittedAnswers, dependentBlockIds, dependentOptions } from './dependen
 import { ENGINE } from './compile.ts';
 import { D, formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
-import { ancestorsOf } from './structure.ts';
+import { ancestorsOf, dependsOnOf } from './structure.ts';
 import { optionValueSource, setValueTargets } from './subset.ts';
 import { traceEntry, type TraceEntry } from './trace.ts';
 
@@ -58,6 +58,8 @@ interface Prepared {
   stepWrites: ReadonlyArray<readonly string[]>;
   /** Short-text fields filled from a dropdown option value, mapped to that choice. Formulas read them as numbers. */
   optionValues: ReadonlyMap<string, BlockId>;
+  /** Dependent options: child choice → parent choice. */
+  dependsOn: Partial<Record<BlockId, BlockId>>;
 }
 
 interface BlockKeys { visible: string; value: string; enabled: string; required: string; ancestors: readonly string[]; onPath: string | null }
@@ -150,7 +152,7 @@ function prepare(version: EvaluableVersion): Prepared {
   }
   const p: Prepared = {
     def, steps, writers, readers, parentOf: compiled.parentOf, blocks, fields, documentOrder: compiled.documentOrder, pageIds: def.pages.map((pg) => pg.id), pageIndex,
-    keys, pageKeys, staticCells, valueCells, stepWrites, optionValues,
+    keys, pageKeys, staticCells, valueCells, stepWrites, optionValues, dependsOn: dependsOnOf(def),
   };
   prepared.set(version.compiled, p);
   return p;
@@ -296,7 +298,16 @@ class Session {
 
   private answerOf(id: BlockId): AnswerValue | undefined {
     if (this.rejected.has(id)) this.note(`the answer for '${id}' is not a valid ${this.p.blocks.get(id)?.type ?? 'block'} answer and reads as unanswered`);
-    return this.cells.get(this.p.keys.get(id)?.value ?? cell.value(id)) as AnswerValue | undefined;
+    const answer = this.cells.get(this.p.keys.get(id)?.value ?? cell.value(id)) as AnswerValue | undefined;
+    const parent = this.p.dependsOn[id];
+    /*
+     * A dependent choice waits while its parent has no answer the final state keeps: hidden, disabled, unanswered or
+     * itself waiting (review S4). Rules, formulas and the final state all read it through here, so they agree.
+     * `admit` has already dropped options the parent's answer does not allow.
+     */
+    if (answer === undefined || parent === undefined) return answer;
+    const enabled = this.p.keys.get(parent)?.enabled ?? cell.enabled(parent);
+    return this.visibleEff(parent) && this.flag(enabled) && this.answerOf(parent) !== undefined ? answer : undefined;
   }
 
   /* ── values ────────────────────────────────────────────────────────── */

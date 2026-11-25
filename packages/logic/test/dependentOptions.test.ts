@@ -1,7 +1,7 @@
 import type * as S from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import { createEvaluator, evaluate } from '../src/index.ts';
-import { META, a, ans, bid, choices, cond, field, form, hide, oid, opts, page, rule, versionOf } from './build.ts';
+import { META, a, ans, bid, choices, cond, field, form, hide, oid, opts, page, rule, show, versionOf } from './build.ts';
 
 const linked = (option: string, ...parents: string[]): S.ChoiceOption => ({ id: oid(option), label: option, parentOptionIds: parents.map(oid) });
 
@@ -86,6 +86,31 @@ describe('dependent options', () => {
     const incremental = evaluator.update(usa, [bid('country')]);
     expect(incremental.visible.has(bid('district'))).toBe(true);
     expect(incremental.values[bid('state')]).toBeUndefined();
+  });
+
+  it('a rule reading State does not fire while a rule hides Country, on a full or an incremental pass (review S4)', () => {
+    /* Hide Country when a flag is answered; show GST only for Maharashtra. With Country hidden, State waits, so GST stays hidden. */
+    const def = form([field('short_text', 'flag'), ...blocks(), field('short_text', 'gst', { initiallyHidden: true })],
+      [page('p1', ['flag', 'country', 'state', 'district', 'gst'])], [
+        rule('r1', cond(ans('flag'), 'is_answered'), [hide('country')]),
+        rule('r2', cond(ans('state'), 'eq', opts('state', 'maharashtra')), [show('gst')]),
+      ]);
+    const answers = { [bid('country')]: a.single('india'), [bid('state')]: a.single('maharashtra'), [bid('district')]: a.single('pune') };
+    const flagged = { ...answers, [bid('flag')]: a.text('x') };
+    const check = (state: S.EvalState, shown: boolean) => {
+      expect(state.visible.has(bid('country'))).toBe(shown);
+      expect(state.disabled.has(bid('state'))).toBe(!shown);
+      expect(state.disabled.has(bid('district'))).toBe(!shown);
+      expect(state.values[bid('state')] !== undefined).toBe(shown);
+      expect(state.visible.has(bid('gst'))).toBe(shown);
+    };
+    check(evaluate(versionOf(def), answers, META, 'client'), true);
+    check(evaluate(versionOf(def), flagged, META, 'client'), false);
+    check(evaluate(versionOf(def), flagged, META, 'server'), false);
+    const evaluator = createEvaluator(versionOf(def), META, 'client');
+    check(evaluator.evaluate(answers), true);
+    check(evaluator.update(flagged, [bid('flag')]), false);
+    check(evaluator.update(answers, [bid('flag')]), true);
   });
 
   it('a parent answered with only "Other" unlocks the child with just its unlinked options', () => {
