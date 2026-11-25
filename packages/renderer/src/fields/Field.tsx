@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useFormState } from 'react-hook-form';
+import { setValueTargets } from '@form/logic';
 import { isAvailable } from '@form/registry';
 import type { BlockStyle, FieldBlock, StoredBlock } from '@form/schema';
 import { useRenderer } from '../context.ts';
@@ -45,7 +46,7 @@ function RequiredMark() {
 
 /** One field: label, description, control and error, wired with ids for `htmlFor`, `aria-describedby` and focus. */
 function FieldShell({ block, control }: { block: FieldBlock; control: Control<never> }) {
-  const { idFor } = useRenderer();
+  const { idFor, version } = useRenderer();
   const { resolve } = usePipes();
   const { state } = useEvaluation();
   const { errors } = useFormState({ name: block.id });
@@ -67,7 +68,9 @@ function FieldShell({ block, control }: { block: FieldBlock; control: Control<ne
     invalid: !!error,
     required,
     disabled: state.disabled.has(block.id),
-    readOnly: block.readOnly === true || block.type === 'calculation' || block.type === 'context' || block.type === 'unique_id',
+    /* A field a rule sets (WP-2.01) is the form's to fill, like a calculation: the server ignores what is typed into it. */
+    readOnly: block.readOnly === true || block.type === 'calculation' || block.type === 'context' || block.type === 'unique_id'
+      || setValueTargets(version.definition).has(block.id),
     autoFocus: block.autoFocus === true,
   };
   const labelling = control.labelling(block as never);

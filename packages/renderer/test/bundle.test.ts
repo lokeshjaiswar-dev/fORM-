@@ -43,7 +43,7 @@ const enginesEntry: Plugin = {
   load: (id) =>
     id === ENGINES_MODULE
       ? [
-          "export { createEvaluator } from '@form/logic';",
+          "export { createEvaluator, setValueTargets } from '@form/logic';",
           "export { loadRegexEngine, needsRegexEngine, normalizeAnswer, validateAnswers } from '@form/validation/lazy';",
           "export { EN_IN, createI18n, defineMessages, graphemeLength } from '@form/i18n';",
           "export { CALLING_CODE_REGIONS, acceptsFile, callingCodeOf, isAvailable, rankCount, valueDefinition, wordCount } from '@form/registry';",

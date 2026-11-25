@@ -190,8 +190,3 @@ export function syncInitiallyHidden(def: FormDefinition, ids: Iterable<string>):
     else delete element.initiallyHidden;
   }
 }
-/**
- * `set_value` stays refused by compile() until WP-2.01: review redaction (logic reviewUnits.derivedFrom) relies on rules
- * writing no data. Until then the builder does not offer actions that write values (merge of lan121/dev-lokesh).
- */
-export const SET_VALUE_AVAILABLE = false;
