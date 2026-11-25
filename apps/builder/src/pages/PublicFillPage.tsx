@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { runtimeEdition } from '@form/config';
 import { defineMessages } from '@form/i18n';
-import { FormRenderer, browserSession, type RendererSession, type SubmitPayload } from '@form/renderer';
+import { FormRenderer, browserSession, type RendererSession, type SubmitAccepted, type SubmitPayload } from '@form/renderer';
 import '@form/renderer/styles.css';
 import type { Answers, BlockId, EndingId, FieldError, IsoInstant, PublicFormDefinition, RuntimeFormVersion, RuntimeStatus, SubmissionId, SubmitResult } from '@form/schema';
 import { Alert, AlertDescription, AlertTitle, Button } from '@dmacq/ui';
@@ -226,7 +226,7 @@ export function PublicFillPage() {
     }
   };
 
-  const submit = async (payload: SubmitPayload): Promise<SubmitResult | void> => {
+  const submit = async (payload: SubmitPayload): Promise<SubmitResult | SubmitAccepted | void> => {
     if (version === null) throw new Error('This form is not open.');
     const timeZone = browserTimeZone();
     const pageUrl = addressWithoutQuery(payload.client.pageUrl);
@@ -258,7 +258,15 @@ export function PublicFillPage() {
         // Only the held status this page can say is acted on; the renderer's own ending (thanks, redirect) still shows.
         const held = outcome.held === 'pending_review';
         setUnderReview(held);
-        return { ok: true, submissionId: outcome.submissionId as SubmissionId, endingId: outcome.endingId as EndingId, ...(held ? { held: 'pending_review' as const } : {}) };
+        // The reference numbers the server issued (only those the ending shows) replace the previews on the ending.
+        return {
+          ok: true,
+          submissionId: outcome.submissionId as SubmissionId,
+          endingId: outcome.endingId as EndingId,
+          ...(held ? { held: 'pending_review' as const } : {}),
+          ...(outcome.uniqueId !== undefined ? { uniqueId: outcome.uniqueId } : {}),
+          ...(outcome.uniqueIds !== undefined ? { uniqueIds: outcome.uniqueIds } : {}),
+        };
       }
       case 'invalid':
         // The server re-checks every answer against the live version: show what it refused next to the fields.

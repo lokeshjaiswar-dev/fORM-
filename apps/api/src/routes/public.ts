@@ -323,7 +323,8 @@ export function publicFormRoutes(
           "Respondents are anonymous. `Idempotency-Key` (a uuid, the same for every retry of one submission) is required: a retry with the same body gets the first answer back with `Idempotent-Replayed: true` and counts nothing, the same key with other answers is 422 `IDEMPOTENCY_KEY_REUSED`. " +
           "The answers are for `formVersionId`, which must be the live version or the one it replaced within the form's `acceptPreviousVersionsHours` (else 409 `VERSION_SUPERSEDED`). " +
           'They are evaluated and validated on the server (422 `SUBMISSION_INVALID` with each field named), every file they name must have been uploaded to this form, and the form must be open: 409 `FORM_CLOSED` or `LIMIT_REACHED`, or 401 `PASSWORD_REQUIRED` without a valid `X-FR-Access` token. ' +
-          'A form with section review keeps the response until a checker approves it: the answer then holds `held: "pending_review"` (a replay says it too).',
+          'A form with section review keeps the response until a checker approves it: the answer then holds `held: "pending_review"` (a replay says it too). ' +
+          'The reference numbers the form shows on its ending come back as `uniqueIds` (by block id: the `unique_id` fields marked to show on the ending, and any the reached ending pipes) and `uniqueId` (the first marked one); no other answer is returned, and a replay gives the same numbers.',
         params: slugParam,
         body: z.object({
           formVersionId: z.uuid(),
@@ -333,7 +334,7 @@ export function publicFormRoutes(
           client: clientDetails.optional(),
         }),
         // `held` is there when the form's review keeps the response for a checker: it is not final until then (WP-2.33).
-        response: { 200: z.object({ ok: z.literal(true), submissionId: z.uuid(), endingId: z.string(), held: z.literal('pending_review').exactOptional() }) },
+        response: { 200: z.object({ ok: z.literal(true), submissionId: z.uuid(), endingId: z.string(), held: z.literal('pending_review').exactOptional(), uniqueId: z.string().exactOptional(), uniqueIds: z.record(z.string(), z.string()).exactOptional() }) },
       },
     },
     async (request, reply) => {

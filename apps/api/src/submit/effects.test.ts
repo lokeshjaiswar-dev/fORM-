@@ -6,7 +6,7 @@ import type { Tx } from '@form/db';
 import type { Answers, FormDefinition } from '@form/schema';
 import { answers as answersOf, definitionOf, encrypted, fieldBlock, sensitive } from '../submissions/test-fixtures.ts';
 import type { SearchIndexFactory } from '../submissions/search.ts';
-import { recordEffects, takeUniqueIds, type EffectsContext } from './effects.ts';
+import { issuedForEnding, recordEffects, takeUniqueIds, type EffectsContext } from './effects.ts';
 
 const dialect = new PgDialect();
 
@@ -260,5 +260,32 @@ describe('takeUniqueIds', () => {
   it('fails the transaction when the counter gives no number', async () => {
     const def = definitionOf([uniqueId('ticket')]);
     await expect(takeUniqueIds(fakeTx().tx, context(def, answersOf({ ticket: ['unique_id', 'APP-0100'] })))).rejects.toThrow(/returned no number/);
+  });
+});
+
+describe('issuedForEnding', () => {
+  const pipeOf = (blockId: string) => ({ type: 'pipe', attrs: { source: { kind: 'answer', blockId } } });
+  const withEnding = (def: FormDefinition, ending: Record<string, unknown>): FormDefinition => ({ ...def, endings: [{ id: 'end_1', kind: 'message', name: 'Thanks', actions: [], ...ending }] as unknown as FormDefinition['endings'], defaultEndingId: 'end_1' as FormDefinition['defaultEndingId'] });
+  const values = answersOf({ name: ['short_text', 'Asha'], ticket: ['unique_id', 'APP-0100'], receipt: ['unique_id', 'R-7'] });
+  const base = (over: Record<string, unknown>) => withEnding(definitionOf([fieldBlock('name', 'short_text'), uniqueId('ticket', over), uniqueId('receipt', { showOnEnding: false })]), { content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Thanks' }] }] } });
+
+  it('returns the numbers the form marks for its ending, the first as uniqueId, and no other answer', () => {
+    expect(issuedForEnding(base({}), 'end_1', values)).toEqual({ uniqueId: 'APP-0100', uniqueIds: { ticket: 'APP-0100' } });
+  });
+
+  it('returns nothing when no number is marked or piped', () => {
+    expect(issuedForEnding(base({ showOnEnding: false }), 'end_1', values)).toEqual({});
+  });
+
+  it('returns an unmarked number the reached ending pipes, as uniqueIds only', () => {
+    const def = withEnding(base({ showOnEnding: false }), { content: { type: 'doc', content: [{ type: 'paragraph', content: [pipeOf('receipt')] }] } });
+    expect(issuedForEnding(def, 'end_1', values)).toEqual({ uniqueIds: { receipt: 'R-7' } });
+    const redirect = withEnding(base({ showOnEnding: false }), { kind: 'redirect', url: ['https://x.example/?r=', { pipe: { source: { kind: 'answer', blockId: 'receipt' }, encode: 'url' } }] });
+    expect(issuedForEnding(redirect, 'end_1', values)).toEqual({ uniqueIds: { receipt: 'R-7' } });
+  });
+
+  it('never returns a number the path did not reach, or a pipe of an ordinary answer', () => {
+    const def = withEnding(base({}), { content: { type: 'doc', content: [{ type: 'paragraph', content: [pipeOf('name')] }] } });
+    expect(issuedForEnding(def, 'end_1', answersOf({ name: ['short_text', 'Asha'] }))).toEqual({});
   });
 });

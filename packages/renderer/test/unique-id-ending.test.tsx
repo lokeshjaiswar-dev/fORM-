@@ -49,4 +49,12 @@ describe('unique_id on the ending', () => {
     expect(await screen.findByRole('heading', { name: 'Ticket T-001' })).toBeInTheDocument();
     expect(screen.queryByText('Your reference number:')).not.toBeInTheDocument();
   });
+
+  it('pipes a number the server returned for the ending only, with no reference line', async () => {
+    const onSubmit: SubmitHandler = () => ({ ok: true, uniqueIds: { ref: 'T-077' } });
+    render(<FormRenderer {...props(runtime(serialForm()), { onSubmit })} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByRole('heading', { name: 'Ticket T-077' })).toBeInTheDocument();
+    expect(screen.queryByText('Your reference number:')).not.toBeInTheDocument();
+  });
 });

@@ -105,6 +105,44 @@ export async function takeUniqueIds(tx: Tx, ctx: Pick<EffectsContext, 'orgId' | 
   return numbered;
 }
 
+/** Every block id a template or rich document reads as an answer (`{ kind: 'answer', blockId }` inside a pipe), wherever it sits in the value. */
+function pipedBlockIds(value: unknown, found: Set<string> = new Set()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) pipedBlockIds(item, found);
+  } else if (typeof value === 'object' && value !== null) {
+    const node = value as Record<string, unknown>;
+    const attrs = node['type'] === 'pipe' ? node['attrs'] : node['pipe'];
+    const source = (attrs as { source?: { kind?: unknown; blockId?: unknown } } | undefined)?.source;
+    if (source?.kind === 'answer' && typeof source.blockId === 'string') found.add(source.blockId);
+    for (const child of Object.values(node)) pipedBlockIds(child, found);
+  }
+  return found;
+}
+
+/**
+ * The reference numbers the respondent is given back (FLD-32): only numbers the form means to show. A `unique_id` field
+ * is returned when it is marked `showOnEnding`, or when the ending the answers reached pipes it (its content, its
+ * redirect address or message, its buttons). Nothing else of the answers is returned, and neither is a number of a
+ * field the respondent's path did not reach (it holds no answer). `uniqueId` is the first marked one, in block id order.
+ */
+export function issuedForEnding(definition: FormDefinition, endingId: string, answers: Answers): { uniqueId?: string; uniqueIds?: Record<string, string> } {
+  const ending = definition.endings.find((e) => e.id === endingId);
+  const piped = ending ? pipedBlockIds(ending) : new Set<string>();
+  const uniqueIds: Record<string, string> = {};
+  let uniqueId: string | undefined;
+  for (const id of (Object.keys(definition.blocks) as BlockId[]).sort()) {
+    const block = definition.blocks[id];
+    const answer = answers[id];
+    if (block?.type !== 'unique_id' || answer?.type !== 'unique_id' || typeof answer.value !== 'string' || answer.value === '') continue;
+    const marked = block.config.showOnEnding;
+    if (!marked && !piped.has(id)) continue;
+    uniqueIds[id] = answer.value;
+    if (marked && uniqueId === undefined) uniqueId = answer.value;
+  }
+  if (Object.keys(uniqueIds).length === 0) return {};
+  return { ...(uniqueId === undefined ? {} : { uniqueId }), uniqueIds };
+}
+
 /**
  * What a stored response sets in motion inside its own transaction, before the guarded counter update that can still roll
  * everything back and before the INSERT of the response, so whatever it writes is undone with the rest by a
