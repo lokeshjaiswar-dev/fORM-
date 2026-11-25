@@ -197,7 +197,8 @@ export async function authSession(db: Executor, tokenHash: Uint8Array, idleSecon
  * `auth_files_*` and `auth_submit_*` count the anonymous writes of respondents (uploads and submissions) per IP hash
  * and per IP hash and form, the same keyed-hash counters, so no address is stored. `auth_remote_ip`, `auth_remote_form`
  * and `auth_remote_formall` count a respondent's lookup, option and check calls (per IP hash, per IP hash and form, and per
- * form); `auth_remote_test` counts an author's test calls per user. `auth_unlock_ip` and
+ * form); `auth_remote_test` counts an author's Test-button calls per user and `auth_remote_preview` the builder preview's
+ * calls per user (each pause in typing is one, so it has its own, larger budget). `auth_unlock_ip` and
  * `auth_unlock_form` count the password attempts of one address over every form and on one protected form (WP-1.07).
  */
 export const AUTH_THROTTLE_BUCKETS = [
@@ -216,6 +217,7 @@ export const AUTH_THROTTLE_BUCKETS = [
   'auth_remote_form',
   'auth_remote_formall',
   'auth_remote_test',
+  'auth_remote_preview',
 ] as const;
 export type AuthThrottleBucket = (typeof AUTH_THROTTLE_BUCKETS)[number];
 

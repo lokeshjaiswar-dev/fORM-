@@ -576,6 +576,18 @@ describe('the author route and the SSRF guard (T-LK-02, T-LK-13)', () => {
     expect(Number(over.headers['retry-after'])).toBeGreaterThan(0);
     expect((await author(limited, user.owner, formId, { request: { url: 'https://hr.example.test/x' } })).statusCode).toBe(200);
   });
+  it('preview calls spend their own budget (auth_remote_preview): an exhausted Test budget does not block the preview, nor the reverse (review note)', async () => {
+    const window = await throttleWindowSeconds(owner);
+    const limited = await startApp({ tenantHttp: stubHttp }, {}, { auth_remote_test: { max: 2, windowSeconds: window }, auth_remote_preview: { max: 2, windowSeconds: window } });
+    upstream = () => ({ status: 200, body: '{}' });
+    const req = { request: { url: 'https://hr.example.test/x' } };
+    for (let i = 0; i < 2; i++) expect((await author(limited, user.editor, formId, req)).statusCode).toBe(200);
+    expect((await author(limited, user.editor, formId, req)).statusCode).toBe(429);
+    for (let i = 0; i < 2; i++) expect((await author(limited, user.editor, formId, { ...req, purpose: 'preview' })).statusCode).toBe(200);
+    expect((await author(limited, user.editor, formId, { ...req, purpose: 'preview' })).statusCode).toBe(429);
+    expect((await author(limited, user.editor, formId, { ...req, purpose: 'other' })).statusCode).toBe(400);
+  });
+
 
   describe('through the real tenant egress guard', () => {
     const DNS: Record<string, string> = { 'rebind.example.test': '10.0.0.7', 'public.example.test': '93.184.216.34', 'mapped.example.test': '::ffff:127.0.0.1' };

@@ -41,7 +41,7 @@ describe('previewRemoteSource (the builder preview goes through the author route
     const { calls, source } = setup({ rows: [{ name: 'Asha', dept: 'Finance', salary: '99', ghost: 'x' }] });
     const out = await source.lookup('hr', 'as', signal());
     expect(calls[0]?.url).toMatch(/\/v1\/forms\/f1\/remote\/test$/);
-    expect(calls[0]?.body).toEqual({ request: { url: URL_, method: 'GET', credentialRef: { secretId: 's1' }, searchParam: 'q' }, q: 'as' });
+    expect(calls[0]?.body).toEqual({ request: { url: URL_, method: 'GET', credentialRef: { secretId: 's1' }, searchParam: 'q' }, q: 'as', purpose: 'preview' });
     expect(out.rows).toEqual([{ label: 'Asha', cells: { name: 'Asha', dept: 'Finance' } }]);
   });
 
@@ -57,7 +57,9 @@ describe('previewRemoteSource (the builder preview goes through the author route
     expect((await options.source.options!('city', signal())).map((o) => o.id)).toEqual(['Pune', 'Delhi']);
     const check = setup({ valid: true });
     expect(await check.source.check!('tin', 'abc', signal())).toEqual({ ok: true });
-    expect(check.calls[0]?.body).toMatchObject({ fieldKey: 'tin', value: 'abc' });
+    expect(check.calls[0]?.body).toMatchObject({ fieldKey: 'tin', value: 'abc', purpose: 'preview' });
+    // Every preview call spends the preview's own budget, never the Test buttons' (review note).
+    expect(options.calls[0]?.body).toMatchObject({ purpose: 'preview' });
     const fail = setup({ valid: false });
     expect(await fail.source.check!('tin', 'abc', signal())).toEqual({ ok: false });
   });

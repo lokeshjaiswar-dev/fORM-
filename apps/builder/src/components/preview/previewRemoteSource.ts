@@ -28,14 +28,14 @@ export function previewRemoteSource(org: string, definition: FormDefinition, dms
       if (!found) return { rows: [], truncated: false };
       // "Fill from master" is answered by DMS as the user (previewDmsSource), never by the fORM- author route.
       if (found.source === 'dms_master') return dms ? dms.lookup(lookupId, q, signal) : { rows: [], truncated: false };
-      const { data } = await testRemote(org, definition.formId, found as RemoteTestRequest, found.searchParam !== undefined ? { q } : {});
+      const { data } = await testRemote(org, definition.formId, found as RemoteTestRequest, { ...(found.searchParam !== undefined ? { q } : {}), purpose: 'preview' });
       if (signal.aborted) throw new DOMException('aborted', 'AbortError');
       return projectLookupRows(data, found, { q, hasBlock });
     },
     async options(blockId, signal): Promise<ChoiceOption[]> {
       const api = field(blockId)?.apiOptions;
       if (!api) return [];
-      const { data } = await testRemote(org, definition.formId, api as RemoteTestRequest);
+      const { data } = await testRemote(org, definition.formId, api as RemoteTestRequest, { purpose: 'preview' });
       if (signal.aborted) throw new DOMException('aborted', 'AbortError');
       return mapApiOptions(data, api).slice(0, 500);
     },
@@ -46,7 +46,7 @@ export function previewRemoteSource(org: string, definition: FormDefinition, dms
       // The same scalar the respondent's page sends (an email's address, a choice's id), never '[object Object]'.
       const scalar = apiCheckValue(block.type ?? '', value);
       if (scalar === undefined) return { ok: true };
-      const { data } = await testRemote(org, definition.formId, api as RemoteTestRequest, { fieldKey: block.key, value: scalar });
+      const { data } = await testRemote(org, definition.formId, api as RemoteTestRequest, { fieldKey: block.key, value: scalar, purpose: 'preview' });
       if (signal.aborted) throw new DOMException('aborted', 'AbortError');
       return { ok: evaluateCheck(data, api) };
     },

@@ -44,12 +44,15 @@ export const DEFAULT_AUTH_LIMITS: Record<AuthThrottleBucket, Limit> = {
   // Server-side lookups (`POST /v1/p/:slug/lookups|fields/...`): a respondent types, and each pause is one call, so the budgets
   // are well above filling a form but bound what one address, one address on one form, and every address together on one
   // form can ask the form owner's upstream API for (the proxy is the only caller of that API). Ten-minute windows. The author's
-  // Test and preview calls (`POST /v1/forms/:id/remote/test`) are counted per user. None of these touches the submit buckets,
+  // Test and preview calls (`POST /v1/forms/:id/remote/test`) are counted per user, each in its own bucket. None of these touches the submit buckets,
   // so an exhausted lookup budget never blocks a submission.
   auth_remote_ip: { max: 600, windowSeconds: 600 },
   auth_remote_form: { max: 300, windowSeconds: 600 },
   auth_remote_formall: { max: 20000, windowSeconds: 600 },
   auth_remote_test: { max: 120, windowSeconds: 600 },
+  // The builder preview's lookups, option lists and checks go through the same author route; typing in a preview search
+  // spends a call per pause, so they have their own budget and never starve the Test buttons.
+  auth_remote_preview: { max: 600, windowSeconds: 600 },
 };
 
 export interface ThrottleKey {

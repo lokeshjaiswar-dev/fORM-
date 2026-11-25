@@ -97,9 +97,10 @@ export async function testRemote(
   org: string,
   formId: string,
   request: RemoteTestRequest,
-  extra: { q?: string; fieldKey?: string; value?: string | number | boolean } = {},
+  extra: { q?: string; fieldKey?: string; value?: string | number | boolean; purpose?: 'test' | 'preview' } = {},
 ): Promise<RemoteTestResult> {
   const body: Record<string, unknown> = { request: testRequestOf(request) };
+  if (extra.purpose === 'preview') body.purpose = 'preview';
   if (extra.q !== undefined) body.q = extra.q;
   if (extra.fieldKey !== undefined && extra.value !== undefined) {
     body.fieldKey = extra.fieldKey;
