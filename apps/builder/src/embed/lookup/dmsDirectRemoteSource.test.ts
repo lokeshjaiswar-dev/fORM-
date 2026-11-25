@@ -18,17 +18,19 @@ const lookup: PublicLookup = {
 };
 const TOKEN = 'tok-sentinel-7a1c';
 const BASE = 'https://dms.example.test';
+/** B's elements as GET masters/{id} returns them: both flags on every field. */
+const flagged = fx.sourceMasterElements.map((e) => ({ ...e, is_hidden: Boolean(e.is_hidden), is_secret: Boolean(e.is_secret) }));
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 
-function setup() {
+function setup(o: { elements?: unknown[]; records?: unknown; lookups?: PublicLookup[] } = {}) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const doFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, init: init ?? {} });
-    return url.includes('/master/form/') ? ok({ data: { id: fp.master_id, form_builder_fields: fx.sourceMasterElements } }) : ok(fx.masterRecordsResponse);
+    return url.includes('/dms/masters/') ? ok({ data: { id: fp.master_id, form_builders: o.elements ?? flagged } }) : ok(o.records ?? fx.masterRecordsResponse);
   });
   const client = createDmsClient({ apiBase: BASE, tenantId: 't1', workspaceId: 'w1', fetch: doFetch as never, token: () => TOKEN });
-  return { calls, source: dmsDirectRemoteSource(client, [lookup]) };
+  return { calls, source: dmsDirectRemoteSource(client, o.lookups ?? [lookup]) };
 }
 const signal = () => new AbortController().signal;
 
@@ -66,7 +68,25 @@ describe('dmsDirectRemoteSource (/embed/dms-record)', () => {
     const { calls, source } = setup();
     await source.lookup(lookup.id, 'a', signal());
     await source.lookup(lookup.id, 'ac', signal());
-    expect(calls.filter((c) => c.url.includes('/master/form/'))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.includes('/dms/masters/'))).toHaveLength(1);
+    expect(calls.some((c) => c.url.includes('/master/form/'))).toBe(false);
+  });
+
+  it('B\'s flags come from GET masters/{id}: a hidden column never fills, even for a revealer (review should-fix)', async () => {
+    const NOTE = fx.sourceMasterElements[4]!.id;
+    const hiddenFill: PublicLookup = { ...lookup, mappings: [{ key: NOTE, fieldId: fp.fill[0]!.to as never }] };
+    // A revealer: master-records returns the hidden column in clear (no __masked sibling).
+    const records = { data: { records: [{ id: 'r1', json_data: { 'Vendor Name': 'Acme Traders', 'Internal Note': 'do not share' } }] } };
+    const { calls, source } = setup({ records, lookups: [hiddenFill] });
+    const out = await source.lookup(hiddenFill.id, 'acme', signal());
+    expect(calls.some((c) => c.url === `${BASE}/dms/masters/${fp.master_id}`)).toBe(true);
+    expect(out.rows.map((r) => r.label)).toEqual(['Acme Traders']);
+    expect(JSON.stringify(out)).not.toContain('do not share');
+  });
+
+  it('fails closed when the master route returns fields without the flags', async () => {
+    const { source } = setup({ elements: fx.sourceMasterElements.map(({ is_secret: _s, is_hidden: _h, ...e }) => e) });
+    expect(await source.lookup(lookup.id, 'acm', signal())).toEqual({ rows: [], truncated: false });
   });
 
   it('an undeclared id, or an http lookup, makes no call', async () => {
@@ -82,10 +102,10 @@ describe('dmsDirectRemoteSource (/embed/dms-record)', () => {
     let n = 0;
     const client = {
       request: vi.fn(async (_m: string, p: string) => {
-        if (p.includes('/master/form/')) {
+        if (p.includes('/dms/masters/')) {
           n += 1;
           if (n === 1) throw new Error('down');
-          return { data: { form_builder_fields: fx.sourceMasterElements } };
+          return { data: { form_builders: flagged } };
         }
         return fx.masterRecordsResponse;
       }),

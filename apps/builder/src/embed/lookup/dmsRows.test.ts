@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { fixtures } from '../bridge/fixtures.ts';
-import { DMS_FETCH_ROWS, SECRET_MASK, projectMasterRecords, sourceFieldsOf } from './dmsRows.ts';
+import { DMS_FETCH_ROWS, SECRET_MASK, projectMasterRecords, sourceElementsOf, sourceFieldsOf, sourceMasterPath } from './dmsRows.ts';
 
 const fx = fixtures.lookup;
 const [, ...fillOnly] = fx.pickerElement.fp_lookup.fill;
 void fillOnly;
 const lookup = { pickerKey: fx.pickerElement.fp_lookup.label_field_id, mappings: fx.pickerElement.fp_lookup.fill.map((f) => ({ key: f.from })) };
-const fields = sourceFieldsOf(fx.sourceMasterElements);
+/** B's elements as GET masters/{id} returns them: both flags on every field (from master_fields.properties). */
+const flagged = fx.sourceMasterElements.map((e) => ({ ...e, is_hidden: Boolean(e.is_hidden), is_secret: Boolean(e.is_secret) }));
+const fields = sourceFieldsOf(flagged);
 const ID = (n: number) => `b2000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const NAME = ID(1), CITY = ID(2), PHONE = ID(3), TAX = ID(4), NOTE = ID(5);
 
@@ -37,7 +39,7 @@ describe('projectMasterRecords against the contract fixture (T-BR-L8)', () => {
   });
 
   it('with no flags and no mask a value still has to be declared; the mask text itself and a __masked key drop it even for an unflagged field', () => {
-    const plain = sourceFieldsOf(fx.sourceMasterElements.map(({ is_secret: _s, is_hidden: _h, ...rest }) => rest));
+    const plain = sourceFieldsOf(fx.sourceMasterElements.map(({ is_secret: _s, is_hidden: _h, ...rest }) => rest), { requireFlags: false });
     const rows = projectMasterRecords(fx.masterRecordsResponse, lookup, plain).rows;
     expect(JSON.stringify(rows)).not.toContain(SECRET_MASK);
     for (const row of rows) expect(Object.keys(row.cells)).not.toContain(TAX);
@@ -47,6 +49,27 @@ describe('projectMasterRecords against the contract fixture (T-BR-L8)', () => {
     expect(projectMasterRecords(fx.masterRecordsResponse, { ...lookup, pickerKey: TAX }, fields)).toEqual({ rows: [], truncated: false });
     expect(projectMasterRecords(fx.masterRecordsResponse, { ...lookup, pickerKey: NOTE }, fields)).toEqual({ rows: [], truncated: false });
     expect(projectMasterRecords(fx.masterRecordsResponse, { ...lookup, pickerKey: ID(99) }, fields).rows).toEqual([]);
+  });
+});
+
+describe('B\'s flags fail closed (review: json_data may lack is_hidden/is_secret)', () => {
+  it('a field without both flags is hidden: never a cell, and as the label column it gives no rows', () => {
+    // json_data saved without flags; a revealer gets the hidden column in clear from master-records.
+    const unflagged = sourceFieldsOf(fx.sourceMasterElements.map(({ is_secret: _s, is_hidden: _h, ...rest }) => rest));
+    const fillNote = { pickerKey: NAME, mappings: [{ key: NOTE }] };
+    const records = { data: { records: [{ id: 'r1', json_data: { 'Vendor Name': 'Acme Traders', 'Internal Note': 'do not share' } }] } };
+    expect(projectMasterRecords(records, fillNote, unflagged)).toEqual({ rows: [], truncated: false });
+    const half = sourceFieldsOf([{ ...flagged[0] }, { id: NOTE, value: 'Internal Note', is_secret: false }]);
+    const out = projectMasterRecords(records, fillNote, half);
+    expect(out.rows.map((r) => r.label)).toEqual(['Acme Traders']);
+    expect(JSON.stringify(out)).not.toContain('do not share');
+  });
+
+  it('the flags come from GET masters/{id} form_builders (array or JSON string)', () => {
+    expect(sourceMasterPath('m/1')).toBe('/dms/masters/m%2F1');
+    expect(sourceElementsOf({ data: { form_builders: flagged } })).toEqual(flagged);
+    expect(sourceElementsOf({ data: { form_builders: JSON.stringify(flagged) } })).toEqual(flagged);
+    expect(sourceElementsOf({ data: { form_builder_fields: flagged } })).toBeUndefined();
   });
 });
 

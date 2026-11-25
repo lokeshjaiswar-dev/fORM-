@@ -22,9 +22,11 @@ beforeEach(() => {
   resetUi({ started: true });
 });
 
-const client = () => ({
+/** B's elements as GET masters/{id} returns them: both flags on every field. */
+const flagged = fixtures.lookup.sourceMasterElements.map((e) => ({ ...e, is_hidden: Boolean(e.is_hidden), is_secret: Boolean(e.is_secret) }));
+const client = (elements: unknown[] = flagged) => ({
   request: vi.fn(async (_method: string, path: string): Promise<never> => {
-    if (path === `/dms/v1/master/form/${MASTER}`) return { data: { id: MASTER, form_builder_fields: fixtures.lookup.sourceMasterElements } } as never;
+    if (path === `/dms/masters/${MASTER}`) return { data: { id: MASTER, form_builders: elements } } as never;
     throw new Error(`unexpected ${path}`);
   }),
 });
@@ -43,7 +45,7 @@ describe('DmsLookupSettings (Fill from master)', () => {
     await user.click(screen.getByRole('button', { name: 'Add a lookup' }));
     await user.type(screen.getByLabelText('Source master id'), MASTER);
     await user.click(screen.getByRole('button', { name: 'Load fields' }));
-    await waitFor(() => expect(api.request).toHaveBeenCalledWith('GET', `/dms/v1/master/form/${MASTER}`));
+    await waitFor(() => expect(api.request).toHaveBeenCalledWith('GET', `/dms/masters/${MASTER}`));
     await pick(user, 'Search field in this form', 'Vendor');
     await user.click(screen.getByRole('combobox', { name: 'Column people search and pick by' }));
     const listed = (await screen.findAllByRole('option')).map((o) => o.textContent);
@@ -63,6 +65,20 @@ describe('DmsLookupSettings (Fill from master)', () => {
     expect(saved[0]).toMatchObject({ source: 'dms_master', enabled: true, masterId: MASTER, pickerFieldId: A(1), pickerKey: B(1), minChars: 2 });
     expect(saved[0]!.mappings).toEqual([{ key: B(2), fieldId: A(2) }, { key: B(3), fieldId: A(3) }]);
     expect(checkDmsV1(doc()).filter((i) => i.severity === 'error')).toEqual([]);
+  });
+
+  it('a column without both flags from GET masters/{id} is not offered (fail closed, review should-fix)', async () => {
+    const api = client(fixtures.lookup.sourceMasterElements.map(({ is_hidden: _h, is_secret: _s, ...e }, i) => (i === 0 ? { ...e, is_hidden: false, is_secret: false } : e)));
+    const user = userEvent.setup();
+    render(<DmsLookupSettings client={api} />);
+    await user.click(screen.getByRole('button', { name: 'Add a lookup' }));
+    await user.type(screen.getByLabelText('Source master id'), MASTER);
+    await user.click(screen.getByRole('button', { name: 'Load fields' }));
+    await waitFor(() => expect(api.request).toHaveBeenCalledWith('GET', `/dms/masters/${MASTER}`));
+    await user.click(screen.getByRole('combobox', { name: 'Column people search and pick by' }));
+    const listed = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(listed).toContain('Vendor Name');
+    for (const name of ['City', 'Phone', 'Tax Id', 'Internal Note']) expect(listed).not.toContain(name);
   });
 
   it('the fields to fill are text, multi-line and number fields: not the search field, not an email field', async () => {

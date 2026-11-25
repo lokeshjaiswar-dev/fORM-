@@ -28,18 +28,40 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const flag = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'true';
 
 /**
- * B's elements as id -> name and flags. Elements from `GET master/form/{id}` carry the field name in `value` (else `name`);
- * a field that is flagged secret or hidden is never read. A field that carries no flag is read: DMS itself masks secrets
- * and omits hidden fields in `master-records` for a user who may not see them, and the mask and `__masked` drops below
- * back that up.
+ * Where B's elements come from: `GET masters/{id}` (dms-api `MasterService::getById`), whose `form_builders` carry
+ * `is_hidden` and `is_secret` resolved from `master_fields.properties` (applyHiddenSecretFlagsToFormBuilders), the same
+ * source the classic bridge parent reads. `GET v1/master/form/{id}` returns the saved JSON, which may lack the flags.
  */
-export function sourceFieldsOf(elements: unknown): Map<string, SourceField> {
+export const sourceMasterPath = (masterId: string): string => `/dms/masters/${encodeURIComponent(masterId)}`;
+
+/** The `form_builders` of a `GET masters/{id}` answer (an array, or the same as a JSON string). */
+export function sourceElementsOf(res: unknown): unknown {
+  let list = (res as { data?: { form_builders?: unknown } } | null)?.data?.form_builders;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      list = [];
+    }
+  }
+  return list;
+}
+
+/**
+ * B's elements as id -> name and flags. Elements carry the field name in `value` (else `name`); a field that is flagged
+ * secret or hidden is never read. With `requireFlags` (the default) a field that does not carry both flags explicitly is
+ * treated as hidden (fail closed, as the classic parent does): DMS returns hidden fields in clear to a user who may reveal
+ * them, so a missing flag must not make a hidden column fillable.
+ */
+export function sourceFieldsOf(elements: unknown, opts: { requireFlags?: boolean } = {}): Map<string, SourceField> {
+  const requireFlags = opts.requireFlags ?? true;
   const out = new Map<string, SourceField>();
   for (const e of Array.isArray(elements) ? elements : []) {
     if (!isObj(e) || typeof e.id !== 'string') continue;
     const name = typeof e.value === 'string' && e.value !== '' ? e.value : typeof e.name === 'string' ? e.name : '';
     if (name === '') continue;
-    out.set(e.id.toLowerCase(), { name, secret: flag(e.is_secret), hidden: flag(e.is_hidden) });
+    const unflagged = requireFlags && (!('is_hidden' in e) || !('is_secret' in e));
+    out.set(e.id.toLowerCase(), { name, secret: flag(e.is_secret), hidden: unflagged || flag(e.is_hidden) });
   }
   return out;
 }

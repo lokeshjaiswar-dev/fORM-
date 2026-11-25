@@ -1,8 +1,7 @@
 import type { RemoteLookupResult, RemoteSource } from '@form/renderer';
 import type { PublicLookup } from '@form/schema';
 import type { DmsClient } from '@/embed/dmsClient';
-import { DMS_RECORD_ROUTES } from '@/embed/record/contract';
-import { DMS_FETCH_ROWS, projectMasterRecords, sourceFieldsOf, type SourceField } from './dmsRows';
+import { DMS_FETCH_ROWS, projectMasterRecords, sourceElementsOf, sourceFieldsOf, sourceMasterPath, type SourceField } from './dmsRows';
 
 /*
  * `/embed/dms-record`: the top-level page has the user's own DMS token, so it asks dms-api for the source master's records
@@ -25,17 +24,8 @@ export function dmsDirectRemoteSource(client: Pick<DmsClient, 'request'>, lookup
   const fieldsOf = (masterId: string) => {
     let known = sources.get(masterId);
     if (!known) {
-      known = client.request<{ data?: { form_builder_fields?: unknown } }>('GET', DMS_RECORD_ROUTES.master(masterId)).then((res) => {
-        let list: unknown = res?.data?.form_builder_fields;
-        if (typeof list === 'string') {
-          try {
-            list = JSON.parse(list);
-          } catch {
-            list = [];
-          }
-        }
-        return sourceFieldsOf(list);
-      });
+      // GET masters/{id}: its form_builders carry B's hidden and secret flags (fail closed when one is missing).
+      known = client.request('GET', sourceMasterPath(masterId)).then((res) => sourceFieldsOf(sourceElementsOf(res)));
       known.catch(() => sources.delete(masterId));
       sources.set(masterId, known);
     }

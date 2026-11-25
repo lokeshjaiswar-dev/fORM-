@@ -9,8 +9,7 @@ import { setLookups } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { createDmsClient, type DmsClient } from '@/embed/dmsClient';
 import { currentLaunch } from '@/embed/launch';
-import { sourceFieldsOf, type SourceField } from '@/embed/lookup/dmsRows';
-import { MASTER_FORM_PATH } from '@/embed/master/DmsMasterRepository';
+import { sourceElementsOf, sourceFieldsOf, sourceMasterPath, type SourceField } from '@/embed/lookup/dmsRows';
 import { NiceSelect } from '@/components/NiceSelect';
 import { Alert, AlertDescription, Button, Input, Label } from '@dmacq/ui';
 
@@ -43,7 +42,7 @@ const TARGET_TYPES = new Set(['textinput', 'multilineinput', 'numberinput']);
 
 type Fields = Array<{ id: string; name: string }>;
 
-/** The source master's usable columns: those with a name that are not flagged secret or hidden. */
+/** The source master's usable columns: those with a name that are flagged neither secret nor hidden (a missing flag counts as hidden). */
 export function usableColumns(elements: unknown): Fields {
   const all = sourceFieldsOf(elements);
   const out: Fields = [];
@@ -51,22 +50,10 @@ export function usableColumns(elements: unknown): Fields {
   return out;
 }
 
-function elementsOfMaster(res: unknown): unknown {
-  let list = (res as { data?: { form_builder_fields?: unknown } } | null)?.data?.form_builder_fields;
-  if (typeof list === 'string') {
-    try {
-      list = JSON.parse(list);
-    } catch {
-      list = [];
-    }
-  }
-  return list;
-}
-
 /**
  * "Fill from master" for a DMS form (profile dms-v1, server-side lookups F8). Writes a valid `dms_master` lookup, which the
  * profile writes back as the picker's `fp_lookup`. The source master is chosen by id and its columns are read through the
- * same authenticated call the record page uses (the DMS master list call is not available here), as the signed-in user.
+ * classic bridge parent's call (`GET masters/{id}`, which carries the hidden and secret flags), as the signed-in user.
  */
 export function DmsLookupSettings({ client }: { client?: Pick<DmsClient, 'request'> }) {
   const doc = useDoc((d) => d);
@@ -134,8 +121,9 @@ function LookupEditor({ initial, others, client, onSave }: { initial: DmsMasterL
     }
     setStatus('loading');
     try {
-      const res = await api.request('GET', `${MASTER_FORM_PATH}/${encodeURIComponent(masterId)}`);
-      setColumns(usableColumns(elementsOfMaster(res)));
+      // GET masters/{id}: the fields with the flags DMS keeps in master_fields.properties.
+      const res = await api.request('GET', sourceMasterPath(masterId));
+      setColumns(usableColumns(sourceElementsOf(res)));
       setStatus('idle');
     } catch {
       setColumns([]);
