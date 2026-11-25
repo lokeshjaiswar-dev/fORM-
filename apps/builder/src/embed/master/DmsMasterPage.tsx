@@ -13,7 +13,7 @@ import { useBlockClipboard } from '@/components/builder/useBlockClipboard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Tooltip } from '@/components/Tooltip';
 import { DmsAuthError } from '@/embed/dmsClient';
-import { describeDmsError } from '@/embed/master/describeDmsError';
+import { describeDmsError, schemaSyncOf } from '@/embed/master/describeDmsError';
 import { currentLaunch, rememberMasterId, returnTarget, type ResolvedLaunch } from '@/embed/launch';
 import { ProfileProvider } from '@/embed/profile';
 import { blockText } from '@/lib/definition';
@@ -118,6 +118,7 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
   const issues = checked && checked.doc === doc ? checked.issues : EMPTY_ISSUES;
   const confirmed = checked && checked.doc === doc ? checked.confirmed : null;
   const [problem, setProblem] = useState<string | null>(null);
+  const [problemSaved, setProblemSaved] = useState(false);
   const [signedOut, setSignedOut] = useState(false);
   const [saved, setSaved] = useState<CommitResult | null>(null);
   const dirty = doc !== baseline;
@@ -142,10 +143,11 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
     if (busy) return;
     setBusy(true);
     setProblem(null);
+    setProblemSaved(false);
     /* What DMS receives is the doc as it is now; edits made while the request is in flight are not in it. */
     const sent = currentDoc();
+    const wasCreating = repo.current === null;
     try {
-      const wasCreating = repo.current === null;
       const result = await repo.commit(sent, { confirmedWarnings: confirmed });
       if (wasCreating) rememberMasterId('dms-master', result.masterId);
       setBaseline(sent);
@@ -158,7 +160,16 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
       if (e instanceof DmsCommitRefused) {
         setChecked({ doc: sent, issues: e.issues, confirmed: e.needsConfirmation ? e.warningKey : null });
       } else if (e instanceof DmsAuthError) setSignedOut(true);
-      else setProblem(describeDmsError(e));
+      else {
+        /* SCHEMA_SYNC_FAILED with saved:true: DMS holds this doc already (and, on a create, the master exists), so it is the new baseline. */
+        if (schemaSyncOf(e)?.saved) {
+          if (wasCreating && repo.current) rememberMasterId('dms-master', repo.current.id);
+          setBaseline(sent);
+          setChecked(null);
+          setProblemSaved(true);
+        }
+        setProblem(describeDmsError(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -228,7 +239,7 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
             <div className="space-y-1 p-2" aria-live="polite">
               {problem ? (
                 <Alert variant="destructive">
-                  <AlertTitle>The master was not saved</AlertTitle>
+                  <AlertTitle>{problemSaved ? 'Saved, but the data table needs another save' : 'The master was not saved'}</AlertTitle>
                   <AlertDescription>{problem}</AlertDescription>
                 </Alert>
               ) : null}

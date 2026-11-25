@@ -5,6 +5,7 @@ import { BUILDER_LOCALE } from '@/i18n';
 import { blankDefinition } from '@/lib/definition';
 import { DOCUMENT_FORMAT, type DocumentRepository, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
 import { createDmsClient, type DmsClient } from '@/embed/dmsClient';
+import { schemaSyncOf } from '@/embed/master/describeDmsError';
 import type { ResolvedLaunch } from '@/embed/launch';
 
 /*
@@ -60,10 +61,10 @@ export interface CommitOptions {
   confirmedWarnings?: string | null | undefined;
 }
 
-/** This master was not made in Forms+ (an OpenForm or classic master): editing it here could not keep its fields. */
+/** `source !== 'formplus'`: an OpenForm master not converted yet, or a classic master. dms-api refuses its PATCH (`MASTER_NOT_CONVERTED`), so nothing is editable here. */
 export class NotAFormPlusMaster extends Error {
   constructor(source: string | null) {
-    super(`This master was created with ${source ?? 'another builder'}, not Forms+. Open it in the builder it was made with.`);
+    super(`This master has not been converted to Forms+${source ? ` (it was made with ${source})` : ''}. An administrator converts OpenForm masters; classic-built masters are edited in DMS classic.`);
     this.name = 'NotAFormPlusMaster';
   }
 }
@@ -187,27 +188,39 @@ export class DmsMasterRepository implements DocumentRepository {
     const fields = definitionToElements(doc);
     const existing = this.server;
     const masterId = existing?.id ?? this.launch.masterId;
-    const response =
-      masterId === undefined
-        ? await this.client.request('POST', MASTER_FORM_PATH, {
-            name,
-            source: 'formplus',
-            classification: null, // never from the link: dms-ui sends null too
-            doctype_ids: this.launch.master?.doctypeIds ?? [],
-            folder_ids: this.launch.master?.folderIds ?? [],
-            form_builder_fields: fields,
-          })
-        : await this.client.request('PATCH', `${MASTER_FORM_PATH}/${encodeURIComponent(masterId)}`, {
-            name,
-            source: 'formplus',
-            ...(existing?.updatedAt ? { updated_at: existing.updatedAt } : {}),
-            form_builder_fields: fields,
-          });
+    let response: unknown;
+    try {
+      response = await this.send(masterId, existing, name, fields);
+    } catch (e) {
+      /* The metadata is committed and the lock token moved: adopt both, so "save again" PATCHes with the new token (never a second POST). */
+      const sync = schemaSyncOf(e);
+      const savedId = sync?.masterId ?? masterId;
+      if (sync?.saved && savedId) this.server = { id: savedId, name, source: 'formplus', updatedAt: sync.updatedAt ?? existing?.updatedAt ?? null };
+      throw e;
+    }
     const parsed = MasterEnvelope.safeParse(response);
     const data = parsed.success ? parsed.data.data : null;
     const id = data?.id ?? masterId;
     if (!id) throw new Error('DMS saved the master but did not say which one.');
     this.server = { id, name: data?.name ?? name, source: 'formplus', updatedAt: data?.updated_at ?? null };
     return { masterId: id, updatedAt: this.server.updatedAt, warnings };
+  }
+
+  private send(masterId: string | undefined, existing: ServerMaster | null, name: string, fields: DmsElement[]): Promise<unknown> {
+    return masterId === undefined
+      ? this.client.request('POST', MASTER_FORM_PATH, {
+          name,
+          source: 'formplus',
+          classification: null, // never from the link: dms-ui sends null too
+          doctype_ids: this.launch.master?.doctypeIds ?? [],
+          folder_ids: this.launch.master?.folderIds ?? [],
+          form_builder_fields: fields,
+        })
+      : this.client.request('PATCH', `${MASTER_FORM_PATH}/${encodeURIComponent(masterId)}`, {
+          name,
+          source: 'formplus',
+          ...(existing?.updatedAt ? { updated_at: existing.updatedAt } : {}),
+          form_builder_fields: fields,
+        });
   }
 }

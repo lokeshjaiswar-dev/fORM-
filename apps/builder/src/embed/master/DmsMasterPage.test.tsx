@@ -142,7 +142,77 @@ describe('/embed/dms-master', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(200, shown({ source: 'dms' }))));
     open(descriptor({ masterId: MASTER, master: undefined }));
     expect(await screen.findByRole('heading', { name: 'This master cannot be edited here' }, READY)).toBeInTheDocument();
-    expect(screen.getByText(/not Forms\+/)).toBeInTheDocument();
+    expect(screen.getByText(/has not been converted to Forms\+/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Save/ })).toBeNull();
+    expect(screen.queryByTestId('dms-master-builder')).toBeNull();
+  });
+
+  it('a master with no source is treated the same: notice, nothing editable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(200, shown({ source: null }))));
+    open(descriptor({ masterId: MASTER, master: undefined }));
+    expect(await screen.findByText(/has not been converted to Forms\+/, undefined, READY)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Save/ })).toBeNull();
+  });
+
+  async function openAndEdit(fetch: ReturnType<typeof vi.fn>) {
+    vi.stubGlobal('fetch', fetch);
+    open(descriptor({ masterId: MASTER, master: undefined, returnUrl: 'https://elsewhere.example.test/back' }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    return user;
+  }
+
+  it('shows MASTER_NOT_CONVERTED from a save as its own message and keeps the edit', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(json(200, shown())).mockResolvedValueOnce(json(422, { success: false, code: 'MASTER_NOT_CONVERTED', message: 'no', data: { master_id: MASTER, source: 'dms' } }));
+    const user = await openAndEdit(fetch);
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    expect(await screen.findByText(/has not been converted to Forms\+, so it cannot be saved here/)).toBeInTheDocument();
+    expect(screen.getByText('Changes not saved to DMS')).toBeInTheDocument();
+  });
+
+  it('SCHEMA_SYNC_FAILED saved:false: nothing saved, retry sends the same token', async () => {
+    const fail = json(500, { success: false, code: 'SCHEMA_SYNC_FAILED', message: 'x', data: { master_id: MASTER, saved: false, updated_at: 'T1' } });
+    const fetch = vi.fn().mockResolvedValueOnce(json(200, shown())).mockResolvedValueOnce(fail).mockResolvedValueOnce(json(200, shown({ updated_at: 'T2' })));
+    const user = await openAndEdit(fetch);
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    expect(await screen.findByText('The master was not saved')).toBeInTheDocument();
+    expect(screen.getByText(/nothing was saved and the master is as it was/)).toBeInTheDocument();
+    expect(screen.getByText('Changes not saved to DMS')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await screen.findByText('Saved to DMS');
+    const sent = fetch.mock.calls.slice(1).map((c) => JSON.parse(String((c[1] as RequestInit).body)).updated_at);
+    expect(sent).toEqual(['T1', 'T1']);
+  });
+
+  it('SCHEMA_SYNC_FAILED saved:true: the edit counts as saved, the new token is adopted, save again heals', async () => {
+    const fail = json(500, { success: false, code: 'SCHEMA_SYNC_FAILED', message: 'x', data: { master_id: MASTER, saved: true, updated_at: 'T9' } });
+    const fetch = vi.fn().mockResolvedValueOnce(json(200, shown())).mockResolvedValueOnce(fail).mockResolvedValueOnce(json(200, shown({ updated_at: 'T10' })));
+    const user = await openAndEdit(fetch);
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    expect(await screen.findByText('Saved, but the data table needs another save')).toBeInTheDocument();
+    expect(screen.getByText(/Your changes were saved/)).toBeInTheDocument();
+    expect(screen.getByText('Saved in DMS')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await screen.findByText('Saved to DMS');
+    const last = JSON.parse(String((fetch.mock.calls[2] as [string, RequestInit])[1].body));
+    expect(last.updated_at).toBe('T9');
+  });
+
+  it('a create that fails with SCHEMA_SYNC_FAILED saved:true keeps the new masterId: save again PATCHes, never a second POST', async () => {
+    const fail = json(500, { success: false, code: 'SCHEMA_SYNC_FAILED', message: 'x', data: { master_id: MASTER, saved: true, updated_at: 'T1' } });
+    const fetch = vi.fn().mockResolvedValueOnce(fail).mockResolvedValueOnce(json(200, shown()));
+    vi.stubGlobal('fetch', fetch);
+    open(descriptor({ returnUrl: 'https://elsewhere.example.test/back' }));
+    await screen.findByTestId('dms-master-builder', undefined, READY);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await screen.findByText('Saved, but the data table needs another save');
+    await user.click(screen.getByRole('button', { name: 'Save to DMS' }));
+    await screen.findByText('Saved to DMS');
+    expect(fetch.mock.calls.map((c) => (c[1] as RequestInit).method)).toEqual(['POST', 'PATCH']);
+    expect(String(fetch.mock.calls[1]![0])).toContain(MASTER);
   });
 
   it('does not open without a launch descriptor, with a descriptor for another mode, or with an API base it does not trust', async () => {
@@ -296,6 +366,10 @@ describe('describeDmsError', () => {
     expect(describeDmsError(new DmsApiError(403, 'x', null, null))).toMatch(/permission/);
     expect(describeDmsError(new DmsApiError(422, 'Bad.', 'DUPLICATE_FIELD_NAME', null))).toBe('Bad. (DUPLICATE_FIELD_NAME)');
     expect(describeDmsError(new DmsApiError(500, 'Boom.', null, null))).toBe('Boom.');
+    expect(describeDmsError(new DmsApiError(422, 'x', 'MASTER_NOT_CONVERTED', null))).toMatch(/not been converted to Forms\+/);
+    const sync = (saved: boolean) => new DmsApiError(500, 'x', 'SCHEMA_SYNC_FAILED', { data: { master_id: MASTER, saved, updated_at: 'T' } });
+    expect(describeDmsError(sync(true))).toMatch(/changes were saved, but/);
+    expect(describeDmsError(sync(false))).toMatch(/nothing was saved/);
     expect(describeDmsError(new Error('offline'))).toBe('offline');
     expect(describeDmsError('x')).toBe('The master could not be saved.');
   });
