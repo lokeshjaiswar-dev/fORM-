@@ -31,6 +31,11 @@ const inline = (text: string): InlineDoc => ({ type: 'doc', content: [{ type: 'p
 /** The classic element in the dialect the translator reads: name = the field name, the options the parent sent or loaded. */
 function toElement(field: UploadField, options: readonly Option[]): DmsElement {
   const base = { ...field.element, name: field.element.value, label: field.element.value } as DmsElement;
+  /* A field DMS cascades itself (parent_field_id, options fetched from the parent) keeps that; a linkedTo link is for local lists. */
+  if (field.parentId !== null) {
+    delete base.linkedTo;
+    delete base.optionParents;
+  }
   if (field.increment) {
     // Read-only text whatever the number format of the counter (a prefix makes it text): no pattern, no range.
     return { ...base, type: 'textinput', numeric: true, specialChars: true, required: false, primary: false };
