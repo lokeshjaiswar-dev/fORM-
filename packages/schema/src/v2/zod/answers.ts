@@ -3,7 +3,7 @@ import type { StoredAnswer } from '../answers.ts';
 import { depthGuard, guarded, guardedMap, keyed, options, tagged } from './_util.ts';
 import { ValueFieldTypeSchema } from './catalogue.ts';
 import { NamePartSchema } from './config.ts';
-import { DYNAMIC_COLUMN_INPUTS } from '../config.ts';
+import { DYNAMIC_ADDABLE_INPUTS } from '../config.ts';
 import { ScalarValueSchema } from './logic.ts';
 import {
   BlockIdSchema, CardBucketIdSchema, CardItemIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema, DecimalStringSchema, EmailAddressSchema, FileIdSchema,
@@ -105,7 +105,7 @@ const ANSWER_VALUE_SHAPE = {
     rows: z.array(z.strictObject({ rowId: GroupRowIdSchema, values: keyed(z.partialRecord(BlockIdSchema, StoredAnswerNode)) })).min(1).max(200),
   }),
   dynamic_table: z.strictObject({
-    addedColumns: z.array(z.strictObject({ id: DynamicColumnIdSchema, label: z.string().trim().min(1).max(100), input: z.enum(DYNAMIC_COLUMN_INPUTS) })).min(1).max(30).exactOptional(),
+    addedColumns: z.array(z.strictObject({ id: DynamicColumnIdSchema, label: z.string().trim().min(1).max(100), input: z.enum(DYNAMIC_ADDABLE_INPUTS) })).min(1).max(30).exactOptional(),
     rows: z.array(z.strictObject({ rowId: GroupRowIdSchema, cells: keyed(z.partialRecord(DynamicColumnIdSchema, z.string().min(1).max(10_000))) })).min(1).max(200),
   }),
   file_upload: z.array(FileRefSchema).min(1).max(20),

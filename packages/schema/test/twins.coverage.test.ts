@@ -43,6 +43,7 @@ const NO_TWIN: Record<string, string> = {
   SectionNavMode: 'enum field of SectionNav',
   DiffTemplate: 'function signature',
   DynamicColumnInput: 'enum field of DynamicTableColumn (DYNAMIC_COLUMN_INPUTS)',
+  DynamicAddableInput: 'enum field of DynamicTableConfig.addableInputs and DynamicTableValue.addedColumns (DYNAMIC_ADDABLE_INPUTS)',
   DynamicSummary: 'enum field of DynamicTableColumn',
   ConfettiStyle: 'enum field of the message Ending',
   DynamicTableValue: 'checked through ANSWER_VALUE_SCHEMAS.dynamic_table (the AnswerValueMap twin)',

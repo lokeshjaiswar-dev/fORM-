@@ -272,6 +272,9 @@ export interface RepeatingGroupConfig {
 /** Every type a dynamic-table column can take (authored or respondent-added). */
 export const DYNAMIC_COLUMN_INPUTS = ['text', 'long_text', 'number', 'date', 'datetime', 'time', 'email', 'url', 'phone', 'formula'] as const;
 export type DynamicColumnInput = (typeof DYNAMIC_COLUMN_INPUTS)[number];
+/** The types a respondent may add: never `formula`, whose cells the server works out from the author's formula (review S1). */
+export const DYNAMIC_ADDABLE_INPUTS = ['text', 'long_text', 'number', 'date', 'datetime', 'time', 'email', 'url', 'phone'] as const satisfies ReadonlyArray<DynamicColumnInput>;
+export type DynamicAddableInput = (typeof DYNAMIC_ADDABLE_INPUTS)[number];
 export type DynamicSummary = 'none' | 'sum' | 'average' | 'min' | 'max' | 'count';
 export interface DynamicTableColumn {
   id: DynamicColumnId;
@@ -289,7 +292,7 @@ export interface DynamicTableConfig {
   minRows: number; maxRows: number;  // maxRows ≤ 200
   initialRows?: number;
   allowAddColumns: boolean;          // respondent may add columns
-  addableInputs: DynamicColumnInput[]; // which column types a respondent may add
+  addableInputs: DynamicAddableInput[]; // which column types a respondent may add
   maxColumns: number;                // total columns allowed (authored + respondent-added), ≤ 30
 }
 

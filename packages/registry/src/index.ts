@@ -123,7 +123,7 @@ export type {
 export { acceptsFile } from './fields/file_upload.ts';
 export { LONG_TEXT_MAX, wordCount } from './fields/long_text.ts';
 export { rankCount } from './fields/ranking.ts';
-export { columnNumbers, evaluateRowFormula, summarize } from './fields/dynamic_table.ts';
+export { columnNumbers, evaluateRowFormula, summarize, withFormulaCells } from './fields/dynamic_table.ts';
 export { UNBOUND_BLOCK_ID } from './fields/shared.ts';
 export { SHORT_TEXT_MAX } from './fields/short_text.ts';
 export { isRepeatableChildType } from './fields/repeating_group.ts';

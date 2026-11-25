@@ -1,8 +1,8 @@
 import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
 import {
-  CONTEXT_SOURCES, DATE_PATTERNS, DYNAMIC_COLUMN_INPUTS, NAME_PARTS,
-  type BlockId, type BlockOf, type CardBucketId, type DynamicColumnId, type DynamicColumnInput, type DynamicSummary, type DynamicTableColumn, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
+  CONTEXT_SOURCES, DATE_PATTERNS, DYNAMIC_ADDABLE_INPUTS, DYNAMIC_COLUMN_INPUTS, NAME_PARTS,
+  type BlockId, type BlockOf, type CardBucketId, type DynamicColumnId, type DynamicAddableInput, type DynamicSummary, type DynamicTableColumn, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
 } from '@form/schema';
 import { patternProblem, patternUnsupportedFeature } from '@form/validation';
 import { t } from '@/i18n';
@@ -1729,7 +1729,7 @@ export function DynamicTableGeneral({ block }: InspectorProps<'dynamic_table'>) 
     if (c.columns.length <= 1) return;
     setColumns(c.columns.filter((_, i) => i !== index));
   };
-  const setAddable = (type: DynamicColumnInput, on: boolean) => {
+  const setAddable = (type: DynamicAddableInput, on: boolean) => {
     const next = on ? [...c.addableInputs.filter((x) => x !== type), type] : c.addableInputs.filter((x) => x !== type);
     setConfig(block, { addableInputs: next });
   };
@@ -1789,7 +1789,7 @@ export function DynamicTableGeneral({ block }: InspectorProps<'dynamic_table'>) 
       {c.allowAddColumns ? (
         <>
           <SectionTitle>{t(M['inspector.dtable_addable'])}</SectionTitle>
-          {DYNAMIC_COLUMN_INPUTS.map((type, i) => (
+          {DYNAMIC_ADDABLE_INPUTS.map((type, i) => (
             <ToggleRow
               key={type}
               label={t(M[DT_TYPE_KEYS[type]])}

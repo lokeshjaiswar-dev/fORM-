@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DYNAMIC_COLUMN_INPUTS } from '../config.ts';
+import { DYNAMIC_ADDABLE_INPUTS, DYNAMIC_COLUMN_INPUTS } from '../config.ts';
 import { keyed } from './_util.ts';
 import { ADDRESS_PARTS, CONTEXT_SOURCES, NAME_PARTS, OPTION_PRESETS, TEXT_PRESETS } from '../config.ts';
 import { ExprSchema, ExprTypeSchema } from './logic.ts';
@@ -302,7 +302,7 @@ export const DynamicTableConfigSchema = z.strictObject({
   maxRows: z.number().int().min(1).max(200),
   initialRows: count.max(200).exactOptional(),
   allowAddColumns: z.boolean(),
-  addableInputs: z.array(z.enum(DYNAMIC_COLUMN_INPUTS)).max(DYNAMIC_COLUMN_INPUTS.length),
+  addableInputs: z.array(z.enum(DYNAMIC_ADDABLE_INPUTS)).max(DYNAMIC_ADDABLE_INPUTS.length),
   maxColumns: z.number().int().min(1).max(30),
 });
 

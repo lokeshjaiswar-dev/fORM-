@@ -137,6 +137,24 @@ describe('stubs', () => {
     expect(wordCount('नमस्ते दुनिया')).toBe(2);
   });
 
+  it('a dynamic table is personal free text, and its export keeps the columns a respondent added (review S5)', () => {
+    expect(DEFAULT_COMPLIANCE.dynamic_table).toMatchObject({ classification: 'personal', category: 'free_text' });
+    const def = valueDefinition('dynamic_table');
+    const block = fieldBlock('dynamic_table', { allowAddColumns: true, addableInputs: ['text', 'email'], maxColumns: 5 });
+    const value = {
+      addedColumns: [{ id: id('user_1'), label: 'Contact', input: 'email' }, { id: id('user_2'), label: 'Note', input: 'text' }],
+      rows: [
+        { rowId: id('r1'), cells: { column_1: 'Pen', column_2: '10', user_1: 'a@b.co', user_2: 'call me' } },
+        { rowId: id('r2'), cells: { column_1: 'Ink', user_2: 'later' } },
+      ],
+    } as never;
+    expect(def.export.columns(block).map((c) => c.header)).toEqual(['My dynamic table / Item', 'My dynamic table / Amount', 'My dynamic table / added columns']);
+    expect(def.export.cells(value, block)).toEqual(['Pen; Ink', '10', 'Contact: a@b.co, Note: call me; Note: later']);
+    const closed = fieldBlock('dynamic_table');
+    expect(def.export.columns(closed)).toHaveLength(2);
+    expect(def.export.cells({ rows: [{ rowId: id('r1'), cells: { column_1: 'Pen' } }] } as never, closed)).toEqual(['Pen', '']);
+  });
+
   it('isBlank follows I9 for any shape', () => {
     expect([undefined, null, '', [], {}, { a: '', b: [] }].every(isBlank)).toBe(true);
     expect([0, false, 'x', ['x'], { a: 'x' }].some(isBlank)).toBe(false);

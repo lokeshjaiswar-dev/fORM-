@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { evaluateRowFormula, summarize } from '@form/registry';
-import type { DynamicColumnId, DynamicColumnInput, DynamicSummary, DynamicTableValue, GroupRowId } from '@form/schema';
+import { summarize, withFormulaCells } from '@form/registry';
+import type { DynamicAddableInput, DynamicColumnId, DynamicColumnInput, DynamicSummary, DynamicTableValue, GroupRowId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { useAnswer, type ControlProps } from './hooks.ts';
@@ -56,7 +56,7 @@ export function DynamicTable({ block, field }: ControlProps<'dynamic_table'>) {
   const addable = c.addableInputs;
   const [adding, setAdding] = useState(false);
   const [newLabel, setNewLabel] = useState('');
-  const [newType, setNewType] = useState<DynamicColumnInput>(addable[0] ?? 'text');
+  const [newType, setNewType] = useState<DynamicAddableInput>(addable[0] ?? 'text');
 
   useEffect(() => {
     if (answer.value === undefined && initial > 0) {
@@ -75,28 +75,14 @@ export function DynamicTable({ block, field }: ControlProps<'dynamic_table'>) {
     else answer.set(next.addedColumns?.length ? next : { rows: next.rows });
   };
 
-  const formulaColumns = c.columns.filter((col) => col.input === 'formula' && (col.formula ?? '').trim() !== '');
+  const formulaColumns = c.columns.filter((col) => col.input === 'formula');
   const rowSnapshot = JSON.stringify(rows);
-  const formulaSnapshot = formulaColumns.map((col) => `${col.id}:${col.formula}`).join('|');
+  /* Formulas name other columns by label, so every column's label counts. */
+  const formulaSnapshot = formulaColumns.length ? JSON.stringify(c.columns) : '';
   useEffect(() => {
     if (formulaColumns.length === 0 || rows.length === 0) return;
-    const nextRows = rows.map((row) => {
-      const cells = { ...row.cells };
-      for (let pass = 0; pass < formulaColumns.length; pass += 1) {
-        for (const col of formulaColumns) {
-          const values = new Map<string, number>();
-          for (const other of c.columns) {
-            if (other.id === col.id) continue;
-            const raw = cells[other.id];
-            values.set(other.label, raw !== undefined && /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : 0);
-          }
-          const result = evaluateRowFormula(col.formula ?? '', values);
-          if (result === undefined) delete cells[col.id];
-          else cells[col.id] = Number.isInteger(result) ? String(result) : String(Math.round(result * 100) / 100);
-        }
-      }
-      return { ...row, cells };
-    });
+    /* The same cells the server works out and keeps (withFormulaCells): a typed value never stands in a formula column. */
+    const nextRows = rows.map((row) => ({ ...row, cells: withFormulaCells(row.cells, c.columns) }));
     if (nextRows.some((row, i) => JSON.stringify(row.cells) !== JSON.stringify(rows[i]?.cells))) {
       write({ ...value, rows: nextRows });
     }
@@ -208,7 +194,7 @@ export function DynamicTable({ block, field }: ControlProps<'dynamic_table'>) {
           className="fr-dtable-new-type"
           value={newType}
           allowEmpty={false}
-          onChange={(v) => setNewType(v as DynamicColumnInput)}
+          onChange={(v) => setNewType(v as DynamicAddableInput)}
           options={addable.map((type) => ({ value: type, label: t(MESSAGES[TYPE_LABEL[type]]) }))}
           aria-label={t(MESSAGES['dtable.column_type'])}
         />

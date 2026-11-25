@@ -117,6 +117,41 @@ export function evaluateRowFormula(formula: string, valuesByName: ReadonlyMap<st
   return Math.round(result * 1e10) / 1e10;
 }
 
+/** A formula result as the cell shows it: whole numbers as they are, others to two places. */
+const formulaText = (n: number): string | undefined => {
+  const text = Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+  return DECIMAL.test(text) ? text : undefined;
+};
+
+/**
+ * One row's cells with every authored formula column worked out from the other cells (review S1). Whatever the row held
+ * in a formula column is dropped first: the renderer shows these cells read-only and the server recomputes them, so a
+ * respondent's value never stands. Formulas may read other formula columns, so the pass repeats once per formula.
+ * Cells that are not strings (an answer not yet validated) read as 0 and are otherwise left for validation to report.
+ */
+export function withFormulaCells<C extends Readonly<Record<string, unknown>>>(cells: C, columns: readonly DynamicTableColumn[]): C {
+  const formulas = columns.filter((col) => col.input === 'formula');
+  if (formulas.length === 0) return cells;
+  const out: Record<string, unknown> = { ...cells };
+  for (const col of formulas) delete out[col.id];
+  const active = formulas.filter((col) => (col.formula ?? '').trim() !== '');
+  for (let pass = 0; pass < active.length; pass += 1) {
+    for (const col of active) {
+      const values = new Map<string, number>();
+      for (const other of columns) {
+        if (other.id === col.id) continue;
+        const raw = out[other.id];
+        values.set(other.label, typeof raw === 'string' && DECIMAL.test(raw) ? Number(raw) : 0);
+      }
+      const result = evaluateRowFormula(col.formula ?? '', values);
+      const text = result === undefined ? undefined : formulaText(result);
+      if (text === undefined) delete out[col.id];
+      else out[col.id] = text;
+    }
+  }
+  return out as C;
+}
+
 /** The footer value of a column. `count` counts filled cells; the rest need at least one number. */
 export function summarize(rows: DynamicTableValue['rows'], column: DynamicTableColumn): number | undefined {
   const filled = rows.filter((row) => row.cells[column.id] !== undefined).length;
@@ -214,8 +249,18 @@ export const dynamicTable = defineField({
     return { t: 'number', v: String(rounded) as DecimalString };
   },
   isEmpty: (value) => value.rows.every((row) => isBlank(row.cells)) && (value.addedColumns ?? []).length === 0,
-  columns: (block) => block.config.columns.map((col) => ({ suffix: `.${col.id}`, header: `${headerOf(block)} / ${labelText(col.label)}` })),
-  cells: (value, block) => block.config.columns.map((col) => value.rows.map((row) => row.cells[col.id] ?? '').filter((c) => c !== '').join('; ')),
+  /* Respondent-added columns differ per response, so they share one column: `Label: value` per row (review S5). */
+  columns: (block) => [
+    ...block.config.columns.map((col) => ({ suffix: `.${col.id}`, header: `${headerOf(block)} / ${labelText(col.label)}` })),
+    ...(block.config.allowAddColumns ? [{ suffix: '.added', header: `${headerOf(block)} / added columns` }] : []),
+  ],
+  cells: (value, block) => [
+    ...block.config.columns.map((col) => value.rows.map((row) => row.cells[col.id] ?? '').filter((c) => c !== '').join('; ')),
+    ...(block.config.allowAddColumns ? [value.rows
+      .map((row) => (value.addedColumns ?? []).flatMap((col) => (row.cells[col.id] ? [`${col.label}: ${row.cells[col.id]}`] : [])).join(', '))
+      .filter((c) => c !== '')
+      .join('; ')] : []),
+  ],
   text: (value, block) => value.rows
     .map((row) => allColumns(value, block.config.columns).map((col) => `${col.label}: ${row.cells[col.id as DynamicColumnId] ?? ''}`).join(', '))
     .join('\n'),

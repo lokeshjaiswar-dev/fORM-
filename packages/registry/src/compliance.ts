@@ -61,7 +61,8 @@ export const DEFAULT_COMPLIANCE: { readonly [T in ValueFieldType]: FieldComplian
   schedule_grid: none(),
   matrix: none(),
   repeating_group: none(),
-  dynamic_table: none(),
+  /* Unlike a repeating group (whose children carry their own), the table's cells are its own: free text, email, phone, dates. */
+  dynamic_table: personal('free_text'),
   file_upload: personal('other', { allowPrefill: false }),
   signature: personal('identity', { allowPrefill: false }),
   hidden: none(),

@@ -2,7 +2,7 @@ import type { _ExactKeys } from './_internal.ts';
 import type { ValueFieldType } from './catalogue.ts';
 import type { AddressPart, NamePart } from './config.ts';
 import type { ScalarValue } from './expr.ts';
-import type { DynamicColumnInput } from './config.ts';
+import type { DynamicAddableInput } from './config.ts';
 import type { BlockId, CardBucketId, DynamicColumnId, CardItemId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, SemanticPairId, Sha256Hex, TimeZone, Weekday } from './ids.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -12,7 +12,7 @@ import type { BlockId, CardBucketId, DynamicColumnId, CardItemId, ConsentItemId,
 export interface FileRef { fileId: FileId; name: string; sizeBytes: number; mime: string /* sniffed */; sha256: Sha256Hex; scan?: 'pending' | 'clean' | 'infected' | 'skipped' }
 
 export interface DynamicTableValue {
-  addedColumns?: Array<{ id: DynamicColumnId; label: string; input: DynamicColumnInput }>;
+  addedColumns?: Array<{ id: DynamicColumnId; label: string; input: DynamicAddableInput }>;
   rows: Array<{ rowId: GroupRowId; cells: Partial<Record<DynamicColumnId, string>> }>;
 }
 
