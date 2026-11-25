@@ -104,4 +104,20 @@ describe('ApiCredentialsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Delete credential' }));
     await waitFor(() => expect(api.called('DELETE', '/v1/org/api-credentials/c1')).toHaveLength(1));
   });
+
+  it('a new host needs the secret again: Save stays off until it is typed, then both go out together (review should-fix)', async () => {
+    const api = fakeApi({ rows: [row('c1', 'HR directory')] });
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Rotate HR directory' }));
+    const host = screen.getByLabelText('Host');
+    await user.clear(host);
+    await user.type(host, 'evil.example.com');
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.getByText('To send this credential to a new host, enter the secret again.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Token'), SECRET);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.called('PUT', '/v1/org/api-credentials/c1')).toHaveLength(1));
+    expect(api.called('PUT', '/v1/org/api-credentials/c1')[0]?.body).toEqual({ host: 'evil.example.com', auth: { type: 'bearer', token: SECRET } });
+  });
 });

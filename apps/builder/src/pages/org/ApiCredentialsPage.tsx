@@ -70,6 +70,7 @@ const M = defineMessages('builder', {
   'api_credentials.password': 'Password',
   'api_credentials.secret_hint': 'Typed once and stored sealed. It is never shown again, so keep it somewhere safe.',
   'api_credentials.secret_keep': 'Leave the secret empty to keep the one stored now.',
+  'api_credentials.host_needs_secret': 'To send this credential to a new host, enter the secret again.',
   'api_credentials.save_add': 'Add credential',
   'api_credentials.save_rotate': 'Save changes',
   'api_credentials.cancel': 'Cancel',
@@ -271,7 +272,9 @@ function CredentialForm({ org, credential, onDone }: { org: string; credential: 
   };
   const secret = auth();
   const typeChanged = credential !== null && type !== credential.type;
-  const ready = name.trim() !== '' && host.trim() !== '' && (credential === null ? secret !== null : !typeChanged || secret !== null);
+  // The server takes a new host only with the secret sent again: a stored secret is never re-aimed at another host.
+  const hostChanged = credential !== null && host.trim().toLowerCase() !== credential.host;
+  const ready = name.trim() !== '' && host.trim() !== '' && (credential === null ? secret !== null : !(typeChanged || hostChanged) || secret !== null);
 
   async function save() {
     setBusy(true);
@@ -350,6 +353,7 @@ function CredentialForm({ org, credential, onDone }: { org: string; credential: 
           </Field>
         </>
       ) : null}
+      {hostChanged && secret === null ? <p className="text-[13px] text-muted-foreground">{t(M['api_credentials.host_needs_secret'])}</p> : null}
       {error ? <Alert variant="destructive" icon><AlertDescription>{error}</AlertDescription></Alert> : null}
       <div className="flex gap-2">
         <Button type="submit" disabled={busy || !ready}>

@@ -138,6 +138,7 @@
   "api_credentials.header": "Header name",
   "api_credentials.host": "Host",
   "api_credentials.host_hint": "The one host this credential may be sent to, for example api.example.com or api.example.com:8443.",
+  "api_credentials.host_needs_secret": "To send this credential to a new host, enter the secret again.",
   "api_credentials.intro": "Sign-ins for the APIs your forms call (lookups, option lists, checks). The server adds a credential to a request, only over https and only to the host it was saved for. Respondents and form editors never see the secret.",
   "api_credentials.loading": "Loading credentials…",
   "api_credentials.name": "Name",
