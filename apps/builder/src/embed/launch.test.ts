@@ -89,6 +89,10 @@ describe('validateDescriptor', () => {
       const d = { ...descriptor(), master: { name: 'V', doctypeIds: [], folderIds: [], classification: 'attacker-chosen' } };
       expect(validateDescriptor(d, 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
     });
+    it('a dms-ui shaped create descriptor with classification: null is accepted', () => {
+      const d = { ...descriptor(), master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null } };
+      expect(validateDescriptor(d, 'dms-master', env)).toMatchObject({ ok: true });
+    });
     it.each(['javascript:alert(1)', 'ftp://dms.example.test/api', 'https://user:pw@dms.example.test/api', 'data:text/html,x', '//evil.example.test/api', 'https://dms.example.test.evil.test/api'])('refuses %s', (apiBase) => {
       expect(validateDescriptor(descriptor({ apiBase }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
     });

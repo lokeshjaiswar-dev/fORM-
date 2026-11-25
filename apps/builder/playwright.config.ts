@@ -24,7 +24,10 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `pnpm exec vite preview --port ${port} --strictPort`,
+    /* Self-contained: VITE_FP_DMS_API_BASE is baked in at build time (unset, every dms-master launch is refused), so the e2e build sets it. */
+    command: `pnpm exec vite build && pnpm exec vite preview --port ${port} --strictPort`,
+    env: { VITE_FP_DMS_API_BASE: `http://localhost:${port}/api` },
+    timeout: 180_000,
     url: `http://localhost:${port}/forms`,
     reuseExistingServer: !process.env.CI,
   },

@@ -28,6 +28,8 @@ export const LaunchDescriptorSchema = z.strictObject({
       name: z.string().max(255),
       doctypeIds: z.array(uuid).max(500),
       folderIds: z.array(uuid).max(500),
+      /* dms-ui always sends the key (null). Only null is accepted: the create POST hard-codes null, so a link never chooses it. */
+      classification: z.null().optional(),
     })
     .optional(),
   returnUrl: z.string().max(2048),
