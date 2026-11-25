@@ -1,3 +1,4 @@
+import { apiCheckValue } from '@form/logic';
 import type { RawAnswers } from '@form/validation/lazy';
 import type { AnswerValue, ApiRequestConfig, FieldBlock, FieldError, PublicFormDefinition } from '@form/schema';
 import type { RemoteSource } from '../remote.ts';
@@ -78,7 +79,8 @@ export async function verifyFieldApis(
   if (!check) return [];
   const signal = new AbortController().signal;
   const checks = apiValidationTargets(def, answers, visible, pageId).map(async (block): Promise<FieldError | null> => {
-    const value = payloadValue(answers[block.id]);
+    // The scalar the check is about (an email's address, a choice's id...): the proxy takes no answer object.
+    const value = apiCheckValue(block.type, payloadValue(answers[block.id]));
     if (value === undefined) return null;
     const message = block.messages?.api_failed ?? fallback;
     try {

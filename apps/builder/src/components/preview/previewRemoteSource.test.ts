@@ -21,6 +21,7 @@ function setup(answer: unknown) {
       block('short_text', 'dept', { key: 'dept' }),
       block('single_choice', 'city', { key: 'city', apiOptions: { url: URL_, method: 'GET', itemsPath: '', labelKey: 'n', valueKey: 'n' } }),
       block('short_text', 'tin', { key: 'tin', apiValidation: { url: URL_, method: 'GET', responseKey: 'valid', success: { type: 'boolean', equals: true } } }),
+      block('email', 'mail', { key: 'mail', apiValidation: { url: URL_, method: 'GET' } }),
     ]),
     formId: 'f1' as never,
     lookups: [
@@ -59,5 +60,11 @@ describe('previewRemoteSource (the builder preview goes through the author route
     expect(check.calls[0]?.body).toMatchObject({ fieldKey: 'tin', value: 'abc' });
     const fail = setup({ valid: false });
     expect(await fail.source.check!('tin', 'abc', signal())).toEqual({ ok: false });
+  });
+
+  it('a check on an email sends its address, never "[object Object]" (review should-fix)', async () => {
+    const check = setup({ ok: true });
+    expect(await check.source.check!('mail', { address: 'a@b.in' }, signal())).toEqual({ ok: true });
+    expect(check.calls[0]?.body).toMatchObject({ fieldKey: 'mail', value: 'a@b.in' });
   });
 });

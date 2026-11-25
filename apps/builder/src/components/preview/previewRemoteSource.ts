@@ -1,4 +1,4 @@
-import { evaluateCheck, mapApiOptions, projectLookupRows } from '@form/logic';
+import { apiCheckValue, evaluateCheck, mapApiOptions, projectLookupRows } from '@form/logic';
 import type { ApiLookup, ApiOptions, ApiValidation, ChoiceOption, FormDefinition } from '@form/schema';
 import type { RemoteSource } from '@form/renderer';
 import { testRemote, type RemoteTestRequest } from '@/persistence/remoteApi';
@@ -17,7 +17,7 @@ export function previewRemoteSource(org: string, definition: FormDefinition): Re
   };
   const hasBlock = (id: string) => Object.hasOwn(definition.blocks, id);
   const field = (blockId: string) => {
-    const block = (definition.blocks as Record<string, unknown>)[blockId] as { key?: string; apiOptions?: ApiOptions; apiValidation?: ApiValidation } | undefined;
+    const block = (definition.blocks as Record<string, unknown>)[blockId] as { type?: string; key?: string; apiOptions?: ApiOptions; apiValidation?: ApiValidation } | undefined;
     return block;
   };
 
@@ -40,7 +40,9 @@ export function previewRemoteSource(org: string, definition: FormDefinition): Re
       const block = field(blockId);
       const api = block?.apiValidation;
       if (!api || !block?.key) return { ok: true };
-      const scalar = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : String(value ?? '');
+      // The same scalar the respondent's page sends (an email's address, a choice's id), never '[object Object]'.
+      const scalar = apiCheckValue(block.type ?? '', value);
+      if (scalar === undefined) return { ok: true };
       const { data } = await testRemote(org, definition.formId, api as RemoteTestRequest, { fieldKey: block.key, value: scalar });
       if (signal.aborted) throw new DOMException('aborted', 'AbortError');
       return { ok: evaluateCheck(data, api) };

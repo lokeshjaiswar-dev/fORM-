@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { useController, useFormContext } from 'react-hook-form';
+import { apiCheckValue } from '@form/logic';
 import type { AvailableType } from '@form/registry';
 import type { AnswerValue, AnswerValueMap, BlockOf, ChoiceOption, FieldBlockOf, LabelText, OptionId, ValueFieldType } from '@form/schema';
 import { useRenderer } from '../context.ts';
@@ -65,9 +66,9 @@ export function useAnswer<T extends ValueFieldType>(block: FieldBlockOf<T>) {
     if (!block.apiValidation || !remote?.check) return;
     const check = remote.check;
     const current = field.value as AnswerValue | null | undefined;
-    const payload = current && current.type === block.type ? current.value : undefined;
-    if (payload === undefined || payload === null || payload === '') return;
-    if (typeof payload === 'string' && payload.trim() === '') return;
+    // The scalar the check is about (an email's address, a choice's id...): the proxy takes no answer object.
+    const payload = current && current.type === block.type ? apiCheckValue(block.type, current.value) : undefined;
+    if (payload === undefined) return;
     const failed = block.messages?.api_failed ?? t('system:api_failed');
     check(block.id, payload, new AbortController().signal).then(
       (result) => {

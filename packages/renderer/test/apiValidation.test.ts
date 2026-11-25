@@ -93,6 +93,32 @@ describe('buildApiRequest', () => {
   });
 });
 
+describe('verifyFieldApis sends the scalar the check is about (review: structured answers always failed)', () => {
+  const run = async (type: string, value: unknown) => {
+    const check = vi.fn(async (_id: string, _v: unknown) => ({ ok: true }));
+    const def = { blocks: { f: { id: 'f', key: 'f_key', type, apiValidation: { remote: true } } }, pages: [{ id: 'p1', children: ['f'] }] } as never;
+    const errors = await verifyFieldApis(def, { f: { type, value } } as never, new Set(['f']), undefined, 'fallback', { lookup: async () => ({ rows: [], truncated: false }), check });
+    return { errors, sent: check.mock.calls[0]?.[1] };
+  };
+
+  it('email, phone and choices send a string the proxy accepts (string, number or boolean)', async () => {
+    expect(await run('email', { address: 'a@b.in' })).toEqual({ errors: [], sent: 'a@b.in' });
+    expect((await run('phone', { e164: '+919800000000', country: 'IN' })).sent).toBe('+919800000000');
+    expect((await run('single_choice', { optionId: 'opt_a' })).sent).toBe('opt_a');
+    expect((await run('single_choice', { optionId: null, other: 'Something else' })).sent).toBe('Something else');
+    expect((await run('multi_choice', { optionIds: ['a', 'b'] })).sent).toBe('["a","b"]');
+    expect((await run('datetime', { local: '2026-11-25T10:00', timeZone: 'Asia/Kolkata', instant: '2026-11-25T04:30:00Z' })).sent).toBe('2026-11-25T04:30:00Z');
+    expect((await run('time', { start: '09:00', end: '10:00' })).sent).toBe('09:00/10:00');
+    expect((await run('date_range', { start: '2026-11-01', end: '2026-11-05' })).sent).toBe('2026-11-01/2026-11-05');
+    expect((await run('full_name', { first: 'Asha', last: 'Rao' })).sent).toBe('{"first":"Asha","last":"Rao"}');
+    expect((await run('short_text', 'Lokesh')).sent).toBe('Lokesh');
+    for (const type of ['email', 'phone', 'single_choice', 'multi_choice', 'datetime', 'time', 'date_range', 'full_name', 'address']) {
+      const { sent } = await run(type, type === 'email' ? { address: 'x@y.in' } : { optionIds: ['a'], start: '09:00', end: '10:00', instant: '2026-11-25T04:30:00Z', e164: '+91', optionId: 'a', line1: 'x' });
+      expect(['string', 'number', 'boolean'], type).toContain(typeof sent);
+    }
+  });
+});
+
 describe('verifyFieldApis', () => {
   const block = (extra: Record<string, unknown> = {}) => ({ id: 'emp', key: 'emp_name', type: 'short_text', apiValidation: { remote: true }, ...extra });
   const def = (b: unknown) => ({ blocks: { emp: b }, pages: [{ id: 'p1', children: ['emp'] }] }) as never;
