@@ -163,7 +163,9 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
       else {
         /* SCHEMA_SYNC_FAILED with saved:true: DMS holds this doc already (and, on a create, the master exists), so it is the new baseline. */
         if (schemaSyncOf(e)?.saved) {
-          if (wasCreating && repo.current) rememberMasterId('dms-master', repo.current.id);
+          /* `current` is set by the failed commit itself; typed as read now (the `wasCreating` alias would narrow it to null). */
+          const adopted = repo.current as { id: string } | null;
+          if (wasCreating && adopted) rememberMasterId('dms-master', adopted.id);
           setBaseline(sent);
           setChecked(null);
           setProblemSaved(true);
