@@ -139,6 +139,8 @@ interface HookOptions {
   purposeIds?: string[];
   fieldKeys?: string[] | 'all_in_purposes';
   keyBy?: 'key' | 'id';
+  bodyFormat?: 'json' | 'xml';
+  payloadMapping?: unknown;
   failures?: number;
   /** Seal the secret as this one: a value that does not open for this row, org and kind. */
   sealedFor?: { secretId: string };
@@ -153,8 +155,8 @@ async function seedWebhook(org: Org, o: HookOptions = {}): Promise<{ id: string;
   await owner.query(`insert into secrets (id, org_id, kind, enc, meta) values ($1, $2, 'webhook_hmac', $3, '{}')`, [secretId, org.id, JSON.stringify(enc)]);
   const id = randomUUID();
   await owner.query(
-    `insert into webhooks (id, org_id, form_id, url, enabled, secret_id, events, key_by, field_keys, purpose_ids, consecutive_failures)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    `insert into webhooks (id, org_id, form_id, url, enabled, secret_id, events, key_by, field_keys, purpose_ids, consecutive_failures, body_format, payload_mapping)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     [
       id,
       org.id,
@@ -167,6 +169,8 @@ async function seedWebhook(org: Org, o: HookOptions = {}): Promise<{ id: string;
       JSON.stringify(o.fieldKeys ?? 'all_in_purposes'),
       o.purposeIds ?? [RESPOND],
       o.failures ?? 0,
+      o.bodyFormat ?? 'json',
+      o.payloadMapping === undefined ? null : JSON.stringify(o.payloadMapping),
     ],
   );
   return { id, secretId, secret: shown };
@@ -359,6 +363,39 @@ describe('webhook.deliver', () => {
     // The ledger names the host and the keys that were sent: not the masked field, not the out-of-purpose one, never a value.
     expect(await disclosuresOf(hook.id)).toEqual([{ submission_id: s.id, recipient_kind: 'webhook', display_name: `${RECEIVER_HOST}:${port}`, field_keys: ['full_name', 'note'] }]);
     expect(await hookRow(hook.id)).toMatchObject({ enabled: true, consecutive_failures: 0 });
+  });
+
+  it('sends a mapped XML body with an XML content type, signed over those exact bytes, and a mapped field still obeys the disclosure filter', async () => {
+    const ans = (path: string, key: string) => ({ path, source: { kind: 'answer', key } });
+    const hook = await seedWebhook(a, {
+      bodyFormat: 'xml',
+      payloadMapping: { root: 'order', entries: [ans('customer.name', 'full_name'), ans('customer.pan', 'pan'), ans('promo', 'promo_email'), { path: 'ref', source: { kind: 'meta', name: 'submissionId' } }] },
+    });
+    const s = await store(a);
+    const delivery = await seedDelivery(a, hook.id, s);
+    clock = new Date();
+    expect(await attempt(a, delivery)).toBeNull();
+
+    const hit = hitsOf(delivery)[0]!;
+    expect(hit.headers['content-type']).toBe('application/xml; charset=utf-8');
+    expect(hit.body).toBe(`<?xml version="1.0" encoding="UTF-8"?><order><customer><name>Asha</name><pan>${MASK}</pan></customer><ref>${s.id}</ref></order>`);
+    expect(hit.body).not.toContain('marketing.example');
+    expect(hit.body).not.toContain('ABCDE1234F');
+    expect(verifyWebhook(hit.body, String(hit.headers['form-signature']), hook.secret, Math.floor(clock.getTime() / 1000))).toBe(true);
+    const row = await deliveryRow(delivery);
+    expect(row.status).toBe('succeeded');
+    expect(row.request_hash!.toString('hex')).toBe(createHash('sha256').update(hit.body).digest('hex'));
+    // The ledger names only the fields whose value is in the body.
+    expect((await disclosuresOf(hook.id))[0]!.field_keys).toEqual(['full_name']);
+  });
+
+  it('settles a delivery as failed, with no request, when the stored mapping is not valid', async () => {
+    const hook = await seedWebhook(a, { payloadMapping: { entries: [{ path: 'a', source: { kind: 'answer', key: 'x' } }, { path: 'a.b', source: { kind: 'answer', key: 'y' } }] } });
+    const s = await store(a);
+    const delivery = await seedDelivery(a, hook.id, s);
+    expect(await attempt(a, delivery)).toBeNull();
+    expect(hitsOf(delivery)).toEqual([]);
+    expect(await deliveryRow(delivery)).toMatchObject({ status: 'failed' });
   });
 
   it('signs with the secret the API shows the owner (`whsec_` and the base64url of the sealed bytes), so a receiver that follows the doc verifies it', async () => {
