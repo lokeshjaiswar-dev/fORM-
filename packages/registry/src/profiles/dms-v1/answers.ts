@@ -1,4 +1,6 @@
 import type { AnswerValueMap, BlockConfigMap, DecimalString, EmailAddress, FieldBlock, IsoDate, OptionId } from '@form/schema';
+import type { CountryCode } from '@form/schema';
+import { CALLING_CODE_REGIONS, callingCodeOf, nationalNumberOf } from '../../util/calling-codes.ts';
 import { labelText } from '../../util/text.ts';
 
 type Answer = AnswerValueMap[FieldBlock['type']];
@@ -16,6 +18,54 @@ export function parseDmsDate(raw: string): IsoDate | undefined {
   return `${y}-${m}-${d}` as IsoDate;
 }
 
+/*
+ * Phone numbers. DMS keeps a digits-only string (dms-api checks is_numeric; classic uses 10 national digits):
+ *   India         -> the 10 national digits ("9876543210")
+ *   other country -> calling code + national digits, no '+' ("12025550123")
+ * Reading a stored string: 10 digits or fewer is an Indian number; longer is matched to its longest calling code.
+ */
+export const DMS_PHONE_INDIA_DIGITS = 10;
+export const DMS_PHONE_MAX_DIGITS = 15;
+
+/** Calling code -> the region the picker should show (India for 91, the US for 1, else the first region of the code). */
+const REGION_OF_CODE: ReadonlyMap<string, CountryCode> = (() => {
+  const m = new Map<string, CountryCode>();
+  for (const region of CALLING_CODE_REGIONS) {
+    const code = callingCodeOf(region)!;
+    if (!m.has(code)) m.set(code, region);
+  }
+  m.set('91', 'IN' as CountryCode);
+  m.set('1', 'US' as CountryCode);
+  return m;
+})();
+
+/** A DMS phone string as the phone block's answer; `undefined` when it has no digits, is over 15 digits or its calling code is unknown. */
+export function parseDmsPhone(raw: string): { e164: string; country: CountryCode } | undefined {
+  const digits = raw.replace(/\D/g, '');
+  if (digits === '' || digits.length > DMS_PHONE_MAX_DIGITS) return undefined;
+  if (digits.length <= DMS_PHONE_INDIA_DIGITS) return { e164: `+91${digits}`, country: 'IN' as CountryCode };
+  for (const len of [3, 2, 1]) {
+    const country = REGION_OF_CODE.get(digits.slice(0, len));
+    if (country !== undefined) return { e164: `+${digits}`, country };
+  }
+  return undefined;
+}
+
+/** A phone answer as the DMS digits string (`""` when blank). */
+export function phoneToDms(answer: { e164: string; country: CountryCode }): string {
+  const digits = answer.e164.replace(/\D/g, '');
+  if (digits === '') return '';
+  return answer.country === 'IN' ? nationalNumberOf(`+${digits}`, 'IN' as CountryCode).replace(/\D/g, '') : digits;
+}
+
+/** DMS limits on a phone answer: India is exactly 10 national digits; elsewhere 4 to 15 digits in all (E.164). `null` when fine. */
+export function dmsPhoneProblem(answer: { e164: string; country: CountryCode }): string | null {
+  const digits = answer.e164.replace(/\D/g, '');
+  if (digits === '') return null;
+  if (answer.country === 'IN') return /^\d{10}$/.test(phoneToDms(answer)) ? null : 'An Indian phone number has 10 digits.';
+  return digits.length >= 4 && digits.length <= DMS_PHONE_MAX_DIGITS ? null : 'A phone number has 4 to 15 digits including the country code.';
+}
+
 const dmsDate = (iso: string): string => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
 
 const optionsOf = (block: FieldBlock) => (block.config as BlockConfigMap['single_choice']).options;
@@ -30,6 +80,8 @@ export function dmsToAnswer(block: FieldBlock, raw: string): Answer | undefined 
       return raw;
     case 'email':
       return { address: raw as EmailAddress };
+    case 'phone':
+      return parseDmsPhone(raw);
     case 'number':
       return /^-?(0|[1-9]\d*)$/.test(raw) && raw !== '-0' ? (raw as DecimalString) : undefined;
     case 'date':
@@ -54,6 +106,8 @@ export function answerToDms(block: FieldBlock, answer: Answer | undefined): stri
       return typeof answer === 'string' ? answer : '';
     case 'email':
       return typeof answer === 'object' && 'address' in answer ? answer.address : '';
+    case 'phone':
+      return typeof answer === 'object' && 'e164' in answer ? phoneToDms(answer as { e164: string; country: CountryCode }) : '';
     case 'date':
       return typeof answer === 'string' ? dmsDate(answer) : '';
     case 'single_choice': {

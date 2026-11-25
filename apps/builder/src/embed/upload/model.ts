@@ -1,4 +1,4 @@
-import { isDmsV1Type, legacyOfElement, parseDmsDate, type DmsLegacyMarker, type DmsV1Type } from '@form/registry/profiles/dms-v1';
+import { isDmsV1Type, legacyOfElement, parseDmsDate, parseDmsPhone, type DmsLegacyMarker, type DmsV1Type } from '@form/registry/profiles/dms-v1';
 import type { BridgeElement, FieldError, FieldErrorCode, InitPayload } from '../bridge/protocol.ts';
 
 /*
@@ -144,7 +144,8 @@ export function incrementDisplay(model: UploadModel, field: UploadField, given: 
 const INT_MIN = -2147483648;
 const INT_MAX = 2147483647;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_MAX = 10;
+/** Phone strings: 10 national digits (India) or calling code + number, 15 digits at most (E.164). */
+const PHONE_MAX = 15;
 
 type Verdict = { code: FieldErrorCode; message: string } | null;
 
@@ -181,7 +182,8 @@ export function validateField(field: UploadField, raw: string, options: readonly
       return EMAIL.test(raw) ? null : { code: 'invalid_email', message: `${field.name} is not a valid email` };
     case 'phonenumber':
       if (!/^\d+$/.test(raw)) return { code: 'not_a_number', message: `${field.name} must contain digits only` };
-      return raw.length > PHONE_MAX ? { code: 'too_long', message: `${field.name} can have at most ${PHONE_MAX} digits` } : null;
+      if (raw.length > PHONE_MAX) return { code: 'too_long', message: `${field.name} can have at most ${PHONE_MAX} digits` };
+      return parseDmsPhone(raw) ? null : { code: 'pattern', message: `${field.name} must start with a known country code` };
     case 'multilineinput':
       return null;
     case 'dropdown':

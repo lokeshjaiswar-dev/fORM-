@@ -6,7 +6,7 @@ export { DMS_V1_TYPES, isDmsV1Type } from './types.ts';
 export type { DmsElement, DmsOption, DmsTranslateOptions, DmsV1Type, ProfileIssue } from './types.ts';
 export { elementsToDefinition, definitionToElements } from './translate.ts';
 export { checkDmsV1 } from './guard.ts';
-export { dmsToAnswer, answerToDms, parseDmsDate } from './answers.ts';
+export { dmsToAnswer, answerToDms, parseDmsDate, parseDmsPhone, phoneToDms, dmsPhoneProblem } from './answers.ts';
 export { DMS_V1_TILES } from './tiles.ts';
 export type { DmsV1Tile } from './tiles.ts';
 export { blankDmsDefinition } from './blank.ts';

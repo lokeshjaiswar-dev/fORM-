@@ -4,7 +4,7 @@ import { labelText } from '../../util/text.ts';
 import { blankDmsDefinition } from './blank.ts';
 import { optionIdOf } from './fnv.ts';
 import {
-  DMS_DATE_PATTERN, INT32_MAX, INT32_MIN, MODELLED_KEYS, PHONE_MAX_LENGTH, PHONE_PATTERN, PRIMARY_TYPES, X_DMS, charsOf, dmsTypeOf, isFieldBlock, nameOf, patternFor, xDms,
+  DMS_DATE_PATTERN, DMS_PHONE_DEFAULTS, INT32_MAX, INT32_MIN, MODELLED_KEYS, PRIMARY_TYPES, X_DMS, charsOf, dmsTypeOf, isFieldBlock, nameOf, patternFor, xDms,
 } from './shared.ts';
 import { isDmsV1Type, type DmsElement, type DmsOption, type DmsTranslateOptions, type DmsV1Type } from './types.ts';
 
@@ -40,7 +40,7 @@ const optionsOf = (el: DmsElement): DmsOption[] => {
   return out;
 };
 
-type Built = { type: 'short_text' | 'number' | 'email' | 'long_text' | 'single_choice' | 'date'; config: Record<string, unknown> };
+type Built = { type: 'short_text' | 'phone' | 'number' | 'email' | 'long_text' | 'single_choice' | 'date'; config: Record<string, unknown> };
 
 function configFor(type: DmsV1Type, el: DmsElement): Built {
   const placeholder = typeof el.placeholder === 'string' && el.placeholder !== '' ? { placeholder: el.placeholder } : {};
@@ -50,7 +50,7 @@ function configFor(type: DmsV1Type, el: DmsElement): Built {
       return { type: 'short_text', config: { ...placeholder, ...(source === null ? {} : { pattern: { source } }) } };
     }
     case 'phonenumber':
-      return { type: 'short_text', config: { ...placeholder, maxLength: PHONE_MAX_LENGTH, pattern: { source: PHONE_PATTERN } } };
+      return { type: 'phone', config: { ...DMS_PHONE_DEFAULTS, ...placeholder } };
     case 'numberinput':
       return { type: 'number', config: { display: 'input', integerOnly: true, allowNegative: true, min: INT32_MIN, max: INT32_MAX, ...placeholder } };
     case 'email':

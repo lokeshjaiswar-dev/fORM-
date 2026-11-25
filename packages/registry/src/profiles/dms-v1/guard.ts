@@ -28,6 +28,9 @@ const REPRESENTABLE: Record<DmsV1Type, Record<string, Check>> = {
   email: { placeholder: any },
   phonenumber: {
     placeholder: any,
+    defaultCountry: (v) => v === 'IN',
+    showCountrySelect: (v) => v === true,
+    // the legacy short_text shape of a phone number, still written as phonenumber
     maxLength: (v) => v === PHONE_MAX_LENGTH,
     pattern: (v) => isRecord(v) && v.source === PHONE_PATTERN && !v.flags,
   },

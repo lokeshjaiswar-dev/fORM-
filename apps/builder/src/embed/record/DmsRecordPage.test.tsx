@@ -153,14 +153,14 @@ describe('/embed/dms-record date default (isDefaultToDate)', () => {
       viewerAt('2026-11-25T20:00:00Z', 'Asia/Kolkata');
       expect(todayDms()).toBe('26-11-2026');
       const { shown, json } = await addWithDefault();
-      expect(shown).toBe('2026-11-26');
+      expect(shown).toBe('26-11-2026');
       expect(json.Joined).toBe('26-11-2026');
     });
     it('America/New_York at 22:00 on 25 Nov (03:00Z on 26 Nov) shows and posts 25-11-2026', async () => {
       viewerAt('2026-11-26T03:00:00Z', 'America/New_York');
       expect(todayDms()).toBe('25-11-2026');
       const { shown, json } = await addWithDefault();
-      expect(shown).toBe('2026-11-25');
+      expect(shown).toBe('25-11-2026');
       expect(json.Joined).toBe('25-11-2026');
     });
   });
@@ -184,6 +184,23 @@ describe('/embed/dms-record add', () => {
     expect(sent).toMatchObject({ 'Vendor Name': 'Acme', Phone: '9876543210' });
     expect(Object.keys(sent)).not.toContain('Docs');
     expect(navigate).toHaveBeenCalledWith(`${RETURN}?${fixtures.return.saved}`);
+  });
+
+  it('does not ask "Changes you made may not be saved" when a save returns to DMS', async () => {
+    dms();
+    const prompted: boolean[] = [];
+    const navigate = vi.fn(() => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      prompted.push(e.defaultPrevented);
+    });
+    open(add(), navigate);
+    const name = await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    const user = userEvent.setup();
+    await user.type(name, 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    expect(prompted).toEqual([false]);
   });
 
   it('does not send when a required field is empty', async () => {
@@ -213,7 +230,7 @@ describe('/embed/dms-record edit', () => {
     expect(await screen.findByRole('textbox', { name: /Vendor Name/ }, READY)).toHaveValue('Acme');
     expect(screen.getByRole('textbox', { name: /Docs/ })).toHaveValue('doc-1,doc-2');
     expect(screen.getByRole('textbox', { name: /Docs/ })).toHaveAttribute('readonly');
-    expect(screen.getByRole('textbox', { name: /Phone/ })).toHaveValue('+919876543210');
+    expect(screen.getByRole('textbox', { name: /Phone/ })).toHaveValue('9876543210');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(navigate).toHaveBeenCalled());
     expect(calls.filter((c) => c.method !== 'GET')).toHaveLength(0);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FormDefinitionSchema, type BlockId, type FieldBlock, type FormDefinition, type InlineDoc, type OptionId } from '@form/schema';
 import { REGISTRY } from '../../src/index.ts';
 import {
-  DMS_V1_TILES, DMS_V1_TYPES, answerToDms, checkDmsV1, definitionToElements, dmsToAnswer, elementsToDefinition, fnv1a64hex, isDmsV1Type, optionIdOf, parseDmsDate,
+  DMS_V1_TILES, DMS_V1_TYPES, answerToDms, checkDmsV1, definitionToElements, dmsPhoneProblem, dmsToAnswer, elementsToDefinition, fnv1a64hex, isDmsV1Type, optionIdOf, parseDmsDate,
   type DmsElement,
 } from '../../src/profiles/dms-v1/index.ts';
 import fixtures from '../../src/profiles/dms-v1/__fixtures__/dms-master-form.fixtures.json' with { type: 'json' };
@@ -160,9 +160,27 @@ describe('round trip', () => {
   it('infers phonenumber from the config of a block with no x-dms (a fresh palette tile)', () => {
     const tile = DMS_V1_TILES.find((t) => t.id === 'phonenumber')!;
     const d = withBlocks([]);
-    const block = { id: uuid(1), type: 'short_text', key: 'f_p', label: inline('Mobile'), required: false, compliance: { classification: 'none', purposeIds: [], encrypt: false, allowPrefill: true, inNotifications: 'include', inExports: 'include' }, config: { ...tile.configOverrides } } as unknown as FieldBlock;
+    const block = { id: uuid(1), type: tile.type, key: 'f_p', label: inline('Mobile'), required: false, compliance: { classification: 'none', purposeIds: [], encrypt: false, allowPrefill: true, inNotifications: 'include', inExports: 'include' }, config: { ...tile.configOverrides } } as unknown as FieldBlock;
     const out = definitionToElements({ ...d, blocks: { [block.id]: block }, pages: [{ ...d.pages[0]!, children: [block.id] }] });
     expect(out[0]!.type).toBe('phonenumber');
+  });
+  it('the phonenumber tile is the real phone block, written back as phonenumber with its classic keys', () => {
+    const tile = DMS_V1_TILES.find((t) => t.id === 'phonenumber')!;
+    expect(tile.type).toBe('phone');
+    expect(tile.configOverrides).toEqual({ defaultCountry: 'IN', showCountrySelect: true });
+    const d = withBlocks([el(1, 'phonenumber', 'Mobile', { placeholder: 'Number', primary: true, column: 'text', extra: 1 })]);
+    const block = d.blocks[uuid(1) as BlockId] as FieldBlock;
+    expect(block.type).toBe('phone');
+    expect(block.config).toEqual({ defaultCountry: 'IN', showCountrySelect: true, placeholder: 'Number' });
+    expect(errorCodes(d)).toEqual([]);
+    expect(issuesOf(d)).toEqual([]);
+    expect(definitionToElements(d)[0]).toMatchObject({ id: uuid(1), type: 'phonenumber', name: 'Mobile', placeholder: 'Number', primary: true, column: 'text', extra: 1 });
+  });
+  it('a legacy short_text phone (10-digit pattern, x-dms phonenumber) still saves as phonenumber', () => {
+    const d = withBlocks([el(1, 'phonenumber', 'Old')]);
+    const old = mapDef(d, (b) => ({ ...b, type: 'short_text', config: { maxLength: 10, pattern: { source: '^[0-9]+$' } } }) as unknown as FieldBlock);
+    expect(definitionToElements(old)[0]).toMatchObject({ type: 'phonenumber' });
+    expect(issuesOf(old).filter((x) => x.code === 'config_dropped')).toEqual([]);
   });
   it('maps presets alphabetic/alphanumeric to the character rules', () => {
     const d = withBlocks([el(1, 'textinput', 'A'), el(2, 'textinput', 'B')]);
@@ -200,7 +218,7 @@ describe('checkDmsV1', () => {
     expect(errorCodes(withHeading)).toContain('unsupported_block_type');
     const withCalc = { ...clean, blocks: { ...clean.blocks, c1: calc } };
     expect(errorCodes(withCalc)).toContain('unsupported_block_type');
-    const phone = { ...clean, blocks: { ...clean.blocks, p1: { id: 'p1', type: 'phone', key: 'p1', label: inline('P'), required: false, compliance: {}, config: {} } as never } };
+    const phone = { ...clean, blocks: { ...clean.blocks, p1: { id: 'p1', type: 'url', key: 'p1', label: inline('P'), required: false, compliance: {}, config: {} } as never } };
     expect(errorCodes(phone)).toContain('unsupported_block_type');
   });
 
@@ -283,7 +301,7 @@ describe('answers', () => {
       [1, 'Acme Traders', 'Acme Traders'],
       [2, '42', '42'],
       [3, 'sales@acme.example', { address: 'sales@acme.example' }],
-      [4, '9876543210', '9876543210'],
+      [4, '9876543210', { e164: '+919876543210', country: 'IN' }],
       [5, 'Line 1\nLine 2', 'Line 1\nLine 2'],
       [6, 'Retail', { optionId: optionIdOf('Retail') }],
       [7, '05-03-2026', '2026-03-05'],
@@ -292,6 +310,40 @@ describe('answers', () => {
       expect(dmsToAnswer(block(n), dms), `to ${n}`).toEqual(answer);
       expect(answerToDms(block(n), answer as never), `from ${n}`).toBe(dms);
     }
+  });
+
+  it('phone: reads and writes the digits-only DMS string', () => {
+    const IN = (n: string) => ({ e164: `+91${n}`, country: 'IN' });
+    // India: national digits only, both ways
+    expect(dmsToAnswer(block(4), '9876543210')).toEqual(IN('9876543210'));
+    expect(answerToDms(block(4), IN('9876543210') as never)).toBe('9876543210');
+    // stored with the code or a plus: stripped, then the length decides
+    expect(dmsToAnswer(block(4), '+919876543210')).toEqual(IN('9876543210'));
+    expect(dmsToAnswer(block(4), '919876543210')).toEqual(IN('9876543210'));
+    expect(dmsToAnswer(block(4), '+91 98765-43210')).toEqual(IN('9876543210'));
+    expect(dmsToAnswer(block(4), '98765')).toEqual(IN('98765'));
+    // other countries keep the calling code, no plus
+    expect(dmsToAnswer(block(4), '12025550123')).toEqual({ e164: '+12025550123', country: 'US' });
+    expect(dmsToAnswer(block(4), '+442071838750')).toEqual({ e164: '+442071838750', country: 'GB' });
+    expect(dmsToAnswer(block(4), '971501234567')).toEqual({ e164: '+971501234567', country: 'AE' });
+    expect(answerToDms(block(4), { e164: '+12025550123', country: 'US' } as never)).toBe('12025550123');
+    expect(answerToDms(block(4), { e164: '+442071838750', country: 'GB' } as never)).toBe('442071838750');
+    // blank and junk
+    expect(answerToDms(block(4), { e164: '', country: 'IN' } as never)).toBe('');
+    expect(answerToDms(block(4), undefined)).toBe('');
+    expect(dmsToAnswer(block(4), 'abc')).toBeUndefined();
+    expect(dmsToAnswer(block(4), '+')).toBeUndefined();
+    expect(dmsToAnswer(block(4), '1234567890123456')).toBeUndefined();
+    expect(dmsToAnswer(block(4), '00000000000')).toBeUndefined();
+  });
+
+  it('phone: DMS limits (India 10 digits, elsewhere 4 to 15)', () => {
+    expect(dmsPhoneProblem({ e164: '+919876543210', country: 'IN' } as never)).toBeNull();
+    expect(dmsPhoneProblem({ e164: '+98765', country: 'IN' } as never)).not.toBeNull();
+    expect(dmsPhoneProblem({ e164: '+12025550123', country: 'US' } as never)).toBeNull();
+    expect(dmsPhoneProblem({ e164: '+123', country: 'US' } as never)).not.toBeNull();
+    expect(dmsPhoneProblem({ e164: '+1234567890123456', country: 'US' } as never)).not.toBeNull();
+    expect(dmsPhoneProblem({ e164: '', country: 'IN' } as never)).toBeNull();
   });
 
   it('writes a date given as YYYY-MM-DD back as DD-MM-YYYY', () => {

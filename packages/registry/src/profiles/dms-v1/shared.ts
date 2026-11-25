@@ -16,6 +16,9 @@ export const PRIMARY_TYPES: ReadonlySet<DmsV1Type> = new Set(['textinput', 'numb
 export const INT32_MIN = '-2147483648';
 export const INT32_MAX = '2147483647';
 export const DMS_DATE_PATTERN = 'DD-MM-YYYY';
+/** The phone block's config for a DMS phonenumber (calling-code picker, India first). */
+export const DMS_PHONE_DEFAULTS = { defaultCountry: 'IN', showCountrySelect: true } as const;
+/** Legacy shape of a DMS phonenumber (before the real phone block): a 10-digit short_text. Still read, never written. */
 export const PHONE_PATTERN = '^[0-9]+$';
 export const PHONE_MAX_LENGTH = 10;
 
@@ -76,6 +79,7 @@ export function dmsTypeOf(block: StoredBlock): DmsV1Type | null {
       if (declared === 'phonenumber' || declared === 'textinput') return declared;
       return isPhoneConfig(block.config) ? 'phonenumber' : 'textinput';
     }
+    case 'phone': return 'phonenumber';
     case 'number': return 'numberinput';
     case 'email': return 'email';
     case 'long_text': return 'multilineinput';
@@ -107,4 +111,4 @@ export function orderedBlocks(def: FormDefinition): Array<{ id: string; block: S
 /** The field's name in DMS: its label as plain text, trimmed. */
 export const nameOf = (block: FieldBlock): string => inlineText(block.label).trim();
 
-export type DmsBlockType = Extract<BlockType, 'short_text' | 'number' | 'email' | 'long_text' | 'single_choice' | 'date'>;
+export type DmsBlockType = Extract<BlockType, 'short_text' | 'phone' | 'number' | 'email' | 'long_text' | 'single_choice' | 'date'>;

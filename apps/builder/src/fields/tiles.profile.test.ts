@@ -36,7 +36,7 @@ describe('matchTiles with a profile', () => {
   it('every dms tile starts a block the translator writes back as its own DMS type', () => {
     for (const tile of DMS_TILES) {
       if (tile.kind !== 'block') continue;
-      expect(tile.choice.type).toMatch(/^(short_text|number|email|long_text|single_choice|date)$/);
+      expect(tile.choice.type).toMatch(/^(short_text|phone|number|email|long_text|single_choice|date)$/);
     }
   });
 });
