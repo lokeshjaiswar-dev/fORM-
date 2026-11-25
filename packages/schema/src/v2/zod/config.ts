@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { DYNAMIC_COLUMN_INPUTS } from '../config.ts';
 import { keyed } from './_util.ts';
 import { ADDRESS_PARTS, CONTEXT_SOURCES, NAME_PARTS, OPTION_PRESETS, TEXT_PRESETS } from '../config.ts';
 import { ExprSchema, ExprTypeSchema } from './logic.ts';
 import {
   AssetRefSchema, BlockIdSchema, BrandRefSchema, ConnectionIdSchema, ConsentItemIdSchema, CountryCodeSchema, CurrencyCodeSchema,
-  CardBucketIdSchema, CardItemIdSchema, DecimalStringSchema, HolidayCalendarIdSchema, IsoDateSchema, IsoTimeSchema, LikertStatementIdSchema, LocaleSchema, MatchingPromptIdSchema, MatrixColumnIdSchema, MatrixRowIdSchema, SemanticPairIdSchema,
+  CardBucketIdSchema, CardItemIdSchema, DecimalStringSchema, HolidayCalendarIdSchema, IsoDateSchema, IsoTimeSchema, LikertStatementIdSchema, LocaleSchema, DynamicColumnIdSchema, MatchingPromptIdSchema, MatrixColumnIdSchema, MatrixRowIdSchema, SemanticPairIdSchema,
   MinorUnitsSchema, OptionIdSchema, OriginSchema, ProductIdSchema, ProductOptionIdSchema, PurposeIdSchema, SafeUrlSchema,
   TextAlignSchema, TimeZoneSchema, WeekdaySchema,
 } from './primitives.ts';
@@ -108,6 +109,7 @@ export const ChoiceOptionSchema = z.strictObject({
   score: DecimalStringSchema.exactOptional(),
   correct: z.boolean().exactOptional(),
   origin: OriginSchema.exactOptional(),
+  parentOptionIds: z.array(OptionIdSchema).max(5000).exactOptional(),
 });
 export const OptionPresetSchema = z.enum(OPTION_PRESETS);
 export const OtherOptionSchema = z.strictObject({
@@ -125,6 +127,7 @@ const choiceCommon = {
   columns: z.literal([1, 2, 3, 4]).exactOptional(),
   searchable: z.boolean().exactOptional(),
   placeholder: label.exactOptional(),
+  dependsOn: BlockIdSchema.exactOptional(),
 };
 export const SingleChoiceConfigSchema = z.strictObject({
   ...choiceCommon,
@@ -283,6 +286,24 @@ export const RepeatingGroupConfigSchema = z.strictObject({
   removeLabel: label.exactOptional(),
   rowTitle: PlainTemplateSchema.exactOptional(),
   layout: z.enum(['stacked', 'table']),
+});
+
+export const DynamicTableColumnSchema = z.strictObject({
+  id: DynamicColumnIdSchema,
+  label,
+  input: z.enum(DYNAMIC_COLUMN_INPUTS),
+  summary: z.enum(['none', 'sum', 'average', 'min', 'max', 'count']).exactOptional(),
+  summaryLabel: label.exactOptional(),
+  formula: z.string().max(500).exactOptional(),
+});
+export const DynamicTableConfigSchema = z.strictObject({
+  columns: z.array(DynamicTableColumnSchema).min(1).max(20),
+  minRows: count.max(200),
+  maxRows: z.number().int().min(1).max(200),
+  initialRows: count.max(200).exactOptional(),
+  allowAddColumns: z.boolean(),
+  addableInputs: z.array(z.enum(DYNAMIC_COLUMN_INPUTS)).max(DYNAMIC_COLUMN_INPUTS.length),
+  maxColumns: z.number().int().min(1).max(30),
 });
 
 const GIB = 1024 ** 3;
@@ -447,8 +468,7 @@ export const ContextConfigSchema = z.strictObject({
   staticFacts: z.array(ContextStaticFactSchema).max(20).exactOptional(),
 }).refine((config) => new Set(config.sources).size === config.sources.length, 'sources must be unique')
   .refine((config) => !config.urlParams || new Set(config.urlParams).size === config.urlParams.length, 'url params must be unique')
-  .refine((config) => !config.staticFacts || new Set(config.staticFacts.map((f) => f.key)).size === config.staticFacts.length, 'static keys must be unique')
-  .refine((config) => config.sources.length > 0 || (config.urlParams?.length ?? 0) > 0 || (config.staticFacts?.length ?? 0) > 0, 'session details need at least one fact');
+  .refine((config) => !config.staticFacts || new Set(config.staticFacts.map((f) => f.key)).size === config.staticFacts.length, 'static keys must be unique');
 export const UniqueIdConfigSchema = z.strictObject({
   prefix: PlainTemplateSchema,
   padTo: count.max(20),
@@ -498,7 +518,7 @@ export const BLOCK_CONFIG_SCHEMAS = {
   time: TimeConfigSchema, rating: RatingConfigSchema, linear_scale: LinearScaleConfigSchema, nps: NpsConfigSchema, ranking: RankingConfigSchema,
   matching: MatchingConfigSchema, likert: LikertConfigSchema, constant_sum: ConstantSumConfigSchema, maxdiff: MaxDiffConfigSchema, card_sort: CardSortConfigSchema,
   semantic_differential: SemanticDifferentialConfigSchema, number_range: NumberRangeConfigSchema, schedule_grid: ScheduleGridConfigSchema,
-  matrix: MatrixConfigSchema, repeating_group: RepeatingGroupConfigSchema, file_upload: FileUploadConfigSchema, signature: SignatureConfigSchema,
+  matrix: MatrixConfigSchema, repeating_group: RepeatingGroupConfigSchema, dynamic_table: DynamicTableConfigSchema, file_upload: FileUploadConfigSchema, signature: SignatureConfigSchema,
   hidden: HiddenConfigSchema, consent: ConsentConfigSchema, payment: PaymentConfigSchema, appointment: AppointmentConfigSchema,
   calculation: CalculationConfigSchema, context: ContextConfigSchema, unique_id: UniqueIdConfigSchema, captcha: CaptchaConfigSchema,
   heading: HeadingConfigSchema, paragraph: ParagraphConfigSchema, image: ImageConfigSchema, divider: DividerConfigSchema, section_break: SectionBreakConfigSchema, section: SectionConfigSchema,

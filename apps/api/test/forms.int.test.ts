@@ -483,6 +483,23 @@ describe('draft writes: If-Match, compare-and-swap and the strict definition', (
     }
   });
 
+  it('trashes a form so the active list no longer returns it', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/forms',
+      headers: asWrite(a.owner, a.id),
+      payload: { title: 'Throw away' },
+    });
+    const { id } = created.json<{ id: string }>();
+    const removed = await app.inject({ method: 'DELETE', url: `/v1/forms/${id}`, headers: asWrite(a.owner, a.id) });
+    expect(removed.statusCode).toBe(200);
+    expect(removed.json()).toEqual({ id });
+    const list = await app.inject({ url: '/v1/forms?lifecycle=active', headers: as(a.owner, a.id) });
+    expect(list.json<{ items: { id: string }[] }>().items.some((item) => item.id === id)).toBe(false);
+    const trashed = await app.inject({ url: '/v1/forms?lifecycle=trashed', headers: as(a.owner, a.id) });
+    expect(trashed.json<{ items: { id: string }[] }>().items.map((item) => item.id)).toContain(id);
+  });
+
   it('does not leak another org’s draft', async () => {
     const res = await app.inject({ url: `/v1/forms/${a.forms[0]}/draft`, headers: as(b.owner, b.id) });
     expect(res.statusCode).toBe(404);

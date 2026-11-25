@@ -3,7 +3,7 @@ import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { ChoicePicture } from './choicePicture.tsx';
-import { inputAttrs, useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
+import { inputAttrs, useAnswer, useDependentChoice, useOptions, usePipes, type ControlProps } from './hooks.ts';
 import { NativeSelect } from './native.tsx';
 
 const OTHER = '__other__';
@@ -25,6 +25,10 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const answer = useAnswer(block);
   const c = block.config;
   const options = useOptions(block.id, c.options, c.shuffle, block.apiOptions);
+  /* Dependent (cascading) options: while the parent question has no answer, a hint names it and the block waits. */
+  const { waitingFor } = useDependentChoice(block, options, field.disabled);
+  const waitHint = waitingFor === undefined ? undefined : waitingFor ? t(MESSAGES['choice.choose_first'], { question: waitingFor }) : t(MESSAGES['choice.answer_above_first']);
+  const hint = waitHint ? <p className="fr-hint fr-choice-wait">{waitHint}</p> : null;
   const other = c.other?.enabled ? c.other : undefined;
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const selected = answer.value ? (answer.value.optionId ?? (answer.value.other !== undefined ? OTHER : '')) : '';
@@ -60,6 +64,7 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   if (c.display === 'image') {
     return (
       <>
+        {hint}
         <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
           {options.map((o, i) => (
             <label key={o.id} className="fr-image-choice" data-selected={selected === o.id ? 'true' : undefined}>
@@ -85,7 +90,7 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
 
   if (c.display === 'dropdown') {
     const { readOnly: _readOnly, ...selectAttrs } = inputAttrs(field);
-    const placeholder = c.placeholder?.trim() || t('system:select.placeholder');
+    const placeholder = waitHint ?? (c.placeholder?.trim() || t('system:select.placeholder'));
     const items = [...filtered.map((o) => ({ value: o.id as string, label: text(o.label) })), ...(other ? [{ value: OTHER, label: otherLabel }] : [])];
     return (
       <>
@@ -121,6 +126,7 @@ export function SingleChoice({ block, field }: ControlProps<'single_choice'>) {
   const items = [...options.map((o) => ({ value: o.id as string, label: text(o.label) })), ...(other ? [{ value: OTHER, label: otherLabel }] : [])];
   return (
     <>
+      {hint}
       <div className="fr-choices" style={{ '--fr-columns': c.columns ?? 1 } as CSSProperties}>
         {items.map((item, i) => (
           <label key={item.value} className="fr-choice">

@@ -50,6 +50,7 @@ describe('builder actions', () => {
     if (group.type !== 'repeating_group') return;
     expect(group.config.children.map((id) => get(id).type)).toEqual(['short_text', 'single_choice', 'date']);
     const extra = addChildBlock(groupId, { type: 'number', configOverrides: {} });
+    if (!extra) throw new Error('child');
     expect(get(extra).type).toBe('number');
     const after = get(groupId);
     expect(after.type).toBe('repeating_group');
@@ -60,6 +61,7 @@ describe('builder actions', () => {
     const sectionId = addBlock({ type: 'section', configOverrides: {} });
     if (!sectionId) throw new Error('the section was not added');
     const child = addChildBlock(sectionId, { type: 'short_text', configOverrides: {} });
+    if (!child) throw new Error('child');
     const section = get(sectionId);
     expect(get(child).type).toBe('short_text');
     expect(section.type).toBe('section');

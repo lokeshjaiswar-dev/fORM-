@@ -2,13 +2,19 @@ import type { _ExactKeys } from './_internal.ts';
 import type { ValueFieldType } from './catalogue.ts';
 import type { AddressPart, NamePart } from './config.ts';
 import type { ScalarValue } from './expr.ts';
-import type { BlockId, CardBucketId, CardItemId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, SemanticPairId, Sha256Hex, TimeZone, Weekday } from './ids.ts';
+import type { DynamicColumnInput } from './config.ts';
+import type { BlockId, CardBucketId, DynamicColumnId, CardItemId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, EmailAddress, FileId, GroupRowId, IsoDate, IsoInstant, IsoLocalDateTime, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, SemanticPairId, Sha256Hex, TimeZone, Weekday } from './ids.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §15  ANSWERS — tagged by block type; shape = f(type) (I2); absent = unanswered (I9)
  * ═════════════════════════════════════════════════════════════════════════ */
 
 export interface FileRef { fileId: FileId; name: string; sizeBytes: number; mime: string /* sniffed */; sha256: Sha256Hex; scan?: 'pending' | 'clean' | 'infected' | 'skipped' }
+
+export interface DynamicTableValue {
+  addedColumns?: Array<{ id: DynamicColumnId; label: string; input: DynamicColumnInput }>;
+  rows: Array<{ rowId: GroupRowId; cells: Partial<Record<DynamicColumnId, string>> }>;
+}
 
 export type MatrixValue =
   | { mode: 'single'; rows: Partial<Record<MatrixRowId, MatrixColumnId>> }
@@ -62,6 +68,8 @@ export interface AnswerValueMap {
   schedule_grid: Array<{ weekday: Weekday; time: IsoTime }>;
   matrix: MatrixValue;
   repeating_group: { rows: Array<{ rowId: GroupRowId; values: Partial<Record<BlockId, StoredAnswer>> }> };   // children may be encrypted
+  /** Respondent-added columns (text or number) plus cell text per column id. Numbers are decimal strings, dates ISO. */
+  dynamic_table: DynamicTableValue;
   file_upload: FileRef[];
   signature: SignatureValue;
   hidden: string;

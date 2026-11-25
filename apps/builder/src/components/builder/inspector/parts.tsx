@@ -1,7 +1,9 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
+import { cn } from '@/lib/utils';
 import { Field as DsField, Input, Label, Switch } from '@dmacq/ui';
 import { NiceSelect, type SelectOption } from '@/components/NiceSelect';
 
@@ -19,8 +21,73 @@ export function Field({ label, error, hint, htmlFor, children }: { label: string
   );
 }
 
+const HEADING = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+
+/**
+ * One group of settings in a panel tab. Groups stack with a divider between them (none above the first), so authors
+ * can see which settings belong together. A group whose content renders nothing is hidden, divider and all.
+ */
+export function InspectorSection({ title, collapsible, children }: { title?: string; collapsible?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(!collapsible);
+  const bodyId = useId();
+  return (
+    <section className="border-t border-border py-5 first:border-t-0 first:pt-1 last:pb-1 has-[>[data-section-body]:empty]:hidden">
+      {title && collapsible ? (
+        /* Folded by default: settings an author rarely needs stay one click away instead of filling the panel. */
+        <h3 className={open ? 'mb-4' : undefined}>
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => setOpen((v) => !v)}
+            className={cn(HEADING, 'flex w-full items-center justify-between rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring')}
+          >
+            {title}
+            <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-150', open && 'rotate-180')} />
+          </button>
+        </h3>
+      ) : title ? (
+        <h3 className={cn(HEADING, 'mb-4')}>{title}</h3>
+      ) : null}
+      {/* A folded section keeps a placeholder body so the empty-section rule above does not hide its heading. */}
+      <div data-section-body id={bodyId} className="space-y-4" hidden={!open}>
+        {open ? children : <span hidden />}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Settings folded behind one heading row inside a section, in the same style as a collapsible section heading. It
+ * opens on its own when one of its settings is in use, so nothing switched on is ever out of sight.
+ */
+export function Disclosure({ title, inUse = false, children }: { title: string; inUse?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(inUse);
+  const bodyId = useId();
+  return (
+    <div className="!mt-5 border-t border-dashed border-border pt-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(HEADING, 'flex w-full items-center justify-between rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring')}
+      >
+        {title}
+        <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-150', open && 'rotate-180')} />
+      </button>
+      {open ? (
+        <div id={bodyId} className="mt-4 space-y-4">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A sub-group inside a section: a divider and a heading, for the groups a field type's own settings define. */
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return <p className="pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</p>;
+  return <h4 className={cn(HEADING, '!mt-5 border-t border-dashed border-border pt-4 first:!mt-0 first:border-t-0 first:pt-0')}>{children}</h4>;
 }
 
 export function TextField({ label, value, onChange, onBlur, placeholder, error, hint }: {
@@ -73,13 +140,13 @@ export function NumberField<T>({ label, value, onChange, parse, format = String,
   );
 }
 
-export function ToggleRow({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (checked: boolean) => void; hint?: string }) {
+export function ToggleRow({ label, checked, onChange, hint, disabled }: { label: string; checked: boolean; onChange: (checked: boolean) => void; hint?: string | undefined; disabled?: boolean }) {
   const id = useId();
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-3">
         <Label htmlFor={id}>{label}</Label>
-        <Switch id={id} checked={checked} onCheckedChange={onChange} />
+        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
       </div>
       {hint ? <p className="text-[12px] text-muted-foreground">{hint}</p> : null}
     </div>

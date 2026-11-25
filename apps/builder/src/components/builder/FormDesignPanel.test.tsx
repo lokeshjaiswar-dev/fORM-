@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { doc, resetStore } from '@/test/fixtures';
@@ -11,11 +11,11 @@ describe('FormDesignPanel', () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Violet' }));
     expect(doc().theme.tokens.colors.accent).toBe('#7c3aed');
     expect(doc().theme.tokens.colors.page).toBe('#ede9fe');
-    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
   });
 
   it('shows Form settings when hovering the brush', async () => {
@@ -40,7 +40,7 @@ describe('FormDesignPanel', () => {
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
     await user.click(screen.getByRole('tab', { name: 'Styles' }));
-    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
     await user.click(screen.getByRole('combobox', { name: 'Form width' }));
     await user.click(await screen.findByRole('option', { name: 'Wide' }));
     expect(doc().theme.tokens.formWidth).toBe('wide');
@@ -49,10 +49,10 @@ describe('FormDesignPanel', () => {
     expect(doc().theme.tokens.inputStyle).toBe('filled');
     await user.click(screen.getByRole('button', { name: 'Progress bar: Off' }));
     expect(doc().theme.tokens.progress).toBe('bar');
-    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
   });
 
-  it('closes when clicking outside, and its Submit tab has the Access section (the password lives on the server, WP-1.07)', async () => {
+  it('stays open when clicking outside and closes with the X button', async () => {
     const user = userEvent.setup();
     render(
       <div>
@@ -61,14 +61,16 @@ describe('FormDesignPanel', () => {
       </div>,
     );
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    expect(screen.getByRole('dialog', { name: 'Form settings' })).toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Logic' }));
-    expect(screen.getByText(/When answers match/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Rules' }));
+    expect(screen.getByText(/Each check has a name/)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Submit' }));
     expect(screen.getByRole('region', { name: 'Access' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Password (optional)')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Outside' }));
-    expect(screen.queryByRole('dialog', { name: 'Form settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Form settings' })).not.toBeInTheDocument());
   });
 
   it('has a Review tab before Submit where review units are made from the pages, even while nobody is signed in', async () => {

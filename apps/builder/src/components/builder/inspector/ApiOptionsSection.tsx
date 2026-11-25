@@ -15,14 +15,14 @@ import { patchBlockConfig } from '@/fields/configSink';
 import { useDraft } from '@/lib/useDraft';
 import { applyPatch, type Patch } from '@/lib/patch';
 import { updateBlock } from '@/state/actions';
-import { Button } from '@dmacq/ui';
+import { Alert, AlertDescription, Badge, Button, Label, Separator, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@dmacq/ui';
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
 import { ApiResponseTree, type TreePart } from '@/components/builder/inspector/ApiResponseTree';
 import { ToggleRow } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
   'inspector.api_options': 'Load options from an API',
-  'inspector.api_options_hint': 'The live form fetches this list. Static options below are the fallback.',
+  'inspector.api_options_hint': 'The live form fetches this list. The options above are the fallback.',
   'inspector.api_url_hint_options': 'GET or POST this URL. The field answer is not sent.',
   'inspector.api_query_hint_options': 'Optional extra query values.',
   'inspector.api_body_hint_options': 'Optional extra JSON fields.',
@@ -54,9 +54,13 @@ function patch(block: FieldBlock, next: Patch<ApiOptions>): void {
 
 function PathChip({ label, path }: { label: string; path: string | undefined }) {
   return (
-    <div className="min-w-0 space-y-0.5">
-      <p className="text-[12px] font-medium">{label}</p>
-      <p className="truncate rounded-md border bg-muted/40 px-2 py-1 font-mono text-[11px]">{path ?? t(M['inspector.api_path_empty'])}</p>
+    <div className="flex min-w-0 items-center justify-between gap-2">
+      <Label>{label}</Label>
+      {path ? (
+        <Badge variant="secondary" className="max-w-[60%] truncate font-mono">{path}</Badge>
+      ) : (
+        <span className="text-[12px] text-muted-foreground">{t(M['inspector.api_path_empty'])}</span>
+      )}
     </div>
   );
 }
@@ -153,11 +157,12 @@ export function ApiOptionsSection({ block }: { block: ChoiceBlock }) {
           <Button type="button" size="sm" disabled={status === 'testing'} onClick={() => void test()}>
             {status === 'testing' ? t(M['inspector.api_testing']) : t(M['inspector.api_test'])}
           </Button>
-          {status === 'fail' ? <p role="alert" className="text-[12px] text-amber-700">{t(M['inspector.api_test_fail'])}</p> : null}
-          {status === 'parse' ? <p role="alert" className="text-[12px] text-amber-700">{t(M['inspector.api_parse_fail'], { format: (api.parser ?? 'json').toUpperCase() })}</p> : null}
-          {status === 'empty' ? <p className="text-[12px] text-muted-foreground">{t(M['inspector.api_empty'])}</p> : null}
+          {status === 'fail' ? <Alert variant="negative" emphasis="subtle"><AlertDescription>{t(M['inspector.api_test_fail'])}</AlertDescription></Alert> : null}
+          {status === 'parse' ? <Alert variant="warning" emphasis="subtle"><AlertDescription>{t(M['inspector.api_parse_fail'], { format: (api.parser ?? 'json').toUpperCase() })}</AlertDescription></Alert> : null}
+          {status === 'empty' ? <Alert variant="info" emphasis="subtle"><AlertDescription>{t(M['inspector.api_empty'])}</AlertDescription></Alert> : null}
           {status === 'ok' && data !== undefined ? (
             <>
+              <Separator />
               <div className="grid grid-cols-1 gap-2">
                 <PathChip label={t(M['inspector.api_label_key'])} path={labelPath} />
                 <PathChip label={t(M['inspector.api_value_key'])} path={valuePath} />
@@ -178,25 +183,23 @@ export function ApiOptionsSection({ block }: { block: ChoiceBlock }) {
           ) : null}
           {preview.length ? (
             <div className="space-y-1.5">
-              <p className="text-[13px] font-medium">{t(M['inspector.api_preview'])}</p>
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full table-fixed text-left text-[12px]">
-                  <thead className="bg-muted/60 text-muted-foreground">
-                    <tr>
-                      <th className="px-2 py-1.5 font-medium">{t(M['inspector.api_preview_label'])}</th>
-                      <th className="px-2 py-1.5 font-medium">{t(M['inspector.api_preview_value'])}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.slice(0, 20).map((opt) => (
-                      <tr key={opt.id}>
-                        <td className="truncate px-2 py-1.5">{labelString(opt.label)}</td>
-                        <td className="truncate px-2 py-1.5 font-mono">{opt.id}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Label>{t(M['inspector.api_preview'])}</Label>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t(M['inspector.api_preview_label'])}</TableHead>
+                    <TableHead>{t(M['inspector.api_preview_value'])}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.slice(0, 20).map((opt) => (
+                    <TableRow key={opt.id}>
+                      <TableCell className="truncate">{labelString(opt.label)}</TableCell>
+                      <TableCell className="truncate font-mono">{opt.id}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           ) : null}
         </>

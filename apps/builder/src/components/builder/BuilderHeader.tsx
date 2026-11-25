@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft } from 'lucide-react';
+import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft, Paintbrush } from 'lucide-react';
 import { toast } from 'sonner';
 import { defineMessages } from '@form/i18n';
 import type { BlockId } from '@form/schema';
@@ -51,6 +51,8 @@ export function BuilderHeader() {
   const title = useDoc((d) => d.title);
   const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const designOpen = useUiStore((s) => s.designOpen);
+  const setDesignOpen = useUiStore((s) => s.setDesignOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const save = useUiStore((s) => s.save);
   const canUndo = useCanUndo();
@@ -160,7 +162,12 @@ export function BuilderHeader() {
           <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-foreground hover:bg-state-hover">
             <span className="truncate">{title || 'Form title'}</span>
           </span>
-          <span role="status" title={save.state === 'error' ? save.message : undefined} className="ml-1 shrink-0 text-[13px] text-text-subtle">
+          <span
+            role="status"
+            title={save.state === 'error' ? save.message : undefined}
+            className="ml-1 flex shrink-0 items-center gap-1.5 text-[13px] text-text-subtle"
+          >
+            <SaveDot state={save.state} />
             {saveLabel(save)}
           </span>
         </div>
@@ -179,6 +186,20 @@ export function BuilderHeader() {
         <Ghost disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
           <Redo2 className="size-4" />
         </Ghost>
+        <Tooltip content={designOpen ? 'Close form settings' : 'Form settings'}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            pressed={designOpen}
+            aria-label={designOpen ? 'Close form settings' : 'Form settings'}
+            onClick={() => setDesignOpen(!designOpen)}
+            className="mx-1 border-primary/40 bg-primary/10 font-semibold text-primary hover:bg-primary/20"
+          >
+            <Paintbrush className="size-4" />
+            Form settings
+          </Button>
+        </Tooltip>
         <Ghost onClick={() => setTemplates(true)} label="Templates">
           <LayoutTemplate className="size-4" />
         </Ghost>
@@ -235,6 +256,17 @@ export function BuilderHeader() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Animated status dot: a soft pulse while saving, solid green when saved, red when the save failed. */
+function SaveDot({ state }: { state: SaveState['state'] }) {
+  const color = state === 'error' ? 'bg-destructive' : state === 'saved' ? 'bg-primary' : 'bg-text-subtle';
+  return (
+    <span className="relative flex size-2 shrink-0" aria-hidden>
+      {state === 'saving' ? <span className={`ws-live absolute inline-flex size-full rounded-full ${color}`} /> : null}
+      <span className={`relative inline-flex size-2 rounded-full transition-colors duration-300 ${color}`} />
+    </span>
   );
 }
 

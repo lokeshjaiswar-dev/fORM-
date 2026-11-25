@@ -1,8 +1,8 @@
-import { REGISTRY, type AvailableType } from '@form/registry';
+import { REGISTRY, isAvailable, type AvailableType } from '@form/registry';
 import type {
-  Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, FormTitleStyle, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
+  ApiLookup, Behavior, BlockConfigMap, BlockId, DocumentOp, Ending, EndingId, FormDefinition, FormTitleStyle, OptionId, PageId, Purpose, PurposeId, RichDoc, Rule, RuleId, Theme,
 } from '@form/schema';
-import { APP_IDS, blankDefinition, createBlock, inlineDoc, isField, placementOf, richDoc } from '@/lib/definition';
+import { APP_IDS, blankDefinition, blockOrder, createBlock, inlineDoc, isField, placementOf, richDoc } from '@/lib/definition';
 import { focusLabelEnd } from '@/lib/focusLabel';
 import { applyPatch, type Patch } from '@/lib/patch';
 import { dispatch, type CommandResult } from '@/state/commands/dispatch';
@@ -55,6 +55,10 @@ export function setTheme(theme: Theme): CommandResult {
 
 export function setBehavior(behavior: Behavior): CommandResult {
   return dispatch({ type: 'set_behavior', behavior });
+}
+
+export function setLookups(lookups: ApiLookup[]): CommandResult {
+  return dispatch({ type: 'set_lookups', lookups });
 }
 
 /** Sets the endings, and the behaviour that goes with them (the confetti switch) in the same step. */
@@ -236,4 +240,19 @@ export function replaceDocument(doc: FormDefinition): CommandResult {
   const result = dispatch({ type: 'replace_document', doc: { ...doc, formId: currentDoc().formId } });
   if (result.ok) useUiStore.setState({ activeBlockId: null, inspectorOpen: false, started: true });
   return result;
+}
+
+/**
+ * Enter in a field's label moves to the next field in document order (list rows included), so the author keeps typing
+ * down the form. With no field after it, the cursor goes to the insert line as before.
+ */
+export function focusNextField(from: BlockId, doc: FormDefinition = currentDoc()): void {
+  const order = blockOrder(doc);
+  const index = order.indexOf(from);
+  const next = index < 0 ? undefined : order.slice(index + 1).find((id) => {
+    const block = doc.blocks[id];
+    return block !== undefined && isField(block) && isAvailable(block.type);
+  });
+  if (next) ui().setActiveBlock(next);
+  else ui().requestInsertFocus();
 }

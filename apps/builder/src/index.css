@@ -28,17 +28,22 @@
   opacity: 1;
 }
 
+/* An empty select reads as a placeholder, like an empty text input (not the phone country or appointment day: those show real defaults). */
+.fr-root.fr-builder-canvas [data-canvas-field] [data-slot='select-trigger'][data-placeholder]:not(:is(.fr-phone-country, .fr-appointment-date) *) {
+  color: var(--fr-placeholder, var(--text-muted));
+}
+
 .fr-root.fr-builder-canvas [data-canvas-field] [data-slot='input-prefix'],
 .fr-root.fr-builder-canvas [data-canvas-field] [data-slot='input-suffix'] {
   color: var(--fr-input-color, var(--fr-inputText, currentColor));
 }
 
+/* Match the respondent preview (FLD-35): the field name stacks above the date and times, not beside them. */
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) {
-  display: grid;
-  grid-template-columns: auto minmax(10rem, 1fr);
-  column-gap: 12px;
-  row-gap: 8px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) > [data-canvas-label] {
@@ -46,11 +51,7 @@
 }
 
 .fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) > .fr-appointment {
-  display: contents;
-}
-
-.fr-root.fr-builder-canvas [data-canvas-field]:has(.fr-appointment) .fr-appointment-slots {
-  grid-column: 1 / -1;
+  display: flex;
 }
 
 [data-slash-menu] .ds-menu-search,
@@ -147,15 +148,95 @@ button {
   animation: success-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+@keyframes design-view-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes design-view-back {
+  from {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes design-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes design-switch-draw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+.design-view-in {
+  animation: design-view-in 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes design-view-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.design-view-out {
+  animation: design-view-out 420ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.design-view-back {
+  animation: design-view-back 440ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.design-tab-in {
+  animation: design-tab-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.design-switch-rule path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: design-switch-draw 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .design-view-in,
+  .design-view-back,
+  .design-tab-in,
+  .design-switch-rule path {
+    animation: none;
+  }
+}
+
 /*
  * Tiptap's base editor styles (@tiptap/core style.ts). Tiptap would inject them as a <style> element, which the CSP
  * (style-src 'self') refuses, so editors run with injectCSS: false and the rules live here.
  */
 .ProseMirror {
   position: relative;
+  caret-color: CanvasText;
   word-wrap: break-word;
   white-space: pre-wrap;
-  white-space: break-spaces;
   -webkit-font-variant-ligatures: none;
   font-variant-ligatures: none;
   font-feature-settings: "liga" 0;
@@ -168,6 +249,12 @@ button {
 }
 .ProseMirror pre {
   white-space: pre-wrap;
+}
+.ProseMirror p {
+  min-height: 1.25em;
+}
+.ProseMirror-trailingBreak {
+  display: inline-block;
 }
 img.ProseMirror-separator {
   display: inline !important;

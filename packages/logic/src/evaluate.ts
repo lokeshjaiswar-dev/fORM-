@@ -7,10 +7,12 @@ import type {
 } from '@form/schema';
 import { actionWrites, isClientAction } from './analyze.ts';
 import { cell, stepKey } from './cells.ts';
+import { admittedAnswers, dependentBlockIds, dependentOptions } from './dependentOptions.ts';
 import { ENGINE } from './compile.ts';
-import { formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
+import { D, formatDecimal, parseDecimal, type DecimalValue } from './decimal.ts';
 import { NULL, compare, equal, isNull, order } from './operators.ts';
 import { ancestorsOf } from './structure.ts';
+import { optionValueSource } from './subset.ts';
 import { traceEntry, type TraceEntry } from './trace.ts';
 
 /*
@@ -54,6 +56,8 @@ interface Prepared {
   valueCells: ReadonlyArray<readonly [BlockId, string]>;
   /** Cells each step writes. */
   stepWrites: ReadonlyArray<readonly string[]>;
+  /** Short-text fields filled from a dropdown option value, mapped to that choice. Formulas read them as numbers. */
+  optionValues: ReadonlyMap<string, BlockId>;
 }
 
 interface BlockKeys { visible: string; value: string; enabled: string; required: string; ancestors: readonly string[]; onPath: string | null }
@@ -103,7 +107,13 @@ function prepare(version: EvaluableVersion): Prepared {
     else map.set(c, [i]);
   };
   const stepWrites = steps.map((s): string[] => {
-    if (s.kind === 'rule') return [...new Set([...s.then.keys(), ...(s.else?.keys() ?? [])])];
+    if (s.kind === 'rule') {
+      const cells = [...s.then.keys(), ...(s.else?.keys() ?? [])];
+      for (const action of [...s.rule.then, ...(s.rule.else ?? [])]) {
+        if (action.type === 'set_value' && !action.path) cells.push(cell.value(action.target));
+      }
+      return [...new Set(cells)];
+    }
     if (s.kind === 'on_path') return [cell.onPath(def.pages[s.page]?.id ?? '')];
     if (s.kind === 'capture') return [cell.value(s.blockId)];
     return [];
@@ -132,9 +142,15 @@ function prepare(version: EvaluableVersion): Prepared {
     valueCells.push([id as BlockId, cell.value(id)]);
   }
   const pageKeys = def.pages.map((pg) => ({ visible: cell.visible(pg.id), onPath: cell.onPath(pg.id), jump: cell.jump(pg.id) }));
+  const optionValues = new Map<string, BlockId>();
+  for (const [id, block] of blocks) {
+    if (block.type !== 'short_text') continue;
+    const source = optionValueSource(def, id as BlockId);
+    if (source) optionValues.set(id, source);
+  }
   const p: Prepared = {
     def, steps, writers, readers, parentOf: compiled.parentOf, blocks, fields, documentOrder: compiled.documentOrder, pageIds: def.pages.map((pg) => pg.id), pageIndex,
-    keys, pageKeys, staticCells, valueCells, stepWrites,
+    keys, pageKeys, staticCells, valueCells, stepWrites, optionValues,
   };
   prepared.set(version.compiled, p);
   return p;
@@ -175,6 +191,9 @@ function literalValue(literal: Literal): ScalarValue {
 }
 
 const text = (v: string | undefined): ScalarValue => (v === undefined ? NULL : { t: 'text', v });
+const ZERO: ScalarValue = { t: 'number', v: '0' as never };
+const ONE: ScalarValue = { t: 'number', v: '1' as never };
+const NUMERIC_FIELD = new Set(['number', 'calculation', 'rating', 'linear_scale', 'nps']);
 
 function arithmetic(a: ScalarValue, b: ScalarValue, op: '+' | '-' | '*' | '/'): ScalarValue {
   if (a.t !== 'number' || b.t !== 'number') return NULL;
@@ -222,6 +241,8 @@ class Session {
   /** Blocks whose answer failed its twin: they read as unanswered. */
   private readonly rejected = new Set<string>();
   private current = -1;
+  /** The repeating-group row a per-row formula is being evaluated for; null outside that evaluation. */
+  private currentRow: { groupId: string; values: Partial<Record<string, StoredAnswer>> } | null = null;
   private readonly p: Prepared;
   private readonly meta: EvalMeta;
   private readonly scope: Scope;
@@ -284,6 +305,15 @@ class Session {
       const v = this.cells.get(cell.variable(ref.varId)) as ScalarValue | undefined;
       return v ?? NULL;
     }
+    if (ref.row === 'current') {
+      /* Same-row reference: reads the row a per-row formula is being evaluated for. */
+      const block = this.p.blocks.get(ref.blockId);
+      const row = this.currentRow;
+      if (!isField(block) || row === null || this.p.parentOf[ref.blockId] !== row.groupId) return NULL;
+      const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
+      const scalar = cellAnswer ? answerScalar(block as never, cellAnswer.value as never, ref.path) : NULL;
+      return this.filledNumber(ref.blockId, scalar, row.values);
+    }
     const block = this.p.blocks.get(ref.blockId);
     if (!isField(block) || !this.visibleEff(ref.blockId)) return NULL;
     const parentId = this.p.parentOf[ref.blockId];
@@ -293,10 +323,20 @@ class Session {
       if (!group || group.type !== 'repeating_group') return NULL;
       const items: ScalarValue[] = [];
       let of: ScalarType | undefined;
+      /* A formula inside the list keeps one result per row, outside the rows' answers; sum(...) reads those too. */
+      const rowResults = block.type === 'calculation' ? (this.cells.get(cell.value(ref.blockId)) as Record<string, ScalarValue> | undefined) : undefined;
       for (const row of group.value.rows) {
+        if (block.type === 'calculation') {
+          const result = rowResults?.[row.rowId];
+          if (!result || result.t === 'null') continue;
+          if (result.t === 'list' || result.t === 'option') return NULL;
+          if (of !== undefined && of !== result.t) return NULL;
+          of = result.t;
+          items.push(result);
+          continue;
+        }
         const cellAnswer = asAnswer(row.values[ref.blockId], block.type);
-        if (!cellAnswer) continue;
-        const scalar = answerScalar(block as never, cellAnswer.value as never, ref.path);
+        const scalar = this.filledNumber(ref.blockId, cellAnswer ? answerScalar(block as never, cellAnswer.value as never, ref.path) : NULL, row.values);
         if (scalar.t === 'null') continue;
         if (scalar.t === 'list' || scalar.t === 'option') return NULL;
         if (of !== undefined && of !== scalar.t) return NULL;
@@ -306,8 +346,60 @@ class Session {
       return { t: 'list', of: of ?? 'number', items };
     }
     const answer = this.answerOf(ref.blockId);
-    if (!answer) return NULL;
-    return answerScalar(block as never, answer.value as never, ref.path);
+    const scalar = answer ? answerScalar(block as never, answer.value as never, ref.path) : NULL;
+    return this.filledNumber(ref.blockId, scalar);
+  }
+
+  /** A dropdown's filled value is stored as text. Formulas read the option code as a number, per row when inside a list. */
+  private filledNumber(blockId: BlockId, scalar: ScalarValue, rowValues?: Partial<Record<string, StoredAnswer>>): ScalarValue {
+    const source = this.p.optionValues.get(blockId);
+    if (!source) return scalar;
+    const written = scalar.t === 'text' ? scalar.v.trim() : '';
+    const raw = written !== '' ? written : this.codeInScope(source, rowValues);
+    if (!raw) return NULL;
+    const n = formatDecimal(parseDecimal(raw) ?? D(NaN));
+    return n ? { t: 'number', v: n as never } : NULL;
+  }
+
+  /**
+   * Per-row option values for a field filled from a dropdown inside the same list.
+   * The fill rule writes one form-level value, which cannot name a row, so each row is read here.
+   */
+  private optionValueRows(target: BlockId): Record<string, ScalarValue> | undefined {
+    const source = this.p.optionValues.get(target);
+    if (!source) return undefined;
+    const groupId = this.rowGroupOf(target);
+    if (groupId === undefined || this.rowGroupOf(source) !== groupId) return undefined;
+    const group = this.answerOf(groupId as BlockId);
+    if (!group || group.type !== 'repeating_group') return undefined;
+    const choice = this.p.blocks.get(source);
+    if (!isField(choice)) return undefined;
+    const out: Record<string, ScalarValue> = {};
+    for (const row of group.value.rows) {
+      const cellAnswer = asAnswer(row.values[source], choice.type);
+      if (!cellAnswer) continue;
+      const scalar = answerScalar(choice as never, cellAnswer.value as never, undefined);
+      if (scalar.t !== 'option') continue;
+      const code = this.optionCode(source, scalar.v);
+      if (code) out[row.rowId] = text(code);
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  }
+
+  /** The chosen option's code, from the current row when the choice lives in one, otherwise from the field answer. */
+  private codeInScope(source: BlockId, rowValues?: Partial<Record<string, StoredAnswer>>): string {
+    const block = this.p.blocks.get(source);
+    if (!isField(block)) return '';
+    if (rowValues && this.p.parentOf[source] !== undefined && this.p.blocks.get(this.p.parentOf[source] as string)?.type === 'repeating_group') {
+      const cellAnswer = asAnswer(rowValues[source], block.type);
+      if (!cellAnswer) return '';
+      const scalar = answerScalar(block as never, cellAnswer.value as never, undefined);
+      return scalar.t === 'option' ? this.optionCode(source, scalar.v) : '';
+    }
+    const answer = this.answerOf(source);
+    if (!answer) return '';
+    const scalar = answerScalar(block as never, answer.value as never, undefined);
+    return scalar.t === 'option' ? this.optionCode(source, scalar.v) : '';
   }
 
   private metaValue(ref: Extract<ValueRef, { kind: 'meta' }>): ScalarValue {
@@ -341,6 +433,21 @@ class Session {
     }
   }
 
+  /**
+   * A hidden number is left out of a formula. Addition and subtraction use 0 for it; multiplication and
+   * division use 1, so a hidden factor does not wipe the product and a hidden divisor does not divide by zero.
+   */
+  private skippedNumber(expr: Expr): boolean {
+    if (expr.k === 'ref' && expr.ref.kind === 'answer' && (expr.ref.path ?? '') === '' && expr.ref.row !== 'current') {
+      const block = this.p.blocks.get(expr.ref.blockId);
+      return isField(block) && NUMERIC_FIELD.has(block.type) && !this.visibleEff(expr.ref.blockId);
+    }
+    if (expr.k === 'binary' && (expr.op === '+' || expr.op === '-' || expr.op === '*' || expr.op === '/')) {
+      return this.skippedNumber(expr.left) && this.skippedNumber(expr.right);
+    }
+    return false;
+  }
+
   private exprValue(expr: Expr, depth = 0): ScalarValue {
     if (depth > 64) return NULL;
     switch (expr.k) {
@@ -358,14 +465,39 @@ class Session {
         return text === null ? NULL : { t: 'number', v: text as never };
       }
       case 'call': {
+        if (expr.fn === 'option_code' && expr.args[0] !== undefined) {
+          const chosen = this.exprValue(expr.args[0], depth + 1);
+          if (chosen.t !== 'option') return NULL;
+          const code = this.optionCode(chosen.blockId, chosen.v);
+          return code ? text(code) : NULL;
+        }
+        if ((expr.fn === 'left' || expr.fn === 'right') && expr.args[0] !== undefined && expr.args[1] !== undefined) {
+          const src = this.exprValue(expr.args[0], depth + 1);
+          const nVal = this.exprValue(expr.args[1], depth + 1);
+          const raw = src.t === 'text' ? src.v : src.t === 'option' ? this.optionCode(src.blockId, src.v) : '';
+          const n = nVal.t === 'number' ? Math.floor(Number(nVal.v)) : 0;
+          if (!raw || !Number.isFinite(n) || n <= 0) return NULL;
+          const count = Math.min(raw.length, n);
+          return text(expr.fn === 'left' ? raw.slice(0, count) : raw.slice(-count));
+        }
+        if (expr.fn === 'option_score' && expr.args[0] !== undefined) {
+          const chosen = this.exprValue(expr.args[0], depth + 1);
+          if (chosen.t !== 'option') return NULL;
+          const block = this.p.blocks.get(chosen.blockId);
+          const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; score?: string }> }).options : undefined;
+          const raw = options?.find((o) => o.id === chosen.v)?.score?.trim() ?? '';
+          const score = formatDecimal(parseDecimal(raw) ?? D(NaN));
+          return score ? { t: 'number', v: score as never } : NULL;
+        }
         if (expr.fn !== 'sum' || expr.args[0] === undefined) break;
         return sumNumbers(this.exprValue(expr.args[0], depth + 1));
       }
       case 'binary': {
         const op = expr.op;
         if (op === '+' || op === '-' || op === '*' || op === '/') {
-          const a = this.exprValue(expr.left, depth + 1);
-          const b = this.exprValue(expr.right, depth + 1);
+          const identity = op === '*' || op === '/' ? ONE : ZERO;
+          const a = this.skippedNumber(expr.left) ? identity : this.exprValue(expr.left, depth + 1);
+          const b = this.skippedNumber(expr.right) ? identity : this.exprValue(expr.right, depth + 1);
           return arithmetic(a, b, op);
         }
         if (op !== '==' && op !== '!=' && op !== '<' && op !== '<=' && op !== '>' && op !== '>=') break;
@@ -415,7 +547,7 @@ class Session {
     const block = this.p.blocks.get(blockId as BlockId);
     const options = block && 'config' in block ? (block.config as { options?: ReadonlyArray<{ id: string; code?: string }> }).options : undefined;
     const code = options?.find((o) => o.id === optionId)?.code?.trim();
-    return code ?? '';
+    return code || optionId;
   }
 
   private asText(value: ScalarValue): ScalarValue {
@@ -430,11 +562,15 @@ class Session {
 
   private condition(c: Condition): boolean {
     const left = this.operandValue(c.left);
+    const right = this.operandValue(c.right);
     const textOp = c.op === 'contains' || c.op === 'not_contains' || c.op === 'starts_with' || c.op === 'not_starts_with' || c.op === 'ends_with' || c.op === 'not_ends_with';
+    const optionish = (v: ScalarValue) => v.t === 'option' || (v.t === 'list' && v.of === 'option');
+    // "is" between a dropdown and text compares the option value (its code), not the internal id.
+    const codeEq = (c.op === 'eq' || c.op === 'neq') && ((optionish(left) && right.t === 'text') || (optionish(right) && left.t === 'text'));
     return compare({
       op: c.op,
-      left: textOp ? this.asText(left) : left,
-      right: textOp ? this.asText(this.operandValue(c.right)) : this.operandValue(c.right),
+      left: textOp || codeEq ? this.asText(left) : left,
+      right: textOp || codeEq ? this.asText(right) : right,
       right2: this.operandValue(c.right2),
       caseSensitive: c.caseSensitive === true,
       answered: this.answered(c.left, left),
@@ -496,9 +632,34 @@ class Session {
     }
   }
 
-  private capture(id: BlockId, previous: unknown): AnswerValue | null {
+  /** The repeating group a block sits directly inside, if any. */
+  private rowGroupOf(id: BlockId): string | undefined {
+    const parentId = this.p.parentOf[id];
+    return parentId !== undefined && this.p.blocks.get(parentId)?.type === 'repeating_group' ? parentId : undefined;
+  }
+
+  /** A formula inside a list: its result for every row, keyed by row id. Null while the list has no rows. */
+  private rowResults(id: BlockId, block: Extract<StoredBlock, { type: 'calculation' }>, previous: unknown): unknown {
+    const groupId = this.rowGroupOf(id);
+    const group = groupId === undefined ? undefined : this.answerOf(groupId as BlockId);
+    if (group?.type !== 'repeating_group') return null;
+    const out: Record<string, ScalarValue> = {};
+    try {
+      for (const row of group.value.rows) {
+        this.currentRow = { groupId: groupId as string, values: row.values };
+        out[row.rowId] = this.exprValue(block.config.expr);
+      }
+    } finally {
+      this.currentRow = null;
+    }
+    const prev = previous as Record<string, ScalarValue> | null | undefined;
+    return prev && JSON.stringify(prev) === JSON.stringify(out) ? prev : out;
+  }
+
+  private capture(id: BlockId, previous: unknown): unknown {
     const block = this.p.blocks.get(id);
     const prev = previous as AnswerValue | null | undefined;
+    if (block?.type === 'calculation' && this.rowGroupOf(id) !== undefined) return this.rowResults(id, block, previous);
     if (block?.type === 'calculation') {
       const v = this.exprValue(block.config.expr);
       if (v.t === 'null') return null;
@@ -581,6 +742,21 @@ class Session {
     }
   }
 
+  /** Values a matched rule assigns with `set_value` (literals, arithmetic, option scores). */
+  private assignedValues(rule: Rule, matched: boolean): Map<string, AnswerValue> {
+    const actions = matched ? rule.then : (rule.else ?? []);
+    const out = new Map<string, AnswerValue>();
+    for (const action of actions) {
+      if (action.type !== 'set_value' || action.path) continue;
+      const block = this.p.blocks.get(action.target);
+      if (!isField(block)) continue;
+      const scalar = this.exprValue(action.value);
+      if (block.type === 'number' && scalar.t === 'number') out.set(cell.value(action.target), { type: 'number', value: scalar.v });
+      else if ((block.type === 'short_text' || block.type === 'long_text') && scalar.t === 'text') out.set(cell.value(action.target), { type: block.type, value: scalar.v });
+    }
+    return out;
+  }
+
   /** The value `step` writes to `c` given its output, on top of `current`. */
   private applyOne(i: number, c: string, current: unknown): unknown {
     const s = this.p.steps[i] as Step;
@@ -588,7 +764,12 @@ class Session {
     if (s.kind === 'rule') {
       if (out === null || out === undefined) return current;
       const writes = out ? s.then : s.else;
-      return writes?.has(c) ? writes.get(c) : current;
+      if (writes?.has(c)) return writes.get(c);
+      if (typeof out === 'boolean') {
+        const assigned = this.assignedValues(s.rule, out);
+        if (assigned.has(c)) return assigned.get(c);
+      }
+      return current;
     }
     if (s.kind === 'on_path') return out === true;
     if (s.kind === 'capture') return out ?? (s.authoritative ? undefined : current);
@@ -601,6 +782,7 @@ class Session {
     if (s.kind === 'rule') {
       if (out === null || out === undefined) return;
       for (const [c, v] of (out ? s.then : s.else) ?? []) this.cells.set(c, v);
+      if (typeof out === 'boolean') for (const [c, v] of this.assignedValues(s.rule, out)) this.cells.set(c, v);
     } else if (s.kind === 'on_path') {
       for (const c of this.p.stepWrites[i] ?? []) this.cells.set(c, out === true);
     } else if (s.kind === 'capture' && (out || s.authoritative)) {
@@ -617,8 +799,15 @@ class Session {
     return changed;
   }
 
+  /** Blocks whose options depend on another block: a change anywhere upstream can admit or drop their answers. */
+  private dependants: readonly BlockId[] | undefined;
+
+  private admit(answers: Answers): Answers {
+    return admittedAnswers(this.p.documentOrder, this.p.blocks, answers);
+  }
+
   full(answers: Answers): void {
-    this.answers = answers;
+    this.answers = this.admit(answers);
     this.current = -1;
     this.cells = new Map(this.p.staticCells);
     for (const [id, c] of this.p.valueCells) this.cells.set(c, this.answerCell(id));
@@ -631,13 +820,16 @@ class Session {
 
   /** Re-runs only the steps downstream of the changed answers (§3.3.14); the result equals a full pass. */
   update(answers: Answers, changed: Iterable<BlockId>): void {
-    this.answers = answers;
+    this.answers = this.admit(answers);
     this.current = -1;
+    this.dependants ??= dependentBlockIds(this.p.documentOrder, this.p.blocks);
+    const ids = new Set(changed);
+    if (this.dependants.length && ids.size) for (const id of this.dependants) ids.add(id);
     const dirty = new Uint8Array(this.p.steps.length);
     const touch = (c: string) => {
       for (const r of this.p.readers.get(c) ?? []) dirty[r] = 1;
     };
-    for (const id of changed) {
+    for (const id of ids) {
       const c = cell.value(id);
       if (!this.p.blocks.has(id)) continue;
       /* An answer going between absent and invalid leaves the cell undefined but changes the readers' diagnostics. */
@@ -647,8 +839,11 @@ class Session {
     for (let i = 0; i < dirty.length; i += 1) {
       if (!dirty[i]) continue;
       const out = this.run(i);
-      if (Object.is(out, this.outputs[i])) continue;
+      const same = Object.is(out, this.outputs[i]);
       this.outputs[i] = out;
+      /* A set_value rule can stay true while the value it writes changes, so its cells are recomputed whenever it is dirty. */
+      const dynamic = this.p.steps[i]?.kind === 'rule' && [...(this.p.steps[i] as RuleStep).rule.then, ...((this.p.steps[i] as RuleStep).rule.else ?? [])].some((a) => a.type === 'set_value');
+      if (same && !dynamic) continue;
       for (const c of this.p.stepWrites[i] ?? []) if (this.recompute(c)) touch(c);
     }
     this.current = -1;
@@ -676,14 +871,31 @@ class Session {
     const required = new Set<BlockId>();
     const disabled = new Set<BlockId>();
     const values: Answers = {};
+    const rowValues: Partial<Record<BlockId, Record<string, ScalarValue>>> = {};
     for (const block of p.fields) {
       const id = block.id;
+      if (block.type === 'calculation' && this.rowGroupOf(id) !== undefined) {
+        const results = this.cells.get(cell.value(id));
+        if (results && typeof results === 'object') rowValues[id] = results as Record<string, ScalarValue>;
+        continue;
+      }
+      const filled = this.optionValueRows(id);
+      if (filled) {
+        rowValues[id] = filled;
+      }
       const enabled = this.flag(cell.enabled(id));
       if (!enabled) disabled.add(id);
       const answer = this.answerOf(id);
       const shown = visible.has(id);
       if (shown && enabled && answer) values[id] = answer;
       if (this.flag(cell.required(id)) && shown && enabled && !(block.readOnly === true && !answer)) required.add(id);
+    }
+    /* Dependent options: a block waiting for its parent's answer is disabled, so it is neither answered nor required. */
+    const dependent = dependentOptions(p.documentOrder, p.blocks, values);
+    for (const id of dependent.waiting) {
+      disabled.add(id);
+      required.delete(id);
+      delete values[id];
     }
     const endingId = (this.cells.get(cell.ending()) as EndingId | undefined) ?? p.def.defaultEndingId;
     const last = p.pageIds.length - 1;
@@ -712,8 +924,9 @@ class Session {
       }
     });
     const state: EvalState = {
-      visible, required, disabled, hiddenOptions: {}, values, variables: {}, submitBlocks, nextPage, path, endingId, serverEffects: this.serverEffects(),
+      visible, required, disabled, hiddenOptions: dependent.hiddenOptions, values, variables: {}, submitBlocks, nextPage, path, endingId, serverEffects: this.serverEffects(),
     };
+    if (Object.keys(rowValues).length > 0) state.rowValues = rowValues;
     if (this.tracing) {
       state.trace = p.steps.map((s, i): TraceEntry => {
         const out = this.outputs[i];

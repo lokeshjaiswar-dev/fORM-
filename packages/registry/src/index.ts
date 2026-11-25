@@ -31,6 +31,7 @@ import { paragraph } from './fields/paragraph.ts';
 import { phone } from './fields/phone.ts';
 import { ranking } from './fields/ranking.ts';
 import { repeatingGroup } from './fields/repeating_group.ts';
+import { dynamicTable } from './fields/dynamic_table.ts';
 import { rating } from './fields/rating.ts';
 import { scheduleGrid } from './fields/schedule_grid.ts';
 import { section } from './fields/section.ts';
@@ -73,6 +74,7 @@ const VALUE_FIELDS: { readonly [T in ValueFieldType]: ValueDefinition<T> } = {
   schedule_grid: scheduleGrid,
   matrix,
   repeating_group: repeatingGroup,
+  dynamic_table: dynamicTable,
   file_upload: fileUpload,
   signature,
   hidden,
@@ -121,6 +123,7 @@ export type {
 export { acceptsFile } from './fields/file_upload.ts';
 export { LONG_TEXT_MAX, wordCount } from './fields/long_text.ts';
 export { rankCount } from './fields/ranking.ts';
+export { columnNumbers, evaluateRowFormula, summarize } from './fields/dynamic_table.ts';
 export { UNBOUND_BLOCK_ID } from './fields/shared.ts';
 export { SHORT_TEXT_MAX } from './fields/short_text.ts';
 export { isRepeatableChildType } from './fields/repeating_group.ts';

@@ -57,3 +57,5 @@ playwright-report
 
 # pnpm content store (created when the store lands inside the repo, e.g. on another drive on Windows)
 .pnpm-store/
+# local secrets for deploy
+deploy/docker/secrets/

@@ -3,7 +3,7 @@ import type { OptionId } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { ChoicePicture } from './choicePicture.tsx';
-import { useAnswer, useOptions, usePipes, type ControlProps } from './hooks.ts';
+import { useAnswer, useDependentChoice, useOptions, usePipes, type ControlProps } from './hooks.ts';
 
 /** FLD-11/13: checkboxes, or a disclosure that opens the same checkboxes (multi-select dropdown); exclusive options clear the rest. */
 export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
@@ -12,6 +12,10 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
   const answer = useAnswer(block);
   const c = block.config;
   const options = useOptions(block.id, c.options, c.shuffle, block.apiOptions);
+  /* Dependent (cascading) options: while the parent question has no answer, a hint names it and the block waits. */
+  const { waitingFor } = useDependentChoice(block, options, field.disabled);
+  const waitHint = waitingFor === undefined ? undefined : waitingFor ? t(MESSAGES['choice.choose_first'], { question: waitingFor }) : t(MESSAGES['choice.answer_above_first']);
+  const hint = waitHint ? <p className="fr-hint fr-choice-wait">{waitHint}</p> : null;
   const other = c.other?.enabled ? c.other : undefined;
   const otherLabel = other?.label?.trim() || t('system:other.label');
   const [open, setOpen] = useState(false);
@@ -55,6 +59,8 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
 
   if (c.display === 'image') {
     return (
+      <>
+      {hint}
       <div className="fr-image-choices" style={{ '--fr-columns': c.columns ?? 2 } as CSSProperties}>
         {options.map((o, i) => (
           <label key={o.id} className="fr-image-choice" data-selected={ids.includes(o.id) ? 'true' : undefined}>
@@ -73,6 +79,7 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
           </label>
         ))}
       </div>
+      </>
     );
   }
   const list = (
@@ -112,10 +119,11 @@ export function MultiChoice({ block, field }: ControlProps<'multi_choice'>) {
       {otherInput}
     </div>
   );
-  if (!dropdown) return list;
+  if (!dropdown) return hint ? <>{hint}{list}</> : list;
   const count = ids.length + (otherOn ? 1 : 0);
   return (
     <div className="fr-disclosure">
+      {hint}
       <button type="button" className="fr-input fr-select fr-disclosure-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(!open)}>
         {t(MESSAGES['dropdown.summary'], { count })}
       </button>

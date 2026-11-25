@@ -28,13 +28,24 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+/*
+ * Radix Select renders a hidden native <select> with its option labels only after mount, so the server HTML never has
+ * those labels. They are not on screen, so the text check skips <select> elements; a real mismatch still fails the
+ * `errors` check in `hydrate`.
+ */
+function visibleText(root: HTMLElement): string | null {
+  const copy = root.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('select').forEach((el) => el.remove());
+  return copy.textContent;
+}
+
 /** Server HTML for `server`, hydrated with `client`; returns the container and everything React reported. */
 async function hydrate(server: ReactElement, client: ReactElement) {
   const html = renderToString(server);
   const container = document.createElement('div');
   container.append(...new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body.childNodes);
   document.body.append(container);
-  const before = container.textContent;
+  const before = visibleText(container);
   const errors: unknown[] = [];
   const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => void errors.push(args));
   await act(async () => {
@@ -54,7 +65,7 @@ describe('server rendering and hydration', () => {
     const { html, before, container, errors } = await hydrate(element, element);
     expect(html).toContain('fr-root');
     expect(errors).toEqual([]);
-    expect(container.textContent).toBe(before);
+    expect(visibleText(container)).toBe(before);
   });
 
   it('notices a mismatch (sensitivity check)', async () => {

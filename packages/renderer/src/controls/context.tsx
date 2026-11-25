@@ -43,13 +43,20 @@ export function ContextField({ block, field }: ControlProps<'context'>) {
     return local ? i18n.formatDateTime(local, 'D MMM YYYY', 'h12') : '';
   };
   return (
-    <output id={field.ids.input} className="fr-input fr-computed fr-session">
-      {keys.map((source) => (
-        <span key={source} className="fr-session-row">
-          <span className="fr-session-key">{factLabel(source, t)}</span>
-          <span>{sessionValue(source, facts[source], formatInstant)}</span>
+    <output id={field.ids.input} className="fr-session-card">
+      <span className="fr-session-head">
+        <span className="fr-session-title">{t(MESSAGES['session.title'])}</span>
+      </span>
+      {keys.length === 0 ? <p className="fr-session-empty">{t(MESSAGES['session.empty'])}</p> : (
+        <span className="fr-session-list">
+          {keys.map((source) => (
+            <span key={source} className="fr-session-row">
+              <span className="fr-session-key">{factLabel(source, t)}</span>
+              <span>{sessionValue(source, facts[source], formatInstant)}</span>
+            </span>
+          ))}
         </span>
-      ))}
+      )}
     </output>
   );
 }

@@ -111,10 +111,10 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
             {t(M['gallery.back'])}
           </button>
         </TextLink>
-        <div>
-          <h3 className="text-[18px] font-semibold">{title}</h3>
-          {text?.summary ? <p className="mt-1 text-sm text-muted-foreground">{text.summary}</p> : null}
-          {payload.kind === 'form' ? <p className="mt-1 text-[12px] text-text-subtle">{t(M['gallery.minutes'], { n: payload.estimatedMinutes })}</p> : null}
+        <div className="space-y-1 border-b border-slate-200 pb-4">
+          <h3 className="text-[18px] font-semibold tracking-tight text-slate-900">{title}</h3>
+          {text?.summary ? <p className="text-sm leading-relaxed text-slate-600">{text.summary}</p> : null}
+          {payload.kind === 'form' ? <p className="pt-1 text-[12px] font-medium uppercase tracking-wide text-slate-500">{t(M['gallery.minutes'], { n: payload.estimatedMinutes })}</p> : null}
         </div>
         {variables.length ? (
           <fieldset className="space-y-3">
@@ -125,7 +125,7 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
           </fieldset>
         ) : null}
         {notice ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{notice}</p> : null}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
           <Button variant="ghost" onClick={onCancel}>
             {t(M['gallery.cancel'])}
           </Button>
@@ -153,10 +153,23 @@ export default function TemplateGallery({ onUse, onCancel, useLabel, notice }: T
         const payload = tpl.file.payload;
         const fields = payload.kind === 'form' ? Object.values(payload.document.blocks).filter((b) => b !== undefined && 'compliance' in b).length : 0;
         return (
-          <Button key={tpl.entry.slug} type="button" variant="outline" onClick={() => pick(tpl)} className="h-auto flex-col items-start gap-1 whitespace-normal p-4 text-left">
-            <span className="font-medium">{text?.title ?? tpl.entry.slug}</span>
-            <span className="text-sm font-normal text-muted-foreground">{text?.summary}</span>
-            {fields ? <span className="mt-1 text-[12px] font-normal text-text-subtle">{t(M['gallery.fields'], { n: fields })}</span> : null}
+          <Button
+            key={tpl.entry.slug}
+            type="button"
+            variant="outline"
+            onClick={() => pick(tpl)}
+            className="group h-auto flex-col items-stretch gap-2 whitespace-normal rounded-md border-slate-200 bg-white p-0 text-left shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-900/20"
+          >
+            <span className="flex flex-col gap-1 px-4 pt-4">
+              <span className="text-[15px] font-semibold tracking-tight text-slate-900">{text?.title ?? tpl.entry.slug}</span>
+              <span className="text-[13px] font-normal leading-snug text-slate-600">{text?.summary}</span>
+            </span>
+            {fields ? (
+              <span className="mt-auto flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-[12px] font-medium text-slate-500">
+                <span>{t(M['gallery.fields'], { n: fields })}</span>
+                <span aria-hidden="true" className="text-slate-400 transition-transform group-hover:translate-x-0.5">→</span>
+              </span>
+            ) : null}
           </Button>
         );
       })}

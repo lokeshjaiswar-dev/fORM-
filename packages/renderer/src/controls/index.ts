@@ -8,6 +8,7 @@ import { ConstantSumField } from './constant_sum.tsx';
 import { ConsentField } from './consent.tsx';
 import { ContextField } from './context.tsx';
 import { DateInput } from './date.tsx';
+import { DynamicTable } from './dynamic_table.tsx';
 import { DateRangeField } from './date_range.tsx';
 import { DateTimeInput } from './datetime.tsx';
 import { Divider } from './divider.tsx';
@@ -75,6 +76,7 @@ export const CONTROLS: { readonly [T in AvailableType]: Control<T> } = {
   schedule_grid: { labelling: () => 'group', Component: ScheduleGridField },
   matrix: { labelling: () => 'group', Component: Matrix },
   repeating_group: { labelling: () => 'group', Component: RepeatingGroup },
+  dynamic_table: { labelling: () => 'group', Component: DynamicTable },
   file_upload: { labelling: () => 'input', Component: FileUpload },
   signature: { labelling: () => 'group', Component: Signature },
   /* FLD-30: never rendered; logic captures its value (URL parameter, UTM, static or expression). */

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { DecimalString } from '@form/schema';
+import { useEvaluation } from '../eval/context.ts';
 import { Affix } from './Affix.tsx';
 import { inputAttrs, useAnswer, type ControlProps } from './hooks.ts';
 import { sanitizeDecimal } from './sanitize.ts';
@@ -7,6 +8,10 @@ import { sanitizeDecimal } from './sanitize.ts';
 /** The answer is the typed text as a decimal string; validation reports anything that is not one (not_a_number). */
 export function NumberInput({ block, field }: ControlProps<'number'>) {
   const answer = useAnswer(block);
+  const { state } = useEvaluation();
+  /* A read-only number a rule fills (set_value) shows the rule's value. */
+  const filled = state.values[block.id];
+  const fromRule = field.readOnly && filled?.type === 'number' ? filled.value : undefined;
   const c = block.config;
   const stepper = c.display === 'stepper';
   const slider = stepper && c.min !== undefined && c.max !== undefined;
@@ -15,7 +20,7 @@ export function NumberInput({ block, field }: ControlProps<'number'>) {
   if (slider) {
     const min = Number(c.min);
     const max = Number(c.max);
-    const numeric = Number(answer.value ?? min);
+    const numeric = Number(fromRule ?? answer.value ?? min);
     const current = Number.isFinite(numeric) ? numeric : min;
     /* How far the thumb is along the track, for the filled part of the track (styles.css reads `--fr-fill`). */
     const fill = max > min ? Math.min(100, Math.max(0, ((current - min) / (max - min)) * 100)) : 0;
@@ -54,7 +59,7 @@ export function NumberInput({ block, field }: ControlProps<'number'>) {
         min={stepper ? c.min : undefined}
         max={stepper ? c.max : undefined}
         step={stepper ? step : undefined}
-        value={answer.value ?? ''}
+        value={fromRule ?? answer.value ?? ''}
         placeholder={c.placeholder}
         onChange={(e) => answer.set(sanitizeDecimal(e.target.value, c.integerOnly === true, c.allowNegative !== false) as DecimalString)}
         onBlur={answer.onBlur}

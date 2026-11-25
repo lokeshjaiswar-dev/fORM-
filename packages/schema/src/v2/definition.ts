@@ -10,6 +10,7 @@ import type { RichDoc } from './rich-text.ts';
 import type { BrandToken, TemplateVariableName } from './template-primitives.ts';
 import type { TemplateKind } from './templates.ts';
 import type { HexColor } from './ids.ts';
+import type { ApiLookup } from './envelope.ts';
 import type { Behavior, Theme } from './theme.ts';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -47,6 +48,10 @@ export interface FormDefinition {
   privacy: PrivacyConfig;
   theme: Theme;
   behavior: Behavior;
+  /** @deprecated One lookup. Prefer `lookups`. Kept so drafts saved before the list still open. */
+  lookup?: ApiLookup;
+  /** Master-data lookups. Each picker fills only the fields mapped on that API. */
+  lookups?: ApiLookup[];
   i18n: I18nBundle;
   /** Review units (WP-2.33); who reviews them is server-side `ReviewSettings`. Absent: no review. */
   review?: FormReviewDefinition;

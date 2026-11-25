@@ -41,6 +41,7 @@ export const EndingSchema = z.discriminatedUnion('kind', [
     content: RichDocSchema,
     actions: z.array(EndingActionSchema),
     confetti: z.boolean().exactOptional(),
+    confettiStyle: z.enum(['classic', 'pastel', 'ocean', 'sunset']).exactOptional(),
     origin: OriginSchema.exactOptional(),
   }),
   z.strictObject({

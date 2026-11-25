@@ -1,8 +1,8 @@
 import type { ComponentType } from 'react';
 import type { AvailableType } from '@form/registry';
 import {
-  AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, FullNameGeneral, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionBreakGeneral, SectionGeneral, SemanticDifferentialGeneral,
-  LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
+  AddressGeneral, AppointmentGeneral, CalculationGeneral, CardSortGeneral, CardSortOptions, LikertOptions, MatchingOptions, MatrixOptions, SemanticDifferentialOptions, ChoiceGeneral, ChoiceOptions, ChromeGeneral, ConsentGeneral, ConstantSumGeneral, ContextGeneral, DateGeneral, DateRangeGeneral, DateTimeGeneral, DividerGeneral, EmailGeneral, EndLabels, FileValidation, FullNameGeneral, HeadingGeneral, HiddenGeneral, LikertGeneral, LongTextGeneral, MatchingGeneral, NumberRangeValidation, UniqueIdGeneral, ScheduleGridGeneral, SectionBreakGeneral, SectionGeneral, SemanticDifferentialGeneral,
+  DynamicTableGeneral, LongTextValidation, MatrixGeneral, MultiChoiceValidation, NumberGeneral, NumberValidation, PhoneGeneral, RatingGeneral, RepeatingGroupGeneral, ScaleGeneral, ShortTextValidation, SingleChoiceValidation,
   SignatureGeneral, TimeGeneral, type InspectorProps,
 } from '@/fields/inspectorViews';
 import {
@@ -47,16 +47,17 @@ export const INSPECTOR: { readonly [T in AvailableType]: InspectorView<T> } = {
   linear_scale: { general: ScaleGeneral },
   nps: { general: EndLabels },
   ranking: { options: ChoiceOptions },
-  matching: { general: MatchingGeneral, options: ChoiceOptions },
-  likert: { general: LikertGeneral },
+  matching: { general: MatchingGeneral, options: MatchingOptions },
+  likert: { general: LikertGeneral, options: LikertOptions },
   constant_sum: { general: ConstantSumGeneral, options: ChoiceOptions },
   maxdiff: { options: ChoiceOptions },
-  card_sort: { general: CardSortGeneral },
-  semantic_differential: { general: SemanticDifferentialGeneral },
+  card_sort: { general: CardSortGeneral, options: CardSortOptions },
+  semantic_differential: { general: SemanticDifferentialGeneral, options: SemanticDifferentialOptions },
   number_range: { validation: NumberRangeValidation },
   schedule_grid: { general: ScheduleGridGeneral },
-  matrix: { general: MatrixGeneral },
+  matrix: { general: MatrixGeneral, options: MatrixOptions },
   repeating_group: { general: RepeatingGroupGeneral },
+  dynamic_table: { general: DynamicTableGeneral },
   file_upload: { validation: FileValidation },
   signature: { general: SignatureGeneral },
   hidden: { general: HiddenGeneral },

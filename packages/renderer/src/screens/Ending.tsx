@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { isSafeUrl, type Ending, type PlainTemplate, type RichDoc } from '@form/schema';
+import { isSafeUrl, type ConfettiStyle, type Ending, type PlainTemplate, type RichDoc } from '@form/schema';
 import { Confetti } from '../Confetti.tsx';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
@@ -21,17 +21,25 @@ function Content({ doc, resolve }: { doc: RichDoc; resolve: RichTextResolvers })
 export function EndingScreen({
   ending,
   confetti,
+  confettiStyle,
   resolve,
   url,
   redirecting,
+  minHeight,
   onRestart,
+  uniqueId = null,
 }: {
   ending: Ending;
+  /** The reference number the server issued (a `unique_id` field with `showOnEnding`); null shows nothing. */
+  uniqueId?: string | null | undefined;
   confetti: boolean;
+  confettiStyle?: ConfettiStyle | undefined;
   resolve: RichTextResolvers;
   /** A URL template with its piped values percent-encoded. */
   url: (value: PlainTemplate) => string;
   redirecting: boolean;
+  /** The form's height at submit, so the ending card matches it. */
+  minHeight?: number | undefined;
   onRestart: () => void;
 }) {
   const { t } = useRenderer();
@@ -39,12 +47,17 @@ export function EndingScreen({
   useEffect(() => ref.current?.focus(), []);
   const content = ending.kind === 'message' ? ending.content : ending.message;
   return (
-    <div ref={ref} className="fr-screen fr-ending" tabIndex={-1}>
-      {confetti ? <Confetti /> : null}
+    <div ref={ref} className="fr-screen fr-ending" tabIndex={-1} style={minHeight ? { minHeight } : undefined}>
+      {confetti ? <Confetti style={confettiStyle} /> : null}
       <div className="fr-ending-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" focusable="false"><path d="M20 6 9 17l-5-5" /></svg>
       </div>
       {content ? <Content doc={content} resolve={resolve} /> : null}
+      {uniqueId ? (
+        <p className="fr-ending-reference">
+          {t(MESSAGES['ending.reference'])} <strong>{uniqueId}</strong>
+        </p>
+      ) : null}
       {redirecting ? <p className="fr-hint" role="status">{t(MESSAGES['ending.redirecting'])}</p> : null}
       {ending.kind === 'message'
         ? ending.actions.map((action, i) => {

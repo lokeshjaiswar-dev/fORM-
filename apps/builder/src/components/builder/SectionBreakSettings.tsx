@@ -82,7 +82,7 @@ export function SectionBreakSettings() {
         <>
           <SelectRow
             label={t(M['sections.mode'])}
-            value={current.mode}
+            value={current.mode ?? 'scroll'}
             options={[
               ['scroll', t(M['sections.mode_scroll'])],
               ['paged', t(M['sections.mode_paged'])],

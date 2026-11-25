@@ -20,7 +20,7 @@ export const FIELD_BLOCK_SCHEMAS = {
   matching: fieldBlock('matching'), likert: fieldBlock('likert'),
   constant_sum: fieldBlock('constant_sum'), maxdiff: fieldBlock('maxdiff'), card_sort: fieldBlock('card_sort'),
   semantic_differential: fieldBlock('semantic_differential'), number_range: fieldBlock('number_range'), schedule_grid: fieldBlock('schedule_grid'),
-  matrix: fieldBlock('matrix'), repeating_group: fieldBlock('repeating_group'), file_upload: fieldBlock('file_upload'), signature: fieldBlock('signature'),
+  matrix: fieldBlock('matrix'), repeating_group: fieldBlock('repeating_group'), dynamic_table: fieldBlock('dynamic_table'), file_upload: fieldBlock('file_upload'), signature: fieldBlock('signature'),
   hidden: fieldBlock('hidden'), consent: fieldBlock('consent'), payment: fieldBlock('payment'), appointment: fieldBlock('appointment'),
   calculation: fieldBlock('calculation'), context: fieldBlock('context'), unique_id: fieldBlock('unique_id'),
 } as const;

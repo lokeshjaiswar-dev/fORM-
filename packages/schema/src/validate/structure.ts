@@ -300,15 +300,50 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
     rule.else?.forEach((a, j) => checkAction(a, `${at}/else/${j}`));
   });
 
+  /*
+   * Dependent options: the parent is another single or multi choice placed earlier in the form (so a chain can never
+   * loop), and every option link names one of the parent's options.
+   */
+  const orderOf = new Map(documentOrder.map((blockId, i) => [blockId, i]));
+  const dependentOptions = (id: string, config: { dependsOn?: string; options: ReadonlyArray<{ parentOptionIds?: readonly string[] }> }, at: (...rest: Array<string | number>) => string) => {
+    const parentId = config.dependsOn;
+    if (parentId === undefined) return;
+    const parent = blocks.get(parentId);
+    if (parentId === id || (parent?.type !== 'single_choice' && parent?.type !== 'multi_choice')) {
+      soft('dangling_ref', at('config', 'dependsOn'), `'${parentId}' is not another single or multi choice block`);
+      return;
+    }
+    const childAt = orderOf.get(id);
+    const parentAt = orderOf.get(parentId);
+    if (childAt !== undefined && parentAt !== undefined && parentAt > childAt) {
+      error('page_order_violation', at('config', 'dependsOn'), `options of '${id}' depend on '${parentId}', which comes after it`);
+    }
+    config.options.forEach((option, i) => optionsOf(parentId, option.parentOptionIds ?? [], at('config', 'options', i, 'parentOptionIds')));
+    if ((blocks.get(id) as { apiOptions?: unknown } | undefined)?.apiOptions !== undefined) {
+      soft('dangling_ref', at('apiOptions'), `options of '${id}' load from an API, so they cannot also depend on '${parentId}'`);
+    }
+  };
+
+  /* One primary key per form: it is what identifies a submission. */
+  let primaryKeyAt: string | undefined;
+  for (const [id, b] of blocks) {
+    if (!('primaryKey' in b) || b.primaryKey !== true) continue;
+    const path = jsonPointer('blocks', id, 'primaryKey');
+    if (primaryKeyAt === undefined) primaryKeyAt = path;
+    else error('duplicate_key', path, `only one field can be the primary key; ${primaryKeyAt} already is`);
+  }
+
   for (const [id, b] of blocks) {
     const at = (...rest: Array<string | number>) => jsonPointer('blocks', id, ...rest);
     switch (b.type) {
       case 'single_choice':
         if (b.config.defaultOptionId !== undefined) optionsOf(id, [b.config.defaultOptionId], at('config', 'defaultOptionId'));
+        dependentOptions(id, b.config, at);
         break;
       case 'multi_choice':
         optionsOf(id, b.config.defaultOptionIds ?? [], at('config', 'defaultOptionIds'));
         optionsOf(id, b.config.exclusiveOptionIds ?? [], at('config', 'exclusiveOptionIds'));
+        dependentOptions(id, b.config, at);
         break;
       case 'consent':
         b.config.items.forEach((item, i) => {

@@ -55,6 +55,9 @@ export interface UiState {
   closeInspector: () => void;
   setInspectorWidth: (width: number) => void;
   setSidebarOpen: (open: boolean) => void;
+  /** Form settings panel open (shared by the top bar button and the panel). */
+  designOpen: boolean;
+  setDesignOpen: (open: boolean) => void;
   startBlank: () => void;
   requestInsertFocus: () => void;
   setPendingDelete: (id: BlockId | null) => void;
@@ -64,11 +67,12 @@ export interface UiState {
   clearDraftConflict: () => void;
 }
 
-export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'draftConflict' | 'save'> = {
+export const INITIAL_UI: Pick<UiState, 'activeBlockId' | 'inspectorOpen' | 'inspectorWidth' | 'sidebarOpen' | 'started' | 'insertFocusKey' | 'pendingDelete' | 'clipboard' | 'notes' | 'conflict' | 'draftConflict' | 'save' | 'designOpen'> = {
   activeBlockId: null,
   inspectorOpen: false,
-  inspectorWidth: 400,
+  inspectorWidth: 360,
   sidebarOpen: true,
+  designOpen: false,
   started: false,
   insertFocusKey: 0,
   pendingDelete: null,
@@ -86,6 +90,7 @@ export const useUiStore = create<UiState>()((set) => ({
   closeInspector: () => set({ inspectorOpen: false }),
   setInspectorWidth: (width) => set({ inspectorWidth: Math.min(640, Math.max(280, width)) }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+  setDesignOpen: (designOpen) => set({ designOpen }),
   startBlank: () => set((s) => ({ started: true, activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),
   requestInsertFocus: () => set((s) => ({ activeBlockId: null, insertFocusKey: s.insertFocusKey + 1 })),
   setPendingDelete: (pendingDelete) => set({ pendingDelete }),

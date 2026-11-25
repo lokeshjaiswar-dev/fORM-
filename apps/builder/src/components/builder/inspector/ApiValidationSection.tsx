@@ -13,10 +13,10 @@ import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { applyPatch, type Patch } from '@/lib/patch';
 import { updateBlock } from '@/state/actions';
-import { Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
+import { Alert, AlertDescription, Badge, Button, Input, Label, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
 import { ApiResponseTree } from '@/components/builder/inspector/ApiResponseTree';
-import { TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { SectionTitle, TextField, ToggleRow } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
   'inspector.api_validation': 'Validate with an API',
@@ -39,7 +39,11 @@ const M = defineMessages('builder', {
   'inspector.api_string_values': 'Any of these text values',
   'inspector.api_string_add': 'Add value',
   'inspector.api_string_placeholder': 'validated',
+  'inspector.api_step_request': 'Request',
+  'inspector.api_step_test': 'Try a sample',
+  'inspector.api_step_pass': 'When it passes',
 });
+
 
 const DEFAULT_API: ApiValidation = { url: 'http://localhost:3001/verify-name' as SafeUrl, method: 'POST', parser: 'json' };
 
@@ -167,6 +171,7 @@ export function ApiValidationSection({ block }: { block: FieldBlock }) {
       />
       {api ? (
         <div className="space-y-4">
+          <SectionTitle>{t(M['inspector.api_step_request'])}</SectionTitle>
           <ApiRequestFields
             api={api}
             urlHint={t(M['inspector.api_url_hint'], { key: block.key })}
@@ -176,6 +181,7 @@ export function ApiValidationSection({ block }: { block: FieldBlock }) {
             onUrlText={setUrlText}
             onPatch={(next) => patch(block, next)}
           />
+          <SectionTitle>{t(M['inspector.api_step_test'])}</SectionTitle>
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
               <TextField
@@ -190,23 +196,30 @@ export function ApiValidationSection({ block }: { block: FieldBlock }) {
               {status === 'testing' ? t(M['inspector.api_testing']) : t(M['inspector.api_test'])}
             </Button>
           </div>
-          {status === 'fail' ? <p role="alert" className="text-[12px] text-amber-700">{t(M['inspector.api_test_fail'])}</p> : null}
-          {status === 'parse' ? <p role="alert" className="text-[12px] text-amber-700">{t(M['inspector.api_parse_fail'], { format: (api.parser ?? 'json').toUpperCase() })}</p> : null}
-          {status === 'empty' ? <p className="text-[12px] text-muted-foreground">{t(M['inspector.api_empty'])}</p> : null}
+          {status === 'fail' ? <Alert variant="negative" emphasis="subtle"><AlertDescription>{t(M['inspector.api_test_fail'])}</AlertDescription></Alert> : null}
+          {status === 'parse' ? <Alert variant="warning" emphasis="subtle"><AlertDescription>{t(M['inspector.api_parse_fail'], { format: (api.parser ?? 'json').toUpperCase() })}</AlertDescription></Alert> : null}
+          {status === 'empty' ? <Alert variant="info" emphasis="subtle"><AlertDescription>{t(M['inspector.api_empty'])}</AlertDescription></Alert> : null}
           {status === 'ok' && data !== undefined ? (
-            <>
-              <div className="space-y-0.5">
-                <p className="text-[12px] font-medium">{t(M['inspector.api_pick'])}</p>
-                <p className="truncate rounded-md border bg-muted/40 px-2 py-1 font-mono text-[11px]">{api.responseKey ? `response.${api.responseKey}` : t(M['inspector.api_path_empty'])}</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>{t(M['inspector.api_pick'])}</Label>
+                {api.responseKey ? (
+                  <Badge variant="secondary" className="max-w-[60%] truncate font-mono">response.{api.responseKey}</Badge>
+                ) : (
+                  <span className="text-[12px] text-muted-foreground">{t(M['inspector.api_path_empty'])}</span>
+                )}
               </div>
               <ApiResponseTree data={data} mode="check" selected={api.responseKey} onSelect={(path) => pick(path)} />
-            </>
+            </div>
           ) : null}
           {api.responseKey && api.success ? (
-            <div className="space-y-2">
-              <p className="text-[13px] font-medium">{t(M['inspector.api_track'], { key: api.responseKey })}</p>
-              <SuccessEditor rule={api.success} onChange={(success) => patch(block, { success })} />
-            </div>
+            <>
+              <SectionTitle>{t(M['inspector.api_step_pass'])}</SectionTitle>
+              <div className="space-y-2">
+                <Label>{t(M['inspector.api_track'], { key: api.responseKey })}</Label>
+                <SuccessEditor rule={api.success} onChange={(success) => patch(block, { success })} />
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}

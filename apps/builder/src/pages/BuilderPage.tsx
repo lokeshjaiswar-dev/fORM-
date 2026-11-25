@@ -16,6 +16,7 @@ import { useFormSession } from '@/persistence/useFormSession';
 import { useBuilderMode } from '@/pages/useBuilderMode';
 import { useHistoryShortcuts } from '@/state/history';
 import { useDoc } from '@/state/documentStore';
+import { useUiStore } from '@/state/uiStore';
 import { TextLink } from '@dmacq/ui';
 
 /** `/builder/:id` and `/builder/:id/preview`: the form the URL names, loaded from the repository. */
@@ -40,6 +41,7 @@ export function BuilderPage() {
 
 function Builder() {
   const [mode] = useBuilderMode();
+  const designOpen = useUiStore((s) => s.designOpen);
   const structure = useDoc((d) => d.pages.map((p) => p.children.join(',')).join('|'));
   useHistoryShortcuts();
   useBlockClipboard();
@@ -53,7 +55,7 @@ function Builder() {
           <BuilderHeader />
           <SessionBanners />
           <div className="flex min-h-0 flex-1">
-            <FormDesignPanel>
+            <FormDesignPanel showTrigger={false}>
               {mode === 'edit' ? (
                 <ErrorBoundary key="edit" label="canvas">
                   <FormCanvas />
@@ -64,7 +66,7 @@ function Builder() {
                 </ErrorBoundary>
               )}
             </FormDesignPanel>
-            {mode === 'edit' && <BlockInspector />}
+            {mode === 'edit' && !designOpen && <BlockInspector />}
           </div>
         </div>
         <DeleteBlockDialog />

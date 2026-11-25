@@ -295,4 +295,53 @@ describe('validateStructure', () => {
     def.pages = [{ id: ids.page1, children: [ids.section, ids.marketing, ids.name] }];
     expect(validateStructure(def, { mode: 'publish' })).toEqual([]);
   });
+
+  describe('dependent options', () => {
+    const child = id<S.BlockId>('channel_1');
+    /** A second choice after "Send updates?" whose options follow its answer: Email only for Yes, Never always. */
+    const withChild = (place: 'after' | 'before' = 'after') => {
+      const def = definition();
+      const parent = blockOf(def, ids.marketing, 'single_choice');
+      def.blocks[child] = {
+        ...clone(parent),
+        id: child,
+        key: id<S.FieldKey>('channel'),
+        config: {
+          display: 'dropdown',
+          dependsOn: ids.marketing,
+          options: [
+            { id: id<S.OptionId>('email'), label: 'Email', parentOptionIds: [ids.yes] },
+            { id: id<S.OptionId>('never'), label: 'Never' },
+          ],
+        },
+      };
+      const section = blockOf(def, ids.section, 'section');
+      section.config.children = place === 'after' ? [...section.config.children, child] : [child, ...section.config.children];
+      return def;
+    };
+
+    it('accepts a child placed after its parent whose links name parent options', () => {
+      const def = withChild();
+      expect(FormDefinitionSchema.safeParse(def).success).toBe(true);
+      expect(validateStructure(def, { mode: 'publish' })).toEqual([]);
+    });
+
+    it('refuses a link to an option the parent does not have', () => {
+      const def = withChild();
+      blockOf(def, child, 'single_choice').config.options[0]!.parentOptionIds = [id<S.OptionId>('maybe')];
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toContain('error:dangling_ref:/blocks/channel_1/config/options/0/parentOptionIds/0');
+    });
+
+    it('refuses a parent that is not a choice, or the block itself', () => {
+      const def = withChild();
+      blockOf(def, child, 'single_choice').config.dependsOn = ids.name;
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toContain('error:dangling_ref:/blocks/channel_1/config/dependsOn');
+      blockOf(def, child, 'single_choice').config.dependsOn = child;
+      expect(codes(validateStructure(def, { mode: 'publish' }))).toContain('error:dangling_ref:/blocks/channel_1/config/dependsOn');
+    });
+
+    it('refuses a parent placed after the child, so a chain can never loop', () => {
+      expect(codes(validateStructure(withChild('before')))).toContain('error:page_order_violation:/blocks/channel_1/config/dependsOn');
+    });
+  });
 });

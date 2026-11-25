@@ -44,8 +44,8 @@ test('a 3-page form with a required field on page 3 advances from page 1', async
   await expect(page.getByRole('separator', { name: 'Page break' })).toHaveCount(2);
 
   await openSettings(page, 2);
-  await page.getByRole('tab', { name: 'Validation' }).click();
-  await page.getByRole('switch', { name: 'Required' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
+  await page.getByRole('button', { name: 'Required' }).click();
 
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   await page.getByRole('button', { name: 'Next', exact: true }).click();

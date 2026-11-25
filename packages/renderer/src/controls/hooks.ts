@@ -142,3 +142,56 @@ export function useOptions(
 }
 
 export const range = (from: number, to: number): number[] => Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i);
+
+/** The words of an inline document (a question label), for naming a question in a hint. */
+function inlineWords(doc: unknown): string {
+  const words: string[] = [];
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== 'object') return;
+    const n = node as { text?: unknown; content?: unknown };
+    if (typeof n.text === 'string') words.push(n.text);
+    if (Array.isArray(n.content)) n.content.forEach(walk);
+  };
+  walk(doc);
+  return words.join('').trim();
+}
+
+/**
+ * Dependent (cascading) options for a single or multi choice. While the parent question has no usable answer the
+ * block waits (the engine disables it) and this returns the parent's name for a "Choose … first" hint. Whenever the
+ * parent's answer stops allowing a chosen option, that choice is cleared, so a cleared State in turn empties District.
+ */
+export function useDependentChoice(
+  block: FieldBlockOf<'single_choice'> | FieldBlockOf<'multi_choice'>,
+  offered: readonly ChoiceOption[],
+  disabled: boolean,
+): { waitingFor?: string } {
+  const { def } = useRenderer();
+  const { state } = useEvaluation();
+  const { control } = useFormContext();
+  const { field } = useController({ name: block.id, control });
+  /* Options loaded from an API have their own ids, which option links never name: such a block is not filtered here. */
+  const parentId = block.apiOptions ? undefined : block.config.dependsOn;
+  /* The engine drops answers a parent no longer allows before it evaluates, so a parent missing from the values has
+     no usable answer: exactly when the engine makes this block wait. */
+  const waiting = parentId !== undefined && disabled && state.values[parentId] === undefined;
+  const offeredKey = offered.map((o) => o.id).join('\u0000');
+  const raw = field.value as AnswerValue | null | undefined;
+  const { onChange } = field;
+  useEffect(() => {
+    if (parentId === undefined || !raw) return;
+    if (waiting) {
+      onChange(null);
+      return;
+    }
+    const allowed = new Set(offeredKey.split('\u0000'));
+    if (raw.type === 'single_choice' && raw.value.optionId !== null && !allowed.has(raw.value.optionId)) onChange(null);
+    if (raw.type === 'multi_choice') {
+      const kept = raw.value.optionIds.filter((id) => allowed.has(id));
+      if (kept.length !== raw.value.optionIds.length) onChange(kept.length || raw.value.other !== undefined ? { ...raw, value: { ...raw.value, optionIds: kept } } : null);
+    }
+  }, [parentId, raw, waiting, offeredKey, onChange]);
+  if (!waiting || parentId === undefined) return {};
+  const parent = def.blocks[parentId];
+  return { waitingFor: parent && 'label' in parent ? inlineWords(parent.label) : '' };
+}

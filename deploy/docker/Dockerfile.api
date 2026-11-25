@@ -1,0 +1,13 @@
+FROM node:24-bookworm-slim
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps ./apps
+COPY packages ./packages
+COPY dmacq-ui-0.1.0.tgz ./
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @form/api build
+ENV NODE_ENV=production
+WORKDIR /app/apps/api
+EXPOSE 8080
+CMD ["node", "--enable-source-maps", "dist/main.js"]

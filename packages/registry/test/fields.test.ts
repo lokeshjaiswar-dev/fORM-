@@ -304,6 +304,26 @@ const CASES: { [T in InputAvailable]: Case<T> } = {
     ],
     empty: [{ rows: [] }],
   },
+  dynamic_table: {
+    config: {
+      columns: [{ id: 'column_1', label: 'Item', input: 'text' }, { id: 'column_2', label: 'Amount', input: 'number', summary: 'sum' }],
+      minRows: 1, maxRows: 3, initialRows: 1, allowAddColumns: true, addableInputs: ['text', 'number'], maxColumns: 3,
+    } as never,
+    required: true,
+    valid: [
+      { rows: [{ rowId: 'r1', cells: { column_1: 'Pen', column_2: '10.5' } }] },
+      { rows: [{ rowId: 'r1', cells: { user_1: 'x' } }], addedColumns: [{ id: 'user_1', label: 'Note', input: 'text' }] },
+    ],
+    invalid: [
+      [{ rows: [{ rowId: 'r1', cells: { column_2: 'abc' } }] }, 'invalid_format'],
+      [{ rows: [{ rowId: 'r1', cells: { nope: 'x' } }] }, 'not_in_options'],
+      [{ rows: [{ rowId: 'a', cells: {} }, { rowId: 'b', cells: {} }, { rowId: 'c', cells: {} }, { rowId: 'd', cells: {} }] }, 'too_many_rows'],
+      [{ rows: [{ rowId: 'r1', cells: {} }, { rowId: 'r1', cells: {} }] }, 'invalid_format'],
+      [{ rows: [{ rowId: 'r1', cells: {} }], addedColumns: [{ id: 'u1', label: 'A', input: 'text' }, { id: 'u2', label: 'B', input: 'text' }] }, 'too_many_selected'],
+      [{ rows: [] }, TWIN],
+    ],
+    empty: [{ rows: [] }],
+  },
   matrix: {
     required: true,
     valid: [{ mode: 'multi', rows: { row_1: ['column_1'], row_2: ['column_2'] } }],

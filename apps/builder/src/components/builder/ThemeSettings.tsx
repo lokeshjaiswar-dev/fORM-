@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { defineMessages } from '@form/i18n';
-import { isSafeUrl, type Ending, type EndingId, type FormDefinition, type RichDoc } from '@form/schema';
+import { isSafeUrl, type ConfettiStyle, type Ending, type EndingId, type FormDefinition, type RichDoc } from '@form/schema';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { labelString } from '@/fields/style';
@@ -11,6 +11,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, In
 import { AccessPanel } from '@/components/builder/access/AccessPanel';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { cn } from '@/lib/utils';
+import { NiceSelect } from '@/components/NiceSelect';
+
+const CONFETTI_STYLES: ConfettiStyle[] = ['classic', 'pastel', 'ocean', 'sunset'];
+const CONFETTI_LABEL: Record<ConfettiStyle, 'settings.confetti_classic' | 'settings.confetti_pastel' | 'settings.confetti_ocean' | 'settings.confetti_sunset'> = {
+  classic: 'settings.confetti_classic',
+  pastel: 'settings.confetti_pastel',
+  ocean: 'settings.confetti_ocean',
+  sunset: 'settings.confetti_sunset',
+};
 
 const M = defineMessages('builder', {
   'settings.title': 'Customize',
@@ -22,6 +31,11 @@ const M = defineMessages('builder', {
   'settings.redirect_hint': 'An https address; leave empty to show the thank-you message',
   'settings.redirect_invalid': 'Use an https address',
   'settings.confetti': 'Confetti on submit',
+  'settings.confetti_style': 'Confetti style',
+  'settings.confetti_classic': 'Classic',
+  'settings.confetti_pastel': 'Hearts',
+  'settings.confetti_ocean': 'Ocean',
+  'settings.confetti_sunset': 'Crackers',
   'form.submit_label': 'Submit',
 });
 
@@ -141,6 +155,17 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
         <p className={hintCls}>{t(redirectValid ? M['settings.redirect_hint'] : M['settings.redirect_invalid'])}</p>
       </div>
       <Toggle dark={dark} id="successAnimation" label={t(M['settings.confetti'])} checked={def.behavior.successAnimation} onChange={setConfetti} />
+      {def.behavior.successAnimation && message ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="confetti-style" className={labelCls}>{t(M['settings.confetti_style'])}</Label>
+          <NiceSelect
+            value={message.confettiStyle ?? 'classic'}
+            onChange={(v) => setEndings(def.endings.map((e) => (e.id === message.id ? { ...message, confettiStyle: v as ConfettiStyle } : e)), def.defaultEndingId)}
+            options={CONFETTI_STYLES.map((s) => ({ value: s, label: t(M[CONFETTI_LABEL[s]]) }))}
+            aria-label={t(M['settings.confetti_style'])}
+          />
+        </div>
+      ) : null}
       <AccessPanel dark={dark} />
     </div>
   );

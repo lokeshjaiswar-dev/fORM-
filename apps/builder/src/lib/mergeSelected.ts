@@ -13,7 +13,7 @@ export function mergeLoaded(forms: Array<{ id: string; title: string; definition
   const id = uid();
   const result = mergeForms(forms, { newFormId: id, newId: uid, ...(resolutions ? { resolutions } : {}) });
   if (!result.ok) return result;
-  return { ok: true, form: newStoredForm(id, new Date().toISOString(), result.definition) };
+  return { ok: true, form: newStoredForm(id, new Date().toISOString() as IsoInstant, result.definition) };
 }
 
 export async function mergeFromRepository(

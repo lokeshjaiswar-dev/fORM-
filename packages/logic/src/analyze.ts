@@ -7,7 +7,7 @@ import { placementOf, valueReadsOf, type Placement } from './structure.ts';
 import { checkGroup, typeExpr, type TypeContext } from './subset.ts';
 
 /** Client actions the engine runs today; every other action is `missing_capability` until WP-2.01–2.03. */
-const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit']);
+const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit', 'set_value']);
 const SERVER_ONLY: ReadonlySet<string> = new Set(SERVER_ONLY_ACTION_TYPES);
 export const isClientAction = (action: Action): action is ClientAction => !SERVER_ONLY.has(action.type);
 
@@ -97,7 +97,10 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     if (block.type === 'calculation') {
       const reads = new Set<string>();
       if (block.config.expr.k !== 'lit') usesExpr = true;
+      /* A formula inside a repeating group is typed per row, so same-row references are allowed here. */
+      ctx.rowGroup = (Object.values(def.blocks).find((b) => b?.type === 'repeating_group' && b.config.children.includes(blockId)) as { id: BlockId } | undefined)?.id;
       const typed = typeExpr(ctx, block.config.expr, at('expr'), reads);
+      ctx.rowGroup = undefined;
       if (typed?.list) {
         ctx.issue('expr_type_error', at('expr'), 'a formula is a number; use sum(field) to add every row of a list field');
       }
@@ -145,6 +148,13 @@ export function analyze(def: FormDefinition, registry: FieldRegistry): Analysis 
     const branch = (list: readonly Action[] | undefined, name: 'then' | 'else') => list?.forEach((action, j) => {
       if (!P0_ACTIONS.has(action.type)) {
         ctx.issue('missing_capability', `${at}/${name}/${j}`, `'${action.type}' actions are not available yet; logic shows, hides, requires, enables and can block submit`);
+        return;
+      }
+      if (action.type === 'set_value') {
+        if (action.path) ctx.issue('missing_capability', `${at}/${name}/${j}/path`, 'setting a nested answer path is not available yet');
+        typeExpr(ctx, action.value, `${at}/${name}/${j}/value`, reads);
+        usesExpr = true;
+        if (def.blocks[action.target] !== undefined) writes.add(cell.value(action.target));
         return;
       }
       for (const [c] of actionWrites(def, action)) writes.add(c);

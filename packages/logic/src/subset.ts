@@ -28,6 +28,8 @@ export interface Typed {
 export interface TypeContext {
   def: FormDefinition;
   registry: FieldRegistry;
+  /** The repeating group whose rows a per-row formula is typed for; same-row references are only valid inside it. */
+  rowGroup?: BlockId | undefined;
   /** Cells read by `value(b)`: the value, the visibility of b and its ancestors, and onPath of its page. */
   valueReads(blockId: BlockId): readonly string[];
   issue(code: PublishIssue['code'], path: string, message: string): void;
@@ -44,6 +46,18 @@ const COMPARISONS: ReadonlySet<string> = new Set(['==', '!=', '<', '<=', '>', '>
 const ARITHMETIC: ReadonlySet<string> = new Set(['+', '-', '*', '/']);
 const ORDERED: ReadonlySet<ValueKind> = new Set<ValueKind>(['number', 'money', 'date', 'time', 'datetime']);
 const COUNT = /^(0|[1-9]\d*)$/;
+
+/** The choice whose option value is copied into `target`, when a fill-from-option rule writes it. */
+export function optionValueSource(def: Pick<FormDefinition, 'logic'>, target: BlockId): BlockId | undefined {
+  for (const rule of def.logic.rules) {
+    for (const action of [...rule.then, ...(rule.else ?? [])]) {
+      if (action.type !== 'set_value' || action.target !== target || action.value.k !== 'call' || action.value.fn !== 'option_code') continue;
+      const arg = action.value.args[0];
+      if (arg?.k === 'ref' && arg.ref.kind === 'answer') return arg.ref.blockId;
+    }
+  }
+  return undefined;
+}
 
 const LITERAL_KINDS: Record<Exclude<Literal['type'], 'relative_date'>, ValueKind> = {
   text: 'text', number: 'number', money: 'money', boolean: 'boolean', date: 'date', datetime: 'datetime', time: 'time', null: 'null',
@@ -76,14 +90,17 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
     }
     return { kind: 'text', source: 'meta' };
   }
-  if (ref.row !== undefined) {
-    ctx.issue('missing_capability', `${path}/row`, 'row-scoped references need repeating groups, which are not available yet');
+  if (ref.row !== undefined && ref.row !== 'current') {
+    ctx.issue('missing_capability', `${path}/row`, `row '${String(ref.row)}' is not a supported row scope`);
     return null;
   }
   const block = ctx.def.blocks[ref.blockId];
   if (!block || block.type === 'unsupported') return null; /* dangling_ref / unknown_block_type, reported by validateStructure */
   const definition = ctx.registry[block.type];
-  const kind = (definition.paths as Readonly<Record<string, ComparableKind>>)[ref.path ?? ''];
+  /* A field filled from a dropdown option value holds that code as text, and formulas read it as a number. */
+  const filledNumber = block.type === 'short_text' && (ref.path ?? '') === '' && optionValueSource(ctx.def, ref.blockId) !== undefined;
+  const summaryNumber = block.type === 'dynamic_table' && /^summary\.(sum|average|min|max|count)\..+$/.test(ref.path ?? '');
+  const kind = filledNumber || summaryNumber ? 'number' : (definition.paths as Readonly<Record<string, ComparableKind>>)[ref.path ?? ''];
   if (kind === undefined || kind === 'none') {
     if (definition.capability !== undefined && Object.keys(definition.paths).length === 0) {
       ctx.issue('missing_capability', path, `answers of '${block.type}' blocks need '${definition.capability}', which this version does not provide yet`);
@@ -95,6 +112,15 @@ export function typeRef(ctx: TypeContext, ref: ValueRef, path: string, reads: Se
   }
   for (const c of ctx.valueReads(ref.blockId)) reads.add(c);
   const group = repeatingGroupOf(ctx.def, ref.blockId);
+  if (ref.row === 'current') {
+    /* Same-row reference: one value per row, so the referenced field must be a child of a repeating group. */
+    if (!group || ctx.rowGroup !== group.id) {
+      ctx.issue('expr_type_error', `${path}/row`, 'a same-row reference only works inside a formula in the same repeating group');
+      return null;
+    }
+    for (const c of ctx.valueReads(group.id)) reads.add(c);
+    return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type };
+  }
   if (group) {
     for (const c of ctx.valueReads(group.id)) reads.add(c);
     return { kind, source: 'answer', blockId: ref.blockId, blockType: block.type, list: true };
@@ -140,6 +166,36 @@ export function typeExpr(ctx: TypeContext, expr: Expr, path: string, reads: Set<
         return { kind: 'number', source: 'expr' };
       }
       case 'call': {
+        if (e.fn === 'option_code' || e.fn === 'option_score') {
+          const fn = e.fn;
+          if (e.args.length !== 1 || e.args[0] === undefined) {
+            ctx.issue('expr_type_error', at, `'${fn}' takes the choice field`);
+            return null;
+          }
+          const arg = visit(e.args[0], `${at}/args/0`, depth + 1);
+          if (!arg) return null;
+          if (arg.kind !== 'choice') {
+            ctx.issue('expr_type_error', at, `'${fn}' needs a single choice`);
+            return null;
+          }
+          /* A choice inside a list is one value per row; the fill rule still type-checks, and formulas read each row. */
+          return { kind: fn === 'option_code' ? 'text' : 'number', source: 'expr', ...(arg.list ? { list: true } : {}) };
+        }
+        if (e.fn === 'left' || e.fn === 'right') {
+          const fn = e.fn;
+          if (e.args.length !== 2 || e.args[0] === undefined || e.args[1] === undefined) {
+            ctx.issue('expr_type_error', at, `'${fn}' takes the text and how many characters`);
+            return null;
+          }
+          const arg = visit(e.args[0], `${at}/args/0`, depth + 1);
+          const n = visit(e.args[1], `${at}/args/1`, depth + 1);
+          if (!arg || !n) return null;
+          if ((arg.kind !== 'text' && arg.kind !== 'choice') || n.kind !== 'number') {
+            ctx.issue('expr_type_error', at, `'${fn}' needs text and a number`);
+            return null;
+          }
+          return { kind: 'text', source: 'expr' };
+        }
         if (e.fn !== 'sum') break;
         if (e.args.length !== 1 || e.args[0] === undefined) {
           ctx.issue('expr_type_error', at, "'sum' takes one field");
@@ -215,6 +271,8 @@ function fits(op: LogicOperator, left: Typed, right: Typed): boolean {
   switch (base) {
     case 'eq':
     case 'neq':
+      if ((left.kind === 'choice' || left.kind === 'choices') && right.kind === 'text') return true;
+      if (left.kind === 'text' && (right.kind === 'choice' || right.kind === 'choices')) return true;
       if (left.kind === 'choice' || left.kind === 'choices') return right.kind === 'option_set' && right.blockId === left.blockId;
       return right.kind === left.kind;
     case 'contains':

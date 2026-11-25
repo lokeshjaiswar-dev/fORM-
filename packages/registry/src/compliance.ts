@@ -61,6 +61,7 @@ export const DEFAULT_COMPLIANCE: { readonly [T in ValueFieldType]: FieldComplian
   schedule_grid: none(),
   matrix: none(),
   repeating_group: none(),
+  dynamic_table: none(),
   file_upload: personal('other', { allowPrefill: false }),
   signature: personal('identity', { allowPrefill: false }),
   hidden: none(),

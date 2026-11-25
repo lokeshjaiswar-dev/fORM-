@@ -34,6 +34,20 @@ describe('FormCanvas', () => {
     expect(doc().blocks[added as BlockId]).toMatchObject({ type: 'single_choice', config: { display: 'dropdown' } });
   });
 
+  it("a block's + opens its menu as an overlay outside the canvas and inserts right after that block", async () => {
+    const { container } = renderCanvas();
+    const user = userEvent.setup();
+    const insert = within(container.querySelector('[data-block-id="a"]') as HTMLElement).getByRole('button', { name: 'Insert block' });
+    await user.click(insert);
+    const menu = screen.getByRole('listbox').closest('[data-slash-menu]') as HTMLElement;
+    expect(container).not.toContainElement(menu);
+    expect(screen.getByPlaceholderText('Filter…')).toHaveFocus();
+    await user.keyboard('date');
+    await user.click(within(menu).getByRole('option', { name: 'Date' }));
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(doc().blocks[blockIds()[1] as BlockId]).toMatchObject({ type: 'date' });
+  });
+
   it('puts the caret at the end of the new field label', async () => {
     renderCanvas();
     const user = userEvent.setup();
@@ -157,6 +171,16 @@ describe('FormCanvas', () => {
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('Type ‘/’ to insert blocks'), '/');
     expect(screen.getByRole('listbox').closest('[data-slash-menu]')).toHaveStyle({ color: 'var(--popover-foreground)' });
+  });
+
+  it('Enter on the last field moves the cursor to the insert row', async () => {
+    resetStore([block('short_text', 'a', { label: 'Name' })]);
+    renderCanvas();
+    const user = userEvent.setup();
+    const label = screen.getByRole('textbox', { name: 'Type a question' });
+    label.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByPlaceholderText('Type ‘/’ to insert blocks')).toHaveFocus();
   });
 
   it('typing text on the insert line adds a paragraph', async () => {

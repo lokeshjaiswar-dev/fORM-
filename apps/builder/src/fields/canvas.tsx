@@ -2,20 +2,24 @@ import type { ComponentType } from 'react';
 import { Trash2 } from 'lucide-react';
 import { defineMessages, formatDate, formatTime, type MessageId } from '@form/i18n';
 import { callingCodeOf, formatUniqueId, isAvailable, isRepeatableChildType, type AvailableType } from '@form/registry';
-import { slotsOf } from '@form/renderer/author';
+import { DynamicCellInput, DynamicTableFrame, slotsOf } from '@form/renderer/author';
 import type { AddressPart, BlockOf, NamePart, StoredBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { CheckboxField, Select as DsSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@dmacq/ui';
+import { Button, CheckboxField, Select as DsSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@dmacq/ui';
 import { CanvasCheck, CanvasDate, CanvasDateTime, CanvasRadio, CanvasTime, Chip, FileDropzone, MultiSelectBox, OptionList, Points, RankingList, Select, Slider, TextBox } from '@/fields/canvasParts';
 import { TILES } from '@/fields/tiles';
 import { labelString, labelStyle } from '@/fields/style';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { addChildBlock, requestDeleteBlock, updateBlock } from '@/state/actions';
+import { addChildBlock, focusNextField, requestDeleteBlock, updateBlock } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { inlineDoc, isField, plainText } from '@/lib/definition';
+
+function staticText(value: { kind: string; value: string | readonly unknown[] } | undefined): string | undefined {
+  return value?.kind === 'static' && typeof value.value === 'string' ? value.value : undefined;
+}
 
 /*
  * The canvas view of every available block type (FND-03): what an author sees in place of the respondent control.
@@ -32,6 +36,13 @@ export interface CanvasProps<T extends AvailableType> {
 export type CanvasView<T extends AvailableType> = ComponentType<CanvasProps<T>>;
 
 const M = defineMessages('builder', {
+  'canvas.dtable_add_column': 'Add column',
+  'canvas.dtable_add_row': 'Add row',
+  'canvas.dtable_sum': 'Sum',
+  'canvas.dtable_average': 'Average',
+  'canvas.dtable_min': 'Min',
+  'canvas.dtable_max': 'Max',
+  'canvas.dtable_count': 'Count',
   'canvas.hidden': 'Hidden from respondents · filled from the URL parameter ‘{name}’',
   'canvas.hidden_utm': 'Hidden from respondents · filled from utm_{param}',
   'canvas.hidden_other': 'Hidden from respondents',
@@ -85,7 +96,11 @@ const M = defineMessages('builder', {
   'canvas.session.utm_campaign': 'UTM campaign',
   'canvas.session.utm_term': 'UTM term',
   'canvas.session.utm_content': 'UTM content',
-  'canvas.session_capture_only': 'Not shown on the form · captured in the answers',
+  'canvas.session_title': 'Session details',
+  'canvas.session_capture_only': 'Captured with the response',
+  'canvas.session_shown': 'Shown on the form',
+  'canvas.session_empty': 'Nothing is collected yet. Turn on the facts you need in the field settings.',
+  'canvas.session_fixed': 'Fixed',
   'canvas.heading': 'Heading',
   'canvas.paragraph': 'Type something…',
   'canvas.repeat_hint': '{min}–{max} rows · respondents can add more while filling',
@@ -105,14 +120,14 @@ const DAY_LABEL = {
 } as const;
 
 const headingSize = { 1: 'text-[32px]', 2: 'text-[24px]', 3: 'text-[20px]' } as const;
-const NAME_PART: Record<NamePart, MessageId<'builder'>> = {
+export const NAME_PART: Record<NamePart, MessageId<'builder'>> = {
   prefix: M['canvas.name.prefix'],
   first: M['canvas.name.first'],
   middle: M['canvas.name.middle'],
   last: M['canvas.name.last'],
   suffix: M['canvas.name.suffix'],
 };
-const ADDRESS_PART: Record<AddressPart, MessageId<'builder'>> = {
+export const ADDRESS_PART: Record<AddressPart, MessageId<'builder'>> = {
   line1: M['canvas.address.line1'],
   line2: M['canvas.address.line2'],
   city: M['canvas.address.city'],
@@ -148,9 +163,9 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
         {block.config.suffix ? <span className="fr-blank-words">{block.config.suffix}</span> : null}
       </span>
     ) : (
-      <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />
+      <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} value={staticText(block.config.defaultValue)} />
     ),
-  long_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} tall />,
+  long_text: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} tall value={staticText(block.config.defaultValue)} />,
   full_name: ({ block }) => (
     <div className="fr-name pointer-events-none">
       {block.config.parts.map((part) => (
@@ -161,7 +176,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       ))}
     </div>
   ),
-  email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
+  email: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} value={staticText(block.config.defaultValue)} />,
   phone: ({ block }) => (
     <div className="fr-phone pointer-events-none">
       {block.config.showCountrySelect ? (
@@ -187,7 +202,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   number: ({ block }) => <NumberCanvas block={block} />,
-  url: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} />,
+  url: ({ block }) => <TextBox block={block} placeholder={block.config.placeholder} prefix={block.config.prefix} suffix={block.config.suffix} value={staticText(block.config.defaultValue)} />,
   single_choice: ({ block }) =>
     block.config.display === 'dropdown' ? (
       <Select block={block} placeholder={block.config.placeholder} />
@@ -382,6 +397,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   repeating_group: ({ block }) => <RepeatingGroupCanvas block={block} />,
+  dynamic_table: ({ block }) => <DynamicTableCanvas block={block} />,
   matrix: ({ block }) => (
     <div className="fr-matrix-wrap pointer-events-none">
       <table className="fr-matrix">
@@ -415,8 +431,8 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     </div>
   ),
   file_upload: ({ block }) => (
-    <div className="fr-files pointer-events-none">
-      <FileDropzone disabled size="compact" multiple={block.config.maxFiles > 1} />
+    <div className="fr-files" inert>
+      <FileDropzone size="compact" multiple={block.config.maxFiles > 1} />
     </div>
   ),
   signature: ({ block }) => (
@@ -431,35 +447,49 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
       </div>
     </div>
   ),
-  calculation: () => <output className="fr-input fr-computed">—</output>,
+  calculation: ({ block }) => <TextBox block={block} />,
   context: ({ block }) => {
-    const extras = [...(block.config.urlParams ?? []), ...(block.config.staticFacts ?? []).map((f) => f.key)];
+    const params = block.config.urlParams ?? [];
+    const fixed = block.config.staticFacts ?? [];
     const hidden = block.config.display === 'hidden';
+    const empty = block.config.sources.length === 0 && params.length === 0 && fixed.length === 0;
     return (
-      <output className="fr-input fr-computed fr-session">
-        {hidden ? <p className="text-[12px] text-[var(--fr-muted)]">{t(M['canvas.session_capture_only'])}</p> : null}
-        {block.config.sources.map((source) => (
-          <span key={source} className="fr-session-row">
-            <span className="fr-session-key">{t(SESSION_SOURCE[source])}</span>
-            <span>—</span>
-          </span>
-        ))}
-        {extras.map((key) => (
-          <span key={key} className="fr-session-row">
-            <span className="fr-session-key">{key}</span>
-            <span>—</span>
-          </span>
-        ))}
-      </output>
+      <div className="fr-session-card">
+        <div className="fr-session-head">
+          <span className="fr-session-title">{t(M['canvas.session_title'])}</span>
+          <span className="fr-session-badge">{hidden ? t(M['canvas.session_capture_only']) : t(M['canvas.session_shown'])}</span>
+        </div>
+        {empty ? <p className="fr-session-empty">{t(M['canvas.session_empty'])}</p> : (
+          <dl className="fr-session-list">
+            {block.config.sources.map((source) => (
+              <div key={source} className="fr-session-row">
+                <dt>{t(SESSION_SOURCE[source])}</dt>
+                <dd>Captured</dd>
+              </div>
+            ))}
+            {params.map((key) => (
+              <div key={key} className="fr-session-row">
+                <dt>{key}</dt>
+                <dd>URL</dd>
+              </div>
+            ))}
+            {fixed.map((fact) => (
+              <div key={fact.key} className="fr-session-row">
+                <dt>{fact.key}</dt>
+                <dd>{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
     );
   },
   consent: ({ block }) => (
-    <div className="fr-consent pointer-events-none">
+    <div className="fr-consent" inert>
       {block.config.items.map((item) => (
         <CheckboxField
           key={item.id}
-          className="fr-consent-item pointer-events-none"
-          disabled
+          className="fr-consent-item"
           label={plainText(item.label) || t(M['canvas.consent'])}
         />
       ))}
@@ -467,8 +497,8 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
   ),
   appointment: ({ block }) => <AppointmentCanvas block={block} />,
   captcha: () => (
-    <div className="fr-captcha pointer-events-none">
-      <CheckboxField className="fr-captcha-box pointer-events-none" disabled label={t(M['canvas.captcha'])} />
+    <div className="fr-captcha" inert>
+      <CheckboxField className="fr-captcha-box" label={t(M['canvas.captcha'])} />
     </div>
   ),
   section: ({ block }) => <SectionCanvas block={block} />,
@@ -547,14 +577,14 @@ function AppointmentCanvas({ block }: { block: BlockOf<'appointment'> }) {
   const shown = slots.filter((s) => s.day === days[0]);
   const dayLabel = days[0] ? formatDate(days[0], 'D MMM YYYY') : t(M['canvas.appointment_day']);
   return (
-    <div className="fr-appointment pointer-events-none">
+    <div className="fr-appointment" inert>
       <label className="fr-appointment-date">
         <span className="fr-appointment-caption">{t(M['canvas.appointment_day'])}</span>
         <Select block={block} placeholder={dayLabel} />
       </label>
       <div className="fr-appointment-slots" role="list">
         {shown.map((slot) => (
-          <Chip key={slot.start} kind="filter" size="md" color="primary" disabled role="listitem">{formatTime(slot.time, 'h12')}</Chip>
+          <Chip key={slot.start} kind="filter" size="md" color="primary" role="listitem">{formatTime(slot.time, 'h12')}</Chip>
         ))}
       </div>
     </div>
@@ -564,11 +594,11 @@ function AppointmentCanvas({ block }: { block: BlockOf<'appointment'> }) {
 function NumberCanvas({ block }: { block: BlockOf<'number'> }) {
   const c = block.config;
   const slider = c.display === 'stepper' && c.min !== undefined && c.max !== undefined;
-  if (!slider) return <TextBox block={block} placeholder={c.placeholder} prefix={c.prefix} suffix={c.suffix} />;
+  if (!slider) return <TextBox block={block} placeholder={c.placeholder} prefix={c.prefix} suffix={c.suffix} value={c.defaultValue} />;
   const control = (
-    <div className="fr-slider pointer-events-none">
+    <div className="fr-slider" inert>
       <span className="fr-slider-edge">{c.min}</span>
-      <Slider min={Number(c.min)} max={Number(c.max)} step={Number(c.step ?? 1) || 1} defaultValue={[Number(c.min)]} disabled aria-hidden />
+      <Slider min={Number(c.min)} max={Number(c.max)} step={Number(c.step ?? 1) || 1} defaultValue={[Number(c.min)]} aria-hidden />
       <span className="fr-slider-edge">{c.max}</span>
     </div>
   );
@@ -584,9 +614,8 @@ function NumberCanvas({ block }: { block: BlockOf<'number'> }) {
 
 const CHILD_TILES = TILES.filter((tile) => tile.kind === 'block' && isRepeatableChildType(tile.choice.type));
 
-function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolean }) {
+function RepeatChild({ child, selected, onEnter }: { child: StoredBlock; selected: boolean; onEnter: () => void }) {
   const openInspector = useUiStore((s) => s.openInspector);
-  const requestInsertFocus = useUiStore((s) => s.requestInsertFocus);
   if (child.type === 'unsupported' || !isAvailable(child.type)) return null;
   const View = CANVAS[child.type] as CanvasView<AvailableType>;
   return (
@@ -615,7 +644,7 @@ function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolea
         <InlineEditor
           value={child.label}
           onChange={(label) => updateBlock(child.id, { label })}
-          onEnter={requestInsertFocus}
+          onEnter={onEnter}
           autoFocus={selected}
           fill={false}
           className="mb-1 min-h-7 w-full shrink-0 bg-transparent pr-5 text-left text-[13px] font-medium leading-7"
@@ -625,7 +654,7 @@ function RepeatChild({ child, selected }: { child: StoredBlock; selected: boolea
       ) : isField(child) ? (
         <div className="mb-1 min-h-7 shrink-0" aria-hidden />
       ) : null}
-      <View block={child as never} focused={selected} onEnter={requestInsertFocus} />
+      <View block={child as never} focused={selected} onEnter={onEnter} />
     </div>
   );
 }
@@ -651,7 +680,7 @@ function SectionCanvas({ block }: { block: BlockOf<'section'> }) {
       </p>
       <div className="flex flex-col">
         {children.map((child) => (
-          <RepeatChild key={child.id} child={child} selected={selected === child.id} />
+          <RepeatChild key={child.id} child={child} selected={selected === child.id} onEnter={() => focusNextField(child.id)} />
         ))}
       </div>
       <div className="flex items-center gap-2 border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
@@ -680,14 +709,25 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
   const blocks = useDoc((d) => d.blocks);
   const selected = useUiStore((s) => s.activeBlockId);
   const children = block.config.children.map((id) => blocks[id]).filter((b): b is StoredBlock => !!b && b.type !== 'unsupported' && isAvailable(b.type));
+  const addPickerId = `${block.id}-add-field`;
   return (
     <div className="overflow-hidden rounded-md border" style={{ borderColor: 'var(--fr-inputBorder)' }} onClick={(e) => e.stopPropagation()}>
       <p className="border-b px-3 py-1.5 text-[12px] text-[var(--fr-muted)]" style={{ borderColor: 'var(--fr-inputBorder)' }}>
         {t(M['canvas.repeat_hint'], { min: block.config.minRows, max: block.config.maxRows })}
       </p>
       <div className="grid grid-cols-3 items-start">
-        {children.map((child) => (
-          <RepeatChild key={child.id} child={child} selected={selected === child.id} />
+        {children.map((child, index) => (
+          <RepeatChild
+            key={child.id}
+            child={child}
+            selected={selected === child.id}
+            onEnter={() => {
+              // Enter moves to the list's next field, and from the last one to the "add a field" picker.
+              const next = children[index + 1];
+              if (next) useUiStore.getState().setActiveBlock(next.id);
+              else document.getElementById(addPickerId)?.focus();
+            }}
+          />
         ))}
       </div>
       <div className="flex items-center gap-2 border-t px-2 py-1.5" style={{ borderColor: 'var(--fr-inputBorder)' }}>
@@ -698,7 +738,7 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
             if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
           }}
         >
-          <SelectTrigger className="h-8 min-w-[10rem]" aria-label={t(M['canvas.repeat_pick'])}>
+          <SelectTrigger id={addPickerId} className="h-8 min-w-[10rem]" aria-label={t(M['canvas.repeat_pick'])}>
             <SelectValue placeholder={t(M['canvas.repeat_pick'])} />
           </SelectTrigger>
           <SelectContent>
@@ -708,6 +748,36 @@ function RepeatingGroupCanvas({ block }: { block: BlockOf<'repeating_group'> }) 
           </SelectContent>
         </DsSelect>
       </div>
+    </div>
+  );
+}
+
+/* The builder preview of a dynamic table: the same frame and rows the respondent sees, with inert inputs. */
+/** The summary row's default wording, as the published table shows it. */
+const SUMMARY_LABEL = {
+  sum: 'canvas.dtable_sum',
+  average: 'canvas.dtable_average',
+  min: 'canvas.dtable_min',
+  max: 'canvas.dtable_max',
+  count: 'canvas.dtable_count',
+} as const;
+
+function DynamicTableCanvas({ block }: { block: BlockOf<'dynamic_table'> }) {
+  const c = block.config;
+  const rowCount = c.initialRows ?? Math.max(c.minRows, 1);
+  const hasSummary = c.columns.some((col) => col.summary && col.summary !== 'none');
+  return (
+    <div className="pointer-events-none">
+      <DynamicTableFrame
+        columns={c.columns.map((col) => ({ key: col.id, label: col.label }))}
+        rows={Array.from({ length: rowCount }, (_, i) => ({
+          key: `preview_${i}`,
+          cells: c.columns.map((col) => <DynamicCellInput key={col.id} type={col.input} label={col.label} value="" readOnly />),
+        }))}
+        footer={hasSummary ? c.columns.map((col) => (col.summary && col.summary !== 'none' ? (col.summaryLabel?.trim() || t(M[SUMMARY_LABEL[col.summary]])) : null)) : null}
+        toolbar={c.allowAddColumns && c.addableInputs.length > 0 ? <Button type="button" variant="outline" size="sm">{t(M['canvas.dtable_add_column'])}</Button> : undefined}
+        belowRows={<Button type="button" variant="ghost" size="sm">{t(M['canvas.dtable_add_row'])}</Button>}
+      />
     </div>
   );
 }

@@ -142,6 +142,29 @@ export function pruneOptions(def: FormDefinition, id: BlockId, options: Readonly
   return touched;
 }
 
+/** The choice a "fill from option value" action reads, if this action is one. */
+function optionCodeSource(action: Action): BlockId | null {
+  if (action.type !== 'set_value' || action.value.k !== 'call' || action.value.fn !== 'option_code') return null;
+  const arg = action.value.args[0];
+  return arg?.k === 'ref' && arg.ref.kind === 'answer' ? arg.ref.blockId : null;
+}
+
+/** Fields filled from `source`'s selected option. */
+export function optionValueTargets(def: Pick<FormDefinition, 'logic'>, source: BlockId): BlockId[] {
+  const ids: BlockId[] = [];
+  for (const rule of def.logic.rules) {
+    for (const action of [...rule.then, ...(rule.else ?? [])]) {
+      if (optionCodeSource(action) === source && action.type === 'set_value' && action.target !== source) ids.push(action.target);
+    }
+  }
+  return ids;
+}
+
+/** Whether `id` is a field that only shows a dropdown option's value. */
+export function isOptionValueField(def: Pick<FormDefinition, 'logic'>, id: BlockId): boolean {
+  return def.logic.rules.some((rule) => [...rule.then, ...(rule.else ?? [])].some((action) => action.type === 'set_value' && action.target === id && optionCodeSource(action) !== null));
+}
+
 /** Elements an enabled rule can show. */
 function shownElements(def: FormDefinition): Set<string> {
   const shown = new Set<string>();

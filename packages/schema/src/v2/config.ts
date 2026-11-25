@@ -1,7 +1,7 @@
 import type { _ExactKeys } from './_internal.ts';
 import type { BlockType } from './catalogue.ts';
 import type { Expr, ExprType } from './expr.ts';
-import type { AssetRef, BlockId, CardBucketId, CardItemId, ConnectionId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, HolidayCalendarId, IsoDate, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, PurposeId, SafeUrl, SemanticPairId, TextAlign, TimeZone, Weekday } from './ids.ts';
+import type { AssetRef, BlockId, CardBucketId, CardItemId, ConnectionId, ConsentItemId, CountryCode, CurrencyCode, DecimalString, HolidayCalendarId, IsoDate, IsoTime, LikertStatementId, Locale, MatchingPromptId, MatrixColumnId, DynamicColumnId, MatrixRowId, MinorUnits, OptionId, ProductId, ProductOptionId, PurposeId, SafeUrl, SemanticPairId, TextAlign, TimeZone, Weekday } from './ids.ts';
 import type { ColorValue, DatePattern, InlineDoc, LabelText, PlainTemplate, RichDoc, ValueFormat } from './rich-text.ts';
 import type { BrandRef, Origin } from './template-primitives.ts';
 
@@ -98,6 +98,11 @@ export interface ChoiceOption {
   score?: DecimalString;             // PROP-13 calculation value / quiz score
   correct?: boolean;                 // LOG-24
   origin?: Origin;
+  /**
+   * Dependent options: when the block `dependsOn` another choice, this option is offered only while the parent's
+   * answer includes one of these parent options. Without it the option is always offered (e.g. "Other").
+   */
+  parentOptionIds?: OptionId[];
 }
 
 /** PROP-10. Materialised into options at insert (ids = official codes) so versions are self-contained. */
@@ -115,6 +120,11 @@ interface ChoiceCommon {
   columns?: 1 | 2 | 3 | 4;
   searchable?: boolean;              // FLD-14 (dropdown display)
   placeholder?: string;
+  /**
+   * Dependent (cascading) options: an earlier single or multi choice whose answer filters these options through each
+   * option's `parentOptionIds`. Until the parent has an answer this block is disabled.
+   */
+  dependsOn?: BlockId;
 }
 export interface SingleChoiceConfig extends ChoiceCommon {
   display: 'radio' | 'dropdown' | 'image';
@@ -256,6 +266,31 @@ export interface RepeatingGroupConfig {
   addLabel?: string; removeLabel?: string;
   rowTitle?: PlainTemplate;          // may pipe row-scoped values / meta.row_index
   layout: 'stacked' | 'table';
+}
+
+/** Column input kinds for a dynamic table. `summary` (number only) adds a footer row over the rows. */
+/** Every type a dynamic-table column can take (authored or respondent-added). */
+export const DYNAMIC_COLUMN_INPUTS = ['text', 'long_text', 'number', 'date', 'datetime', 'time', 'email', 'url', 'phone', 'formula'] as const;
+export type DynamicColumnInput = (typeof DYNAMIC_COLUMN_INPUTS)[number];
+export type DynamicSummary = 'none' | 'sum' | 'average' | 'min' | 'max' | 'count';
+export interface DynamicTableColumn {
+  id: DynamicColumnId;
+  label: string;
+  input: DynamicColumnInput;
+  summary?: DynamicSummary;
+  /** Name shown in the footer, e.g. "Total" instead of "Sum". */
+  summaryLabel?: string;
+  /** Row formula, written with the other columns' labels. Only for `input: 'formula'`. */
+  formula?: string;
+}
+/** Input table + configurable list: the author defines columns; rows are added within min/max; respondents may add columns up to `maxColumns`. */
+export interface DynamicTableConfig {
+  columns: DynamicTableColumn[];     // 1..20
+  minRows: number; maxRows: number;  // maxRows ≤ 200
+  initialRows?: number;
+  allowAddColumns: boolean;          // respondent may add columns
+  addableInputs: DynamicColumnInput[]; // which column types a respondent may add
+  maxColumns: number;                // total columns allowed (authored + respondent-added), ≤ 30
 }
 
 export interface FileUploadConfig {
@@ -441,7 +476,7 @@ export interface BlockConfigMap {
   time: TimeConfig; rating: RatingConfig; linear_scale: LinearScaleConfig; nps: NpsConfig; ranking: RankingConfig;
   matching: MatchingConfig; likert: LikertConfig; constant_sum: ConstantSumConfig; maxdiff: MaxDiffConfig; card_sort: CardSortConfig;
   semantic_differential: SemanticDifferentialConfig; number_range: NumberRangeConfig; schedule_grid: ScheduleGridConfig;
-  matrix: MatrixConfig; repeating_group: RepeatingGroupConfig; file_upload: FileUploadConfig; signature: SignatureConfig;
+  matrix: MatrixConfig; repeating_group: RepeatingGroupConfig; dynamic_table: DynamicTableConfig; file_upload: FileUploadConfig; signature: SignatureConfig;
   hidden: HiddenConfig; consent: ConsentConfig; payment: PaymentConfig; appointment: AppointmentConfig;
   calculation: CalculationConfig; context: ContextConfig; unique_id: UniqueIdConfig; captcha: CaptchaConfig;
   heading: HeadingConfig; paragraph: ParagraphConfig; image: ImageConfig; divider: DividerConfig; section_break: SectionBreakConfig; section: SectionConfig;

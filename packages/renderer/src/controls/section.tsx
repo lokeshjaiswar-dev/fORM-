@@ -30,7 +30,7 @@ export function Section({ block }: ControlProps<'section'>) {
   return (
     <section className="fr-section">
       <button type="button" className="fr-section-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="fr-section-title"><RichTextView doc={c.title} inline resolve={resolve} /></span>
+        <span className="fr-section-title">{c.title ? <RichTextView doc={c.title} inline resolve={resolve} /> : null}</span>
       </button>
       {open ? body : null}
     </section>

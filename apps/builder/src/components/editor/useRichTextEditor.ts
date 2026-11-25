@@ -87,16 +87,16 @@ export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, 
     const justSelected = !!autoFocus && !wasAutoFocus.current;
     wasAutoFocus.current = !!autoFocus;
     if (!justSelected) return;
-    const toEnd = () => {
-      if (editor.isDestroyed) return;
-      editor.commands.focus('end');
-      editor.view.focus();
-    };
-    const timer = window.setTimeout(toEnd, 0);
-    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(toEnd));
+    let inner = 0;
+    const frame = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => {
+        if (editor.isDestroyed) return;
+        editor.commands.focus('end');
+      });
+    });
     return () => {
-      window.clearTimeout(timer);
       window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(inner);
     };
   }, [autoFocus, editor]);
 

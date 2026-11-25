@@ -6,7 +6,6 @@ import type { AssetId, HexColor, Theme, ThemeTokens } from '@form/schema';
 import { Button, Label } from '@dmacq/ui';
 import { t } from '@/i18n';
 import { uid } from '@/lib/utils';
-import { cn } from '@/lib/utils';
 import { fileToThemeImage, storeThemeImage } from '@/components/builder/design/uploads';
 
 const M = defineMessages('builder', {
@@ -53,9 +52,9 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
     <div className="space-y-5">
       <SceneRow
         label={t(M['design.backgrounds'])}
-        selected={bg}
+        {...(bg ? { selected: bg } : {})}
         onSelect={(id) => patch({ background: id ? { kind: 'image', image: ref(id), fit: tokens.background?.kind === 'image' ? tokens.background.fit : 'cover' } : { kind: 'color', color: pageColor } })}
-        onUpload={(file) => void upload(file, 'background')}
+        onUpload={(file) => { void upload(file, 'background'); }}
       />
       {tokens.background?.kind === 'image' ? (
         <div className="flex gap-2">
@@ -68,9 +67,9 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
       ) : null}
       <SceneRow
         label={t(M['design.covers'])}
-        selected={cover}
+        {...(cover ? { selected: cover } : {})}
         onSelect={(id) => (id ? patch({ cover: { image: ref(id), heightPx: tokens.cover?.heightPx ?? 220 } }) : patch({}, true))}
-        onUpload={(file) => void upload(file, 'cover')}
+        onUpload={(file) => { void upload(file, 'cover'); }}
       />
       {tokens.cover ? (
         <div className="space-y-1.5">
@@ -96,19 +95,19 @@ function SceneRow({ label, selected, onSelect, onUpload }: { label: string; sele
   return (
     <section>
       <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{label}</p>
-      <div className="grid grid-cols-4 gap-2">
-        <button type="button" aria-pressed={!selected} onClick={() => onSelect(null)} className={cn('flex aspect-[4/3] items-center justify-center rounded-lg border-2 text-[11px]', !selected ? 'border-sidebar-primary' : 'border-sidebar-border')}>
+      <div className="grid grid-cols-[repeat(auto-fill,7.5rem)] gap-2">
+        <Button type="button" variant="outline" size="default" aria-pressed={!selected} pressed={!selected} onClick={() => onSelect(null)} className="h-16 w-[7.5rem] flex-col">
           {t(M['design.none'])}
-        </button>
+        </Button>
         {THEME_SCENES.map((scene) => (
-          <button key={scene.id} type="button" aria-label={scene.name} aria-pressed={selected === scene.id} onClick={() => onSelect(scene.id)} className={cn('aspect-[4/3] overflow-hidden rounded-lg border-2', selected === scene.id ? 'border-sidebar-primary' : 'border-sidebar-border')}>
+          <Button key={scene.id} type="button" variant="outline" aria-label={scene.name} pressed={selected === scene.id} onClick={() => onSelect(scene.id)} className="h-16 w-[7.5rem] overflow-hidden p-0">
             <img alt="" src={scene.url} className="h-full w-full object-cover" />
-          </button>
+          </Button>
         ))}
-        <button type="button" aria-label={t(M['design.upload'])} onClick={() => input.current?.click()} className="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-sidebar-border text-[11px]">
+        <Button type="button" variant="outline" aria-label={t(M['design.upload'])} onClick={() => input.current?.click()} className="h-16 w-[7.5rem] flex-col gap-1 border-dashed">
           <ImagePlus className="size-4" />
           {t(M['design.upload'])}
-        </button>
+        </Button>
       </div>
       <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { onUpload(e.target.files?.[0]); e.target.value = ''; }} />
     </section>

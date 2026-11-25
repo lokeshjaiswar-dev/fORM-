@@ -1,8 +1,10 @@
+import { Alert, AlertDescription } from '@dmacq/ui';
 import { defineMessages } from '@form/i18n';
 import { REGISTRY, type AvailableType } from '@form/registry';
 import { type BlockOf, type CountryCode, type DateBound, type DateLimits, type IsoDate, type IsoTime, type SchemaLike, type Weekday } from '@form/schema';
 import { t } from '@/i18n';
-import { NumberField, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { NumberField, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { ADDRESS_PART, NAME_PART } from '@/fields/canvas';
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { applyPatch, type Patch } from '@/lib/patch';
 import { patchBlockConfig } from '@/fields/configSink';
@@ -43,7 +45,7 @@ const M = defineMessages('builder', {
   'inspector.min_files': 'Minimum files',
   'inspector.min_size': 'Minimum file size (KB)',
   'inspector.other_text_required': 'Require text when Other is chosen',
-  'inspector.required_part': 'Require {part}',
+  'inspector.required_parts': 'Required parts',
   'inspector.config_problem': 'Check this setting: {problem}',
   'inspector.min_span': 'Minimum span (days)',
   'inspector.max_span': 'Maximum span (days)',
@@ -58,9 +60,9 @@ function ConfigProblem({ block }: { block: BlockOf<AvailableType> }) {
   if (parsed.success) return null;
   const issues = (parsed.error as { issues?: Array<{ message: string }> }).issues ?? [];
   return (
-    <p role="alert" className="text-[12px] text-destructive">
-      {t(M['inspector.config_problem'], { problem: issues.map((i) => i.message).join('; ') })}
-    </p>
+    <Alert variant="negative" emphasis="subtle" role="alert">
+      <AlertDescription>{t(M['inspector.config_problem'], { problem: issues.map((i) => i.message).join('; ') })}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -263,10 +265,11 @@ export function TimeValidation({ block }: InspectorProps<'time'>) {
 export function FullNameValidation({ block }: InspectorProps<'full_name'>) {
   return (
     <>
+      <SectionTitle>{t(M['inspector.required_parts'])}</SectionTitle>
       {block.config.parts.map((part) => (
         <ToggleRow
           key={part}
-          label={t(M['inspector.required_part'], { part: block.config.sublabels?.[part] || part })}
+          label={block.config.sublabels?.[part] || t(NAME_PART[part])}
           checked={block.config.requiredParts.includes(part)}
           onChange={(on) => {
             const requiredParts = on
@@ -284,10 +287,11 @@ export function FullNameValidation({ block }: InspectorProps<'full_name'>) {
 export function AddressValidation({ block }: InspectorProps<'address'>) {
   return (
     <>
+      <SectionTitle>{t(M['inspector.required_parts'])}</SectionTitle>
       {block.config.parts.map((part) => (
         <ToggleRow
           key={part}
-          label={t(M['inspector.required_part'], { part })}
+          label={t(ADDRESS_PART[part])}
           checked={block.config.requiredParts.includes(part)}
           onChange={(on) => {
             const requiredParts = on

@@ -5,6 +5,7 @@ import type { AnswerValueMap, Answers, BlockId, GroupRowId, StoredBlock } from '
 import { RendererContext, useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { useAnswer, type ControlProps } from './hooks.ts';
+import { RowContext } from './rowContext.ts';
 
 type GroupValue = AnswerValueMap['repeating_group'];
 
@@ -50,11 +51,13 @@ function RowFields({
 
   return (
     <RendererContext.Provider value={ctx}>
-      <FormProvider {...methods}>
-        <div className="fr-repeat-fields" onBlur={onBlur}>
-          {fields.map((child) => <Block key={child.id} block={child} />)}
-        </div>
-      </FormProvider>
+      <RowContext.Provider value={rowId}>
+        <FormProvider {...methods}>
+          <div className="fr-repeat-fields" onBlur={onBlur}>
+            {fields.map((child) => <Block key={child.id} block={child} />)}
+          </div>
+        </FormProvider>
+      </RowContext.Provider>
     </RendererContext.Provider>
   );
 }

@@ -25,9 +25,12 @@ export type EndingAction =
   | { kind: 'visit_url'; label: string; url: PlainTemplate }
   | { kind: 'open_form'; label: string; formId: FormId; prefill?: Array<{ toKey: FieldKey; from: PipeSource }> };
 
+/** The colour palette of the success confetti (builder: Form settings). */
+export type ConfettiStyle = 'classic' | 'pastel' | 'ocean' | 'sunset';
+
 /** END-01..04. A redirect URL is interpolated server-side, values URL-encoded, result must be https (S6). */
 export type Ending =
-  | { id: EndingId; kind: 'message'; name: string; content: RichDoc; actions: EndingAction[]; confetti?: boolean; origin?: Origin }
+  | { id: EndingId; kind: 'message'; name: string; content: RichDoc; actions: EndingAction[]; confetti?: boolean; confettiStyle?: ConfettiStyle; origin?: Origin }
   | { id: EndingId; kind: 'redirect'; name: string; url: PlainTemplate; delayMs?: number; message?: RichDoc; origin?: Origin };
 
 export interface WelcomeScreen { enabled: boolean; content: RichDoc; image?: AssetRef | BrandRef; startLabel?: string } // DSN-05

@@ -103,7 +103,6 @@ describe('compile', () => {
       ]);
       def.logic.variables = [{ id: id('v1'), key: id('v1'), name: 'v', type: 'number', expr: { k: 'lit', value: { type: 'number', value: id('1') } }, persist: false }];
       expect(codes(failure(def)).filter((c) => c.includes('missing_capability'))).toEqual([
-        'error:missing_capability:/logic/rules/0/then/0',
         'error:missing_capability:/logic/rules/1/when/children/0/op',
         'error:missing_capability:/logic/rules/2/when/children/0/right/value',
         'error:missing_capability:/logic/rules/3/when/children/0/left/expr',

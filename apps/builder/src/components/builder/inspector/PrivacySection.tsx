@@ -2,8 +2,11 @@ import { defineMessages, type MessageId } from '@form/i18n';
 import type { FieldBlock } from '@form/schema';
 import { t } from '@/i18n';
 import { useDoc } from '@/state/documentStore';
+import { SectionTitle } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
+  'privacy.section_data': 'Data',
+  'privacy.section_sharing': 'Sharing',
   'privacy.classification': 'Classification',
   'privacy.class_none': 'Not personal data',
   'privacy.class_personal': 'Personal data',
@@ -19,7 +22,7 @@ const M = defineMessages('builder', {
   'privacy.include': 'Included',
   'privacy.mask': 'Masked',
   'privacy.omit': 'Left out',
-  'privacy.p1': 'Each field takes the registry’s default protection and the form’s purposes. Choosing purposes per field arrives with the purpose picker (Phase 1).',
+  'privacy.p1': 'Each field follows its type’s default protection and the form’s purposes. Choosing purposes per field is coming soon.',
 });
 
 const CLASS: Record<FieldBlock['compliance']['classification'], MessageId> = {
@@ -39,22 +42,26 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** The Privacy section: what the field's compliance says (CMP-03), read-only until the P1 purpose picker. */
+/** The Privacy summary: what the field's compliance says (CMP-03), read-only until the P1 purpose picker. */
 export function PrivacySection({ block }: { block: FieldBlock }) {
   const purposes = useDoc((d) => d.privacy.purposes);
   const c = block.compliance;
   const names = c.purposeIds.map((id) => purposes.find((p) => p.id === id)?.name ?? id);
   return (
-    <div className="space-y-3">
+    <>
+      <SectionTitle>{t(M['privacy.section_data'])}</SectionTitle>
       <dl className="space-y-2">
         <Row label={t(M['privacy.classification'])} value={t(CLASS[c.classification])} />
         {c.category ? <Row label={t(M['privacy.category'])} value={c.category.replaceAll('_', ' ')} /> : null}
         <Row label={t(M['privacy.purposes'])} value={names.length ? names.join(', ') : t(M['privacy.no_purpose'])} />
         <Row label={t(M['privacy.encrypted'])} value={t(c.encrypt ? M['privacy.yes'] : M['privacy.no'])} />
+      </dl>
+      <SectionTitle>{t(M['privacy.section_sharing'])}</SectionTitle>
+      <dl className="space-y-2">
         <Row label={t(M['privacy.notifications'])} value={t(SHARE[c.inNotifications])} />
         <Row label={t(M['privacy.exports'])} value={t(SHARE[c.inExports])} />
       </dl>
       <p className="text-[12px] leading-relaxed text-muted-foreground">{t(M['privacy.p1'])}</p>
-    </div>
+    </>
   );
 }

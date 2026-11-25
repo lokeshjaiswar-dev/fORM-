@@ -9,7 +9,7 @@ import { labelString } from '@/fields/style';
 import { APP_IDS, blockOrder, blockText, isField } from '@/lib/definition';
 import { removeRule, setRule } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Button, Input, Label, Switch } from '@dmacq/ui';
+import { Button, CheckboxField, Input, Label, RadioField, RadioGroup, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
 import { COUNT, UNARY, choiceOptions, condition, firstOperator, kindOf, literal, localToday, operatorsFor, retarget, type Defaults } from '@/components/builder/inspector/conditions';
 
@@ -33,8 +33,8 @@ const M = defineMessages('builder', {
   'logic.hidden_until': 'Hidden until a rule shows it',
   'op.is_answered': 'is answered',
   'op.is_not_answered': 'is not answered',
-  'op.eq': 'is',
-  'op.neq': 'is not',
+  'op.eq': 'equals',
+  'op.neq': 'does not equal',
   'op.contains': 'contains',
   'op.not_contains': 'does not contain',
   'op.starts_with': 'starts with',
@@ -113,14 +113,19 @@ function OperandEditor({ group, source, op, right, onChange }: { group: string; 
       if (optionIds.length) onChange({ kind: 'options', blockId: source.id, optionIds });
     };
     return (
-      <fieldset className="space-y-1">
+      <fieldset className="space-y-2">
         <legend className="text-[12px] text-muted-foreground">{t(M['logic.options'])}</legend>
-        {choiceOptions(source).map((o) => (
-          <label key={o.id} className="flex items-center gap-2 text-[13px]">
-            <input type={kind === 'choice' && (op === 'eq' || op === 'neq') ? 'radio' : 'checkbox'} name={`logic-${group}`} checked={chosen.includes(o.id)} onChange={() => toggle(o.id)} />
-            {labelString(o.label)}
-          </label>
-        ))}
+        {kind === 'choice' && (op === 'eq' || op === 'neq') ? (
+          <RadioGroup name={group} value={chosen[0] ?? ''} onValueChange={(v) => toggle(v as OptionId)}>
+            {choiceOptions(source).map((o) => (
+              <RadioField key={o.id} value={o.id} label={labelString(o.label)} size="sm" />
+            ))}
+          </RadioGroup>
+        ) : (
+          choiceOptions(source).map((o) => (
+            <CheckboxField key={o.id} checked={chosen.includes(o.id)} onCheckedChange={() => toggle(o.id)} label={labelString(o.label)} size="sm" />
+          ))
+        )}
       </fieldset>
     );
   }

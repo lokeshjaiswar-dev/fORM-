@@ -33,3 +33,6 @@ export type { RichTextResolvers, RichTextViewProps } from './richtext/RichTextVi
 export { SignaturePad } from './signature/SignaturePad.tsx';
 export type { SignaturePadProps } from './signature/SignaturePad.tsx';
 export { Confetti } from './Confetti.tsx';
+export { DynamicCellInput, DynamicTableFrame } from './controls/dynamic_table_frame.tsx';
+export type { DynamicTableFrameProps, FrameColumn, FrameRow } from './controls/dynamic_table_frame.tsx';
+export { lookupRows } from './controls/apiLookup.ts';

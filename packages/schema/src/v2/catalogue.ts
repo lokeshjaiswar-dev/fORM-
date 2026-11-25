@@ -32,6 +32,7 @@ export const INPUT_FIELD_TYPES = [
   'schedule_grid',   // weekdays × time slots
   'matrix',          // FLD-24
   'repeating_group', // FLD-25
+  'dynamic_table',   // configurable columns × rows with per-column summary
   'file_upload',     // FLD-26/27 (capture)
   'signature',       // FLD-28
   'hidden',          // FLD-30
@@ -57,5 +58,5 @@ export type BlockType = ValueFieldType | TransientBlockType | ContentBlockType |
 
 /** Allowed as repeating-group children (no nesting, money, bookings, consent, server-assigned values). */
 export type RepeatableBlockType =
-  | Exclude<InputFieldType, 'repeating_group' | 'payment' | 'appointment' | 'consent' | 'hidden'>
+  | Exclude<InputFieldType, 'repeating_group' | 'dynamic_table' | 'payment' | 'appointment' | 'consent' | 'hidden'>
   | 'calculation' | 'heading' | 'paragraph' | 'divider';

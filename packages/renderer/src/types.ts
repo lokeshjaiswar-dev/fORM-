@@ -19,8 +19,20 @@ export type Uploader = (request: UploadRequest) => Promise<FileRef>;
 /** The submission body the renderer builds; the host adds the idempotency key, tokens and any verification it runs. */
 export type SubmitPayload = Pick<SubmissionRequest, 'formVersionId' | 'locale' | 'answers' | 'pageTrail' | 'client'>;
 
+/**
+ * Accepted by a host that leaves the ending to the renderer, with the `unique_id` values the server issued (the
+ * values the respondent saw before submitting were previews).
+ */
+export interface SubmitAccepted {
+  ok: true;
+  /** Shown on the ending: the value of a `unique_id` field with `showOnEnding`. */
+  uniqueId?: string | undefined;
+  /** Every issued `unique_id` value by block id, so the ending's pipes show it instead of the preview. */
+  uniqueIds?: Readonly<Record<string, string>> | undefined;
+}
+
 /** Nothing (or `undefined`) means accepted: the renderer shows the ending its own evaluation chose. */
-export type SubmitHandler = (payload: SubmitPayload) => Promise<SubmitResult | void> | SubmitResult | void;
+export type SubmitHandler = (payload: SubmitPayload) => Promise<SubmitResult | SubmitAccepted | void> | SubmitResult | SubmitAccepted | void;
 
 export interface PartialSave {
   formVersionId: FormVersionId;

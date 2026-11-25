@@ -1,8 +1,8 @@
 import { defineMessages } from '@form/i18n';
 import { isRepeatableChildType, PALETTE_LABELS, REGISTRY, SHORT_TEXT_MAX, type AvailableType } from '@form/registry';
 import {
-  CONTEXT_SOURCES, DATE_PATTERNS, NAME_PARTS,
-  type BlockOf, type CardBucketId, type CardItemId, type ContextSource, type DecimalString, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
+  CONTEXT_SOURCES, DATE_PATTERNS, DYNAMIC_COLUMN_INPUTS, NAME_PARTS,
+  type BlockId, type BlockOf, type CardBucketId, type DynamicColumnId, type DynamicColumnInput, type DynamicSummary, type DynamicTableColumn, type CardItemId, type ContextSource, type DecimalString, type Expr, type IsoTime, type LikertStatementId, type MatchingPromptId, type MatrixColumnId, type MatrixRowId, type NamePart, type SchemaLike, type SemanticPairId, type Weekday,
 } from '@form/schema';
 import { patternProblem, patternUnsupportedFeature } from '@form/validation';
 import { t } from '@/i18n';
@@ -11,14 +11,18 @@ import { Field, NumberField, SectionTitle, SelectField, TextField, ToggleRow } f
 import { parseInteger } from '@/components/builder/inspector/parse';
 import { OptionsEditor } from '@/components/builder/inspector/OptionsEditor';
 import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
-import { formatFormula, parseFormula } from '@/lib/formula';
+import { formatFormula, markRowRefs, parseFormula } from '@/lib/formula';
+import { switchFieldType } from '@/lib/switchFieldType';
+import { useProfile } from '@/embed/useProfile';
+import { isOptionValueField } from '@/state/commands/rules';
 import { patchBlockConfig } from '@/fields/configSink';
 import { addChildBlock, requestDeleteBlock } from '@/state/actions';
 import { currentDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TILES } from '@/fields/tiles';
 import { ChoiceOtherValidation, FileMinLimits } from '@/fields/validationViews';
-import { Button, Input } from '@dmacq/ui';
+import { Plus, Trash2 } from 'lucide-react';
+import { Button, Input, TextLink } from '@dmacq/ui';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
 
@@ -118,6 +122,37 @@ const M = defineMessages('builder', {
   'inspector.matrix_add_row': 'Add row',
   'inspector.matrix_add_column': 'Add column',
   'inspector.matrix_row_n': 'Row {n}',
+  'inspector.dtable_columns': 'Columns',
+  'inspector.dtable_add_column': 'Add column',
+  'inspector.dtable_column_n': 'Column {n}',
+  'inspector.dtable_column_label': 'Column name',
+  'inspector.dtable_type': 'Type',
+  'inspector.dtable_type_text': 'Text',
+  'inspector.dtable_type_number': 'Number',
+  'inspector.dtable_type_date': 'Date',
+  'inspector.dtable_type_email': 'Email',
+  'inspector.dtable_type_url': 'URL',
+  'inspector.dtable_type_phone': 'Phone',
+  'inspector.dtable_type_long_text': 'Long text',
+  'inspector.dtable_type_datetime': 'Date and time',
+  'inspector.dtable_type_time': 'Time',
+  'inspector.dtable_type_formula': 'Formula',
+  'inspector.dtable_formula': 'Formula',
+  'inspector.dtable_formula_hint': 'Uses the other columns in this row. Click a column to insert it. Example: qty * price',
+  'inspector.dtable_summary_label': 'Footer label',
+  'inspector.dtable_summary': 'Footer summary',
+  'inspector.dtable_summary_none': 'None',
+  'inspector.dtable_summary_sum': 'Sum',
+  'inspector.dtable_summary_average': 'Average',
+  'inspector.dtable_summary_min': 'Minimum',
+  'inspector.dtable_summary_max': 'Maximum',
+  'inspector.dtable_summary_count': 'Count filled cells',
+  'inspector.dtable_remove_column': 'Remove column',
+  'inspector.dtable_allow_add': 'Let respondents add columns',
+  'inspector.dtable_allow_add_hint': 'When on, the respondent can add text or number columns while filling the form.',
+  'inspector.dtable_max_columns': 'Maximum columns (including added)',
+  'inspector.dtable_addable': 'Column types a respondent can add',
+  'inspector.dtable_addable_hint': 'Only the types ticked here appear when the respondent adds a column.',
   'inspector.matrix_column_n': 'Column {n}',
   'inspector.allow_same_day': 'Allow the same start and end date',
   'inspector.min_span': 'Minimum span (days)',
@@ -142,6 +177,16 @@ const M = defineMessages('builder', {
   'inspector.semantic_add': 'Add pair',
   'inspector.semantic_left': 'Left pole',
   'inspector.semantic_right': 'Right pole',
+  'inspector.semantic_left_n': 'Left pole of pair {n}',
+  'inspector.default_today': 'Default to today',
+  'inspector.default_today_hint': 'The date starts as the day the form is opened; respondents can still change it.',
+  'inspector.auto_increment': 'Auto increment',
+  'inspector.auto_increment_hint': 'Numbers each submission for you (1, 2, 3 …), so respondents do not type it.',
+  'inspector.auto_increment_on_hint': 'Each submission gets the next number. Turn off to let respondents type a number instead.',
+  'inspector.semantic_right_n': 'Right pole of pair {n}',
+  'inspector.list_item': '{list}: item {n}',
+  'inspector.matching_options': 'Matches',
+  'inspector.list_remove': 'Remove item {n} from {list}',
   'inspector.schedule_days': 'Weekdays',
   'inspector.schedule_slots': 'Time slots',
   'inspector.schedule_add_slot': 'Add slot',
@@ -449,8 +494,11 @@ export function PhoneGeneral({ block }: InspectorProps<'phone'>) {
 }
 
 export function NumberGeneral({ block }: InspectorProps<'number'>) {
+  /* Auto increment turns the field into a unique_id serial, a type DMS masters do not have (profile dms-v1). */
+  const autoIncrement = useProfile() === 'full';
   return (
     <>
+      {autoIncrement ? <ToggleRow label={t(M['inspector.auto_increment'])} hint={t(M['inspector.auto_increment_hint'])} checked={false} onChange={(on) => on && switchFieldType(block.id, 'unique_id')} /> : null}
       <ChromeGeneral block={block} />
       <SelectField
         label={t(M['inspector.display'])}
@@ -477,24 +525,30 @@ export function NumberValidation({ block }: InspectorProps<'number'>) {
   );
 }
 
-export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
+/** How the options are shown: the first decision about a choice question, so it heads its Options section. */
+function ChoiceDisplay({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
   const list = block.type === 'single_choice' ? 'radio' : 'checkbox';
   return (
+    <SelectField
+      label={t(M['inspector.display'])}
+      value={block.config.display === 'dropdown' || block.config.display === 'image' ? block.config.display : list}
+      options={[
+        { value: list, label: t(list === 'radio' ? M['inspector.display_radio'] : M['inspector.display_checkbox']) },
+        { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
+        { value: 'image', label: t(M['inspector.display_image']) },
+      ]}
+      onChange={(display) => setConfig(block, { display })}
+    />
+  );
+}
+
+/** A dropdown's own settings: its empty text and whether it can be searched. */
+export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
+  if (block.config.display !== 'dropdown') return null;
+  return (
     <>
-      <SelectField
-        label={t(M['inspector.display'])}
-        value={block.config.display === 'dropdown' || block.config.display === 'image' ? block.config.display : list}
-        options={[
-          { value: list, label: t(list === 'radio' ? M['inspector.display_radio'] : M['inspector.display_checkbox']) },
-          { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
-          { value: 'image', label: t(M['inspector.display_image']) },
-        ]}
-        onChange={(display) => setConfig(block, { display })}
-      />
-      {block.config.display === 'dropdown' ? <Placeholder block={block} /> : null}
-      {block.config.display === 'dropdown' ? (
-        <ToggleRow label={t(M['inspector.searchable'])} checked={block.config.searchable === true} onChange={(on) => setConfig(block, { searchable: on || undefined })} />
-      ) : null}
+      <Placeholder block={block} />
+      <ToggleRow label={t(M['inspector.searchable'])} checked={block.config.searchable === true} onChange={(on) => setConfig(block, { searchable: on || undefined })} />
     </>
   );
 }
@@ -613,9 +667,9 @@ export function SectionGeneral({ block }: InspectorProps<'section'>) {
         const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
         return (
           <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
-            <button type="button" className="truncate text-left hover:underline" onClick={() => useUiStore.getState().openInspector(id)}>
+            <TextLink asChild color="neutral" size="small" className="min-w-0 truncate text-left" ><button type="button" onClick={() => useUiStore.getState().openInspector(id)}>
               {name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}
-            </button>
+            </button></TextLink>
             <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" aria-label={t(M['inspector.repeat_remove_field'])} onClick={() => requestDeleteBlock(id)}>×</Button>
           </div>
         );
@@ -638,6 +692,7 @@ export function UniqueIdGeneral({ block }: InspectorProps<'unique_id'>) {
   const prefix = block.config.prefix.map((part) => (typeof part === 'string' ? part : '')).join('');
   return (
     <>
+      <ToggleRow label={t(M['inspector.auto_increment'])} hint={t(M['inspector.auto_increment_on_hint'])} checked onChange={(on) => !on && switchFieldType(block.id, 'number')} />
       <TextField label={t(M['inspector.unique_prefix'])} value={prefix} onChange={(value) => setConfig(block, { prefix: value ? [value] : [] })} />
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t(M['inspector.unique_pad'])} value={block.config.padTo} parse={parseInteger(1, 20)} onChange={(padTo) => padTo !== undefined && setConfig(block, { padTo })} />
@@ -658,8 +713,18 @@ export function UniqueIdGeneral({ block }: InspectorProps<'unique_id'>) {
 }
 
 export function DateGeneral({ block }: InspectorProps<'date'>) {
+  const today = block.config.defaultValue?.kind === 'today';
   return (
     <>
+      <ToggleRow
+        label={t(M['inspector.default_today'])}
+        hint={t(M['inspector.default_today_hint'])}
+        checked={today}
+        onChange={(on) => {
+          if (on) setConfig(block, { defaultValue: { kind: 'today' } });
+          else if (today) setConfig(block, { defaultValue: undefined });
+        }}
+      />
       <SelectField label={t(M['inspector.date_pattern'])} value={block.config.pattern} options={DATE_PATTERNS.map((p) => ({ value: p, label: p }))} onChange={(pattern) => setConfig(block, { pattern })} />
       <SelectField
         label={t(M['inspector.picker'])}
@@ -850,24 +915,83 @@ export function HiddenGeneral({ block }: InspectorProps<'hidden'>) {
 
 const CALC_SOURCES = new Set(['number', 'rating', 'linear_scale', 'nps', 'repeating_group', 'calculation']);
 
-function listParentOf(id: string): boolean {
-  return Object.values(currentDoc().blocks).some((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never));
+/** Footer summaries on dynamic tables, offered to formulas that sit outside the table. */
+function summarySources(doc: ReturnType<typeof currentDoc>): Array<{ id: string; key: string; name: string; insert: string; tableId: string; path: string }> {
+  const out: Array<{ id: string; key: string; name: string; insert: string; tableId: string; path: string }> = [];
+  for (const b of Object.values(doc.blocks)) {
+    if (b?.type !== 'dynamic_table') continue;
+    const tableName = plainText(b.label) || b.key;
+    b.config.columns.forEach((col, index) => {
+      if (!col.summary || col.summary === 'none') return;
+      const what = col.summaryLabel?.trim() || `${col.label} ${col.summary}`;
+      const name = `${tableName}: ${what}`;
+      const path = `summary.${col.summary}.${col.id}`;
+      const key = `summ_${b.key}_${index}`;
+      out.push({ id: `${b.id}|${path}`, key, name, insert: name, tableId: b.id, path });
+    });
+  }
+  return out;
+}
+
+/** The repeating group a block sits directly inside, if any. */
+function groupOf(id: string): string | undefined {
+  return Object.values(currentDoc().blocks).find((b) => b?.type === 'repeating_group' && b.config.children.includes(id as never))?.id;
 }
 
 export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
   const doc = currentDoc();
-  const sources = Object.values(doc.blocks).flatMap((b) => {
-    if (!b || b.id === block.id || !isField(b) || !CALC_SOURCES.has(b.type)) return [];
-    const list = listParentOf(b.id);
-    const insert = list ? `sum(${b.key})` : b.key;
-    return [{ id: b.id, key: b.key, insert, label: list ? `sum(${plainText(b.label) || b.key})` : plainText(b.label) || b.key }];
-  });
-  const keys = new Map(sources.map((s) => [s.key, s.id]));
-  const labels = new Map(sources.map((s) => [s.id, s.key]));
-  const stored = formatFormula(block.config.expr, labels);
+  // Inside a list row, a formula works row by row, so list fields are inserted by plain key.
+  // Outside a list, a list field means the sum of all its rows.
+  const formulaGroup = groupOf(block.id);
+  const summaries = summarySources(doc);
+  const sources = [
+    ...Object.values(doc.blocks).flatMap((b) => {
+      /* A dropdown's filled value is text on the canvas and a number in a formula. */
+      const filled = b?.type === 'short_text' && isOptionValueField(doc, b.id);
+      if (!b || b.id === block.id || !isField(b) || (!CALC_SOURCES.has(b.type) && !filled)) return [];
+      const list = groupOf(b.id);
+      const name = plainText(b.label) || b.key;
+      const useSum = list !== undefined && list !== formulaGroup;
+      /* The chip, the formula text and the saved formula all use the field's name; the key is only used to parse. */
+      return [{ id: b.id as string, key: b.key, name, insert: useSum ? `sum(${name})` : name }];
+    }),
+    ...summaries,
+  ];
+  const keys = new Map(sources.map((s) => [s.key as string, s.id as BlockId]));
+  const names = new Map<string, string>([
+    ...sources.filter((s) => !('path' in s)).map((s) => [s.id, s.name] as const),
+    ...summaries.map((s) => [`${s.tableId}|${s.path}`, s.name] as const),
+  ]);
+  /* Field names (and sum(name)) in the formula text, mapped back to keys before parsing. Longest first; whole words only. */
+  const nameToKey = new Map<string, string>();
+  for (const s of sources) {
+    nameToKey.set(s.name, s.key);
+    nameToKey.set(`sum(${s.name})`, `sum(${s.key})`);
+  }
+  const nameAlternatives = [...nameToKey.keys()].sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const nameRegex = nameAlternatives.length > 0 ? new RegExp(`(?<![\\p{L}\\p{N}_])(${nameAlternatives.join('|')})(?![\\p{L}\\p{N}_])`, 'gu') : null;
+  const toKeys = (text: string): string => (nameRegex ? text.replace(nameRegex, (m) => nameToKey.get(m) ?? m) : text);
+  const stored = formatFormula(block.config.expr, names);
   const shown = stored === '0' && block.config.expr.k === 'lit' ? '' : stored;
   const [draft, setDraft] = useDraft(shown);
-  const parsed = parseFormula(draft, keys);
+  const parsed = parseFormula(toKeys(draft), keys);
+  const summaryById = new Map(summaries.map((s) => [s.id, s]));
+  /* A summary chip parses as its own id, then becomes a path on the dynamic table. */
+  const bindSummaries = (expr: Expr): Expr => {
+    const go = (e: Expr): Expr => {
+      if (e.k === 'ref' && e.ref.kind === 'answer') {
+        const hit = summaryById.get(e.ref.blockId);
+        return hit ? { k: 'ref', ref: { kind: 'answer', blockId: hit.tableId as never, path: hit.path } } : e;
+      }
+      if (e.k === 'unary') return { ...e, arg: go(e.arg) };
+      if (e.k === 'call') return { ...e, args: e.args.map(go) };
+      if (e.k === 'binary') return { ...e, left: go(e.left), right: go(e.right) };
+      return e;
+    };
+    return go(expr);
+  };
+  /* Same-list fields are read per row: a formula inside a list works on each row's own values. */
+  const toExpr = (expr: Expr): Expr => markRowRefs(bindSummaries(expr), (id) => formulaGroup !== undefined && groupOf(id) === formulaGroup);
   return (
     <>
       <TextField
@@ -878,8 +1002,8 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
         placeholder="qty * price"
         onChange={(text) => {
           setDraft(text);
-          const next = parseFormula(text, keys);
-          if (next.ok) setConfig(block, { expr: next.expr });
+          const next = parseFormula(toKeys(text), keys);
+          if (next.ok) setConfig(block, { expr: toExpr(next.expr) });
         }}
       />
       <SectionTitle>{t(M['inspector.calc_fields'])}</SectionTitle>
@@ -896,11 +1020,11 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
               onClick={() => {
                 const text = draft.trim() ? `${draft.trimEnd()} ${source.insert}` : source.insert;
                 setDraft(text);
-                const next = parseFormula(text, keys);
-                if (next.ok) setConfig(block, { expr: next.expr });
+                const next = parseFormula(toKeys(text), keys);
+                if (next.ok) setConfig(block, { expr: toExpr(next.expr) });
               }}
             >
-              {source.label}
+              {source.insert}
             </Button>
           ))}
         </div>
@@ -915,8 +1039,8 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
             onClick={() => {
               const text = `${draft}${draft && !draft.endsWith(' ') ? ' ' : ''}${op} `;
               setDraft(text);
-              const next = parseFormula(text, keys);
-              if (next.ok) setConfig(block, { expr: next.expr });
+              const next = parseFormula(toKeys(text), keys);
+              if (next.ok) setConfig(block, { expr: toExpr(next.expr) });
             }}
           >
             {op}
@@ -938,16 +1062,56 @@ export function CalculationGeneral({ block }: InspectorProps<'calculation'>) {
 
 const PARAM_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
+/** Facts an author usually needs. Browser and embed strings stay available only when a form already captures them. */
+const SESSION_FACTS: readonly ContextSource[] = [
+  'page_url', 'referrer', 'locale', 'time_zone', 'started_at', 'submitted_at', 'utm_source', 'utm_medium', 'utm_campaign',
+];
+
+function StaticFactRow({
+  fact, onChange,
+}: {
+  fact: { key: string; value: string };
+  onChange: (next: { key: string; value: string }) => void;
+}) {
+  const [key, setKey] = useDraft(fact.key);
+  const [value, setValue] = useDraft(fact.value);
+  const commit = (nextKey: string, nextValue: string) => {
+    if (!PARAM_NAME.test(nextKey) || nextValue.length === 0) return;
+    onChange({ key: nextKey, value: nextValue });
+  };
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <TextField
+        label={t(M['inspector.context_static_key'])}
+        value={key}
+        onChange={(text) => {
+          setKey(text);
+          commit(text, value);
+        }}
+      />
+      <TextField
+        label={t(M['inspector.context_static_value'])}
+        value={value}
+        onChange={(text) => {
+          setValue(text);
+          commit(key, text);
+        }}
+      />
+    </div>
+  );
+}
+
 export function ContextGeneral({ block }: InspectorProps<'context'>) {
   const selected = new Set(block.config.sources);
-  const extras = (block.config.urlParams?.length ?? 0) + (block.config.staticFacts?.length ?? 0);
   const toggle = (source: ContextSource, on: boolean) => {
     const next = CONTEXT_SOURCES.filter((item) => (item === source ? on : selected.has(item)));
-    if (next.length === 0 && extras === 0) return;
     setConfig(block, { sources: [...next] });
   };
   const urls = selected.has('page_url') || selected.has('referrer');
   const facts = block.config.staticFacts ?? [];
+  const shown = SESSION_FACTS.filter((source) => SESSION_FACTS.includes(source) || selected.has(source));
+  const extraSelected = CONTEXT_SOURCES.filter((source) => selected.has(source) && !SESSION_FACTS.includes(source));
+  const [params, setParams] = useDraft((block.config.urlParams ?? []).join(', '));
   return (
     <>
       <ToggleRow
@@ -956,7 +1120,7 @@ export function ContextGeneral({ block }: InspectorProps<'context'>) {
         onChange={(on) => setConfig(block, { display: on ? 'hidden' : 'visible' })}
       />
       <SectionTitle>{t(M['inspector.context_facts'])}</SectionTitle>
-      {CONTEXT_SOURCES.map((source) => (
+      {[...shown, ...extraSelected].map((source) => (
         <ToggleRow
           key={source}
           label={t(PALETTE_LABELS[`palette.context.${source}`])}
@@ -970,39 +1134,34 @@ export function ContextGeneral({ block }: InspectorProps<'context'>) {
       <TextField
         label={t(M['inspector.context_url_params'])}
         hint={t(M['inspector.context_url_params_hint'])}
-        value={(block.config.urlParams ?? []).join(', ')}
+        value={params}
         onChange={(text) => {
+          setParams(text);
           const urlParams = text.split(',').map((part) => part.trim()).filter((name) => PARAM_NAME.test(name));
+          const pending = text.split(',').some((part) => {
+            const name = part.trim();
+            return name.length > 0 && !PARAM_NAME.test(name);
+          });
+          if (pending) return;
           setConfig(block, { urlParams: urlParams.length > 0 ? [...new Set(urlParams)] : undefined });
         }}
       />
       <SectionTitle>{t(M['inspector.context_static'])}</SectionTitle>
       {facts.map((fact, i) => (
-        <div key={`${fact.key}-${i}`} className="grid grid-cols-2 gap-2">
-          <TextField
-            label={t(M['inspector.context_static_key'])}
-            value={fact.key}
-            onChange={(key) => {
-              if (!PARAM_NAME.test(key) && key !== '') return;
-              const next = facts.map((item, j) => (j === i ? { ...item, key } : item));
-              setConfig(block, { staticFacts: next });
-            }}
-          />
-          <TextField
-            label={t(M['inspector.context_static_value'])}
-            value={fact.value}
-            onChange={(value) => {
-              const next = facts.map((item, j) => (j === i ? { ...item, value } : item));
-              setConfig(block, { staticFacts: next.filter((item) => item.key && item.value) });
-            }}
-          />
-        </div>
+        <StaticFactRow
+          key={i}
+          fact={fact}
+          onChange={(next) => {
+            const staticFacts = facts.map((item, j) => (j === i ? next : item));
+            setConfig(block, { staticFacts });
+          }}
+        />
       ))}
       <Button
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => setConfig(block, { staticFacts: [...facts, { key: `value_${facts.length + 1}`, value: 'fixed' }] })}
+        onClick={() => setConfig(block, { staticFacts: [...facts, { key: `fact_${facts.length + 1}`, value: 'value' }] })}
       >
         {t(M['inspector.context_static_add'])}
       </Button>
@@ -1092,48 +1251,66 @@ export function SectionBreakGeneral({ block }: InspectorProps<'section_break'>) 
 }
 
 export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'> }) {
-  return <OptionsEditor block={block} />;
+  return (
+    <>
+      {block.type === 'single_choice' || block.type === 'multi_choice' ? <ChoiceDisplay block={block} /> : null}
+      <OptionsEditor block={block} />
+    </>
+  );
 }
 
+/**
+ * An editable list of labels (statements, rows, cards...), drawn like the options list: one input per row with a remove
+ * button, and the add button under the list where the next row appears. A list keeps at least `min` rows.
+ */
 function LabelList({
   title,
   addLabel,
   items,
   onChange,
+  min = 1,
 }: {
   title: string;
   addLabel: string;
   items: Array<{ id: string; label: string }>;
   onChange: (next: Array<{ id: string; label: string }>) => void;
+  min?: number;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium">{title}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-auto px-1 py-0 text-[12px] text-primary"
-          onClick={() => onChange([...items, { id: APP_IDS.newId(), label: `${title.replace(/s$/, '')} ${items.length + 1}` }])}
-        >
-          {addLabel}
-        </Button>
-      </div>
-      {items.map((item, i) => (
-        <div key={item.id} className="flex gap-1">
-          <TextField
-            label=""
-            value={item.label}
-            onChange={(label) => onChange(items.map((row, j) => (j === i ? { ...row, label } : row)))}
-          />
-          {items.length > 1 ? (
-            <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => onChange(items.filter((_, j) => j !== i))}>
-              ×
+      <p className="text-[13px] font-medium leading-5">{title}</p>
+      <ul className="space-y-1.5">
+        {items.map((item, i) => (
+          <li key={item.id} className="flex items-center gap-1">
+            <Input
+              className="min-w-0 flex-1"
+              aria-label={t(M['inspector.list_item'], { list: title, n: i + 1 })}
+              value={item.label}
+              onChange={(e) => onChange(items.map((row, j) => (j === i ? { ...row, label: e.target.value } : row)))}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label={t(M['inspector.list_remove'], { list: title, n: i + 1 })}
+              disabled={items.length <= min}
+              onClick={() => onChange(items.filter((_, j) => j !== i))}
+            >
+              <Trash2 className="size-3.5" />
             </Button>
-          ) : null}
-        </div>
-      ))}
+          </li>
+        ))}
+      </ul>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full border-dashed text-muted-foreground hover:text-foreground"
+        onClick={() => onChange([...items, { id: APP_IDS.newId(), label: `${title.replace(/s$/, '')} ${items.length + 1}` }])}
+      >
+        <Plus className="size-3.5" /> {addLabel}
+      </Button>
     </div>
   );
 }
@@ -1142,13 +1319,23 @@ export function MatchingGeneral({ block }: InspectorProps<'matching'>) {
   return (
     <>
       <ToggleRow label={t(M['inspector.matching_exclusive'])} checked={block.config.exclusive} onChange={(exclusive) => setConfig(block, { exclusive })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+/** The items to match come first, then the answers they are matched with. */
+export function MatchingOptions({ block }: InspectorProps<'matching'>) {
+  return (
+    <>
       <LabelList
         title={t(M['inspector.matching_prompts'])}
         addLabel={t(M['inspector.matching_add_prompt'])}
         items={block.config.prompts}
         onChange={(prompts) => setConfig(block, { prompts: prompts.map((row) => ({ id: row.id as MatchingPromptId, label: row.label })) })}
       />
-      <ConfigProblem block={block} />
+      <p className="!mt-5 text-[13px] font-medium leading-5">{t(M['inspector.matching_options'])}</p>
+      <ChoiceOptions block={block} />
     </>
   );
 }
@@ -1158,14 +1345,19 @@ export function LikertGeneral({ block }: InspectorProps<'likert'>) {
     <>
       <SelectField label={t(M['inspector.scale_max'])} value={String(block.config.max)} options={range(2, 10)} onChange={(v) => setConfig(block, { max: Number(v) })} />
       <EndLabels block={block} />
-      <LabelList
-        title={t(M['inspector.likert_statements'])}
-        addLabel={t(M['inspector.likert_add_statement'])}
-        items={block.config.statements}
-        onChange={(statements) => setConfig(block, { statements: statements.map((row) => ({ id: row.id as LikertStatementId, label: row.label })) })}
-      />
       <ConfigProblem block={block} />
     </>
+  );
+}
+
+export function LikertOptions({ block }: InspectorProps<'likert'>) {
+  return (
+    <LabelList
+      title={t(M['inspector.likert_statements'])}
+      addLabel={t(M['inspector.likert_add_statement'])}
+      items={block.config.statements}
+      onChange={(statements) => setConfig(block, { statements: statements.map((row) => ({ id: row.id as LikertStatementId, label: row.label })) })}
+    />
   );
 }
 
@@ -1183,33 +1375,48 @@ export function SemanticDifferentialGeneral({ block }: InspectorProps<'semantic_
   return (
     <>
       <SelectField label={t(M['inspector.scale_max'])} value={String(block.config.max)} options={range(2, 10)} onChange={(v) => setConfig(block, { max: Number(v) })} />
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[12px] font-medium">{t(M['inspector.semantic_pairs'])}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-auto px-1 py-0 text-[12px] text-primary"
-            onClick={() => setConfig(block, { pairs: [...block.config.pairs, { id: APP_IDS.newId() as SemanticPairId, left: t(M['inspector.semantic_left']), right: t(M['inspector.semantic_right']) }] })}
-          >
-            {t(M['inspector.semantic_add'])}
-          </Button>
-        </div>
-        {block.config.pairs.map((pair, i) => (
-          <div key={pair.id} className="grid grid-cols-[1fr_1fr_auto] gap-1">
-            <TextField label="" value={pair.left} onChange={(left) => setConfig(block, { pairs: block.config.pairs.map((row, j) => (j === i ? { ...row, left } : row)) })} />
-            <TextField label="" value={pair.right} onChange={(right) => setConfig(block, { pairs: block.config.pairs.map((row, j) => (j === i ? { ...row, right } : row)) })} />
-            {block.config.pairs.length > 1 ? (
-              <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" onClick={() => setConfig(block, { pairs: block.config.pairs.filter((_, j) => j !== i) })}>
-                ×
-              </Button>
-            ) : null}
-          </div>
-        ))}
-      </div>
       <ConfigProblem block={block} />
     </>
+  );
+}
+
+/** Each pair is one row: the word at the low end and the word at the high end. */
+export function SemanticDifferentialOptions({ block }: InspectorProps<'semantic_differential'>) {
+  const pairs = block.config.pairs;
+  const write = (next: typeof pairs) => setConfig(block, { pairs: next });
+  return (
+    <div className="space-y-2">
+      <p className="text-[13px] font-medium leading-5">{t(M['inspector.semantic_pairs'])}</p>
+      <ul className="space-y-1.5">
+        {pairs.map((pair, i) => (
+          <li key={pair.id} className="flex items-center gap-1">
+            <Input className="min-w-0 flex-1" aria-label={t(M['inspector.semantic_left_n'], { n: i + 1 })} value={pair.left} onChange={(e) => write(pairs.map((row, j) => (j === i ? { ...row, left: e.target.value } : row)))} />
+            <span aria-hidden className="shrink-0 text-[12px] text-muted-foreground">to</span>
+            <Input className="min-w-0 flex-1" aria-label={t(M['inspector.semantic_right_n'], { n: i + 1 })} value={pair.right} onChange={(e) => write(pairs.map((row, j) => (j === i ? { ...row, right: e.target.value } : row)))} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label={t(M['inspector.list_remove'], { list: t(M['inspector.semantic_pairs']), n: i + 1 })}
+              disabled={pairs.length <= 1}
+              onClick={() => write(pairs.filter((_, j) => j !== i))}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full border-dashed text-muted-foreground hover:text-foreground"
+        onClick={() => write([...pairs, { id: APP_IDS.newId() as SemanticPairId, left: t(M['inspector.semantic_left']), right: t(M['inspector.semantic_right']) }])}
+      >
+        <Plus className="size-3.5" /> {t(M['inspector.semantic_add'])}
+      </Button>
+    </div>
   );
 }
 
@@ -1298,6 +1505,15 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
   return (
     <>
       <ToggleRow label={t(M['inspector.card_exclusive'])} checked={block.config.exclusive} onChange={(exclusive) => setConfig(block, { exclusive })} />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+/** The cards respondents sort, then the groups they sort them into (at least two). */
+export function CardSortOptions({ block }: InspectorProps<'card_sort'>) {
+  return (
+    <>
       <LabelList
         title={t(M['inspector.card_items'])}
         addLabel={t(M['inspector.card_add_item'])}
@@ -1308,12 +1524,12 @@ export function CardSortGeneral({ block }: InspectorProps<'card_sort'>) {
         title={t(M['inspector.card_buckets'])}
         addLabel={t(M['inspector.card_add_bucket'])}
         items={block.config.buckets}
+        min={2}
         onChange={(buckets) => {
           if (buckets.length < 2) return;
           setConfig(block, { buckets: buckets.map((row) => ({ id: row.id as CardBucketId, label: row.label })) });
         }}
       />
-      <ConfigProblem block={block} />
     </>
   );
 }
@@ -1352,6 +1568,17 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
           }}
         />
       ) : null}
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+/** The rows respondents answer and the columns they answer with. */
+export function MatrixOptions({ block }: InspectorProps<'matrix'>) {
+  const inputFor = (next: typeof block.config.mode) => (next === 'single' ? 'choice' as const : next === 'multi' ? 'checkbox' as const : 'text' as const);
+  const mode = block.config.mode;
+  return (
+    <>
       <LabelList
         title={t(M['inspector.matrix_rows'])}
         addLabel={t(M['inspector.matrix_add_row'])}
@@ -1372,7 +1599,6 @@ export function MatrixGeneral({ block }: InspectorProps<'matrix'>) {
           })
         }
       />
-      <ConfigProblem block={block} />
     </>
   );
 }
@@ -1395,9 +1621,9 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
         const name = child && isField(child) ? (plainText(child.label) || child.key) : id;
         return (
           <div key={id} className="flex items-center justify-between gap-2 text-[13px]">
-            <button type="button" className="truncate text-left hover:underline" onClick={() => useUiStore.getState().openInspector(id)}>
+            <TextLink asChild color="neutral" size="small" className="min-w-0 truncate text-left" ><button type="button" onClick={() => useUiStore.getState().openInspector(id)}>
               {name}{child ? ` · ${child.type.replace(/_/g, ' ')}` : ''}
-            </button>
+            </button></TextLink>
             <Button type="button" variant="ghost" size="icon-xs" className="text-destructive" aria-label={t(M['inspector.repeat_remove_field'])} onClick={() => requestDeleteBlock(id)}>×</Button>
           </div>
         );
@@ -1412,6 +1638,160 @@ export function RepeatingGroupGeneral({ block }: InspectorProps<'repeating_group
           if (tile?.kind === 'block') addChildBlock(block.id, tile.choice, { label: inlineDoc(tile.label) });
         }}
       />
+      <ConfigProblem block={block} />
+    </>
+  );
+}
+
+const DT_TYPE_KEYS = {
+  text: 'inspector.dtable_type_text',
+  number: 'inspector.dtable_type_number',
+  date: 'inspector.dtable_type_date',
+  email: 'inspector.dtable_type_email',
+  url: 'inspector.dtable_type_url',
+  phone: 'inspector.dtable_type_phone',
+  long_text: 'inspector.dtable_type_long_text',
+  datetime: 'inspector.dtable_type_datetime',
+  time: 'inspector.dtable_type_time',
+  formula: 'inspector.dtable_type_formula',
+} as const;
+
+const DT_SUMMARY_KEYS = {
+  none: 'inspector.dtable_summary_none',
+  sum: 'inspector.dtable_summary_sum',
+  average: 'inspector.dtable_summary_average',
+  min: 'inspector.dtable_summary_min',
+  max: 'inspector.dtable_summary_max',
+  count: 'inspector.dtable_summary_count',
+} as const;
+
+/** A row formula: the other columns in this table, inserted by label. */
+function ColumnFormula({ columns, column, onChange }: { columns: DynamicTableColumn[]; column: DynamicTableColumn; onChange: (formula: string) => void }) {
+  const [draft, setDraft] = useDraft(column.formula ?? '');
+  const others = columns.filter((col) => col.id !== column.id && col.label.trim() !== '');
+  const insert = (label: string) => {
+    const text = draft.trim() ? `${draft.trimEnd()} ${label}` : label;
+    setDraft(text);
+    onChange(text);
+  };
+  return (
+    <>
+      <TextField
+        label={t(M['inspector.dtable_formula'])}
+        hint={t(M['inspector.dtable_formula_hint'])}
+        value={draft}
+        placeholder="qty * price"
+        onChange={(text) => {
+          setDraft(text);
+          onChange(text);
+        }}
+      />
+      {others.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {others.map((col) => (
+            <Button key={col.id} type="button" variant="outline" size="sm" onClick={() => insert(col.label)}>
+              {col.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Column settings for the dynamic table: label, type, and (number columns, or count on any column) a footer summary. */
+export function DynamicTableGeneral({ block }: InspectorProps<'dynamic_table'>) {
+  const c = block.config;
+  const setColumns = (columns: DynamicTableColumn[]) => setConfig(block, { columns });
+  const updateColumn = (index: number, patch: Partial<DynamicTableColumn>) =>
+    setColumns(c.columns.map((col, i) => {
+      if (i !== index) return col;
+      const next = { ...col, ...patch };
+      if (next.formula === undefined || next.formula === '') delete next.formula;
+      if (next.input !== 'formula') delete next.formula;
+      return next;
+    }));
+  const addColumn = () => {
+    if (c.columns.length >= 20) return;
+    let n = c.columns.length + 1;
+    while (c.columns.some((col) => col.id === `column_${n}`)) n += 1;
+    setColumns([...c.columns, { id: `column_${n}` as DynamicColumnId, label: t(M['inspector.dtable_column_n'], { n }), input: 'text' }]);
+  };
+  const removeColumn = (index: number) => {
+    if (c.columns.length <= 1) return;
+    setColumns(c.columns.filter((_, i) => i !== index));
+  };
+  const setAddable = (type: DynamicColumnInput, on: boolean) => {
+    const next = on ? [...c.addableInputs.filter((x) => x !== type), type] : c.addableInputs.filter((x) => x !== type);
+    setConfig(block, { addableInputs: next });
+  };
+  const typeOptions = DYNAMIC_COLUMN_INPUTS.map((type) => ({ value: type, label: t(M[DT_TYPE_KEYS[type]]) }));
+  return (
+    <>
+      <SectionTitle>{t(M['inspector.dtable_columns'])}</SectionTitle>
+      {c.columns.map((col, index) => {
+        const summaries = col.input === 'number' || col.input === 'formula' ? (['none', 'sum', 'average', 'min', 'max', 'count'] as const) : (['none', 'count'] as const);
+        return (
+          <div key={col.id} className="flex flex-col gap-2 rounded-md border p-2" style={{ borderColor: 'var(--fr-inputBorder)' }}>
+            <TextField label={t(M['inspector.dtable_column_label'])} value={col.label} onChange={(label) => updateColumn(index, { label: label ?? '' })} />
+            <SelectField
+              label={t(M['inspector.dtable_type'])}
+              value={col.input}
+              options={typeOptions}
+              onChange={(input) => {
+                const next = input as DynamicTableColumn['input'];
+                const numeric = col.summary === 'sum' || col.summary === 'average' || col.summary === 'min' || col.summary === 'max';
+                // Numeric summaries only make sense on number columns; `count` works on any column.
+                const keep = numeric && next !== 'number' && next !== 'formula' ? undefined : col.summary;
+                updateColumn(index, keep === undefined ? { input: next, summary: 'none' } : { input: next, summary: keep });
+              }}
+            />
+            {col.input === 'formula' ? <ColumnFormula columns={c.columns} column={col} onChange={(formula) => updateColumn(index, { formula })} /> : null}
+            <TextField
+              label={t(M['inspector.dtable_summary_label'])}
+              value={col.summaryLabel ?? ''}
+              onChange={(summaryLabel) => updateColumn(index, { summaryLabel: summaryLabel ?? '' })}
+            />
+            <SelectField
+              label={t(M['inspector.dtable_summary'])}
+              value={col.summary ?? 'none'}
+              options={summaries.map((s) => ({ value: s, label: t(M[DT_SUMMARY_KEYS[s]]) }))}
+              onChange={(summary) => updateColumn(index, { summary: summary as DynamicSummary })}
+            />
+            <Button type="button" variant="ghost" size="xs" className="self-end text-destructive" onClick={() => removeColumn(index)} disabled={c.columns.length <= 1}>
+              {t(M['inspector.dtable_remove_column'])}
+            </Button>
+          </div>
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" onClick={addColumn} disabled={c.columns.length >= 20}>
+        {t(M['inspector.dtable_add_column'])}
+      </Button>
+      <SectionTitle>{t(M['inspector.repeat_fields'])}</SectionTitle>
+      <NumberField label={t(M['inspector.repeat_min'])} value={c.minRows} parse={parseInteger(0, 200)} onChange={(minRows) => minRows !== undefined && setConfig(block, { minRows })} />
+      <NumberField label={t(M['inspector.repeat_max'])} value={c.maxRows} parse={parseInteger(1, 200)} onChange={(maxRows) => maxRows !== undefined && setConfig(block, { maxRows })} />
+      <NumberField label={t(M['inspector.repeat_initial'])} value={c.initialRows} parse={parseInteger(0, 200)} onChange={(initialRows) => setConfig(block, { initialRows })} />
+      <ToggleRow
+        label={t(M['inspector.dtable_allow_add'])}
+        hint={t(M['inspector.dtable_allow_add_hint'])}
+        checked={c.allowAddColumns}
+        onChange={(allowAddColumns) => setConfig(block, { allowAddColumns })}
+      />
+      <NumberField label={t(M['inspector.dtable_max_columns'])} value={c.maxColumns} parse={parseInteger(1, 30)} onChange={(maxColumns) => maxColumns !== undefined && setConfig(block, { maxColumns })} />
+      {c.allowAddColumns ? (
+        <>
+          <SectionTitle>{t(M['inspector.dtable_addable'])}</SectionTitle>
+          {DYNAMIC_COLUMN_INPUTS.map((type, i) => (
+            <ToggleRow
+              key={type}
+              label={t(M[DT_TYPE_KEYS[type]])}
+              {...(i === 0 ? { hint: t(M['inspector.dtable_addable_hint']) } : {})}
+              checked={c.addableInputs.includes(type)}
+              onChange={(on) => setAddable(type, on)}
+            />
+          ))}
+        </>
+      ) : null}
       <ConfigProblem block={block} />
     </>
   );

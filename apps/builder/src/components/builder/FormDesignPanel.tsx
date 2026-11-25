@@ -8,11 +8,13 @@ import { useDraft } from '@/lib/useDraft';
 import { cn } from '@/lib/utils';
 import { setTheme } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Button, Input, Label, SearchInput, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
+import { Button, Input, Label, SearchInput } from '@dmacq/ui';
 import { Tooltip } from '@/components/Tooltip';
 import { NiceSelect } from '@/components/NiceSelect';
 import { SubmissionSettings } from '@/components/builder/ThemeSettings';
+import { LookupSettings } from '@/components/builder/LookupSettings';
 import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
+import { useUiStore } from '@/state/uiStore';
 import { ReviewSettings } from '@/components/builder/review/ReviewSettings';
 import { SectionBreakSettings } from '@/components/builder/SectionBreakSettings';
 import { ImagesSection } from '@/components/builder/design/ImagesSection';
@@ -22,12 +24,14 @@ import { themeImageUrl } from '@form/renderer/author';
 const M = defineMessages('builder', {
   'design.open': 'Form settings',
   'design.close': 'Close',
+  'design.back': 'Back to form builder',
   'design.title': 'Form settings',
   'design.colors': 'Colors',
   'design.styles': 'Styles',
   'design.themes': 'Themes',
   'design.submit': 'Submit',
-  'design.logic': 'Logic',
+  'design.lookup': 'API autofill',
+  'design.logic': 'Rules',
   'design.sections': 'Sections',
   'design.review': 'Review',
   'design.schemes': 'Color palette',
@@ -49,7 +53,7 @@ const M = defineMessages('builder', {
   'design.image_themes': 'Image templates',
 });
 
-const TABS = ['colors', 'styles', 'themes', 'logic', 'sections', 'review', 'submit'] as const;
+const TABS = ['colors', 'styles', 'themes', 'logic', 'sections', 'review', 'lookup', 'submit'] as const;
 type Tab = (typeof TABS)[number];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -64,23 +68,40 @@ function hexOf(value: unknown, fallback: string): string {
   return typeof value === 'string' && HEX.test(value) ? value : fallback;
 }
 
-export function FormDesignPanel({ children }: { children?: ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function FormDesignPanel({ children, showTrigger = true }: { children?: ReactNode; showTrigger?: boolean }) {
+  const open = useUiStore((s) => s.designOpen);
+  const setOpen = useUiStore((s) => s.setDesignOpen);
   const [tab, setTab] = useState<Tab>('colors');
   const [query, setQuery] = useState('');
-  const panelRef = useRef<HTMLDivElement>(null);
   const theme = useDoc((d) => d.theme);
   const tokens = theme.tokens;
-
+  const [switchMark, setSwitchMark] = useState(0);
+  const wasOpen = useRef(open);
   useEffect(() => {
-    if (!open) return;
-    const onDown = (event: PointerEvent) => {
-      if (eventFromPanel(event, panelRef.current)) return;
-      setOpen(false);
-    };
-    document.addEventListener('pointerdown', onDown, true);
-    return () => document.removeEventListener('pointerdown', onDown, true);
+    if (wasOpen.current === open) return;
+    wasOpen.current = open;
+    setSwitchMark((n) => n + 1);
   }, [open]);
+
+  // Keep the panel mounted while it slides back out to the right, then unmount it.
+  const [visible, setVisible] = useState(open);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
+      setLeaving(false);
+      return;
+    }
+    if (!visible) return;
+    setLeaving(true);
+    const id = window.setTimeout(() => {
+      setVisible(false);
+      setLeaving(false);
+    }, 450);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const showPanel = open || visible;
 
   const patch = (next: Theme) => setTheme(next);
   const patchTokens = (partial: Partial<ThemeTokens>) => patch({ ...theme, tokens: { ...tokens, ...partial } });
@@ -96,12 +117,22 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
   const schemeId = matchingSchemeId(theme);
   const presetId = matchingPresetId(theme);
 
+  const tabLabel = (id: Tab) =>
+    id === 'colors' ? t(M['design.colors'])
+    : id === 'styles' ? t(M['design.styles'])
+    : id === 'themes' ? t(M['design.themes'])
+    : id === 'logic' ? t(M['design.logic'])
+    : id === 'sections' ? t(M['design.sections'])
+    : id === 'review' ? t(M['design.review'])
+    : id === 'lookup' ? t(M['design.lookup'])
+    : t(M['design.submit']);
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 min-w-0 flex-1">
+      <div className={cn('relative flex min-h-0 min-w-0 flex-col', showPanel ? 'w-1/2 shrink-0 overflow-hidden' : 'flex-1')}>
         {children}
-        {!open ? (
-          <Tooltip content={t(M['design.open'])} side="left" className="absolute right-5 top-5 z-20">
+        {!open && showTrigger ? (
+          <Tooltip content={t(M['design.open'])} side="right" className="absolute right-5 top-5 z-20">
             <Button
               type="button"
               size="icon-lg"
@@ -114,46 +145,52 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
           </Tooltip>
         ) : null}
       </div>
-      <aside className={cn('min-h-0 shrink-0 overflow-hidden transition-[width] duration-300 ease-out', open ? 'w-[min(100%,380px)]' : 'w-0')}>
-        {open ? (
-          <div
-            ref={panelRef}
-            role="dialog"
-            aria-label={t(M['design.title'])}
-            className="ov-theme-dark flex h-full w-[380px] max-w-[100vw] flex-col bg-sidebar text-sidebar-foreground shadow-2xl"
-          >
-            <div className="flex items-center justify-between px-4 pt-4">
-              <h2 className="text-[16px] font-semibold">{t(M['design.title'])}</h2>
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['design.close'])} onClick={() => setOpen(false)}>
-                <X className="size-4" />
-              </Button>
-            </div>
-            <Tabs value={tab} onValueChange={(id) => setTab(id as Tab)} size="sm" fullWidth className="flex min-h-0 flex-1 flex-col">
-            <TabsList className="px-3">
-              {TABS.map((id) => {
-                const label =
-                  id === 'colors' ? t(M['design.colors'])
-                  : id === 'styles' ? t(M['design.styles'])
-                  : id === 'themes' ? t(M['design.themes'])
-                  : id === 'logic' ? t(M['design.logic'])
-                  : id === 'sections' ? t(M['design.sections'])
-                  : id === 'review' ? t(M['design.review'])
-                  : t(M['design.submit']);
-                return (
-                  <TabsTrigger key={id} value={id} className="text-[10px] uppercase tracking-wide">
-                    {label}
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <TabsContent value={tab} className="mt-0">
+      {showPanel ? (
+    <div className={cn('ov-theme-dark relative flex min-h-0 min-w-0 w-1/2 shrink-0 flex-col border-l border-sidebar-border bg-sidebar text-sidebar-foreground', leaving ? 'design-view-out' : switchMark > 0 && 'design-view-in')}>
+      <svg aria-hidden viewBox="0 0 100 2" preserveAspectRatio="none" className="design-switch-rule pointer-events-none absolute inset-x-0 top-0 z-20 h-0.5 w-full text-sidebar-primary">
+        <path d="M0 1h100" fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <nav aria-label={t(M['design.title'])} className="flex w-full shrink-0 flex-col border-b border-sidebar-border bg-sidebar">
+        <div className="px-3 pt-4">
+          <h2 className="px-2 pb-2 pt-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">{t(M['design.title'])}</h2>
+        </div>
+        <div role="tablist" aria-orientation="horizontal" className="flex flex-row flex-wrap gap-1 px-2 pb-2">
+          {TABS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={cn(
+                'rounded-md border-b-2 px-3 py-2 text-left text-[14px] whitespace-nowrap',
+                tab === id
+                  ? 'border-sidebar-primary bg-sidebar-accent font-medium text-sidebar-foreground'
+                  : 'border-transparent text-sidebar-muted hover:bg-sidebar-accent/40',
+              )}
+            >
+              {tabLabel(id)}
+            </button>
+          ))}
+        </div>
+      </nav>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={t(M['design.close'])}
+        onClick={() => setOpen(false)}
+        className="absolute right-4 top-4 z-30 text-sidebar-foreground"
+      >
+        <X className="size-5" />
+      </Button>
+      <div role="region" aria-label={t(M['design.title'])} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-sidebar">
+        <div key={tab} className="design-tab-in w-full px-6 py-6">
+          <h2 className="mb-5 text-[22px] font-semibold text-sidebar-foreground">{tabLabel(tab)}</h2>
               {tab === 'colors' ? (
-                <div className="space-y-5">
-                  <section>
-                    <p className="mb-3 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.schemes'])}</p>
-                    <div className="grid grid-cols-6 gap-2">
+                <div className="space-y-4">
+                  <SettingCard title={t(M['design.schemes'])}>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,4.5rem))] gap-2">
                       {schemes.map((scheme) => (
                         <button
                           key={scheme.id}
@@ -171,18 +208,24 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                         </button>
                       ))}
                     </div>
-                  </section>
-                  <ColorField label={t(M['design.page'])} value={tokens.colors.page} fallback={DEFAULT_COLORS.page} onChange={(v) => setColor('page', v)} />
-                  <ColorField label={t(M['design.form'])} value={tokens.colors.surface} fallback={DEFAULT_COLORS.surface} onChange={(v) => setColor('surface', v)} />
-                  <ColorField label={t(M['design.text'])} value={tokens.colors.text} fallback={DEFAULT_COLORS.text} onChange={(v) => setColor('text', v)} />
-                  <ColorField label={t(M['design.accent'])} value={tokens.colors.accent} fallback={DEFAULT_COLORS.accent} onChange={(v) => setColor('accent', v)} />
-                  <ColorField label={t(M['design.input'])} value={tokens.colors.inputBg} fallback={DEFAULT_COLORS.inputBg} onChange={(v) => setColor('inputBg', v)} />
-                  <ImagesSection theme={theme} onChange={patch} />
+                  </SettingCard>
+                  <SettingCard title={t(M['design.colors'])}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <ColorField label={t(M['design.page'])} value={tokens.colors.page} fallback={DEFAULT_COLORS.page} onChange={(v) => setColor('page', v)} />
+                    <ColorField label={t(M['design.form'])} value={tokens.colors.surface} fallback={DEFAULT_COLORS.surface} onChange={(v) => setColor('surface', v)} />
+                    <ColorField label={t(M['design.text'])} value={tokens.colors.text} fallback={DEFAULT_COLORS.text} onChange={(v) => setColor('text', v)} />
+                    <ColorField label={t(M['design.accent'])} value={tokens.colors.accent} fallback={DEFAULT_COLORS.accent} onChange={(v) => setColor('accent', v)} />
+                    <ColorField label={t(M['design.input'])} value={tokens.colors.inputBg} fallback={DEFAULT_COLORS.inputBg} onChange={(v) => setColor('inputBg', v)} />
+                  </div>
+                  </SettingCard>
+                  <SettingCard>
+                    <ImagesSection theme={theme} onChange={patch} />
+                  </SettingCard>
                 </div>
               ) : null}
 
               {tab === 'styles' ? (
-                <div className="space-y-4">
+                <SettingCard>
                   <Pair>
                     <SelectField label={t(M['design.width'])} value={tokens.formWidth} options={WIDTHS} onChange={(formWidth) => patchTokens({ formWidth: formWidth as ThemeTokens['formWidth'] })} />
                     <SelectField label={t(M['design.align'])} value={tokens.labelAlign} options={ALIGNS} onChange={(labelAlign) => patchTokens({ labelAlign: labelAlign as ThemeTokens['labelAlign'] })} />
@@ -210,45 +253,26 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                   <Button
                     type="button"
                     variant="secondary"
-                    className="w-full justify-start"
+                    className="justify-start"
                     onClick={() => patchTokens({ progress: tokens.progress === 'none' ? 'bar' : 'none' })}
                   >
                     {t(M['design.progress'])}: {tokens.progress === 'none' ? 'Off' : 'On'}
                   </Button>
-                </div>
+                </SettingCard>
               ) : null}
 
               {tab === 'themes' ? (
-                <div className="space-y-3">
-                  <SearchInput
-                    value={query}
-                    onValueChange={setQuery}
-                    placeholder={t(M['design.search'])}
-                    aria-label={t(M['design.search'])}
-                  />
-                  <p className="text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.image_themes'])}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {IMAGE_TEMPLATES.filter((template) => template.name.toLowerCase().includes(query.trim().toLowerCase())).map((template) => {
-                      const selected = presetId === template.id;
-                      const preview = themeImageUrl(template.scene);
-                      return (
-                        <button
-                          key={template.id}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => patch(applyImageTemplate(theme, template))}
-                          className={cn('flex w-full flex-col overflow-hidden rounded-xl border-2 text-left', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
-                        >
-                          <div className="relative h-24 w-full">
-                            {preview ? <img alt="" src={preview} className="absolute inset-0 h-full w-full object-cover" /> : null}
-                            <div className="absolute inset-x-3 bottom-3 h-10 rounded-md bg-white/90 shadow-sm" />
-                          </div>
-                          <p className="bg-sidebar-accent/50 px-3 py-2 text-[12px] font-medium leading-5">{template.name}</p>
-                        </button>
-                      );
-                    })}
+                <div className="space-y-4">
+                <SettingCard>
+                  <div className="max-w-sm">
+                    <SearchInput
+                      value={query}
+                      onValueChange={setQuery}
+                      placeholder={t(M['design.search'])}
+                      aria-label={t(M['design.search'])}
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
                     {themes.map((preset) => {
                       const page = hexOf(preset.tokens.colors.page, DEFAULT_COLORS.page);
                       const surface = hexOf(preset.tokens.colors.surface, DEFAULT_COLORS.surface);
@@ -278,34 +302,54 @@ export function FormDesignPanel({ children }: { children?: ReactNode }) {
                       );
                     })}
                   </div>
+                  <p className="text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{t(M['design.image_themes'])}</p>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+                    {IMAGE_TEMPLATES.filter((template) => template.name.toLowerCase().includes(query.trim().toLowerCase())).map((template) => {
+                      const selected = presetId === template.id;
+                      const preview = themeImageUrl(template.scene);
+                      return (
+                        <button
+                          key={template.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => patch(applyImageTemplate(theme, template))}
+                          className={cn('flex w-full flex-col overflow-hidden rounded-xl border-2 text-left', selected ? 'border-sidebar-primary' : 'border-sidebar-border')}
+                        >
+                          <div className="relative h-24 w-full">
+                            {preview ? <img alt="" src={preview} className="absolute inset-0 h-full w-full object-cover" /> : null}
+                            <div className="absolute inset-x-3 bottom-3 h-10 rounded-md bg-white/90 shadow-sm" />
+                          </div>
+                          <p className="bg-sidebar-accent/50 px-3 py-2 text-[12px] font-medium leading-5">{template.name}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SettingCard>
                 </div>
               ) : null}
 
-              {tab === 'logic' ? <FormLogicChecks /> : null}
+              {tab === 'logic' ? <SettingCard><FormLogicChecks /></SettingCard> : null}
 
-              {tab === 'sections' ? <SectionBreakSettings /> : null}
+              {tab === 'sections' ? <SettingCard><SectionBreakSettings /></SettingCard> : null}
 
-              {tab === 'review' ? <ReviewSettings /> : null}
-
-              {tab === 'submit' ? <SubmissionSettings dark /> : null}
-              </TabsContent>
-            </div>
-            </Tabs>
-          </div>
-        ) : null}
-      </aside>
+              {tab === 'review' ? <SettingCard><ReviewSettings /></SettingCard> : null}
+              {tab === 'lookup' ? <SettingCard><LookupSettings /></SettingCard> : null}
+              {tab === 'submit' ? <SettingCard><SubmissionSettings dark /></SettingCard> : null}
+        </div>
+      </div>
+    </div>
+      ) : null}
     </div>
   );
 }
 
-const FLOATING_UI = '[data-nice-select],[data-slot="select-content"],[data-slot="select-item"],[data-slot="select-trigger"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"],[data-radix-popper-content-wrapper],[role="listbox"]';
-
-function eventFromPanel(event: PointerEvent, panel: HTMLElement | null): boolean {
-  const path = event.composedPath();
-  if (panel && path.includes(panel)) return true;
-  const target = event.target;
-  if (target instanceof Node && !document.contains(target)) return true;
-  return path.some((node) => node instanceof Element && node.closest(FLOATING_UI));
+function SettingCard({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-sidebar-border bg-sidebar-accent/25 p-5">
+      {title ? <p className="mb-4 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{title}</p> : null}
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
 }
 
 function Pair({ children }: { children: ReactNode }) {
@@ -336,18 +380,18 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 }
 
 function NumberField({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const [draft, setDraft] = useDraft(String(value));
   return (
     <div className="space-y-1.5">
       <Label className="text-sidebar-foreground/80">{label}</Label>
       <Input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
+        inputMode="numeric"
+        value={draft}
         className="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground"
         onChange={(e) => {
+          setDraft(e.target.value);
           const n = Number(e.target.value);
-          if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.round(n))));
+          if (e.target.value.trim() !== '' && Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.round(n))));
         }}
       />
     </div>

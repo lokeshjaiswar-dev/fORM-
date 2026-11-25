@@ -356,6 +356,38 @@ describe('evaluate', () => {
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '13.5' } });
   });
 
+  it('leaves a hidden number out of a formula: addition skips it and multiplication does not zero out', () => {
+    const ref = (name: string): S.Expr => ({ k: 'ref', ref: { kind: 'answer', blockId: bid(name) } });
+    const total = (...parts: S.Expr[]): S.Expr => parts.slice(1).reduce<S.Expr>((left, right) => ({ k: 'binary', op: '+', left, right }), parts[0] as S.Expr);
+    const product = (...parts: S.Expr[]): S.Expr => parts.slice(1).reduce<S.Expr>((left, right) => ({ k: 'binary', op: '*', left, right }), parts[0] as S.Expr);
+    const calc = (id: string, expr: S.Expr) => field('calculation', id, { config: { expr, resultType: 'number', display: 'visible' } });
+    const def = form(
+      [
+        field('number', 'price'),
+        field('number', 'igst'),
+        field('number', 'cgst'),
+        field('number', 'sgst'),
+        field('number', 'rate'),
+        field('number', 'factor'),
+        calc('total', total(ref('price'), ref('igst'), ref('cgst'), ref('sgst'))),
+        calc('gross', product(ref('price'), ref('rate'), ref('factor'))),
+      ],
+      [page('p1', ['price', 'igst', 'cgst', 'sgst', 'rate', 'factor', 'total', 'gross'])],
+      [rule('tax', cond(ans('price'), 'is_answered'), [hide('cgst'), hide('sgst'), hide('factor')])],
+    );
+    const state = evaluate(versionOf(def), {
+      [bid('price')]: a.number('100'),
+      [bid('igst')]: a.number('18'),
+      [bid('cgst')]: a.number('9'),
+      [bid('sgst')]: a.number('9'),
+      [bid('rate')]: a.number('2'),
+      [bid('factor')]: a.number('5'),
+    }, META, 'client');
+    expect(state.visible.has(bid('cgst'))).toBe(false);
+    expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '118' } });
+    expect(state.values[bid('gross')]).toEqual({ type: 'calculation', value: { t: 'number', v: '200' } });
+  });
+
   it('a formula sums every row of a repeating-group number', () => {
     const def = form(
       [
@@ -378,6 +410,94 @@ describe('evaluate', () => {
     ]);
     const state = evaluate(versionOf(def), { [bid('items')]: rows }, META, 'client');
     expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '30' } });
+  });
+
+  it('sums the option value filled into each row, and a row formula uses that row’s value', () => {
+    const fill = rule('fill', cond(ans('item'), 'is_answered'), [{
+      type: 'set_value',
+      target: bid('price'),
+      value: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('item') } }] },
+    }]);
+    const perRow: S.Expr = {
+      k: 'binary',
+      op: '*',
+      left: { k: 'ref', ref: { kind: 'answer', blockId: bid('qty'), row: 'current' } },
+      right: { k: 'ref', ref: { kind: 'answer', blockId: bid('price'), row: 'current' } },
+    };
+    const def = form(
+      [
+        field('repeating_group', 'items', { config: { children: [bid('item'), bid('price'), bid('qty'), bid('line')], minRows: 0, maxRows: 10, initialRows: 1, layout: 'stacked' } }),
+        field('single_choice', 'item', { config: { display: 'dropdown', options: [{ id: oid('burger'), label: 'Burger', code: '40' }, { id: oid('fries'), label: 'Fries', code: '15' }] } }),
+        field('short_text', 'price'),
+        field('number', 'qty'),
+        field('calculation', 'line', { config: { expr: perRow, resultType: 'number', display: 'visible' } }),
+        field('calculation', 'total', {
+          config: {
+            expr: { k: 'call', fn: 'sum', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('price') } }] },
+            resultType: 'number',
+            display: 'visible',
+          },
+        }),
+      ],
+      [page('p1', ['items', 'total'])],
+      [fill],
+    );
+    const rows = a.group([
+      { rowId: 'row_1', values: { [bid('item')]: a.single('burger'), [bid('qty')]: a.number('2') } },
+      { rowId: 'row_2', values: { [bid('item')]: a.single('fries'), [bid('qty')]: a.number('3') } },
+    ]);
+    const state = evaluate(versionOf(def), { [bid('items')]: rows }, META, 'client');
+    expect(state.rowValues?.[bid('line')]).toEqual({
+      row_1: { t: 'number', v: '80' },
+      row_2: { t: 'number', v: '45' },
+    });
+    expect(state.values[bid('total')]).toEqual({ type: 'calculation', value: { t: 'number', v: '55' } });
+    expect(state.rowValues?.[bid('price')]).toEqual({
+      row_1: { t: 'text', v: '40' },
+      row_2: { t: 'text', v: '15' },
+    });
+  });
+
+  it('copies the selected option value into a text field', () => {
+    const def = form(
+      [
+        field('single_choice', 'menu', { config: { display: 'dropdown', options: [{ id: oid('burger'), label: 'Burger', code: '467' }] } }),
+        field('short_text', 'price'),
+      ],
+      [page('p1', ['menu', 'price'])],
+      [rule('fill', cond(ans('menu'), 'is_answered'), [{
+        type: 'set_value',
+        target: bid('price'),
+        value: { k: 'call', fn: 'option_code', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('menu') } }] },
+      }])],
+    );
+    const version = versionOf(def);
+    const state = evaluate(version, { [bid('menu')]: a.single('burger') }, META, 'client');
+    expect(state.values[bid('price')]).toEqual({ type: 'short_text', value: '467' });
+    const session = createEvaluator(version, META, 'client');
+    session.evaluate({});
+    const next = session.update({ [bid('menu')]: a.single('burger') }, [bid('menu')]);
+    expect(next.values[bid('price')]).toEqual({ type: 'short_text', value: '467' });
+  });
+
+  it('treats “is” between an option and the first characters as the option value', () => {
+    const prefix = expr({ k: 'call', fn: 'left', args: [{ k: 'ref', ref: { kind: 'answer', blockId: bid('gstin') } }, { k: 'lit', value: { type: 'number', value: '2' as S.DecimalString } }] });
+    const def = form(
+      [
+        field('single_choice', 'state', { config: { display: 'dropdown', options: [
+          { id: oid('mh'), label: 'Maharashtra', code: '27' },
+          { id: oid('ka'), label: 'Karnataka', code: '29' },
+        ] } }),
+        field('short_text', 'gstin'),
+        field('short_text', 'igst'),
+      ],
+      [page('p1', ['state', 'gstin', 'igst'])],
+      [rule('gst', cond(ans('state'), 'eq', prefix), [hide('igst')], [show('igst')])],
+    );
+    const match = evaluate(versionOf(def), { [bid('state')]: a.single('mh'), [bid('gstin')]: a.text('27AAAAA0000A1Z5') }, META, 'client');
+    expect(match.visible.has(bid('igst'))).toBe(false);
+    const mismatch = evaluate(versionOf(def), { [bid('state')]: a.single('mh'), [bid('gstin')]: a.text('29AAAAA0000A1Z5') }, META, 'client');
+    expect(mismatch.visible.has(bid('igst'))).toBe(true);
   });
 
   it('blocks submit when a text field does not start with another field’s option code', () => {

@@ -29,6 +29,7 @@ export const PALETTE_LABELS = defineMessages('builder', {
   'palette.ranking': 'Ranking',
   'palette.matrix': 'Input table',
   'palette.repeating_group': 'Configurable list',
+  'palette.dynamic_table': 'Dynamic table',
   'palette.full_name': 'Full name',
   'palette.address': 'Address',
   'palette.datetime': 'Date and time',
