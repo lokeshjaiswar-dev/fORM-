@@ -241,7 +241,7 @@ describe('/embed/dms-master', () => {
     ];
     const fetch = vi.fn().mockResolvedValueOnce(json(200, shown({ form_builder_fields: fields }))).mockResolvedValueOnce(json(200, shown({ form_builder_fields: fields })));
     vi.stubGlobal('fetch', fetch);
-    const { navigate } = open(descriptor({ masterId: MASTER, master: undefined }));
+    open(descriptor({ masterId: MASTER, master: undefined }));
     await screen.findByTestId('dms-master-builder', undefined, READY);
     const user = userEvent.setup();
     expect(screen.getAllByText('Linked to Country').length).toBeGreaterThan(0);
