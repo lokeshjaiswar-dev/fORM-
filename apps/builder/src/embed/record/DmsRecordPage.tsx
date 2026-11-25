@@ -84,7 +84,7 @@ function RecordApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (ur
       .load(launch.masterId as string, launch.recordId)
       .then((loaded) => {
         if (!live) return;
-        const planned = loaded.source === 'formplus' ? planRecordForm(loaded.elements, loaded.values, loaded.masterName, todayInstant()) : null;
+        const planned = loaded.source === 'formplus' ? planRecordForm(loaded.elements, loaded.values, loaded.masterName, todayInstant(), loaded.recordId) : null;
         setLoad({ state: 'ready', loaded, form: planned?.ok ? planned.form : null, formError: planned && !planned.ok ? planned.message : null });
       })
       .catch((e: unknown) => {
@@ -161,7 +161,7 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
       const name = fieldNameOf(el);
       const block = form.blocks[id];
       const answer = answers.current[id as keyof Answers];
-      out[name] = JSON.stringify(answer ?? null) === form.baseline[id] || !block ? (loaded.values[name] ?? '') : answerToDms(block, (answer as { value?: never } | undefined)?.value);
+      out[name] = !block || (!adding && JSON.stringify(answer ?? null) === form.baseline[id]) ? (loaded.values[name] ?? '') : answerToDms(block, (answer as { value?: never } | undefined)?.value);
     }
     return out;
   }

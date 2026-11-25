@@ -30,7 +30,8 @@ export type RecordFormResult = { ok: true; form: RecordForm } | { ok: false; mes
 const forRender = (el: DmsElement): DmsElement =>
   isIncrementElement(el) ? { ...el, type: 'textinput', numeric: true, specialChars: true, required: false, primary: false } : el;
 
-export function planRecordForm(elements: readonly DmsElement[], values: DmsRecordValues, title: string, today: IsoInstant): RecordFormResult {
+export function planRecordForm(elements: readonly DmsElement[], values: DmsRecordValues, title: string, today: IsoInstant, recordId: string | null = null): RecordFormResult {
+  const editing = recordId !== null;
   const translated = elements.map(forRender);
   let def: FormDefinition = elementsToDefinition(translated, { formId: FORM_ID, title, locale: LOCALE, base: blankDmsDefinition(FORM_ID, title, LOCALE) });
   const blocks: Partial<Record<BlockId, StoredBlock>> = { ...def.blocks };
@@ -42,12 +43,21 @@ export function planRecordForm(elements: readonly DmsElement[], values: DmsRecor
     const block = blocks[id];
     if (!block || block.type === 'unsupported') return { ok: false, message: `The field "${fieldNameOf(el)}" could not be shown.` };
     const locked = isLegacyElement(el) || isIncrementElement(el);
-    const field = (locked ? { ...block, readOnly: true, required: false } : block) as FieldBlock;
+    let field = (locked ? { ...block, readOnly: true, required: false } : block) as FieldBlock;
+    /* Edit shows and compares what DMS stores: a "today" default must not appear or count as a change. */
+    if (editing && field.type === 'date' && field.config.defaultValue !== undefined) {
+      const { defaultValue: _dropped, ...config } = field.config;
+      field = { ...field, config } as FieldBlock;
+    }
     blocks[id] = field as StoredBlock;
     byId[id] = field;
     const answer = dmsToAnswer(field, values[fieldNameOf(el)] ?? '');
     if (answer !== undefined) answers[id] = { type: field.type, value: answer } as AnswerValue;
     baseline[id] = JSON.stringify(answers[id] ?? null);
+    /* Add: the default the screen shows is part of the starting answers, so it is what gets posted. */
+    if (!editing && answers[id] === undefined && field.type === 'date' && field.config.defaultValue?.kind === 'today') {
+      answers[id] = { type: 'date', value: today.slice(0, 10) } as AnswerValue;
+    }
   }
   def = { ...def, blocks, theme: { ...def.theme, tokens: { ...def.theme.tokens, density: 'compact', formWidth: 'wide' } } };
   const compiled = (() => {

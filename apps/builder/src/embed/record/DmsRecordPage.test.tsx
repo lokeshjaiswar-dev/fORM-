@@ -13,7 +13,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 interface Call { method: string; path: string; body: unknown }
 
 /** An in-process DMS answering from the fixture. */
-function dms(over: { master?: unknown; patch?: Response; post?: Response; masterStatus?: number } = {}) {
+function dms(over: { master?: unknown; record?: unknown; patch?: Response; post?: Response; masterStatus?: number } = {}) {
   const calls: Call[] = [];
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -22,7 +22,7 @@ function dms(over: { master?: unknown; patch?: Response; post?: Response; master
     const path = url.slice(API.length);
     calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
     if (method === 'GET' && path === fixtures.loadMaster.request.path) return json(over.masterStatus ?? 200, over.master ?? fixtures.loadMaster.response.body);
-    if (method === 'GET' && path === fixtures.loadRecord.request.path) return json(200, fixtures.loadRecord.response.body);
+    if (method === 'GET' && path === fixtures.loadRecord.request.path) return json(200, over.record ?? fixtures.loadRecord.response.body);
     if (method === 'POST' && path === fixtures.create.request.path) return over.post ?? json(201, fixtures.create.response.body);
     if (method === 'PATCH' && path === fixtures.update.request.path) return over.patch ?? json(200, fixtures.update.response.body);
     return json(404, {});
@@ -77,6 +77,56 @@ describe('/embed/dms-record launch', () => {
     open({ ...add(), apiBase: 'https://evil.example/api' });
     expect(screen.getByText(/not set up to talk to/)).toBeInTheDocument();
     expect(calls).toHaveLength(0);
+  });
+});
+
+/** The fixture master with the Joined date defaulting to today (what the converter writes for prefill_today). */
+const withTodayDefault = () => {
+  const m = structuredClone(fixtures.loadMaster.response.body);
+  const joined = m.data.form_builder_fields.find((f) => f.name === 'Joined')!;
+  (joined as { isDefaultToDate: boolean }).isDefaultToDate = true;
+  return m;
+};
+const todayDms = () => {
+  const [y, mo, d] = new Date().toISOString().slice(0, 10).split('-');
+  return `${d}-${mo}-${y}`;
+};
+
+describe('/embed/dms-record date default (isDefaultToDate)', () => {
+  it('edit: a record with no stored date shows none, and changing only Tier PATCHes {Tier}', async () => {
+    const rec = structuredClone(fixtures.loadRecord.response.body);
+    rec.data.json_data = JSON.stringify({ ...JSON.parse(rec.data.json_data), Joined: '' });
+    const calls = dms({ master: withTodayDefault(), record: rec });
+    const navigate = open(edit());
+    await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: /Tier/ }), 'Silver');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    const writes = calls.filter((c) => c.method !== 'GET');
+    expect(writes).toHaveLength(1);
+    expect((writes[0]!.body as { json_data: unknown }).json_data).toEqual({ Tier: 'Silver' });
+  });
+  it('edit: the same record saved unchanged sends nothing', async () => {
+    const rec = structuredClone(fixtures.loadRecord.response.body);
+    rec.data.json_data = JSON.stringify({ ...JSON.parse(rec.data.json_data), Joined: '' });
+    const calls = dms({ master: withTodayDefault(), record: rec });
+    const navigate = open(edit());
+    await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(calls.filter((c) => c.method !== 'GET')).toHaveLength(0);
+  });
+  it('add: an untouched default date is posted as today in the DMS format', async () => {
+    const calls = dms({ master: withTodayDefault() });
+    const navigate = open(add());
+    const name = await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    const user = userEvent.setup();
+    await user.type(name, 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    const post = calls.find((c) => c.method === 'POST')!;
+    expect((post.body as { json_data: Record<string, string> }).json_data.Joined).toBe(todayDms());
   });
 });
 
