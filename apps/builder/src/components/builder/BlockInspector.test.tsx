@@ -509,7 +509,9 @@ describe('formula fields from a filled option value', () => {
   });
 });
 
-describe('dropdown fill toggle', () => {
+// Merge of lan121/dev-lokesh (2026-11-25): "Fill from option" writes a set_value rule, which compile() refuses until
+// WP-2.01 (review redaction relies on rules writing no data), so the builder does not offer it (SET_VALUE_AVAILABLE).
+describe.skip('dropdown fill toggle', () => {
   beforeEach(() => {
     resetStore([
       block('single_choice', 'menu', {
