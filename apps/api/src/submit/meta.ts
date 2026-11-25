@@ -1,4 +1,5 @@
-import type { FormDefinition } from '@form/schema';
+import { setValueTargets } from '@form/logic';
+import type { BlockId, FormDefinition } from '@form/schema';
 
 /*
  * What a stored response says about how it was made: `submissions.meta` (architecture §2.4). Every value that comes from
@@ -92,22 +93,46 @@ export function buildMeta(input: MetaInput): Record<string, unknown> {
 /** Block types whose value the server makes: a respondent's word for them is never taken (see `withoutServerOwned`). */
 const SERVER_OWNED: ReadonlySet<string> = new Set(['hidden', 'calculation', 'context', 'unique_id']);
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * A repeating group's answer without the row values of children the server fills: a row's copy of a field a rule sets
+ * would otherwise stand in for the option code a row formula reads (`price` in `qty * price`). Anything that is not the
+ * group's shape is passed on unchanged, for validation to report.
+ */
+function rowsWithoutServerOwned(answer: unknown, owned: (id: string) => boolean): unknown {
+  if (!isRecord(answer) || !isRecord(answer['value']) || !Array.isArray(answer['value']['rows'])) return answer;
+  const rows = answer['value']['rows'].map((row: unknown) => {
+    if (!isRecord(row) || !isRecord(row['values'])) return row;
+    const values = Object.fromEntries(Object.entries(row['values']).filter(([id]) => !owned(id)));
+    return { ...row, values };
+  });
+  return { ...answer, value: { ...answer['value'], rows } };
+}
+
 /**
  * The answers for the blocks the respondent may answer: those of blocks the form has, without the ones whose value comes
- * from the server's own evaluation: a calculation, a context (address, referrer, language, ...), a unique ID, and a
- * hidden field, which captures a URL parameter or a fixed value the form defines. The evaluator fills them again from
- * the form and from the page-view details the route passes it; without this a respondent could write any value into a
- * hidden field that the URL did not set, which the evaluator keeps (it only overwrites a hidden field when its source
- * has a value). An id that is not a block of this form is dropped as well: it was never kept, and this keeps odd keys
- * (`__proto__`) out of everything after.
+ * from the server's own evaluation: a calculation, a context (address, referrer, language, ...), a unique ID, a hidden
+ * field, which captures a URL parameter or a fixed value the form defines, and a field an enabled rule sets (`set_value`:
+ * set, percent, fill from an option; WP-2.01), anywhere in the form, rows of a repeating group included. The evaluator
+ * fills them again from the form and from the page-view details the route passes it; without this a respondent could
+ * write any value into a hidden field that the URL did not set, or into a field a rule sets when the rule does not
+ * write it (its condition is false, or its value works out to nothing), which the evaluator keeps (it only overwrites
+ * such a field when it has a value for it). An id that is not a block of this form is dropped as well: it was never
+ * kept, and this keeps odd keys (`__proto__`) out of everything after.
  */
 export function withoutServerOwned(definition: FormDefinition, raw: Record<string, unknown>): Record<string, unknown> {
+  const targets = setValueTargets(definition);
+  const owned = (blockId: string): boolean => {
+    const block = Object.hasOwn(definition.blocks, blockId) ? definition.blocks[blockId as keyof FormDefinition['blocks']] : undefined;
+    return block !== undefined && (SERVER_OWNED.has(block.type) || targets.has(blockId as BlockId));
+  };
   const out: Record<string, unknown> = {};
   for (const [blockId, answer] of Object.entries(raw)) {
     if (!Object.hasOwn(definition.blocks, blockId)) continue;
     const block = definition.blocks[blockId as keyof FormDefinition['blocks']];
-    if (block === undefined || SERVER_OWNED.has(block.type)) continue;
-    out[blockId] = answer;
+    if (block === undefined || owned(blockId)) continue;
+    out[blockId] = block.type === 'repeating_group' ? rowsWithoutServerOwned(answer, owned) : answer;
   }
   return out;
 }

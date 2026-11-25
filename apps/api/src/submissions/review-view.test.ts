@@ -155,6 +155,27 @@ describe('the redaction loader', () => {
     const seen = await createRedactionLoader().visibility(tx, redacted, [V1]);
     expect([...seen.of(V1)!]).toEqual(['a']);
   });
+
+  it('loads the values rules set (compiled.ruleWrites, WP-2.01) and hides a field a rule copies from a hidden unit', async () => {
+    // copy sits in unit A, and a rule writes it from unit B's block b: a unit-A checker must not read it.
+    const copied = {
+      documentOrder: ['a', 'b', 'copy'],
+      reviewUnits: { u_a: ['a', 'copy'], u_b: ['b'] },
+      plan: [{ kind: 'rule', ruleId: 'r', scope: 'client+server' }],
+      reads: { 'rule:r': ['value:a', 'value:b'] },
+      ruleWrites: { 'rule:r': ['value:copy'] },
+    };
+    let asked: { scoping?: { queryChunks?: unknown[] } } = {};
+    const where = vi.fn().mockResolvedValue([{ id: V1, scoping: copied }, { id: V2, scoping: { ...copied, ruleWrites: ['value:copy'] } }]);
+    const tx = { select: (fields: typeof asked) => { asked = fields; return { from: () => ({ where }) }; } } as unknown as Tx;
+    const seen = await createRedactionLoader().visibility(tx, redacted, [V1, V2]);
+    expect([...seen.of(V1)!]).toEqual(['a']);
+    // A ruleWrites that is not an object cannot be followed: the version shows nothing.
+    expect([...seen.of(V2)!]).toEqual([]);
+    // The version read picks ruleWrites out of the stored compiled form along with the plan and its reads.
+    const text = (asked.scoping?.queryChunks ?? []).flatMap((c) => (typeof c === 'object' && c !== null && Array.isArray((c as { value?: unknown }).value) ? (c as { value: string[] }).value : [])).join('');
+    expect(text).toContain("'ruleWrites', ");
+  });
 });
 
 describe('reviewSummaries', () => {

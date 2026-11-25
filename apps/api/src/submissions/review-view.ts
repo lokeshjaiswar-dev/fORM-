@@ -59,12 +59,15 @@ export const SEES_ALL: Visibility = { of: () => null };
 export const mayShow = (visible: ReadonlySet<BlockId> | null, blockId: string): boolean => visible === null || visible.has(blockId as BlockId);
 
 /** The parts of a compiled form that decide what a reviewer sees. */
-type Scoping = Pick<CompiledForm, 'documentOrder' | 'reviewUnits' | 'plan' | 'reads'>;
+type Scoping = Pick<CompiledForm, 'documentOrder' | 'reviewUnits' | 'plan' | 'reads' | 'ruleWrites'>;
 
 const isScoping = (value: unknown): value is Scoping => {
   if (value === null || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return Array.isArray(v['documentOrder']) && Array.isArray(v['plan']) && v['reads'] !== null && typeof v['reads'] === 'object';
+  /* `ruleWrites` (the values rules set, WP-2.01) is absent on a version with no such rule; anything else fails closed. */
+  const writes = v['ruleWrites'];
+  const writesOk = writes === undefined || writes === null || (typeof writes === 'object' && !Array.isArray(writes));
+  return Array.isArray(v['documentOrder']) && Array.isArray(v['plan']) && v['reads'] !== null && typeof v['reads'] === 'object' && writesOk;
 };
 
 /**
@@ -87,7 +90,7 @@ export function createRedactionLoader(o: { maxEntries?: number; maxBytes?: numbe
     const rows = await tx
       .select({
         id: formVersions.id,
-        scoping: sql<unknown>`jsonb_build_object('documentOrder', ${formVersions.compiled} -> 'documentOrder', 'reviewUnits', ${formVersions.compiled} -> 'reviewUnits', 'plan', ${formVersions.compiled} -> 'plan', 'reads', ${formVersions.compiled} -> 'reads')`,
+        scoping: sql<unknown>`jsonb_build_object('documentOrder', ${formVersions.compiled} -> 'documentOrder', 'reviewUnits', ${formVersions.compiled} -> 'reviewUnits', 'plan', ${formVersions.compiled} -> 'plan', 'reads', ${formVersions.compiled} -> 'reads', 'ruleWrites', ${formVersions.compiled} -> 'ruleWrites')`,
       })
       .from(formVersions)
       .where(inArray(formVersions.id, missing));

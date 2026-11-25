@@ -78,6 +78,7 @@ describe('withoutServerOwned', () => {
   const block = (type: string) => ({ id: type, type, key: type });
   const definition = {
     blocks: { name: block('short_text'), source: block('hidden'), total: block('calculation'), where: block('context'), ticket: block('unique_id') },
+    logic: { rules: [], variables: [] },
   } as unknown as FormDefinition;
 
   it('keeps the answers of blocks the respondent answers and drops the four kinds the server fills in', () => {
