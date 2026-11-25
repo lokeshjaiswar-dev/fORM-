@@ -7,6 +7,7 @@ import { type BlockId, type BlockOf, type BlockStyle, type FieldBlock, type HexC
 import { t } from '@/i18n';
 import type { ProfileName } from '@/embed/launch';
 import { useProfile } from '@/embed/useProfile';
+import { legacyOfBlock } from '@form/registry/profiles/dms-v1';
 import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { tileOf } from '@/fields/tiles';
@@ -117,8 +118,15 @@ type Section = 'general' | 'options' | 'validation';
 const sectionOf = (block: StoredBlock, section: Section): ComponentType<InspectorProps<AvailableType>> | undefined =>
   isAvailable(block.type) ? (INSPECTOR[block.type][section] as ComponentType<InspectorProps<AvailableType>> | undefined) : undefined;
 
+/**
+ * Profile dms-v1: a converted OpenForm field with no lossless target (`legacy.readOnly`) keeps its type, options and
+ * settings as stored. Only the General tab stays, with a notice; rename, reorder and delete work on the canvas.
+ */
+const legacyLock = (block: StoredBlock, profile: ProfileName) => (profile === 'dms-v1' ? legacyOfBlock(block) : null);
+
 function tabsFor(block: StoredBlock, profile: ProfileName): Tab[] {
   const tabs: Tab[] = ['general'];
+  if (legacyLock(block, profile)) return tabs;
   if (sectionOf(block, 'options')) tabs.push('options');
   if (isField(block)) tabs.push('validation');
   // DMS forms have no logic and no per-field privacy settings (profile dms-v1).
@@ -264,7 +272,7 @@ export function BlockInspector() {
             ))}
           </TabsList>
           <TabsContent value={shown} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {shown === 'general' ? <GeneralTab block={block} /> : null}
+            {shown === 'general' ? (legacyLock(block, profile) ? <LegacyLockedNotice from={legacyLock(block, profile)!.from} /> : <GeneralTab block={block} />) : null}
             {shown === 'options' ? <Registered block={block} section="options" /> : null}
             {shown === 'validation' && isField(block) ? <ValidationTab block={block} /> : null}
             {shown === 'logic' ? <LogicTab blockId={block.id} /> : null}
@@ -273,6 +281,14 @@ export function BlockInspector() {
         </Tabs>
       </div>
     </aside>
+  );
+}
+
+function LegacyLockedNotice({ from }: { from: string }) {
+  return (
+    <p role="note" className="text-[13px] text-muted-foreground">
+      This field was converted from an OpenForm "{from}" field. Its type, options and settings are locked and it is read-only in records. You can rename it, move it or delete it.
+    </p>
   );
 }
 
