@@ -324,15 +324,6 @@ export function validateStructure(def: FormDefinition, options: StructureOptions
     }
   };
 
-  /* One primary key per form: it is what identifies a submission. */
-  let primaryKeyAt: string | undefined;
-  for (const [id, b] of blocks) {
-    if (!('primaryKey' in b) || b.primaryKey !== true) continue;
-    const path = jsonPointer('blocks', id, 'primaryKey');
-    if (primaryKeyAt === undefined) primaryKeyAt = path;
-    else error('duplicate_key', path, `only one field can be the primary key; ${primaryKeyAt} already is`);
-  }
-
   for (const [id, b] of blocks) {
     const at = (...rest: Array<string | number>) => jsonPointer('blocks', id, ...rest);
     switch (b.type) {

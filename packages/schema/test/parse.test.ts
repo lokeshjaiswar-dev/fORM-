@@ -73,6 +73,13 @@ describe('runtime twins reject what the types reject', () => {
     expect(ok(plan, [{ kind: 'rule', ruleId: 'r', scope: 'server' }])).toBe(false);
   });
 
+  it('a session details block captures at least one fact (review N1)', () => {
+    expect(ok(S.ContextConfigSchema, { sources: [], display: 'hidden' })).toBe(false);
+    expect(ok(S.ContextConfigSchema, { sources: ['locale'], display: 'hidden' })).toBe(true);
+    expect(ok(S.ContextConfigSchema, { sources: [], urlParams: ['ref'] })).toBe(true);
+    expect(ok(S.ContextConfigSchema, { sources: [], staticFacts: [{ key: 'campaign', value: 'diwali' }] })).toBe(true);
+  });
+
   it('consent items are never pre-ticked', () => {
     const item = { id: 'i', label: inline('Yes'), requiredToSubmit: false, defaultChecked: false };
     expect(ok(S.ConsentItemSchema, item)).toBe(true);

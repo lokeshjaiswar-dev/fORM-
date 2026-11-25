@@ -468,7 +468,8 @@ export const ContextConfigSchema = z.strictObject({
   staticFacts: z.array(ContextStaticFactSchema).max(20).exactOptional(),
 }).refine((config) => new Set(config.sources).size === config.sources.length, 'sources must be unique')
   .refine((config) => !config.urlParams || new Set(config.urlParams).size === config.urlParams.length, 'url params must be unique')
-  .refine((config) => !config.staticFacts || new Set(config.staticFacts.map((f) => f.key)).size === config.staticFacts.length, 'static keys must be unique');
+  .refine((config) => !config.staticFacts || new Set(config.staticFacts.map((f) => f.key)).size === config.staticFacts.length, 'static keys must be unique')
+  .refine((config) => config.sources.length > 0 || (config.urlParams?.length ?? 0) > 0 || (config.staticFacts?.length ?? 0) > 0, 'session details need at least one fact');
 export const UniqueIdConfigSchema = z.strictObject({
   prefix: PlainTemplateSchema,
   padTo: count.max(20),
