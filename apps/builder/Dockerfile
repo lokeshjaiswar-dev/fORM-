@@ -5,6 +5,7 @@
 #     --build-arg VITE_FP_DMS_API_BASE=https://dms.example/api \
 #     --build-arg VITE_FP_DMS_API_ORIGINS=https://dms.example \
 #     --build-arg VITE_FP_EMBED_PARENTS=https://dms.example \
+#     --build-arg VITE_FP_RETURN_ORIGINS=https://dms.example \
 #     -t form-builder .
 # Every VITE_* value is baked into the bundle and into the CSP headers at build time (docs/platform/builder-security-headers.md).
 # No secret belongs in a build arg.
@@ -22,14 +23,19 @@ ARG VITE_API_URL=
 ARG VITE_FP_DMS_API_BASE=
 ARG VITE_FP_DMS_API_ORIGINS=
 ARG VITE_FP_EMBED_PARENTS=
+ARG VITE_FP_RETURN_ORIGINS=
 ARG VITE_WEBHOOK_DOCS_URL=
 ENV VITE_BASE=$VITE_BASE \
     VITE_API_URL=$VITE_API_URL \
     VITE_FP_DMS_API_BASE=$VITE_FP_DMS_API_BASE \
     VITE_FP_DMS_API_ORIGINS=$VITE_FP_DMS_API_ORIGINS \
     VITE_FP_EMBED_PARENTS=$VITE_FP_EMBED_PARENTS \
+    VITE_FP_RETURN_ORIGINS=$VITE_FP_RETURN_ORIGINS \
     VITE_WEBHOOK_DOCS_URL=$VITE_WEBHOOK_DOCS_URL
-RUN pnpm --filter @form/builder build \
+# The signed system template pack (packages/templates/dist, git- and docker-ignored) is built first:
+# the builder imports @form/templates/packs/system-core-*.formpack.
+RUN pnpm --filter @form/templates build \
+ && pnpm --filter @form/builder build \
  && node apps/builder/security/render-nginx.ts /out/fp
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine

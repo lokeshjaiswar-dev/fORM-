@@ -76,7 +76,13 @@ describe('Dockerfile', () => {
   it('builds @form/builder with pnpm and the VITE_* build args, and serves it from nginx-unprivileged on 8080', () => {
     expect(dockerfile).toContain('pnpm install --frozen-lockfile --filter @form/builder...');
     expect(dockerfile).toContain('pnpm --filter @form/builder build');
-    for (const arg of ['VITE_BASE=/formplus/', 'VITE_API_URL', 'VITE_FP_DMS_API_BASE', 'VITE_FP_DMS_API_ORIGINS', 'VITE_FP_EMBED_PARENTS']) expect(dockerfile).toContain(`ARG ${arg}`);
+    // The signed system formpack is built before the builder that imports it.
+    expect(dockerfile.indexOf('pnpm --filter @form/templates build')).toBeGreaterThan(-1);
+    expect(dockerfile.indexOf('pnpm --filter @form/templates build')).toBeLessThan(dockerfile.indexOf('pnpm --filter @form/builder build'));
+    for (const arg of ['VITE_BASE=/formplus/', 'VITE_API_URL', 'VITE_FP_DMS_API_BASE', 'VITE_FP_DMS_API_ORIGINS', 'VITE_FP_EMBED_PARENTS', 'VITE_FP_RETURN_ORIGINS']) {
+      expect(dockerfile).toContain(`ARG ${arg}`);
+    }
+    expect(dockerfile).toContain('VITE_FP_RETURN_ORIGINS=$VITE_FP_RETURN_ORIGINS');
     expect(dockerfile).toContain('FROM nginxinc/nginx-unprivileged:');
     expect(dockerfile).toContain('EXPOSE 8080');
     expect(dockerfile).toContain('/etc/nginx/templates/default.conf.template');
