@@ -434,6 +434,7 @@ function FormSession({ props, meta, base, onRestart }: {
       evaluateNow().state.visible,
       isLast ? undefined : current,
       base.t(`system:api_failed`),
+      base.remote,
     );
     if (remote.length) {
       for (const error of remote) {
@@ -605,7 +606,7 @@ function SessionForm({ formRef, onSubmit, pageId, trail, ...rest }: {
  * or `document` at module scope or during render, ids from `useId`, the session clock from `session.startedAt`.
  */
 export function FormRenderer(props: FormRendererProps) {
-  const { version, mode, status, locale, messages, theme, session, uploader, onEvent, onUnlock } = props;
+  const { version, mode, status, locale, messages, theme, session, uploader, remote, onEvent, onUnlock } = props;
   const def = version.definition;
   const rootId = useId();
   const i18n: I18n = useMemo(() => createI18n(locale, messages ?? EN_IN, { fallback: EN_IN }), [locale, messages]);
@@ -627,10 +628,11 @@ export function FormRenderer(props: FormRendererProps) {
       i18n,
       t: (id, values) => i18n.t(id, values),
       uploader,
+      remote,
       Block,
       idFor: (blockId) => `${rootId}${blockId}`,
     }),
-    [version, def, tokens, mode, meta, i18n, uploader, rootId],
+    [version, def, tokens, mode, meta, i18n, uploader, remote, rootId],
   );
   const pinned = stableSession.startedAt;
   const restart = useCallback(() => setRun((r) => ({ count: r.count + 1, startedAt: pinned ?? (new Date().toISOString() as IsoInstant) })), [pinned]);

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ApiValidation, SafeUrl } from '@form/schema';
-import { buildApiRequest, callFieldApi, matchSuccessRule, parseApiBody, postFieldApi } from '../src/controls/apiValidation.ts';
+import type { SafeUrl } from '@form/schema';
+import { buildApiRequest, matchSuccessRule, parseApiBody, verifyFieldApis } from '../src/controls/apiValidation.ts';
 
 const url = 'https://hr.example.com/names' as SafeUrl;
 
@@ -93,39 +93,33 @@ describe('buildApiRequest', () => {
   });
 });
 
-describe('callFieldApi', () => {
-  it('POSTs JSON with the field key and typed value', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(postFieldApi(url, 'emp_name', 'Lokesh')).resolves.toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledWith(url, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emp_name: 'Lokesh' }),
-    });
-    vi.unstubAllGlobals();
+describe('verifyFieldApis', () => {
+  const block = (extra: Record<string, unknown> = {}) => ({ id: 'emp', key: 'emp_name', type: 'short_text', apiValidation: { remote: true }, ...extra });
+  const def = (b: unknown) => ({ blocks: { emp: b }, pages: [{ id: 'p1', children: ['emp'] }] }) as never;
+  const answers = { emp: { type: 'short_text', value: 'Lokesh' } } as never;
+  const visible = new Set(['emp']);
+
+  it('asks the host source (never the network) and keeps the author\'s message for a failed check', async () => {
+    const check = vi.fn(async () => ({ ok: false }));
+    const errors = await verifyFieldApis(def(block({ messages: { api_failed: 'Name not found' } })), answers, visible, undefined, 'fallback', { lookup: async () => ({ rows: [], truncated: false }), check });
+    expect(errors).toEqual([{ blockId: 'emp', code: 'api_failed', message: 'Name not found' }]);
+    expect(check).toHaveBeenCalledWith('emp', 'Lokesh', expect.any(AbortSignal));
   });
 
-  it('uses the API message when ok is false', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, message: 'Name not found' }), { status: 200 })));
-    await expect(postFieldApi(url, 'emp_name', 'Nope')).resolves.toEqual({
-      ok: false,
-      message: 'Name not found',
-    });
-    vi.unstubAllGlobals();
+  it('passes a check that says ok, falls back to the system message, and blocks a check that could not run', async () => {
+    const source = (check: () => Promise<{ ok: boolean }>) => ({ lookup: async () => ({ rows: [], truncated: false }), check });
+    expect(await verifyFieldApis(def(block()), answers, visible, undefined, 'fallback', source(async () => ({ ok: true })))).toEqual([]);
+    expect(await verifyFieldApis(def(block()), answers, visible, undefined, 'fallback', source(async () => ({ ok: false })))).toEqual([{ blockId: 'emp', code: 'api_failed', message: 'fallback' }]);
+    expect(await verifyFieldApis(def(block()), answers, visible, undefined, 'fallback', source(async () => { throw new Error('502'); }))).toEqual([{ blockId: 'emp', code: 'api_failed', message: 'fallback' }]);
   });
 
-  it('uses the selected response key and success rule', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 })));
-    const config: ApiValidation = { url, method: 'POST', parser: 'json', responseKey: 'success', success: { type: 'boolean', equals: true } };
-    await expect(callFieldApi(config, 'emp_name', 'Lokesh')).resolves.toEqual({ ok: true });
-    vi.unstubAllGlobals();
-  });
-
-  it('fails when the selected key does not match the success rule', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: false }), { status: 200 })));
-    const config: ApiValidation = { url, method: 'POST', parser: 'json', responseKey: 'success', success: { type: 'boolean', equals: true } };
-    await expect(callFieldApi(config, 'emp_name', 'Lokesh')).resolves.toEqual({ ok: false });
-    vi.unstubAllGlobals();
+  it('is inert without a source, or with a source that has no check, and skips empty and hidden fields', async () => {
+    expect(await verifyFieldApis(def(block()), answers, visible, undefined, 'fallback')).toEqual([]);
+    expect(await verifyFieldApis(def(block()), answers, visible, undefined, 'fallback', { lookup: async () => ({ rows: [], truncated: false }) })).toEqual([]);
+    const check = vi.fn(async () => ({ ok: false }));
+    const source = { lookup: async () => ({ rows: [], truncated: false }), check };
+    expect(await verifyFieldApis(def(block()), {} as never, visible, undefined, 'fallback', source)).toEqual([]);
+    expect(await verifyFieldApis(def(block()), answers, new Set(), undefined, 'fallback', source)).toEqual([]);
+    expect(check).not.toHaveBeenCalled();
   });
 });

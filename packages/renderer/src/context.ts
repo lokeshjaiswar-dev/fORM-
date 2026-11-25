@@ -1,6 +1,7 @@
 import { createContext, useContext, type ComponentType } from 'react';
 import type { I18n, MessageId, MessageValues } from '@form/i18n';
 import type { EvalMeta, PublicFormDefinition, RuntimeFormVersion, StoredBlock, ThemeTokens } from '@form/schema';
+import type { RemoteSource } from './remote.ts';
 import type { Uploader } from './types.ts';
 
 /** Per-render facts every block needs; the answers and evaluation live in EvalProvider. */
@@ -14,6 +15,8 @@ export interface RendererContextValue {
   i18n: I18n;
   t: (id: MessageId, values?: MessageValues) => string;
   uploader: Uploader;
+  /** Where lookups, API option lists and API checks go (the host's door to the network); absent: they are inert. */
+  remote?: RemoteSource | undefined;
   /**
    * Renders one block (label, control, error). Containers (a section, a repeating group) render their children with it.
    * FormRenderer supplies it, because importing `fields/Field.tsx` from a control is a cycle: Field.tsx imports every control.

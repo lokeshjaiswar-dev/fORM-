@@ -1,14 +1,14 @@
 import type { RawAnswers } from '@form/validation/lazy';
-import { getAtPath, matchSuccessRule, parseApiBody } from '@form/logic';
-import type { ApiCheckResult } from '@form/logic';
-import type { AnswerValue, ApiRequestConfig, ApiValidation, FieldBlock, FieldError, PublicFormDefinition, SafeUrl } from '@form/schema';
+import type { AnswerValue, ApiRequestConfig, FieldBlock, FieldError, PublicFormDefinition } from '@form/schema';
+import type { RemoteSource } from '../remote.ts';
 
 /* The pure parsing and rule helpers live in @form/logic (shared with the API proxy); re-exported so author.ts keeps its exports. */
 export { defaultSuccess, getAtPath, matchSuccessRule, parseApiBody } from '@form/logic';
 export type { ApiCheckResult, ApiCollection, ApiLeafType, ApiParseResult, ApiResponseLeaf } from '@form/logic';
 
 /**
- * The request the respondent's (or author's) browser sends. It never carries credentials: whatever the browser sends,
+ * The request the author's browser used to send for a Test button (the builder now goes through the author route and only
+ * uses this to describe it). It sends nothing itself. It never carries credentials: whatever the browser sends,
  * every respondent can read (Step 0 denylist, DEC-03), so `config.auth` on an old draft is ignored here, refused at
  * publish and stripped from the runtime projection.
  */
@@ -32,33 +32,6 @@ export function buildApiRequest(config: ApiRequestConfig, fieldKey?: string, val
   if (fieldKey) body[fieldKey] = value;
   headers['Content-Type'] = 'application/json';
   return { url: url.toString(), init: { method: 'POST', headers, body: JSON.stringify(body) } };
-}
-
-export async function callFieldApi(config: ApiValidation, fieldKey: string, value: unknown): Promise<ApiCheckResult> {
-  try {
-    const { url, init } = buildApiRequest(config, fieldKey, value);
-    const res = await fetch(url, init);
-    const text = await res.text();
-    const parser = config.parser ?? 'json';
-    const parsed = text ? parseApiBody(text, parser) : { data: undefined, leaves: [], collections: [] };
-    if (config.responseKey && config.success) {
-      const leaf = getAtPath(parsed.data, config.responseKey);
-      return { ok: matchSuccessRule(leaf, config.success) };
-    }
-    if (parsed.data && typeof parsed.data === 'object' && 'ok' in parsed.data) {
-      const body = parsed.data as { ok: unknown; message?: unknown };
-      const message = typeof body.message === 'string' && body.message.trim() ? body.message : '';
-      return message ? { ok: body.ok === true, message } : { ok: body.ok === true };
-    }
-    return { ok: res.ok };
-  } catch {
-    return { ok: false, message: 'Could not reach the validation API.' };
-  }
-}
-
-/** @deprecated use callFieldApi */
-export async function postFieldApi(url: SafeUrl, fieldKey: string, value: unknown): Promise<ApiCheckResult> {
-  return callFieldApi({ url }, fieldKey, value);
 }
 
 export function payloadValue(answer: AnswerValue | null | undefined): unknown {
@@ -88,20 +61,32 @@ export function apiValidationTargets(
   return out;
 }
 
+/**
+ * Runs the API checks of the visible fields on the page through the host's remote source (a public form never calls the
+ * checked API itself). Without a source, or a source with no `check`, nothing is checked. A check that fails, or that could
+ * not be run, blocks the page with the author's own message (`messages.api_failed`) or the system one.
+ */
 export async function verifyFieldApis(
   def: PublicFormDefinition,
   answers: RawAnswers,
   visible: ReadonlySet<string>,
   pageId: string | undefined,
   fallback: string,
+  remote?: RemoteSource,
 ): Promise<FieldError[]> {
+  const check = remote?.check;
+  if (!check) return [];
+  const signal = new AbortController().signal;
   const checks = apiValidationTargets(def, answers, visible, pageId).map(async (block): Promise<FieldError | null> => {
     const value = payloadValue(answers[block.id]);
-    const config = block.apiValidation;
-    if (value === undefined || config === undefined) return null;
-    const result = await callFieldApi(config, block.key, value);
-    if (result.ok) return null;
-    return { blockId: block.id, code: 'api_failed', message: result.message ?? fallback };
+    if (value === undefined) return null;
+    const message = block.messages?.api_failed ?? fallback;
+    try {
+      if ((await check(block.id, value, signal)).ok) return null;
+    } catch {
+      /* The check could not be run: the page does not move on. */
+    }
+    return { blockId: block.id, code: 'api_failed', message };
   });
   return (await Promise.all(checks)).filter((error): error is FieldError => error !== null);
 }

@@ -731,6 +731,8 @@ describe('OpenAPI', () => {
     // form by slug, its file uploads, its answers: a respondent has no account (the anonymous writes are bound to the
     // live version of one form and validated there). routes/public-unlock.ts (1): the respondent's password check for a
     // protected form: the password is the credential, the route is limited per address and form, and every refusal is audited.
+    // routes/public-remote.ts (one shared route config, three routes): a respondent's lookup, option list and field check through the
+    // proxy: bound to one version of one form, limited per address, per address and form and per form, strict bodies, one fixed 502.
     expect(open).toEqual({
       'app.ts': 1,
       'modules/account/routes.ts': 1,
@@ -740,6 +742,7 @@ describe('OpenAPI', () => {
       'routes/csp-reports.ts': 1,
       'routes/health.ts': 2,
       'routes/meta.ts': 1,
+      'routes/public-remote.ts': 1,
       'routes/public-unlock.ts': 1,
       'routes/public.ts': 3,
     });
@@ -783,6 +786,7 @@ describe('OpenAPI', () => {
       '/v1/forms/{formId}/files/{id}',
       '/v1/forms/{formId}/notifications',
       '/v1/forms/{formId}/notifications/{id}',
+      '/v1/forms/{formId}/remote/test',
       '/v1/forms/{formId}/submissions',
       '/v1/forms/{formId}/submissions/bulk',
       '/v1/forms/{formId}/submissions/{id}',
@@ -820,6 +824,8 @@ describe('OpenAPI', () => {
       '/v1/me/sessions/{id}',
       '/v1/meta/edition',
       '/v1/org',
+      '/v1/org/api-credentials',
+      '/v1/org/api-credentials/{id}',
       '/v1/org/invites',
       '/v1/org/invites/{id}',
       '/v1/org/members',
@@ -831,7 +837,10 @@ describe('OpenAPI', () => {
       '/v1/org/settings',
       '/v1/orgs',
       '/v1/p/{slug}',
+      '/v1/p/{slug}/fields/{blockId}/check',
+      '/v1/p/{slug}/fields/{blockId}/options',
       '/v1/p/{slug}/files',
+      '/v1/p/{slug}/lookups/{lookupId}',
       '/v1/p/{slug}/submissions',
       '/v1/p/{slug}/unlock',
       '/v1/privacy/notice',

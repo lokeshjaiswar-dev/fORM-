@@ -1,7 +1,7 @@
 import type { BlockId } from '@form/schema';
 import { describe, expect, it } from 'vitest';
 import {
-  LOOKUP_LIMITS, buildUpstreamRequest, defaultSuccess, filterLookupRows, getAtPath, lookupAnswer, lookupRows, mapApiOptions, matchSuccessRule, parseApiBody, projectLookupRows,
+  LOOKUP_LIMITS, buildUpstreamRequest, defaultSuccess, evaluateCheck, filterLookupRows, getAtPath, lookupAnswer, lookupRows, mapApiOptions, matchSuccessRule, parseApiBody, projectLookupRows,
 } from '../src/remote/index.ts';
 
 const bid = (v: string) => v as BlockId;
@@ -42,6 +42,18 @@ describe('moved parse, check and options helpers behave as before (parity)', () 
     expect(lookupAnswer('short_text', 'x')).toEqual({ type: 'short_text', value: 'x' });
     expect(lookupAnswer('number', 'abc')).toBeUndefined();
     expect(lookupAnswer('email', 'a@b.c')).toBeUndefined();
+  });
+});
+
+describe('evaluateCheck (the server decides a field check)', () => {
+  it('uses the response key and success rule, else an `ok` key, else any 2xx passes', () => {
+    const rule = { responseKey: 'success', success: { type: 'boolean', equals: true } } as const;
+    expect(evaluateCheck({ success: true }, rule)).toBe(true);
+    expect(evaluateCheck({ success: false }, rule)).toBe(false);
+    expect(evaluateCheck({ ok: false, message: 'Name not found' }, {})).toBe(false);
+    expect(evaluateCheck({ ok: true }, {})).toBe(true);
+    expect(evaluateCheck({ anything: 1 }, {})).toBe(true);
+    expect(evaluateCheck(undefined, {})).toBe(true);
   });
 });
 

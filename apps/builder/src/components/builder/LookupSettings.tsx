@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { buildApiRequest, getAtPath, parseApiBody } from '@form/renderer/author';
-import { isSafeUrl, type ApiLookup, type BlockId, type SafeUrl } from '@form/schema';
+import { isSafeUrl, type DmsMasterLookup, type HttpLookup, type BlockId, type SafeUrl } from '@form/schema';
 import { t } from '@/i18n';
 import { labelString } from '@/fields/style';
 import { applyPatch, type Patch } from '@/lib/patch';
@@ -51,7 +51,7 @@ const TEXT_TYPES = new Set(['short_text', 'long_text', 'url', 'number']);
  * A new lookup starts with no URL (review N3). A lookup must have a URL to be stored, so the new one stays in this panel
  * until the author saves a valid URL.
  */
-function freshLookup(n: number): ApiLookup {
+function freshLookup(n: number): HttpLookup {
   return {
     id: APP_IDS.newId(),
     name: `API ${n}`,
@@ -103,13 +103,17 @@ function sampleKeys(data: unknown, itemsPath: string | undefined): string[] {
   return sample && typeof sample === 'object' ? Object.keys(sample as object) : [];
 }
 
-function sourcesOf(lookups: ApiLookup[] | undefined, legacy: ApiLookup | undefined): ApiLookup[] {
-  if (lookups?.length) return lookups.map((source, i) => ({ ...source, id: source.id ?? `lookup-${i}` }));
+/** The HTTP lookups this panel edits; a DMS master lookup (edited by the DMS profile's own panel) is kept as it is. */
+const isHttp = (lookup: HttpLookup | DmsMasterLookup): lookup is HttpLookup => lookup.source !== 'dms_master';
+
+function sourcesOf(lookups: Array<HttpLookup | DmsMasterLookup> | undefined, legacy: HttpLookup | undefined): HttpLookup[] {
+  const http = lookups?.filter(isHttp);
+  if (http?.length) return http.map((source, i) => ({ ...source, id: source.id ?? `lookup-${i}` }));
   if (legacy) return [{ ...legacy, id: legacy.id ?? 'lookup-0', name: legacy.name ?? 'API 1' }];
   return [];
 }
 
-function usedElsewhere(sources: ApiLookup[], currentId: string): Map<string, string> {
+function usedElsewhere(sources: HttpLookup[], currentId: string): Map<string, string> {
   const taken = new Map<string, string>();
   for (const source of sources) {
     if ((source.id ?? '') === currentId || source.enabled !== true) continue;
@@ -123,9 +127,9 @@ function usedElsewhere(sources: ApiLookup[], currentId: string): Map<string, str
 export function LookupSettings() {
   const doc = useDoc((d) => d);
   const sources = sourcesOf(doc.lookups, doc.lookup);
-  const [pending, setPending] = useState<ApiLookup>();
+  const [pending, setPending] = useState<HttpLookup>();
   const [open, setOpen] = useState(sources[0]?.id ?? '');
-  const save = (next: ApiLookup[]) => setLookups(next);
+  const save = (next: HttpLookup[]) => setLookups([...(doc.lookups ?? []).filter((l): l is DmsMasterLookup => !isHttp(l)), ...next]);
   const shown = pending ? [...sources, pending] : sources;
   const fields = Object.values(doc.blocks).flatMap((block) => {
     if (!block || !isField(block) || !TEXT_TYPES.has(block.type)) return [];
@@ -175,10 +179,10 @@ function LookupAccordion({
   onChange,
   onRemove,
 }: {
-  source: ApiLookup;
+  source: HttpLookup;
   fields: { value: string; label: string }[];
   taken: Map<string, string>;
-  onChange: (next: ApiLookup) => void;
+  onChange: (next: HttpLookup) => void;
   onRemove: () => void;
 }) {
   const [draft, setDraft] = useState(source);
@@ -189,7 +193,7 @@ function LookupAccordion({
   const [conflict, setConflict] = useState('');
   const keys = (draft.mappings ?? []).map((row) => row.key);
 
-  const patch = (next: Patch<ApiLookup>) => {
+  const patch = (next: Patch<HttpLookup>) => {
     const merged = applyPatch(draft, next);
     for (const key of ['query', 'body', 'auth', 'itemsPath', 'pickerFieldId', 'pickerKey', 'mappings', 'name'] as const) {
       if (merged[key] === undefined) delete merged[key];

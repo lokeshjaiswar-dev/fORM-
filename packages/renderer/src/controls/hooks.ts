@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { useController, useFormContext } from 'react-hook-form';
 import type { AvailableType } from '@form/registry';
-import type { AnswerValue, AnswerValueMap, ApiOptions, BlockOf, ChoiceOption, FieldBlockOf, LabelText, OptionId, ValueFieldType } from '@form/schema';
+import type { AnswerValue, AnswerValueMap, BlockOf, ChoiceOption, FieldBlockOf, LabelText, OptionId, ValueFieldType } from '@form/schema';
 import { useRenderer } from '../context.ts';
 import { useEvaluation } from '../eval/context.ts';
 import type { RichTextResolvers } from '../richtext/RichTextView.tsx';
@@ -48,7 +48,7 @@ export interface Control<T extends AvailableType> {
 /** The control's answer from react-hook-form, typed by block type; `set(undefined)` clears it. */
 export function useAnswer<T extends ValueFieldType>(block: FieldBlockOf<T>) {
   const { control, setError, clearErrors } = useFormContext();
-  const { revalidate, t } = useRenderer();
+  const { revalidate, t, remote } = useRenderer();
   const { field } = useController({ name: block.id, control });
   const raw = field.value as AnswerValue | null | undefined;
   const value = raw && raw.type === block.type ? (raw.value as AnswerValueMap[T]) : undefined;
@@ -62,19 +62,21 @@ export function useAnswer<T extends ValueFieldType>(block: FieldBlockOf<T>) {
   );
   const onBlur = useCallback(() => {
     field.onBlur();
-    const config = block.apiValidation;
-    if (!config) return;
+    if (!block.apiValidation || !remote?.check) return;
+    const check = remote.check;
     const current = field.value as AnswerValue | null | undefined;
     const payload = current && current.type === block.type ? current.value : undefined;
     if (payload === undefined || payload === null || payload === '') return;
     if (typeof payload === 'string' && payload.trim() === '') return;
-    void import('./apiValidation.ts').then(({ callFieldApi }) =>
-      callFieldApi(config, block.key, payload).then((result) => {
+    const failed = block.messages?.api_failed ?? t('system:api_failed');
+    check(block.id, payload, new AbortController().signal).then(
+      (result) => {
         if (result.ok) clearErrors(block.id);
-        else setError(block.id, { type: 'api_failed', message: result.message ?? t('system:api_failed') });
-      }),
+        else setError(block.id, { type: 'api_failed', message: failed });
+      },
+      () => setError(block.id, { type: 'api_failed', message: failed }),
     );
-  }, [block.apiValidation, block.id, block.key, block.type, clearErrors, field, setError, t]);
+  }, [block.apiValidation, block.id, block.messages, block.type, clearErrors, field, remote, setError, t]);
   return { value, set, onBlur };
 }
 
@@ -98,29 +100,25 @@ export function usePipes(): { ctx: PipeContext; text: (label: LabelText | undefi
   return { ctx, text: (label) => labelText(label, ctx), resolve: { pipe: (attrs) => pipeValue(attrs, ctx) } };
 }
 
-function useFetchedOptions(api: ApiOptions | undefined): ChoiceOption[] | undefined {
-  const fingerprint = api ? JSON.stringify(api) : '';
+/** The option list a field loads through the host's remote source (`apiOptions` is a `{ remote: true }` marker on a public form). */
+function useFetchedOptions(blockId: string, api: unknown): ChoiceOption[] | undefined {
+  const { remote } = useRenderer();
+  const wanted = Boolean(api) && remote?.options !== undefined;
   const [rows, setRows] = useState<ChoiceOption[] | undefined>();
   useEffect(() => {
-    if (!fingerprint) {
+    if (!wanted || !remote?.options) {
       setRows(undefined);
       return;
     }
-    const config = JSON.parse(fingerprint) as ApiOptions;
-    if (!config.url || config.itemsPath === undefined) {
-      setRows(undefined);
-      return;
-    }
-    let cancelled = false;
-    void import('./apiOptions.ts').then(({ fetchApiOptions }) =>
-      fetchApiOptions(config).then((next) => {
-        if (!cancelled) setRows(next.length ? next : undefined);
-      }),
+    const controller = new AbortController();
+    remote.options(blockId, controller.signal).then(
+      (next) => {
+        if (!controller.signal.aborted) setRows(next.length ? next : undefined);
+      },
+      () => undefined,
     );
-    return () => {
-      cancelled = true;
-    };
-  }, [fingerprint]);
+    return () => controller.abort();
+  }, [blockId, remote, wanted]);
   return rows;
 }
 
@@ -129,11 +127,11 @@ export function useOptions(
   blockId: string,
   options: readonly ChoiceOption[],
   shuffle: false | { keepLast: number } | boolean | undefined,
-  api?: ApiOptions,
+  api?: unknown,
 ): ChoiceOption[] {
   const { meta } = useRenderer();
   const { state } = useEvaluation();
-  const loaded = useFetchedOptions(api);
+  const loaded = useFetchedOptions(blockId, api);
   const source = loaded ?? options;
   const hidden = new Set<OptionId>(state.hiddenOptions[blockId as keyof typeof state.hiddenOptions] ?? []);
   const visible = source.filter((o) => !hidden.has(o.id));

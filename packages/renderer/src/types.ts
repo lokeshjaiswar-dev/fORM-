@@ -1,5 +1,6 @@
 import type { Catalogs } from '@form/i18n';
 import type { Ref } from 'react';
+import type { RemoteSource } from './remote.ts';
 import type {
   Answers, BlockId, EndingId, FieldError, FileRef, FormVersionId, IsoInstant, Locale, PageId, RuntimeFormVersion, RuntimeStatus, SafeUrl,
   SubmissionRequest, SubmitResult, Theme,
@@ -92,6 +93,11 @@ export interface FormRendererProps {
   onSubmit: SubmitHandler;
   onPartialSave?: (draft: PartialSave) => void;
   uploader: Uploader;
+  /**
+   * Where server-side lookups, API option lists and API checks go. The public page passes the fORM- proxy, the builder preview
+   * the author route, the DMS upload iframe the bridge. Without it they are inert: the renderer makes no network call itself.
+   */
+  remote?: RemoteSource;
   locale: Locale;
   /** Catalogues for `locale`; the en-IN source catalogues are always the fallback. */
   messages?: Catalogs;

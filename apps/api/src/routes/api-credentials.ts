@@ -164,18 +164,21 @@ export function apiCredentialRoutes(app: FastifyInstance, deps: ApiCredentialRou
       const host = normaliseHost(body.host);
       if (!host) throw new ProblemError('BAD_REQUEST', 'The host must be a host name and an optional port, for example api.example.com.');
       const who = client(request);
+      const authType = body.auth.type;
       const id = uuidv7();
       const enc = await orgSecrets.seal({ orgId: tenant.orgId, secretId: id, kind: 'api_credential' }, JSON.stringify(body.auth));
       const created = await withTenant(deps.db, tenant, async (tx) => {
         await tx.insert(secrets).values({ id, orgId: tenant.orgId, kind: 'api_credential', enc: enc as unknown as Record<string, unknown>, meta: metaOf(body.name, host, body.auth) });
         await audit.append(tx, tenant.orgId, {
           ...auditActor(tenant),
-          ...who,
+          sessionId: who.sessionId,
+          actorIpHash: who.actorIpHash,
+          actorUa: who.actorUa,
           action: 'api_credential.saved',
           resourceType: 'api_credential',
           resourceId: id,
           outcome: 'success',
-          metadata: { change: 'created', changedKeys: ['name', 'host', 'auth'], authType: body.auth.type },
+          metadata: { change: 'created', changedKeys: ['name', 'host', 'auth'], authType },
         });
         const [row] = await tx.select(columns).from(secrets).where(eq(secrets.id, id)).limit(1);
         return row!;
@@ -219,19 +222,22 @@ export function apiCredentialRoutes(app: FastifyInstance, deps: ApiCredentialRou
         const boundHost = host ?? (typeof m['host'] === 'string' ? m['host'] : '');
         // Without a new secret the type, header and last characters stay as they were.
         const meta = body.auth ? metaOf(name, boundHost, body.auth) : { ...m, name, host: boundHost };
-        const changedKeys = [...(body.name !== undefined ? ['name'] : []), ...(host !== undefined ? ['host'] : []), ...(body.auth ? ['auth'] : [])];
+        const rotated = enc !== undefined;
+        const changedKeys = [...(body.name !== undefined ? ['name'] : []), ...(host !== undefined ? ['host'] : []), ...(rotated ? ['auth'] : [])];
         await tx
           .update(secrets)
           .set({ meta, ...(enc ? { enc: enc as unknown as Record<string, unknown>, rotatedAt: now } : {}) })
           .where(and(eq(secrets.id, id), eq(secrets.kind, 'api_credential')));
         await audit.append(tx, tenant.orgId, {
           ...auditActor(tenant),
-          ...who,
+          sessionId: who.sessionId,
+          actorIpHash: who.actorIpHash,
+          actorUa: who.actorUa,
           action: 'api_credential.saved',
           resourceType: 'api_credential',
           resourceId: id,
           outcome: 'success',
-          metadata: { change: body.auth ? 'rotated' : 'updated', changedKeys },
+          metadata: { change: rotated ? 'rotated' : 'updated', changedKeys },
         });
         const [row] = await tx.select(columns).from(secrets).where(eq(secrets.id, id)).limit(1);
         return viewOf(row!);
@@ -259,7 +265,16 @@ export function apiCredentialRoutes(app: FastifyInstance, deps: ApiCredentialRou
       await withTenant(deps.db, tenant, async (tx) => {
         const gone = await tx.delete(secrets).where(and(eq(secrets.id, id), eq(secrets.kind, 'api_credential'))).returning({ id: secrets.id });
         if (gone.length === 0) throw new ProblemError('NOT_FOUND', 'That API credential is not in this organisation.');
-        await audit.append(tx, tenant.orgId, { ...auditActor(tenant), ...who, action: 'api_credential.deleted', resourceType: 'api_credential', resourceId: id, outcome: 'success' });
+        await audit.append(tx, tenant.orgId, {
+          ...auditActor(tenant),
+          sessionId: who.sessionId,
+          actorIpHash: who.actorIpHash,
+          actorUa: who.actorUa,
+          action: 'api_credential.deleted',
+          resourceType: 'api_credential',
+          resourceId: id,
+          outcome: 'success',
+        });
       });
       return reply.code(204).send(null);
     },
