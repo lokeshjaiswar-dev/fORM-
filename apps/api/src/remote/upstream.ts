@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { secretEnc, secretPublicColumns, secrets, withTenant, type Db } from '@form/db';
-import { buildUpstreamRequest, parseApiBody } from '@form/logic';
+import { buildUpstreamRequest, parseApiData } from '@form/logic';
 import { ApiAuthSchema, type ApiAuth, type ApiRequestConfig } from '@form/schema';
 import { isPortError, type OrgSecrets } from '@form/ports';
 
@@ -139,7 +139,8 @@ export async function callUpstream(
   if (res.status < 200 || res.status >= 300) throw new UpstreamError('status', host);
   const text = res.text();
   if (o.allowEmpty && text.trim() === '') return { data: undefined, status: res.status };
-  const parsed = parseApiBody(text, o.config.parser ?? 'json');
-  if (parsed.data === undefined) throw new UpstreamError('unparsable', host);
-  return { data: parsed.data, status: res.status };
+  // Linear, bounded (depth 64, 50k XML elements) and never throws: a hostile answer is `unparsable`, the fixed 502.
+  const data = parseApiData(text, o.config.parser ?? 'json');
+  if (data === undefined) throw new UpstreamError('unparsable', host);
+  return { data, status: res.status };
 }
