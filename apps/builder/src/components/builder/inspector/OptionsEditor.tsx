@@ -15,6 +15,7 @@ import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSect
 import { Disclosure, ToggleRow } from '@/components/builder/inspector/parts';
 import { GroupedOptions, LinkSetting, PasteList, useLinkedParent } from '@/components/builder/inspector/DependentOptions';
 import { OptionRow, SortableOptions, type OptionPatch } from '@/components/builder/inspector/OptionList';
+import { SET_VALUE_AVAILABLE } from '@/state/commands/rules';
 
 const M = defineMessages('builder', {
   'options.add': 'Add option',
@@ -162,7 +163,7 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
           checked={showCode}
           onChange={setCodesOn}
         />
-        {block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
+        {SET_VALUE_AVAILABLE && block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
         <ApiOptionsSection block={block} />
       </Disclosure>
     </>

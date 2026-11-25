@@ -21,6 +21,7 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.OptionIdSchema>>().toEqualTypeOf<S.OptionId>();
   expectTypeOf<z.infer<typeof S.MatrixRowIdSchema>>().toEqualTypeOf<S.MatrixRowId>();
   expectTypeOf<z.infer<typeof S.MatrixColumnIdSchema>>().toEqualTypeOf<S.MatrixColumnId>();
+  expectTypeOf<z.infer<typeof S.DynamicColumnIdSchema>>().toEqualTypeOf<S.DynamicColumnId>();
   expectTypeOf<z.infer<typeof S.MatchingPromptIdSchema>>().toEqualTypeOf<S.MatchingPromptId>();
   expectTypeOf<z.infer<typeof S.LikertStatementIdSchema>>().toEqualTypeOf<S.LikertStatementId>();
   expectTypeOf<z.infer<typeof S.CardItemIdSchema>>().toEqualTypeOf<S.CardItemId>();
@@ -141,6 +142,8 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.ApiAuthSchema>>().toEqualTypeOf<S.ApiAuth>();
   expectTypeOf<z.infer<typeof S.ApiSuccessRuleSchema>>().toEqualTypeOf<S.ApiSuccessRule>();
   expectTypeOf<z.infer<typeof S.ApiValidationSchema>>().toEqualTypeOf<S.ApiValidation>();
+  expectTypeOf<z.infer<typeof S.ApiLookupMappingSchema>>().toEqualTypeOf<S.ApiLookupMapping>();
+  expectTypeOf<z.infer<typeof S.ApiLookupSchema>>().toEqualTypeOf<S.ApiLookup>();
   expectTypeOf<z.infer<typeof S.ApiRequestConfigSchema>>().toEqualTypeOf<S.ApiRequestConfig>();
   expectTypeOf<z.infer<typeof S.ApiOptionsSchema>>().toEqualTypeOf<S.ApiOptions>();
   expectTypeOf<z.infer<typeof S.TextPresetSchema>>().toEqualTypeOf<S.TextPreset>();
@@ -189,6 +192,8 @@ test('every v2 type equals the inferred type of its zod twin', () => {
   expectTypeOf<z.infer<typeof S.MatrixColumnSchema>>().toEqualTypeOf<S.MatrixColumn>();
   expectTypeOf<z.infer<typeof S.MatrixConfigSchema>>().toEqualTypeOf<S.MatrixConfig>();
   expectTypeOf<z.infer<typeof S.RepeatingGroupConfigSchema>>().toEqualTypeOf<S.RepeatingGroupConfig>();
+  expectTypeOf<z.infer<typeof S.DynamicTableColumnSchema>>().toEqualTypeOf<S.DynamicTableColumn>();
+  expectTypeOf<z.infer<typeof S.DynamicTableConfigSchema>>().toEqualTypeOf<S.DynamicTableConfig>();
   expectTypeOf<z.infer<typeof S.FileUploadConfigSchema>>().toEqualTypeOf<S.FileUploadConfig>();
   expectTypeOf<z.infer<typeof S.SignatureConfigSchema>>().toEqualTypeOf<S.SignatureConfig>();
   expectTypeOf<z.infer<typeof S.HiddenConfigSchema>>().toEqualTypeOf<S.HiddenConfig>();

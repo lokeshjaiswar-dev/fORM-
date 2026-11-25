@@ -7,7 +7,7 @@ import { placementOf, valueReadsOf, type Placement } from './structure.ts';
 import { checkGroup, typeExpr, type TypeContext } from './subset.ts';
 
 /** Client actions the engine runs today; every other action is `missing_capability` until WP-2.01–2.03. */
-const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit', 'set_value']);
+const P0_ACTIONS: ReadonlySet<Action['type']> = new Set<Action['type']>(['show', 'hide', 'require', 'unrequire', 'enable', 'disable', 'block_submit']);
 const SERVER_ONLY: ReadonlySet<string> = new Set(SERVER_ONLY_ACTION_TYPES);
 export const isClientAction = (action: Action): action is ClientAction => !SERVER_ONLY.has(action.type);
 

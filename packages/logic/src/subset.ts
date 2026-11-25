@@ -271,8 +271,6 @@ function fits(op: LogicOperator, left: Typed, right: Typed): boolean {
   switch (base) {
     case 'eq':
     case 'neq':
-      if ((left.kind === 'choice' || left.kind === 'choices') && right.kind === 'text') return true;
-      if (left.kind === 'text' && (right.kind === 'choice' || right.kind === 'choices')) return true;
       if (left.kind === 'choice' || left.kind === 'choices') return right.kind === 'option_set' && right.blockId === left.blockId;
       return right.kind === left.kind;
     case 'contains':

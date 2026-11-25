@@ -42,6 +42,10 @@ const NO_TWIN: Record<string, string> = {
   SectionNavChrome: 'enum field of SectionNav',
   SectionNavMode: 'enum field of SectionNav',
   DiffTemplate: 'function signature',
+  DynamicColumnInput: 'enum field of DynamicTableColumn (DYNAMIC_COLUMN_INPUTS)',
+  DynamicSummary: 'enum field of DynamicTableColumn',
+  ConfettiStyle: 'enum field of the message Ending',
+  DynamicTableValue: 'checked through ANSWER_VALUE_SCHEMAS.dynamic_table (the AnswerValueMap twin)',
 };
 
 const fileUrl = import.meta.url;

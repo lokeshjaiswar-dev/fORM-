@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { isSafeUrl, type ConfettiStyle, type Ending, type PlainTemplate, type RichDoc } from '@form/schema';
-import { Confetti } from '../Confetti.tsx';
 import { useRenderer } from '../context.ts';
 import { MESSAGES } from '../messages.ts';
 import { LINK_REL, RichTextView, type RichTextResolvers } from '../richtext/RichTextView.tsx';
+
+/** The confetti is fetched on demand: only an ending that plays it pays for it (bundle ratchet, test/bundle.test.ts). */
+const Confetti = lazy(() => import('../Confetti.tsx').then((m) => ({ default: m.Confetti })));
 
 /** A single paragraph is the screen's heading (as the v1 thank-you title was); longer content keeps its blocks. */
 function Content({ doc, resolve }: { doc: RichDoc; resolve: RichTextResolvers }) {
@@ -48,7 +50,7 @@ export function EndingScreen({
   const content = ending.kind === 'message' ? ending.content : ending.message;
   return (
     <div ref={ref} className="fr-screen fr-ending" tabIndex={-1} style={minHeight ? { minHeight } : undefined}>
-      {confetti ? <Confetti style={confettiStyle} /> : null}
+      {confetti ? <Suspense fallback={null}><Confetti style={confettiStyle} /></Suspense> : null}
       <div className="fr-ending-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" focusable="false"><path d="M20 6 9 17l-5-5" /></svg>
       </div>

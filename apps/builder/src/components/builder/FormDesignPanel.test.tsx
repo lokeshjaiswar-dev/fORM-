@@ -77,7 +77,7 @@ describe('FormDesignPanel', () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Colors', 'Styles', 'Themes', 'Logic', 'Sections', 'Review', 'Submit']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Colors', 'Styles', 'Themes', 'Rules', 'Sections', 'Review', 'API autofill', 'Submit']);
     await user.click(screen.getByRole('tab', { name: 'Review' }));
     expect(screen.getByRole('region', { name: 'Review' })).toBeInTheDocument();
     // The assignments are the server's; without a session they are off and the reason is given, but the units are the draft's.

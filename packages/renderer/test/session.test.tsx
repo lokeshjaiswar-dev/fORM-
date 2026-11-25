@@ -77,7 +77,7 @@ describe('meta.now is frozen at session start', () => {
     fireEvent.change(screen.getByLabelText(/day/), { target: { value: '2026-10-19' } });
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     await waitFor(() => expect(submitted).toHaveLength(1));
-    expect(submitted[0]?.client).toEqual({ startedAt: '2026-10-19T18:00:00.000Z', device: 'mobile', pageUrl: window.location.href });
+    expect(submitted[0]?.client).toEqual({ startedAt: '2026-10-19T18:00:00.000Z', device: 'mobile' });
     expect(submitted[0]?.answers['day' as BlockId]).toEqual({ type: 'date', value: '2026-10-19' as IsoDate });
   });
 

@@ -10,6 +10,7 @@ import { useDraft } from '@/lib/useDraft';
 import { APP_IDS, blockOrder, blockText, isField } from '@/lib/definition';
 import { labelString } from '@/fields/style';
 import { removeRule, setRule } from '@/state/actions';
+import { SET_VALUE_AVAILABLE } from '@/state/commands/rules';
 import { useDoc } from '@/state/documentStore';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Badge, Button, Input, Label, RadioField, RadioGroup, Switch } from '@dmacq/ui';
 import { NiceSelect } from '@/components/NiceSelect';
@@ -395,8 +396,9 @@ function EffectBlock({
               { value: 'show', label: t(M['rules.act_show']) },
               { value: 'hide', label: t(M['rules.act_hide']) },
               { value: 'error', label: 'Show error' },
-              { value: 'set', label: t(M['rules.act_set']) },
-              { value: 'percent', label: t(M['rules.act_percent']) },
+              /* Rules that set a value need set_value, which compile() refuses until WP-2.01; an existing one still shows. */
+              ...(SET_VALUE_AVAILABLE || kind === 'set' ? [{ value: 'set', label: t(M['rules.act_set']) }] : []),
+              ...(SET_VALUE_AVAILABLE || kind === 'percent' ? [{ value: 'percent', label: t(M['rules.act_percent']) }] : []),
             ]} />
             {kind === 'error' ? (
               <LooseInput aria-label={t(M['rules.message'])} value={message} commit={(text) => { if (text.trim()) set(buildAction('error', target as BlockId, { message: text })); }} />

@@ -228,6 +228,14 @@ const ROWS: Partial<Record<S.ValueFieldType, Row>> = {
     valid: [ans.raw('consent', { items: { item_1: true }, noticeLocale: 'en-IN', noticeVersion: 0 })],
     invalid: [[ans.raw('consent', { items: { item_1: false }, noticeLocale: 'en-IN', noticeVersion: 0 }), 'f.items.item_1 required']],
   },
+  dynamic_table: {
+    block: field('dynamic_table', 'f', { config: {
+      columns: [{ id: 'c1' as S.DynamicColumnId, label: 'Item', input: 'text' }, { id: 'c2' as S.DynamicColumnId, label: 'Qty', input: 'number' }], minRows: 0, maxRows: 3, allowAddColumns: false, addableInputs: [], maxColumns: 5,
+    } }),
+    blank: [ans.raw('dynamic_table', { rows: [{ rowId: 'row_1', cells: {} }] })],
+    valid: [ans.raw('dynamic_table', { rows: [{ rowId: 'row_1', cells: { c1: 'Pen', c2: '2' } }] })],
+    invalid: [[ans.raw('dynamic_table', { rows: [{ rowId: 'row_1', cells: { c2: 'two' } }] }), 'f.rows.0.cells.c2 invalid_format']],
+  },
   signature: {
     block: field('signature', 'f', { config: { penColor: { token: 'text' }, heightPx: 160, allowTyped: true } }),
     blank: [null],

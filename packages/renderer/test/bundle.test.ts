@@ -73,9 +73,20 @@ async function chunks(entry: string, external: (id: string) => boolean): Promise
     },
   })) as Rollup.RollupOutput | Rollup.RollupOutput[];
   const outputs = Array.isArray(output) ? output : [output];
-  return outputs.flatMap((o) => o.output).flatMap((file) =>
-    file.type === 'chunk' ? [{ entry: file.isEntry, gz: gzipSync(file.code).length, modules: Object.keys(file.modules).map((m) => m.split('\\').join('/')) }] : [],
-  );
+  const files = outputs.flatMap((o) => o.output).flatMap((file) => (file.type === 'chunk' ? [file] : []));
+  /*
+   * "Up front" is the entry and every chunk it imports statically, transitively: once a control is loaded on demand,
+   * Rollup moves the code it shares with the entry into a common chunk, which is not an entry but loads with it.
+   */
+  const byName = new Map(files.map((file) => [file.fileName, file]));
+  const upFront = new Set<string>();
+  const visit = (name: string) => {
+    if (upFront.has(name)) return;
+    upFront.add(name);
+    for (const next of byName.get(name)?.imports ?? []) visit(next);
+  };
+  for (const file of files) if (file.isEntry) visit(file.fileName);
+  return files.map((file) => ({ entry: upFront.has(file.fileName), gz: gzipSync(file.code).length, modules: Object.keys(file.modules).map((m) => m.split('\\').join('/')) }));
 }
 
 const sum = (list: Chunk[]) => list.reduce((total, chunk) => total + chunk.gz, 0);

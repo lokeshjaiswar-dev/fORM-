@@ -1,3 +1,4 @@
+import { createElement, lazy, Suspense } from 'react';
 import type { AvailableType } from '@form/registry';
 import { AddressField } from './address.tsx';
 import { AppointmentField } from './appointment.tsx';
@@ -8,7 +9,6 @@ import { ConstantSumField } from './constant_sum.tsx';
 import { ConsentField } from './consent.tsx';
 import { ContextField } from './context.tsx';
 import { DateInput } from './date.tsx';
-import { DynamicTable } from './dynamic_table.tsx';
 import { DateRangeField } from './date_range.tsx';
 import { DateTimeInput } from './datetime.tsx';
 import { Divider } from './divider.tsx';
@@ -16,7 +16,7 @@ import { Email } from './email.tsx';
 import { FileUpload } from './file_upload.tsx';
 import { FullName } from './full_name.tsx';
 import { Heading } from './heading.tsx';
-import type { Control } from './hooks.ts';
+import type { Control, ControlProps } from './hooks.ts';
 import { LikertField } from './likert.tsx';
 import { LinearScale } from './linear_scale.tsx';
 import { LongText } from './long_text.tsx';
@@ -42,6 +42,15 @@ import { SingleChoice } from './single_choice.tsx';
 import { TimeInput } from './time.tsx';
 import { UniqueIdField } from './unique_id.tsx';
 import { Url } from './url.tsx';
+
+/*
+ * The dynamic table (lan121/dev-lokesh) is fetched on demand, like the phone flags: only a form that has one pays for its
+ * code (bundle ratchet, test/bundle.test.ts). Until it arrives the field shows nothing; the server renders the same.
+ */
+const LazyDynamicTable = lazy(() => import('./dynamic_table.tsx').then((m) => ({ default: m.DynamicTable })));
+function DynamicTable(props: ControlProps<'dynamic_table'>) {
+  return createElement(Suspense, { fallback: null }, createElement(LazyDynamicTable, props));
+}
 
 /**
  * The renderer side of the registry (`RendererRegistry`, architecture §1.2): one control per available type, with how

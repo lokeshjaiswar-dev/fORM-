@@ -30,15 +30,15 @@ describe('BlockInspector in profile dms-v1: legacy read-only blocks', () => {
     expect(screen.queryByText('Required')).toBeNull();
   });
 
-  it('a normal block keeps its tabs', () => {
+  it('a normal block keeps its tabs (General and Design; DMS forms have no Logic)', () => {
     open('plain', 'dms-v1');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toContain('Validation');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Design']);
     expect(screen.queryByRole('note')).toBeNull();
   });
 
   it('outside profile dms-v1 the marker locks nothing', () => {
     open('docs', 'full');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toContain('Validation');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['General', 'Design', 'Logic']);
     expect(screen.queryByRole('note')).toBeNull();
   });
 });
