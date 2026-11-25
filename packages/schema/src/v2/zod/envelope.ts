@@ -38,7 +38,7 @@ export const ApiSuccessRuleSchema = z.union([
   z.strictObject({ type: z.literal('number'), equals: z.number().finite() }),
   z.strictObject({ type: z.literal('string'), equals: z.array(z.string().min(1).max(256)).min(1).max(3) }),
 ]);
-export const CredentialRefSchema = z.strictObject({ secretId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) });
+export const CredentialRefSchema = z.strictObject({ secretId: z.string().max(36).regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) });
 const apiRequest = {
   url: SafeUrlSchema,
   method: z.enum(['GET', 'POST']).exactOptional(),
@@ -80,15 +80,15 @@ export const HttpLookupSchema = z.strictObject({
   maxRows: z.number().int().min(1).max(50).exactOptional(),
 });
 const DMS_ID = /^[0-9a-fA-F-]{36}$/;
-export const DmsLookupMappingSchema = z.strictObject({ key: z.string().regex(DMS_ID), fieldId: BlockIdSchema });
+export const DmsLookupMappingSchema = z.strictObject({ key: z.string().max(36).regex(DMS_ID), fieldId: BlockIdSchema });
 export const DmsMasterLookupSchema = z.strictObject({
-  id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  id: z.string().max(64).regex(/^[A-Za-z0-9_-]{1,64}$/),
   source: z.literal('dms_master'),
   name: z.string().min(1).max(80).exactOptional(),
   enabled: z.boolean().exactOptional(),
-  masterId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+  masterId: z.string().max(64).regex(/^[A-Za-z0-9-]{1,64}$/),
   pickerFieldId: BlockIdSchema,
-  pickerKey: z.string().regex(DMS_ID),
+  pickerKey: z.string().max(36).regex(DMS_ID),
   mappings: z.array(DmsLookupMappingSchema).max(16),
   minChars: z.number().int().min(0).max(3).exactOptional(),
   maxRows: z.number().int().min(1).max(20).exactOptional(),
@@ -103,7 +103,7 @@ export const PublicLookupSchema = z.strictObject({
   mappings: z.array(z.strictObject({ key: z.string().min(1).max(128), fieldId: BlockIdSchema })).max(32),
   minChars: z.number().int().min(0).max(3),
   maxRows: z.number().int().min(1).max(50),
-  masterId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/).exactOptional(),
+  masterId: z.string().max(64).regex(/^[A-Za-z0-9-]{1,64}$/).exactOptional(),
 });
 export const PublicApiOptionsSchema = z.strictObject({ remote: z.literal(true) });
 export const PublicApiValidationSchema = z.strictObject({ remote: z.literal(true), message: z.string().max(1000).exactOptional() });
