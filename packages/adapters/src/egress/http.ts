@@ -7,6 +7,10 @@ export interface HttpRequest {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   body?: string | Uint8Array;
+  /**
+   * The whole exchange, from connect to the last byte (default 10 s): past it the request is destroyed with
+   * PortError('unavailable'), however steadily the other side keeps sending. Also the socket's idle limit.
+   */
   timeoutMs?: number;
   /** Larger responses are cut off with PortError('unavailable'). Default 1 MiB. */
   maxResponseBytes?: number;
@@ -27,7 +31,8 @@ const DEFAULT_MAX_BYTES = 1024 * 1024;
 /**
  * One HTTP(S) request. With `pinnedIp` the connection goes to that address while TLS still verifies the
  * certificate for the URL's host, so a DNS answer that changed since the egress check cannot redirect it.
- * Redirects are never followed. Network failures and timeouts → PortError('unavailable').
+ * Redirects are never followed. Network failures and timeouts → PortError('unavailable'). The timeout is a total deadline,
+ * not only an idle one: an answer dripped one byte at a time cannot hold the request open past it.
  */
 export function sendHttp(url: URL, r: HttpRequest = {}, pinnedIp?: string): Promise<HttpResponse> {
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return Promise.reject(new PortError('invalid_argument', `not an http(s) URL: ${url.protocol}`));
@@ -42,11 +47,14 @@ export function sendHttp(url: URL, r: HttpRequest = {}, pinnedIp?: string): Prom
         };
   const body = typeof r.body === 'string' ? Buffer.from(r.body) : r.body;
   const max = r.maxResponseBytes ?? DEFAULT_MAX_BYTES;
+  const timeoutMs = r.timeoutMs ?? 10_000;
   return new Promise((resolve, fail) => {
     let settled = false;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     const reject = (e: Error) => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadline);
       fail(e instanceof PortError ? e : new PortError('unavailable', `${url.host}: ${e.message}`, { cause: e }));
     };
     const req = send(
@@ -54,7 +62,7 @@ export function sendHttp(url: URL, r: HttpRequest = {}, pinnedIp?: string): Prom
       {
         method: r.method ?? (body ? 'POST' : 'GET'),
         headers: { ...(body ? { 'content-length': String(body.byteLength) } : {}), ...r.headers },
-        timeout: r.timeoutMs ?? 10_000,
+        timeout: timeoutMs,
         ...(r.ca ? { ca: r.ca } : {}),
         ...(lookup ? { lookup } : {}),
       },
@@ -73,6 +81,7 @@ export function sendHttp(url: URL, r: HttpRequest = {}, pinnedIp?: string): Prom
         res.on('end', () => {
           if (settled) return;
           settled = true;
+          clearTimeout(deadline);
           const bytes = new Uint8Array(Buffer.concat(parts));
           const text = () => new TextDecoder().decode(bytes);
           resolve({
@@ -96,6 +105,10 @@ export function sendHttp(url: URL, r: HttpRequest = {}, pinnedIp?: string): Prom
       reject(new PortError('unavailable', `${url.host} timed out`));
       req.destroy();
     });
+    deadline = setTimeout(() => {
+      reject(new PortError('unavailable', `${url.host} did not finish within ${timeoutMs} ms`));
+      req.destroy();
+    }, timeoutMs);
     req.on('error', reject);
     req.end(body);
   });
