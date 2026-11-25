@@ -5,7 +5,8 @@ import { answerToDms } from '@form/registry/profiles/dms-v1';
 import type { Answers, FileRef, Locale } from '@form/schema';
 import { Alert, AlertDescription, AlertTitle, Button } from '@dmacq/ui';
 import { BUILDER_LOCALE } from '@/i18n';
-import { DmsApiError, DmsAuthError } from '@/embed/dmsClient';
+import { createDmsClient, DmsApiError, DmsAuthError } from '@/embed/dmsClient';
+import { dmsDirectRemoteSource } from '@/embed/lookup/dmsDirectRemoteSource';
 import { currentLaunch, type ResolvedLaunch } from '@/embed/launch';
 import { ProfileProvider } from '@/embed/profile';
 import { fieldNameOf, recordReturnTarget, writableElements, type DmsRecordValues, type LoadedDmsRecord } from './contract';
@@ -139,6 +140,11 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
   const [signedOut, setSignedOut] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const adding = loaded.recordId === null;
+  /* "Fill from master": the page has the user's own token, so the lookup asks dms-api directly (apiBase only). */
+  const remote = useMemo(
+    () => dmsDirectRemoteSource(createDmsClient({ apiBase: launch.apiBase, tenantId: launch.tenantId, workspaceId: launch.workspaceId }), form.version.definition.lookups ?? []),
+    [launch.apiBase, launch.tenantId, launch.workspaceId, form],
+  );
 
   /* Typed values are the only copy until Save. */
   const allowLeave = useLeaveGuard(dirty);
@@ -250,6 +256,7 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
         onSubmit={() => undefined}
         uploader={refuseUpload}
         hideNavigation
+        remote={remote}
         onAnswersChange={(next) => {
           answers.current = next;
           setDirty(true);

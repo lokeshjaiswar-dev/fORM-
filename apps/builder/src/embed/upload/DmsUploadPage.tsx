@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RendererHandle } from '@form/renderer';
 import { ChildTransport } from '@/embed/bridge/childTransport';
-import { embedEnv, resolveParent } from '@/embed/bridge/origins';
+import { embedEnv, resolveParent, type EmbedCap } from '@/embed/bridge/origins';
+import { bridgeRemoteSource } from '@/embed/lookup/bridgeRemoteSource';
 import { PROTOCOL_VERSION } from '@/embed/bridge/protocol';
 import { UploadController, type RenderView } from './controller';
 import { UploadForm } from './UploadForm';
@@ -23,14 +24,14 @@ const PROBLEM_TEXT = {
 } as const;
 type Problem = keyof typeof PROBLEM_TEXT;
 
-type Gate = { ok: true; parentOrigin: string; version: string | null } | { ok: false; problem: Problem };
+type Gate = { ok: true; parentOrigin: string; version: string | null; caps: readonly EmbedCap[] } | { ok: false; problem: Problem };
 
 function openGate(win: Window): Gate {
   if (win.parent === win) return { ok: false, problem: 'not_framed' };
   const env = embedEnv(win.location.search, win.location.origin);
   const parent = resolveParent(win.location.search, env);
   if (!parent.ok) return { ok: false, problem: parent.reason };
-  return { ok: true, parentOrigin: parent.parentOrigin, version: env.version };
+  return { ok: true, parentOrigin: parent.parentOrigin, version: env.version, caps: env.caps };
 }
 
 const RESIZE_DEBOUNCE_MS = 50;
@@ -38,7 +39,7 @@ const RESIZE_DEBOUNCE_MS = 50;
 export default function DmsUploadPage() {
   const gate = useMemo(() => openGate(window), []);
   if (!gate.ok) return <Notice problem={gate.problem} />;
-  return <Host parentOrigin={gate.parentOrigin} version={gate.version} />;
+  return <Host parentOrigin={gate.parentOrigin} version={gate.version} caps={gate.caps} />;
 }
 
 function Notice({ problem }: { problem: Problem }) {
@@ -49,7 +50,7 @@ function Notice({ problem }: { problem: Problem }) {
   );
 }
 
-function Host({ parentOrigin, version }: { parentOrigin: string; version: string | null }) {
+function Host({ parentOrigin, version, caps }: { parentOrigin: string; version: string | null; caps: readonly EmbedCap[] }) {
   const [view, setView] = useState<RenderView | null>(null);
   const [today, setToday] = useState('01-01-2026');
   const handle = useRef<RendererHandle | null>(null);
@@ -57,6 +58,9 @@ function Host({ parentOrigin, version }: { parentOrigin: string; version: string
   const transport = useRef<ChildTransport | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const mismatch = version !== null && version !== PROTOCOL_VERSION;
+  const lookupEnabled = caps.includes('lookup');
+  /** The parent's lookup source: only when it announced the capability in the iframe URL. */
+  const remote = useMemo(() => (lookupEnabled ? bridgeRemoteSource(() => controller.current) : undefined), [lookupEnabled]);
 
   useEffect(() => {
     // The parent supplies the page background; the iframe must not paint over it.
@@ -85,6 +89,7 @@ function Host({ parentOrigin, version }: { parentOrigin: string; version: string
       send: (type, payload, replyTo) => link.send(type, payload, replyTo),
       onRender: setView,
       showInlineErrors: async () => void (await handle.current?.validate()),
+      lookupEnabled,
     });
     transport.current = link;
     controller.current = logic;
@@ -103,7 +108,7 @@ function Host({ parentOrigin, version }: { parentOrigin: string; version: string
       transport.current = null;
       controller.current = null;
     };
-  }, [parentOrigin, mismatch, version]);
+  }, [parentOrigin, mismatch, version, lookupEnabled]);
 
   // Height to the parent whenever the form's size changes (debounced), so its iframe never scrolls.
   useEffect(() => {
@@ -138,6 +143,7 @@ function Host({ parentOrigin, version }: { parentOrigin: string; version: string
           handleRef={handle}
           onAnswers={(answers) => controller.current?.setAnswers(answers)}
           onError={(error) => controller.current?.fail('render_failed', error.message)}
+          {...(remote ? { remote } : {})}
         />
       ) : null}
     </div>

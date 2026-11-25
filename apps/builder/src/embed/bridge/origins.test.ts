@@ -44,3 +44,16 @@ describe('resolveParent', () => {
     expect(resolveParent('?fp_parent=https%3A%2F%2Fevil.example', allowed)).toEqual({ ok: false, reason: 'not_allowed' });
   });
 });
+
+describe('fp_caps (the parent announces optional capabilities in the iframe URL)', () => {
+  it('reads the known ones from a comma list and ignores the rest', () => {
+    expect(embedEnv('?fp_caps=lookup', OWN, undefined).caps).toEqual(['lookup']);
+    expect(embedEnv('?fp_caps=foo,lookup,%20bar', OWN, undefined).caps).toEqual(['lookup']);
+    expect(embedEnv('?fp_caps=lookups,LOOKUP,__proto__', OWN, undefined).caps).toEqual([]);
+  });
+
+  it('is empty when the parent sent none (an old parent), so the child never asks', () => {
+    expect(embedEnv('', OWN, undefined).caps).toEqual([]);
+    expect(embedEnv('?fp_v=1&fp_parent=x', OWN, undefined).caps).toEqual([]);
+  });
+});

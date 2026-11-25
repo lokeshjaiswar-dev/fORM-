@@ -55,6 +55,21 @@ export function sessionStart(today: string): IsoInstant {
   return `${today.slice(6, 10)}-${today.slice(3, 5)}-${today.slice(0, 2)}T06:30:00Z` as IsoInstant;
 }
 
+/**
+ * The lookups of the form as this page may use them: none in a read-only form, and no mapping into a field that is locked
+ * (auto-increment, converted from OpenForm) or outside the seven types, so a lookup can never write where a person cannot.
+ */
+function lookupsFor(model: UploadModel, def: FormDefinition): Pick<FormDefinition, 'lookups'> | Record<string, never> {
+  if (!def.lookups) return {};
+  const editable = new Set(editableFields(model).map((f) => f.id));
+  if (model.readOnly) return { lookups: [] };
+  const kept = def.lookups.flatMap((l) => {
+    if (l.source !== 'dms_master' || !editable.has(l.pickerFieldId)) return [];
+    return [{ ...l, mappings: l.mappings.filter((m) => editable.has(m.fieldId) && m.fieldId !== l.pickerFieldId) }];
+  });
+  return { lookups: kept };
+}
+
 export function planRender(
   model: UploadModel,
   values: Readonly<Record<string, string>>,
@@ -64,6 +79,7 @@ export function planRender(
   const elements = model.fields.map((f) => toElement(f, optionsFor(f, loaded)));
   let def: FormDefinition = elementsToDefinition(elements, { formId: FORM_ID, title: '', locale: model.locale, base: blankDmsDefinition(FORM_ID, '', model.locale) });
   const blocks: Partial<Record<BlockId, StoredBlock>> = { ...def.blocks };
+  def = { ...def, ...lookupsFor(model, def) };
   const answers: Record<string, AnswerValue> = {};
   const baseline: Record<string, string> = {};
   const editable = new Set(editableFields(model).map((f) => f.id));

@@ -12,6 +12,21 @@ export interface EmbedEnv {
   parents: readonly string[];
   /** `fp_v`, when the parent sent one. */
   version: string | null;
+  /**
+   * Optional capabilities the parent announced in `?fp_caps=` (comma list; unknown values are ignored). `lookup`: the parent
+   * answers `lookup.request`. Without it the child sends no lookup request, so an old parent never sees one (skew-safe).
+   */
+  caps: readonly EmbedCap[];
+}
+
+export const EMBED_CAPS = ['lookup'] as const;
+export type EmbedCap = (typeof EMBED_CAPS)[number];
+
+/** `fp_caps` as the known capabilities it names. */
+export function parseCaps(search: string): EmbedCap[] {
+  const raw = new URLSearchParams(search).get('fp_caps') ?? '';
+  const named = raw.split(',').map((c) => c.trim());
+  return EMBED_CAPS.filter((cap) => named.includes(cap));
 }
 
 const originOf = (raw: string): string | null => {
@@ -31,7 +46,7 @@ export function parseEmbedParents(raw: unknown, ownOrigin: string): string[] {
 }
 
 export function embedEnv(search: string, ownOrigin: string, rawParents: unknown = (import.meta.env as Record<string, unknown>).VITE_FP_EMBED_PARENTS): EmbedEnv {
-  return { origin: ownOrigin, parents: parseEmbedParents(rawParents, ownOrigin), version: new URLSearchParams(search).get('fp_v') };
+  return { origin: ownOrigin, parents: parseEmbedParents(rawParents, ownOrigin), version: new URLSearchParams(search).get('fp_v'), caps: parseCaps(search) };
 }
 
 export type ParentResult = { ok: true; parentOrigin: string } | { ok: false; reason: 'missing' | 'malformed' | 'not_allowed' };
