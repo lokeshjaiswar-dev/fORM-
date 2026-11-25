@@ -68,6 +68,7 @@ describe('XML', () => {
     const xml = renderXml('r', { v: evil });
     expect(xml).not.toContain('<!DOCTYPE');
     expect(xml).not.toContain('<![CDATA[');
+    // oxlint-disable-next-line no-control-regex -- asserting that none are left
     expect(xml).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
     expect(xml).toBe(
       '<?xml version="1.0" encoding="UTF-8"?><r><v>&lt;/x&gt;&lt;!DOCTYPE a [&lt;!ENTITY e SYSTEM &quot;file:///etc/passwd&quot;&gt;]&gt;&amp;e;&lt;![CDATA[ ]]&gt; &quot;q&quot; &apos;a&apos;&#13;&#10;z</v></r>',

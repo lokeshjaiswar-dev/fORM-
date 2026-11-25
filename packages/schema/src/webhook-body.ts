@@ -141,6 +141,7 @@ export function applyMapping(mapping: WebhookPayloadMapping, source: MappingSour
 // ---------------------------------------------------------------------------------------------------------------- XML
 
 // Characters XML 1.0 cannot carry at all (controls but tab, LF, CR; the non-characters; a lone surrogate) are dropped.
+// oxlint-disable-next-line no-control-regex -- the point is to match control characters
 const XML_ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 
 /** Text for element content or an attribute value: illegal characters dropped, the five predefined entities and CR/LF/TAB as character references. */

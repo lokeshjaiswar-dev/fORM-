@@ -4,6 +4,8 @@ import { Alert, AlertDescription, Button, CheckboxField, Field, Input, Label, Ra
 import { t } from '@/i18n';
 import { ApiProblem } from '@/auth/client';
 import { type FormFacts } from '@/components/settings/webhookForm';
+import { bodyIsSaveable, mappingOf, rowsOf, type BodyValues } from '@/components/settings/webhookBody';
+import { WebhookBodyEditor } from '@/components/settings/WebhookBodyEditor';
 import { EVENT_LABELS, describeWebhookFailure, isForbidden } from '@/components/settings/webhookText';
 import {
   ALL_IN_PURPOSES,
@@ -20,7 +22,7 @@ const M = defineMessages('builder', {
   'webhooks.editor.title_new': 'Add a webhook',
   'webhooks.editor.title_edit': 'Change this webhook',
   'webhooks.editor.url': 'Address',
-  'webhooks.editor.url_hint': 'Each response is posted here as JSON, signed so your receiver can check it came from fORM-.',
+  'webhooks.editor.url_hint': 'Each response is posted here as JSON or XML, signed so your receiver can check it came from fORM-.',
   'webhooks.editor.url_placeholder': 'https://example.com/hooks/form',
   'webhooks.editor.enabled': 'Send responses to this address',
   'webhooks.editor.events': 'Send when',
@@ -62,10 +64,11 @@ interface Values {
   allFields: boolean;
   fieldKeys: string[];
   purposeIds: string[];
+  body: BodyValues;
 }
 
 function valuesOf(webhook: Webhook | null): Values {
-  if (!webhook) return { url: '', enabled: true, events: ['submission.created'], keyBy: 'key', allFields: true, fieldKeys: [], purposeIds: [] };
+  if (!webhook) return { url: '', enabled: true, events: ['submission.created'], keyBy: 'key', allFields: true, fieldKeys: [], purposeIds: [], body: { format: 'json', custom: false, root: '', rows: [] } };
   return {
     url: webhook.url,
     enabled: webhook.enabled,
@@ -74,6 +77,7 @@ function valuesOf(webhook: Webhook | null): Values {
     allFields: webhook.fieldKeys === ALL_IN_PURPOSES,
     fieldKeys: webhook.fieldKeys === ALL_IN_PURPOSES ? [] : webhook.fieldKeys,
     purposeIds: webhook.purposeIds,
+    body: { format: webhook.bodyFormat, custom: webhook.payloadMapping !== null, root: webhook.payloadMapping?.root ?? '', rows: rowsOf(webhook.payloadMapping) },
   };
 }
 
@@ -136,7 +140,7 @@ export function WebhookEditor({ org, formId, webhook, facts, onCreated, onSaved,
 
   const addressOk = isWebAddress(values.url);
   const fieldsOk = values.allFields || values.fieldKeys.length > 0;
-  const canSave = addressOk && values.events.length > 0 && values.purposeIds.length > 0 && fieldsOk && !busy;
+  const canSave = addressOk && values.events.length > 0 && values.purposeIds.length > 0 && fieldsOk && bodyIsSaveable(values.body, fields) && !busy;
 
   async function submit() {
     if (!canSave) return;
@@ -149,6 +153,8 @@ export function WebhookEditor({ org, formId, webhook, facts, onCreated, onSaved,
       purposeIds: values.purposeIds,
       // Signed file links are not sent yet, so a new webhook asks for none and a saved one keeps what it had.
       files: webhook?.files ?? 'none',
+      bodyFormat: values.body.format,
+      payloadMapping: values.body.custom ? mappingOf(values.body.rows, values.body.format === 'xml' ? values.body.root : '') : null,
     };
     setBusy(true);
     setProblems({});
@@ -160,6 +166,7 @@ export function WebhookEditor({ org, formId, webhook, facts, onCreated, onSaved,
       if (isForbidden(err)) return onForbidden();
       if (err instanceof WebhookConflict) return setProblems({ conflict: true });
       if (err instanceof ApiProblem && err.code === 'EGRESS_DENIED') return setProblems({ url: err.message || t(M['webhooks.editor.egress']) });
+      if (err instanceof ApiProblem && err.code === 'INVALID_PAYLOAD_MAPPING') return setProblems({ general: err.message });
       if (err instanceof ApiProblem && err.code === 'MISSING_PURPOSE') return setProblems({ purposes: err.message || t(M['webhooks.editor.missing_purpose']) });
       setProblems({ general: describeWebhookFailure(err, M['webhooks.editor.save_failed']) });
     }
@@ -287,6 +294,8 @@ export function WebhookEditor({ org, formId, webhook, facts, onCreated, onSaved,
         <RadioField value="key" label={t(M['webhooks.editor.key_by_key'])} />
         <RadioField value="id" label={t(M['webhooks.editor.key_by_id'])} />
       </RadioGroup>
+
+      <WebhookBodyEditor value={values.body} fields={fields} onChange={(change) => set({ body: { ...values.body, ...change } })} />
 
       {problems.conflict ? (
         <Alert variant="warning" icon>

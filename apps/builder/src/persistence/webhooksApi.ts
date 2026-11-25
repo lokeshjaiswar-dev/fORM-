@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { WebhookConfigSchema } from '@form/schema';
+import { WebhookConfigSchema, WebhookPayloadMappingSchema, type WebhookPayloadMapping } from '@form/schema';
 import { ApiUnreachable } from '@/auth/client';
 import { orgCall, problemOf, type Reply } from '@/persistence/draftsApi';
 
@@ -34,6 +34,10 @@ const webhookSchema = z.object({
   fieldKeys: z.union([z.array(z.string()), z.literal(ALL_IN_PURPOSES)]),
   purposeIds: z.array(z.string()),
   files: z.enum(['signed_urls', 'none']),
+  /** 'json' (standard payload unless mapped) or 'xml'. */
+  bodyFormat: z.enum(['json', 'xml']).default('json'),
+  /** The custom body: dotted paths to answers, or null for the standard payload. */
+  payloadMapping: WebhookPayloadMappingSchema.nullable().default(null),
   /** The last four characters of the signing secret in force: all that can be shown of it. */
   secretHint: z.string(),
   secretRotatedAt: z.string().nullable(),
@@ -87,6 +91,8 @@ export interface WebhookInput {
   fieldKeys: FieldKeys;
   purposeIds: string[];
   files: 'signed_urls' | 'none';
+  bodyFormat: 'json' | 'xml';
+  payloadMapping: WebhookPayloadMapping | null;
 }
 
 /** The answer to creating a webhook: the webhook, and its signing secret, which is shown this once. */

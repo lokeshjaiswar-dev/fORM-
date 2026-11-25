@@ -23,6 +23,8 @@ const HOOK = {
   fieldKeys: 'all_in_purposes',
   purposeIds: ['purpose_ops'],
   files: 'none',
+  bodyFormat: 'json',
+  payloadMapping: null,
   secretHint: 'a1b2',
   secretRotatedAt: null,
   consecutiveFailures: 0,
@@ -55,6 +57,8 @@ const INPUT: WebhookInput = {
   fieldKeys: 'all_in_purposes',
   purposeIds: ['purpose_ops'],
   files: 'none',
+  bodyFormat: 'json',
+  payloadMapping: null,
 };
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': status >= 400 ? 'application/problem+json' : 'application/json' } });
