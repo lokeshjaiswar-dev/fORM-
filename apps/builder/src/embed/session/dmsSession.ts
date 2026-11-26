@@ -315,7 +315,10 @@ export function waitForReconnect(usedGeneration: number): Promise<void> {
 function releaseParked(error: Error | null): void {
   const calls = parked;
   parked = [];
-  for (const p of calls) error ? p.reject(error) : p.resolve();
+  for (const p of calls) {
+    if (error) p.reject(error);
+    else p.resolve();
+  }
 }
 
 /** The user closed the Reconnect prompt: parked calls fail with `SessionEndedError` (the page shows its own message). */

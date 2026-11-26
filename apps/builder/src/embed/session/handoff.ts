@@ -94,12 +94,14 @@ const B64URL_43 = /^[A-Za-z0-9_-]{43}$/;
  */
 export function takeHandoff(env: HandoffEnv, loc: Pick<Location, 'hash' | 'pathname' | 'search'> = globalThis.location): Handoff {
   const hash = loc.hash;
-  if (hash !== '' && hash !== '#') stripFragment(loc);
+  const hasFragment = hash !== '' && hash !== '#';
+  if (hasFragment) stripFragment(loc);
+  // A launch page view consumes `fp.lv` whatever the fragment turns out to be: the verifier was meant for this one navigation only, and a
+  // refused link must not leave a valid one lying in the tab for the next page view.
+  const stored = hasFragment ? takeVerifier() : null;
 
   const parsed = parseTicketFragment(hash, { apiBases: env.apiBases, devOverrides: env.devOverrides });
   if (parsed.ok) {
-    // The verifier is consumed even when the exchange cannot start: it was meant for this ticket only.
-    const stored = takeVerifier();
     const verifier = parsed.verifier ?? stored;
     if (verifier === null || !B64URL_43.test(verifier)) return { kind: 'failed', reason: 'no_verifier' };
     // One configured base: no selector needed. Several: the link must name one (parseTicketFragment already checked it is listed),

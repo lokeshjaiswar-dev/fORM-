@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
+    "lint:authority": "node scripts/lint-embed-authority.mjs",
+    "test:authority": "node --test scripts/lint-embed-authority.test.mjs",
     "preview": "vite preview",
     "test": "vitest run --coverage",
     "test:perf": "vitest run --config vitest.perf.config.ts",

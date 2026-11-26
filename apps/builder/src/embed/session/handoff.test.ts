@@ -93,13 +93,24 @@ describe('T-DMSINT-52 takeHandoff, production build', () => {
     expect(window.location.href).not.toContain('fpt');
   });
 
-  it('strips a fragment it refuses too, and an unrelated fragment', () => {
+  it('strips a fragment it refuses too, and an unrelated fragment; the verifier is consumed either way', () => {
+    sessionStorage.setItem('fp.lv', VERIFIER);
     at('#fpt=garbage');
     expect(takeHandoff(PROD)).toEqual({ kind: 'failed', reason: 'malformed' });
     expect(window.location.hash).toBe('');
+    expect(sessionStorage.getItem('fp.lv')).toBeNull();
+    sessionStorage.setItem('fp.lv', VERIFIER);
     at('#x=1');
     expect(takeHandoff(PROD)).toEqual({ kind: 'failed', reason: 'missing' });
     expect(window.location.hash).toBe('');
+    expect(sessionStorage.getItem('fp.lv')).toBeNull();
+  });
+
+  it('a page view with no fragment (a reload) leaves fp.lv alone: it is not that view\'s to consume', () => {
+    sessionStorage.setItem('fp.lv', VERIFIER);
+    at('');
+    takeHandoff(PROD);
+    expect(sessionStorage.getItem('fp.lv')).toBe(VERIFIER);
   });
 
   it('does not reuse a verifier: the second read finds none', () => {
