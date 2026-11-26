@@ -264,7 +264,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master record retrieved successfully",
+            "message": "Master retrieved successfully",
             "data": {
               "id": "d3000000-0000-4000-8000-0000000000b1",
               "master_id": "a1000000-0000-4000-8000-0000000000b1",
@@ -288,7 +288,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master record retrieved successfully",
+            "message": "Master retrieved successfully",
             "data": {
               "id": "d3000000-0000-4000-8000-0000000000b1",
               "master_id": "a1000000-0000-4000-8000-0000000000b1",
@@ -403,8 +403,7 @@
             "success": true,
             "message": "Master record updated successfully",
             "data": {
-              "id": "d3000000-0000-4000-8000-0000000000b1",
-              "master_id": "a1000000-0000-4000-8000-0000000000b1"
+              "id": "d3000000-0000-4000-8000-0000000000b1"
             }
           }
         },
@@ -439,8 +438,7 @@
             "success": true,
             "message": "Master record updated successfully",
             "data": {
-              "id": "d3000000-0000-4000-8000-0000000000b1",
-              "master_id": "a1000000-0000-4000-8000-0000000000b1"
+              "id": "d3000000-0000-4000-8000-0000000000b1"
             }
           }
         },
