@@ -1,22 +1,53 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>fp-bridge parent (test harness)</title>
-<!-- A stand-in for the classic upload step 2: frames the child, logs what it sends, sends what the test asks. -->
+<title>fp-bridge/2 parent (test harness)</title>
+<!-- A stand-in for the classic live upload module (DESIGN 6.3): frames the child exactly as FormPlusHost does
+     (sandbox="allow-scripts allow-forms", no allow-same-origin, no fp_parent), takes `hello` only from that frame with origin "null",
+     transfers one MessagePort, logs everything the child sends and sends what the test asks. -->
 <body style="margin:0;font-family:sans-serif">
 <p>parent page</p>
-<iframe id="child" title="fORM- upload form" style="width:100%;border:0;height:40px"></iframe>
+<iframe id="child" title="fORM- upload form" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" style="width:100%;border:0;height:40px"></iframe>
 <script>
   const params = new URLSearchParams(location.search);
   const child = document.getElementById('child');
   const origin = params.get('childOrigin') || location.origin;
-  const parent = params.get('parent') || location.origin;
-  window.fpLog = [];
-  window.fpReadyOnce = false;
-  child.src = origin + '/embed/dms-upload?fp_parent=' + encodeURIComponent(parent) + '&fp_v=1';
+  const dialogId = params.get('dialogId') || 'dlg-e2e-1';
+  const manual = params.get('manual') === '1';   // do not answer `hello` until the test calls fpHandover()
+  window.fpWindowLog = [];   // window-level messages from the child: only `hello` is allowed there
+  window.fpLog = [];         // messages from the child on the port
+  window.fpPortSent = 0;
+  window.fpPortReady = false;
+  let port = null;
+  child.src = origin + (params.get('path') || '/embed/dms-upload?fp_v=2');
+  window.fpHelloSeen = 0;
+  function handover() {
+    if (port) return;
+    const channel = new MessageChannel();
+    port = channel.port1;
+    port.onmessage = function (e) {
+      window.fpLog.push(e.data);
+      if (e.data && e.data.type === 'resize') child.style.height = e.data.height + 'px';
+    };
+    child.contentWindow.postMessage({ protocol: 'fp-bridge/2', type: 'port', dialogId: dialogId }, '*', [channel.port2]);
+    window.fpPortSent += 1;
+    window.fpPortReady = true;
+  }
+  window.fpHandover = handover;
   window.addEventListener('message', function (event) {
-    if (event.source !== child.contentWindow || event.origin !== origin) return;
-    window.fpLog.push(event.data);
-    if (event.data && event.data.type === 'resize') child.style.height = event.data.payload.height + 'px';
+    if (event.source !== child.contentWindow || event.origin !== 'null') return;
+    window.fpWindowLog.push(event.data);
+    if (!event.data || event.data.protocol !== 'fp-bridge/2' || event.data.type !== 'hello') return;
+    window.fpHelloSeen += 1;
+    if (!manual) handover();
   });
-  window.fpSend = function (message) { child.contentWindow.postMessage(message, origin); };
+  window.fpSend = function (message) { port.postMessage(message); };
+  // A second, rogue handover attempt from this page after the first one is taken (the child must ignore it).
+  window.fpSendSecondPort = function () {
+    const channel = new MessageChannel();
+    const rogue = [];
+    channel.port1.onmessage = function (e) { rogue.push(e.data); };
+    child.contentWindow.postMessage({ protocol: 'fp-bridge/2', type: 'port', dialogId: 'dlg-rogue' }, '*', [channel.port2]);
+    window.fpRogue = rogue;
+    window.fpRoguePort = channel.port1;
+  };
 </script>

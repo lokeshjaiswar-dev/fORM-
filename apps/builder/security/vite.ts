@@ -93,12 +93,20 @@ export function noInjectedStyles(): Plugin {
  * route, `/embed/dms-master` included, stays `frame-ancestors 'none'`.
  * Vite's `server.headers` and `preview.headers` are one set for all paths, so this replaces the framing headers on the
  * response of a framable path just before its head is written, whichever middleware set them first. `headers` is the
- * full set of `embedHeaders(...)`; headers it does not carry (`X-Frame-Options`) are removed.
+ * full set the route gets (`sandboxedEmbedHeaders(...)` or `embedHeaders(...)`); headers it does not carry (`X-Frame-Options`,
+ * the plain set's COOP and report endpoints) are removed.
+ *
+ * `rewriteTo` (a file under the base, `embed-upload.html`): the framable path is served from that entry instead of the SPA, as
+ * nginx does (`deploy/nginx.conf.template`): the upload page is its own entry that runs in an opaque origin.
  */
-export function embedFraming(headers: Record<string, string>, base = '/'): Plugin {
-  const replaced = ['Content-Security-Policy', 'X-Frame-Options'];
+export function embedFraming(headers: Record<string, string>, base = '/', options: { rewriteTo?: string } = {}): Plugin {
+  const replaced = ['Content-Security-Policy', 'X-Frame-Options', 'Cross-Origin-Opener-Policy', 'Reporting-Endpoints', 'Content-Security-Policy-Report-Only'];
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     if (isFramablePath(req.url, base)) {
+      if (options.rewriteTo !== undefined) {
+        const query = (req.url ?? '').match(/[?#].*$/)?.[0] ?? '';
+        req.url = `${base.replace(/\/+$/, '')}/${options.rewriteTo}${query}`;
+      }
       const writeHead = res.writeHead.bind(res) as (...args: unknown[]) => ServerResponse;
       res.writeHead = ((...args: unknown[]) => {
         for (const name of replaced) if (!(name in headers)) res.removeHeader(name);
@@ -110,6 +118,26 @@ export function embedFraming(headers: Record<string, string>, base = '/'): Plugi
   };
   return {
     name: 'fr-embed-framing',
+    configureServer: (server) => void server.middlewares.use(handler),
+    configurePreviewServer: (server) => void server.middlewares.use(handler),
+  };
+}
+
+/**
+ * The built assets (`<base>assets/*`, hashed, public) answer `Access-Control-Allow-Origin: *`, as `location ^~ /formplus/assets/` does in
+ * nginx (SEC-DESIGN 3.3 B2): the sandboxed upload page has an opaque origin and loads its module scripts, stylesheet and fonts in CORS
+ * mode with `Origin: null`. Only the assets get it: never a page, never an API response. `vite preview` has no CORS on its static
+ * files (the e2e suite and the cross-origin spec run against it); the dev server already allows any origin.
+ */
+export function assetCors(base = '/'): Plugin {
+  const prefix = `${base.replace(/\/+$/, '')}/assets/`;
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    const path = (req.url ?? '').split(/[?#]/)[0] ?? '';
+    if (path.startsWith(prefix) && (req.method === 'GET' || req.method === 'HEAD')) res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+  };
+  return {
+    name: 'fr-asset-cors',
     configureServer: (server) => void server.middlewares.use(handler),
     configurePreviewServer: (server) => void server.middlewares.use(handler),
   };

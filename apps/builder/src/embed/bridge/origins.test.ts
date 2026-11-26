@@ -5,10 +5,11 @@ const OWN = 'https://form.example';
 const env = (parents: string[]) => ({ parents });
 
 describe('embed parent allowlist', () => {
-  it('defaults to this origin when unset or when no entry is usable', () => {
-    expect(parseEmbedParents(undefined, OWN)).toEqual([OWN]);
-    expect(parseEmbedParents('', OWN)).toEqual([OWN]);
-    expect(parseEmbedParents('*, javascript:alert(1), ftp://x.example', OWN)).toEqual([OWN]);
+  it('an unset list, or one with no usable entry, is EMPTY: nobody may frame the page (no "own origin" default)', () => {
+    expect(parseEmbedParents(undefined, OWN)).toEqual([]);
+    expect(parseEmbedParents('', OWN)).toEqual([]);
+    expect(parseEmbedParents('*, javascript:alert(1), ftp://x.example', OWN)).toEqual([]);
+    expect(resolveParent(`?fp_parent=${encodeURIComponent(OWN)}`, embedEnv('', OWN, undefined))).toEqual({ ok: false, reason: 'not_allowed' });
   });
 
   it('normalises listed origins, drops duplicates and credentials', () => {

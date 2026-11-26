@@ -6,6 +6,7 @@
 #     --build-arg VITE_FP_DMS_API_ORIGINS=https://dms.example \
 #     --build-arg VITE_FP_EMBED_PARENTS=https://dms.example \
 #     --build-arg VITE_FP_RETURN_ORIGINS=https://dms.example \
+#     --build-arg FP_PUBLIC_ORIGINS=https://dms.example \
 #     -t form-builder .
 # Every VITE_* value is baked into the bundle and into the CSP headers at build time (docs/platform/builder-security-headers.md).
 # No secret belongs in a build arg.
@@ -25,13 +26,22 @@ ARG VITE_FP_DMS_API_ORIGINS=
 ARG VITE_FP_EMBED_PARENTS=
 ARG VITE_FP_RETURN_ORIGINS=
 ARG VITE_WEBHOOK_DOCS_URL=
+# The M2 legacy build only (VITE_FP_LEGACY_DESCRIPTOR=1): the upload child also answers fp-bridge/1 (`fp_v=1`) for upload-v2 on the
+# old classic frontend, and /embed/dms-upload keeps today's framable header set. Default empty = fp-bridge/2 + sandbox only
+# (SEC-DESIGN 3.5); never set at M4.
+ARG VITE_FP_LEGACY_DESCRIPTOR=
+# This deployment's own public origin(s), listed explicitly in the sandboxed upload CSP (SEC-DESIGN 3.3 B3). Empty = the value of
+# VITE_FP_EMBED_PARENTS (the DMS app host serves fORM- under /formplus). Not a secret.
+ARG FP_PUBLIC_ORIGINS=
 ENV VITE_BASE=$VITE_BASE \
     VITE_API_URL=$VITE_API_URL \
     VITE_FP_DMS_API_BASE=$VITE_FP_DMS_API_BASE \
     VITE_FP_DMS_API_ORIGINS=$VITE_FP_DMS_API_ORIGINS \
     VITE_FP_EMBED_PARENTS=$VITE_FP_EMBED_PARENTS \
     VITE_FP_RETURN_ORIGINS=$VITE_FP_RETURN_ORIGINS \
-    VITE_WEBHOOK_DOCS_URL=$VITE_WEBHOOK_DOCS_URL
+    VITE_WEBHOOK_DOCS_URL=$VITE_WEBHOOK_DOCS_URL \
+    VITE_FP_LEGACY_DESCRIPTOR=$VITE_FP_LEGACY_DESCRIPTOR \
+    FP_PUBLIC_ORIGINS=$FP_PUBLIC_ORIGINS
 # The signed system template pack (packages/templates/dist, git- and docker-ignored) is built first:
 # the builder imports @form/templates/packs/system-core-*.formpack.
 RUN pnpm --filter @form/templates build \
