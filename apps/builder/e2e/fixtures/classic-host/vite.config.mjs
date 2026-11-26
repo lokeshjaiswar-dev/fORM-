@@ -1,5 +1,5 @@
-// Builds the classic-side half of the fp-bridge/1 conformance harness: the REAL classic step 2 host
-// (FormPlusHost + bridgeParent + bridgeProtocol + legacyRecord + flag, from the classic checkout) into one
+// Builds the classic-side half of the fp-bridge/2 conformance harness: the REAL classic step 2 host
+// (FormPlusHost + bridgeParentV2 + bridgeProtocolV2 + legacyRecord + fieldsHandle + flag, from the classic checkout) into one
 // browser script. Only two seams are replaced, because they are classic's data layer, not the bridge:
 // the UploadService (options endpoints) and the legacy RenderElement (the fallback target).
 //   CLASSIC_DIR   the classic checkout (default: ../classic next to the fORM- checkout)
@@ -10,7 +10,7 @@ import { defineConfig } from 'vite';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const classic = path.resolve(process.env.CLASSIC_DIR ?? path.resolve(here, '../../../../../../classic'));
-const formplusDir = path.join(classic, 'src/modules/documents/upload-v2/components/doc-properties/formplus');
+const formplusDir = path.join(classic, 'src/modules/documents/upload/components/doc-properties/formplus');
 const nm = (p) => path.join(classic, 'node_modules', p);
 
 const stubSeams = {

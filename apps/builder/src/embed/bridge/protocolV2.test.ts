@@ -95,6 +95,10 @@ describe('prefillHash', () => {
   it('is stable: the golden vector of the two repos', () => {
     expect(GOLDEN).toBe('1610d51cf42f8b4f');
   });
+  it('more golden vectors (non-ASCII text, a NUL, an escaped lone surrogate, nothing at all), the same in classic\'s test', () => {
+    expect(prefillHash({ 'b2000000-0000-4000-8000-000000000001': 'Zo\u00eb \u20b9 \u{1f600} \u0000x', 'b2000000-0000-4000-8000-000000000002': 'lone \ud800 end' }, [])).toBe('07b9e769b839559d');
+    expect(prefillHash({}, [])).toBe('cc6425794958175e');
+  });
   it('ignores key order and the case of ids, and sees a changed value or mask', () => {
     expect(prefillHash({ 'c2000000-0000-4000-8000-000000000103': 'Goods', 'c2000000-0000-4000-8000-000000000101': 'Acme', 'C2000000-0000-4000-8000-000000000102': null }, ['C2000000-0000-4000-8000-000000000102'])).toBe(GOLDEN);
     expect(prefillHash({ ...VALUES, 'c2000000-0000-4000-8000-000000000103': 'Services' }, MASKED)).not.toBe(GOLDEN);

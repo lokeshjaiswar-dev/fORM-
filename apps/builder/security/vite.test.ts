@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import type { Connect } from 'vite';
 import { embedHeaders, sandboxedEmbedHeaders } from './headers.ts';
-import { embedFraming, noInjectedStyles } from './vite.ts';
+import { assetCors, embedFraming, noInjectedStyles } from './vite.ts';
 
 type Transform = (this: { error: (m: string) => never }, code: string, id: string) => { code: string } | null;
 
@@ -117,5 +117,36 @@ describe('embedFraming for the sandboxed upload entry (T-61)', () => {
       expect(r.set.get('X-Frame-Options'), url).toBe('DENY');
       expect(r.set.get('Content-Security-Policy'), url).toBe("frame-ancestors 'none'");
     }
+  });
+});
+
+
+describe('assetCors (the nginx assets location, for vite preview)', () => {
+  function run(url: string, base = '/', method = 'GET') {
+    const set = new Map<string, string>();
+    const res = { setHeader: (k: string, v: string) => void set.set(k, v) };
+    let handler: Connect.NextHandleFunction | undefined;
+    (assetCors(base).configurePreviewServer as unknown as (s: { middlewares: { use: (h: Connect.NextHandleFunction) => void } }) => void)({ middlewares: { use: (h) => void (handler = h) } });
+    let nexted = 0;
+    handler!({ url, method } as never, res as never, () => void (nexted += 1));
+    return { set, nexted };
+  }
+
+  it('gives the built assets Access-Control-Allow-Origin: * and passes the request on', () => {
+    for (const url of ['/assets/embed-upload-abc.js', '/assets/x.css?v=1', '/assets/fonts/a.woff2']) {
+      const r = run(url);
+      expect(r.set.get('Access-Control-Allow-Origin'), url).toBe('*');
+      expect(r.nexted).toBe(1);
+    }
+    expect(run('/formplus/assets/a.js', '/formplus/').set.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(run('/assets/a.js', '/', 'HEAD').set.get('Access-Control-Allow-Origin')).toBe('*');
+  });
+
+  it('gives nothing else CORS: not a page, not the embed entry, not an API path, not another base', () => {
+    for (const url of ['/', '/forms', '/embed/dms-upload', '/embed-upload.html', '/v1/me', '/assetsx/a.js', '/x/assets/a.js']) {
+      expect(run(url).set.has('Access-Control-Allow-Origin'), url).toBe(false);
+    }
+    expect(run('/assets/a.js', '/formplus/').set.has('Access-Control-Allow-Origin')).toBe(false);
+    expect(run('/assets/a.js', '/', 'POST').set.has('Access-Control-Allow-Origin')).toBe(false);
   });
 });

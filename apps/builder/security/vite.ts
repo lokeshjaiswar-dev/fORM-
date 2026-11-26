@@ -122,3 +122,23 @@ export function embedFraming(headers: Record<string, string>, base = '/', option
     configurePreviewServer: (server) => void server.middlewares.use(handler),
   };
 }
+
+/**
+ * The built assets (`<base>assets/*`, hashed, public) answer `Access-Control-Allow-Origin: *`, as `location ^~ /formplus/assets/` does in
+ * nginx (SEC-DESIGN 3.3 B2): the sandboxed upload page has an opaque origin and loads its module scripts, stylesheet and fonts in CORS
+ * mode with `Origin: null`. Only the assets get it: never a page, never an API response. `vite preview` has no CORS on its static
+ * files (the e2e suite and the cross-origin spec run against it); the dev server already allows any origin.
+ */
+export function assetCors(base = '/'): Plugin {
+  const prefix = `${base.replace(/\/+$/, '')}/assets/`;
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    const path = (req.url ?? '').split(/[?#]/)[0] ?? '';
+    if (path.startsWith(prefix) && (req.method === 'GET' || req.method === 'HEAD')) res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+  };
+  return {
+    name: 'fr-asset-cors',
+    configureServer: (server) => void server.middlewares.use(handler),
+    configurePreviewServer: (server) => void server.middlewares.use(handler),
+  };
+}
