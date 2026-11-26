@@ -1,7 +1,8 @@
 import { expect, test } from './test.ts';
 import { enableSections, insert, label, openNewForm, openSettings } from './helpers.ts';
 
-test('section breaks name a stepper that highlights the current section', async ({ page }) => {
+/* Skipped while Form settings → Sections is hidden (design/shownTabs.ts). */
+test.skip('section breaks name a stepper that highlights the current section', async ({ page }) => {
   await openNewForm(page);
   await enableSections(page);
   await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();

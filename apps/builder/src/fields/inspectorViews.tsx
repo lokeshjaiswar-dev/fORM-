@@ -22,6 +22,8 @@ import { TILES } from '@/fields/tiles';
 import { ChoiceOtherValidation, FileMinLimits } from '@/fields/validationViews';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, Input, TextLink } from '@dmacq/ui';
+import { SHOWN_SETTINGS } from '@/components/builder/inspector/shownSettings';
+import { isDropdown, withoutForbidden } from '@/fields/dropdownChoices';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
 
@@ -449,14 +451,16 @@ export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
         <NumberField label={t(M['inspector.min_length'])} value={block.config.minLength} parse={count(SHORT_TEXT_MAX)} onChange={(minLength) => setConfig(block, { minLength })} />
         <NumberField label={t(M['inspector.max_length'])} value={block.config.maxLength} parse={count(SHORT_TEXT_MAX)} onChange={(maxLength) => setConfig(block, { maxLength })} />
       </div>
-      <TextField
-        label={t(M['inspector.pattern'])}
-        hint={t(M['inspector.pattern_hint'])}
-        value={pattern}
-        placeholder="^[A-Z].+"
-        error={pattern ? shortTextPatternError(pattern) : null}
-        onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
-      />
+      {SHOWN_SETTINGS.pattern ? (
+        <TextField
+          label={t(M['inspector.pattern'])}
+          hint={t(M['inspector.pattern_hint'])}
+          value={pattern}
+          placeholder="^[A-Z].+"
+          error={pattern ? shortTextPatternError(pattern) : null}
+          onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
+        />
+      ) : null}
       <ConfigProblem block={block} />
     </>
   );
@@ -520,12 +524,14 @@ export function NumberGeneral({ block }: InspectorProps<'number'>) {
     <>
       <ToggleRow label={t(M['inspector.auto_increment'])} hint={t(M['inspector.auto_increment_hint'])} checked={false} onChange={(on) => on && switchFieldType(block.id, 'unique_id')} />
       <ChromeGeneral block={block} />
-      <SelectField
-        label={t(M['inspector.display'])}
-        value={block.config.display}
-        options={[{ value: 'input', label: t(M['inspector.display_input']) }, { value: 'stepper', label: t(M['inspector.display_stepper']) }]}
-        onChange={(display) => setConfig(block, { display })}
-      />
+      {SHOWN_SETTINGS.numberDisplay ? (
+        <SelectField
+          label={t(M['inspector.display'])}
+          value={block.config.display}
+          options={[{ value: 'input', label: t(M['inspector.display_input']) }, { value: 'stepper', label: t(M['inspector.display_stepper']) }]}
+          onChange={(display) => setConfig(block, { display })}
+        />
+      ) : null}
     </>
   );
 }
@@ -557,7 +563,8 @@ function ChoiceDisplay({ block }: { block: BlockOf<'single_choice' | 'multi_choi
         { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
         { value: 'image', label: t(M['inspector.display_image']) },
       ]}
-      onChange={(display) => setConfig(block, { display })}
+      /* A list becoming a dropdown loses any "&" in its choices (see fields/dropdownChoices.ts). */
+      onChange={(display) => setConfig(block, display === 'dropdown' ? { display, options: withoutForbidden(block.config.options) } : { display })}
     />
   );
 }
@@ -745,6 +752,7 @@ export function DateGeneral({ block }: InspectorProps<'date'>) {
           else if (today) setConfig(block, { defaultValue: undefined });
         }}
       />
+      <Placeholder block={block} />
       <SelectField label={t(M['inspector.date_pattern'])} value={block.config.pattern} options={DATE_PATTERNS.map((p) => ({ value: p, label: p }))} onChange={(pattern) => setConfig(block, { pattern })} />
       <SelectField
         label={t(M['inspector.picker'])}
@@ -1273,7 +1281,9 @@ export function SectionBreakGeneral({ block }: InspectorProps<'section_break'>) 
 export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'> }) {
   return (
     <>
-      {block.type === 'single_choice' || block.type === 'multi_choice' ? <ChoiceDisplay block={block} /> : null}
+      {(block.type === 'single_choice' || block.type === 'multi_choice') && (SHOWN_SETTINGS.dropdownDisplay || !isDropdown(block)) ? (
+        <ChoiceDisplay block={block} />
+      ) : null}
       <OptionsEditor block={block} />
     </>
   );

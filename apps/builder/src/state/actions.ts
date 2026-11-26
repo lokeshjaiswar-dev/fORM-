@@ -220,10 +220,26 @@ export function moveBlock(id: BlockId, to: PageSlot): CommandResult {
   return dispatch({ type: 'move_block', id, to });
 }
 
-export function placeBeside(hostId: BlockId, payload: { choice: BlockChoice } | { id: BlockId }): CommandResult {
-  const source = 'choice' in payload ? newBlock(payload.choice, currentDoc()) : payload;
+/**
+ * Places a block beside `hostId` as a half-width pair: an existing block (`id`), or a new one for a palette entry
+ * (`choice`, started with `patch` like addBlock). A new block is selected with its settings open and its label focused.
+ */
+export function placeBeside(hostId: BlockId, payload: { choice: BlockChoice; patch?: BlockPatch } | { id: BlockId }): CommandResult {
+  let source: { id: BlockId } | ReturnType<typeof newBlock>;
+  if ('choice' in payload) {
+    const made = newBlock(payload.choice, currentDoc());
+    source = { ...made, block: { ...made.block, ...payload.patch } as ReturnType<typeof createBlock> };
+  } else {
+    source = payload;
+  }
   const result = dispatch({ type: 'place_beside', hostId, source });
-  if (result.ok) useUiStore.setState({ activeBlockId: result.created ?? ui().activeBlockId, started: true });
+  if (!result.ok) return result;
+  if ('choice' in payload && result.created) {
+    useUiStore.setState({ activeBlockId: result.created, started: true, inspectorOpen: true });
+    focusLabelEnd(result.created);
+  } else {
+    useUiStore.setState({ activeBlockId: result.created ?? ui().activeBlockId, started: true });
+  }
   return result;
 }
 

@@ -6,6 +6,8 @@ import type { FontId, HexColor, Theme, ThemeColorToken, ThemeTokens } from '@for
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { cn } from '@/lib/utils';
+import { switchBuilderView } from '@/lib/viewTransition';
+import { TabGlide } from '@/components/TabGlide';
 import { setTheme } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
 import { Button, Input, SearchInput } from '@dmacq/ui';
@@ -17,6 +19,7 @@ import { FormLogicChecks } from '@/components/builder/FormLogicPanel';
 import { useUiStore } from '@/state/uiStore';
 import { SectionBreakSettings } from '@/components/builder/SectionBreakSettings';
 import { ImagesSection } from '@/components/builder/design/ImagesSection';
+import { SHOWN_DESIGN_TABS } from '@/components/builder/design/shownTabs';
 import { applyImageTemplate, applyPreset, applyScheme, COLOR_SCHEMES, IMAGE_TEMPLATES, matchingPresetId, matchingSchemeId, THEME_PRESETS } from '@/components/builder/design/presets';
 import { themeImageUrl } from '@form/renderer';
 import '@/components/builder/inspector/inspectorFields.css';
@@ -64,8 +67,9 @@ const M = defineMessages('builder', {
 
 /* By how often authors need them: a look first, then its colours and layout, what happens on submit, then the advanced
    tools (rules, section navigation, API autofill). The panel opens on Themes, the fastest way to a finished look. */
-const TABS = ['themes', 'colors', 'styles', 'submit', 'logic', 'sections', 'lookup'] as const;
-type Tab = (typeof TABS)[number];
+const ALL_TABS = ['themes', 'colors', 'styles', 'submit', 'logic', 'sections', 'lookup'] as const;
+type Tab = (typeof ALL_TABS)[number];
+const TABS: readonly Tab[] = ALL_TABS.filter((id) => (SHOWN_DESIGN_TABS as Partial<Record<Tab, boolean>>)[id] !== false);
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const FONTS = [['inter', 'Inter'], ['georgia', 'Georgia'], ['mono', 'Mono']] as const;
@@ -91,33 +95,9 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
   const [query, setQuery] = useState('');
   const theme = useDoc((d) => d.theme);
   const tokens = theme.tokens;
-  const [switchMark, setSwitchMark] = useState(0);
-  const wasOpen = useRef(open);
-  useEffect(() => {
-    if (wasOpen.current === open) return;
-    wasOpen.current = open;
-    setSwitchMark((n) => n + 1);
-  }, [open]);
-
-  // Keep the panel mounted while it slides back out to the right, then unmount it.
-  const [visible, setVisible] = useState(open);
-  const [leaving, setLeaving] = useState(false);
-  useEffect(() => {
-    if (open) {
-      setVisible(true);
-      setLeaving(false);
-      return;
-    }
-    if (!visible) return;
-    setLeaving(true);
-    const id = window.setTimeout(() => {
-      setVisible(false);
-      setLeaving(false);
-    }, 450);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-  const showPanel = open || visible;
+  /* Opening and closing go through the builder's view switch, which slides the panel in and out (index.css). */
+  const toggle = (next: boolean) => switchBuilderView(() => setOpen(next));
+  const showPanel = open;
 
   const patch = (next: Theme) => setTheme(next);
   const patchTokens = (partial: Partial<ThemeTokens>) => patch({ ...theme, tokens: { ...tokens, ...partial } });
@@ -146,7 +126,7 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1">
-      <div className={cn('relative flex min-h-0 min-w-0 flex-col', showPanel ? 'w-1/2 shrink-0 overflow-hidden' : 'flex-1')}>
+      <div className={cn('vt-builder-stage relative flex min-h-0 min-w-0 flex-col', showPanel ? 'w-1/2 shrink-0 overflow-hidden' : 'flex-1')}>
         {children}
         {!open && showTrigger ? (
           <Tooltip content={t(M['design.open'])} side="right" className="absolute right-5 top-5 z-20">
@@ -154,7 +134,7 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
               type="button"
               size="icon-lg"
               aria-label={t(M['design.open'])}
-              onClick={() => setOpen(true)}
+              onClick={() => toggle(true)}
               className="rounded-full shadow-lg"
             >
               <Paintbrush className="size-5" />
@@ -164,19 +144,20 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
       </div>
       {showPanel ? (
     <SettingsPanelContext.Provider value>
-    <div data-settings-panel className={cn('relative flex min-h-0 min-w-0 w-1/2 shrink-0 flex-col border-l border-border bg-card text-foreground', leaving ? 'design-view-out' : switchMark > 0 && 'design-view-in')}>
+    <div data-settings-panel className="vt-builder-side relative flex min-h-0 min-w-0 w-1/2 shrink-0 flex-col border-l border-border bg-card text-foreground">
       {/* The same frame as the block settings panel: a 48px title row, then the grey tab track 16px in from the edges. */}
       <nav aria-label={t(M['design.title'])} className="flex w-full shrink-0 flex-col">
         <div className="flex h-12 shrink-0 items-center justify-between gap-3 px-4">
           <h2 className="min-w-0 truncate text-[14px] font-semibold leading-5 text-foreground">{t(M['design.title'])}</h2>
           <Tooltip content={t(M['design.close'])}>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['design.close'])} onClick={() => setOpen(false)}>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t(M['design.close'])} onClick={() => toggle(false)}>
               <X className="size-4" />
             </Button>
           </Tooltip>
         </div>
         <div className="px-4 pt-1">
-          <div role="tablist" aria-orientation="horizontal" className="flex h-8 w-full gap-0.5 overflow-x-auto rounded-[8px] bg-(--bluedark-100) p-[3px]">
+          <div role="tablist" aria-orientation="horizontal" className="relative flex h-8 w-full gap-0.5 overflow-x-auto rounded-[8px] bg-(--bluedark-100) p-[3px]">
+            <TabGlide active={tab} className="rounded-[6px] bg-card shadow-[0_2px_8px_rgba(25,40,57,0.09)]" />
             {TABS.map((id) => (
               <button
                 key={id}
@@ -185,8 +166,8 @@ export function FormDesignPanel({ children, showTrigger = true }: { children?: R
                 aria-selected={tab === id}
                 onClick={() => setTab(id)}
                 className={cn(
-                  'h-[26px] flex-1 whitespace-nowrap rounded-[6px] px-3 text-[12px] font-semibold leading-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                  tab === id ? 'bg-card text-primary-text shadow-[0_2px_8px_rgba(25,40,57,0.09)]' : 'text-(--bluedark-800) hover:text-foreground',
+                  'relative h-[26px] flex-1 whitespace-nowrap rounded-[6px] px-3 text-[12px] font-semibold leading-4 outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring',
+                  tab === id ? 'text-primary-text' : 'text-(--bluedark-800) hover:text-foreground',
                 )}
               >
                 {tabLabel(id)}

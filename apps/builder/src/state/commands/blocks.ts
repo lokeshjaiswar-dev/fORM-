@@ -81,13 +81,43 @@ export function updateBlock(doc: Draft, id: BlockId, patch: BlockPatch): void {
   if ('config' in patch && Array.isArray(options)) syncInitiallyHidden(doc, pruneOptions(doc, id, options as Array<{ id: OptionId }>));
 }
 
-/** Full width also unpairs the block that sat beside this one, in the same history step. */
+/** A half-width block with a row to itself: it starts its row and nothing sits beside it. */
+function loneHalf(doc: Draft, siblings: readonly BlockId[], i: number): boolean {
+  const id = siblings[i];
+  const block = id === undefined ? undefined : doc.blocks[id];
+  const next = siblings[i + 1];
+  return isHalf(block) && !joinsPrevious(block) && !joinsPrevious(next === undefined ? undefined : doc.blocks[next]);
+}
+
+/**
+ * Sets a block's width. A block made half width shares a row with a neighbour that has a half row to itself: the one
+ * just above first, else the one just below; with neither, it starts its own row. Choosing half on a block that is
+ * already half changes nothing, so a pair stays a pair. Full width also unpairs the block that sat beside this one, in
+ * the same history step.
+ */
 export function setWidth(doc: Draft, id: BlockId, width: 'full' | 'half'): void {
   const block = doc.blocks[id];
+  if (width === 'half' && isHalf(block)) return;
   const siblings = siblingsOf(doc, id);
-  if (siblings) unpairFollower(doc, siblings, siblings.indexOf(id));
+  const at = siblings ? siblings.indexOf(id) : -1;
+  if (siblings) unpairFollower(doc, siblings, at);
   const labelAlign = layoutOf(block)?.labelAlign;
-  setLayout(block, width === 'half' ? { width, startNewRow: true, ...(labelAlign ? { labelAlign } : {}) } : { width, ...(labelAlign ? { labelAlign } : {}) });
+  const align = labelAlign ? { labelAlign } : {};
+  if (width === 'full') {
+    setLayout(block, { width, ...align });
+    return;
+  }
+  if (siblings && at > 0 && loneHalf(doc, siblings, at - 1)) {
+    setLayout(block, { width, ...align });
+    return;
+  }
+  setLayout(block, { width, startNewRow: true, ...align });
+  const below = siblings?.[at + 1];
+  if (siblings && below !== undefined && loneHalf(doc, siblings, at + 1)) {
+    const next = doc.blocks[below];
+    const { startNewRow: _ownRow, ...beside } = layoutOf(next) as BlockLayout;
+    setLayout(next, beside);
+  }
 }
 
 /**

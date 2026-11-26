@@ -163,6 +163,7 @@ const minuteStep = z.literal([1, 5, 10, 15, 30]);
 export const DateConfigSchema = z.strictObject({
   pattern: DatePatternSchema,
   separator: z.enum(['-', '/', '.']).exactOptional(),
+  placeholder: z.string().max(200).exactOptional(),
   picker: z.enum(['calendar', 'selects', 'native']),
   defaultValue: z.discriminatedUnion('kind', [z.strictObject({ kind: z.literal('today') }), z.strictObject({ kind: z.literal('fixed'), date: IsoDateSchema })]).exactOptional(),
   limits: DateLimitsSchema.exactOptional(),

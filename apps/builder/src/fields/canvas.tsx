@@ -215,7 +215,7 @@ export const CANVAS: { readonly [T in AvailableType]: CanvasView<T> } = {
     ) : (
       <OptionList options={block.config.options} shape="square" other={block.config.other?.enabled === true} pictures={block.config.display === 'image'} columns={block.config.columns} />
     ),
-  date: () => <CanvasDate />,
+  date: ({ block }) => <CanvasDate placeholder={block.config.placeholder} />,
   date_range: () => (
     <div className="fr-date-range pointer-events-none">
       <span className="fr-label">{t(M['canvas.date_start'])}</span>

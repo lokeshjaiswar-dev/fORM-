@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { doc, resetStore } from '@/test/fixtures';
+
+/* These tests cover the Rules, Sections and API autofill tabs, so they turn them on; FormDesignPanel.hidden.test.tsx checks the shipped defaults. */
+vi.mock('@/components/builder/design/shownTabs', () => ({ SHOWN_DESIGN_TABS: { logic: true, sections: true, lookup: true } }));
 
 beforeEach(() => resetStore());
 

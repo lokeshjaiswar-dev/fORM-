@@ -19,11 +19,13 @@ import { isOptionValueField } from '@/state/commands/rules';
 import { currentDoc, useBlock, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { Tooltip } from '@/components/Tooltip';
+import { GLIDE_TRIGGER, TabGlide } from '@/components/TabGlide';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { InlineEditor } from '@/components/editor/InlineEditor';
 import { Field, InspectorSection, SectionTitle, SelectField, TextField, ToggleRow, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
 import { ApiValidationSection } from '@/components/builder/inspector/ApiValidationSection';
+import { SHOWN_SETTINGS } from '@/components/builder/inspector/shownSettings';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
 import { PrivacySection } from '@/components/builder/inspector/PrivacySection';
 import { SUBMIT_INSPECTOR_ID, SubmitInspector } from '@/components/builder/SubmitInspector';
@@ -59,7 +61,7 @@ const M = defineMessages('builder', {
   'inspector.width': 'Block width',
   'inspector.width_full': 'Full',
   'inspector.width_half': 'Half',
-  'inspector.width_hint': 'Half keeps this block on its own row. Drag another block onto it to sit beside it.',
+  'inspector.width_hint': 'Half shares a row with a half-width block just above or below it. You can also drag a block onto it to sit beside it.',
   'inspector.label_color': 'Question colour',
   'inspector.input_text_color': 'Answer colour',
   'inspector.input_bg': 'Input background',
@@ -236,7 +238,7 @@ export function BlockInspector() {
         aria-label={t(M['inspector.title'])}
         className={cn(
           'relative flex shrink-0 flex-col overflow-hidden border-l bg-card',
-          open ? 'border-border' : 'border-transparent',
+          open ? 'vt-builder-side border-border' : 'border-transparent',
           !resizing && 'transition-[width,border-color] duration-300 ease-out',
         )}
         style={{ width: open ? panelWidth : 0 }}
@@ -266,7 +268,7 @@ export function BlockInspector() {
       aria-label={t(M['inspector.title'])}
       className={cn(
         'relative flex shrink-0 flex-col overflow-hidden border-l bg-card',
-        open ? 'border-border' : 'border-transparent',
+        open ? 'vt-builder-side border-border' : 'border-transparent',
         !resizing && 'transition-[width,border-color] duration-300 ease-out',
       )}
       style={{ width: open ? panelWidth : 0 }}
@@ -279,9 +281,10 @@ export function BlockInspector() {
         <Tabs value={shown} onValueChange={(id) => setTab(id as Tab)} variant="pill" size="sm" className="flex min-h-0 flex-1 flex-col gap-0">
           {/* Figma 5356:184211: a 32px grey track 16px in from the edges; the selected tab is white with primary text. */}
           <div className="shrink-0 px-4 pt-1">
-            <TabsList className="flex h-8 w-full rounded-[8px] bg-(--bluedark-100) p-[3px]">
+            <TabsList className="relative flex h-8 w-full rounded-[8px] bg-(--bluedark-100) p-[3px]">
+              <TabGlide active={`${shown}:${tabs.join(',')}`} className="rounded-[6px] bg-card shadow-sm" />
               {tabs.map((id) => (
-                <TabsTrigger key={id} value={id} className="h-[25px] rounded-[6px] text-[12px] leading-4 data-[state=active]:text-primary-text data-[state=inactive]:text-(--bluedark-800)">
+                <TabsTrigger key={id} value={id} className={cn(GLIDE_TRIGGER, 'h-[25px] rounded-[6px] text-[12px] leading-4 duration-300 data-[state=active]:text-primary-text data-[state=inactive]:text-(--bluedark-800)')}>
                   {t(TAB_LABELS[id])}
                 </TabsTrigger>
               ))}
@@ -555,18 +558,18 @@ function GeneralTab({ block }: { block: ShownBlock }) {
         <InspectorSection title={t(M['inspector.section.validation'])}>
           <Registered block={block} section="validation" />
           <PrimaryKeySetting block={block} />
-          <UniqueSetting block={block} />
-          {API_CHECK_TYPES.has(block.type) || block.apiValidation ? <ApiValidationSection block={block} /> : null}
+          {SHOWN_SETTINGS.unique ? <UniqueSetting block={block} /> : null}
+          {SHOWN_SETTINGS.apiValidation && (API_CHECK_TYPES.has(block.type) || block.apiValidation) ? <ApiValidationSection block={block} /> : null}
         </InspectorSection>
       ) : null}
-      {field ? (
+      {field && SHOWN_SETTINGS.advanced ? (
         <InspectorSection title={t(M['inspector.section.advanced'])} collapsible>
           <KeyField block={block} />
           {isCustomFieldType(block.type) ? <SaveAsField block={block} /> : null}
           <ErrorMessages block={block} />
         </InspectorSection>
       ) : null}
-      {field ? (
+      {field && SHOWN_SETTINGS.privacy ? (
         <InspectorSection title={t(M['inspector.section.privacy'])} collapsible>
           <PrivacySection block={block} />
         </InspectorSection>

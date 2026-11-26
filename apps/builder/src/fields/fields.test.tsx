@@ -42,6 +42,9 @@ describe('registry views (FND-03)', () => {
   it('tiles are labelled from the builder catalogue and found by label, id or keyword', () => {
     expect(tileOf('short_text')?.label).toBe('Short answer');
     expect(tileOf('single_choice', { display: 'dropdown', searchable: true })?.label).toBe('Dropdown');
+    /* Settings that match no palette entry exactly still name the closest one, never an unrelated first entry. */
+    expect(tileOf('single_choice', { display: 'dropdown', searchable: false, options: [] })?.label).toBe('Dropdown');
+    expect(tileOf('single_choice', { display: 'dropdown', options: [] })?.label).toBe('Dropdown');
     const saas = editionSummary(loadEditionConfig({ DEPLOYMENT_MODE: 'saas' }));
     expect(matchTiles('nps', saas).map((t) => t.id)).toEqual([]);
     expect(matchTiles('dob', saas).map((t) => t.id)).toEqual(['date']);

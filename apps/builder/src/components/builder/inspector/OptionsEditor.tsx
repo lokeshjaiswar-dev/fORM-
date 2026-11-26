@@ -7,12 +7,14 @@ import { labelString } from '@/fields/style';
 import { applyPatch } from '@/lib/applyPatch';
 import { APP_IDS, blockText, inlineDoc } from '@/lib/definition';
 import { patchBlockConfig } from '@/fields/configSink';
+import { isDropdown, withoutForbidden } from '@/fields/dropdownChoices';
 import { placeBeside, removeRule, setRule, updateBlock } from '@/state/actions';
 import { currentDoc, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { Button } from '@dmacq/ui';
 import { ApiOptionsSection } from '@/components/builder/inspector/ApiOptionsSection';
 import { Disclosure, ToggleRow } from '@/components/builder/inspector/parts';
+import { SHOWN_SETTINGS } from '@/components/builder/inspector/shownSettings';
 import { GroupedOptions, LinkSetting, PasteList, useLinkedParent } from '@/components/builder/inspector/DependentOptions';
 import { OptionRow, SortableOptions, type OptionPatch } from '@/components/builder/inspector/OptionList';
 
@@ -29,6 +31,7 @@ const M = defineMessages('builder', {
   'options.show_codes_hint': 'Exports and integrations use an option’s code. An option without one exports its label.',
   'options.show_values': 'Show option values',
   'options.show_values_hint': 'A value is written to a filled field, and used in exports. An option without one uses its label.',
+  'options.no_ampersand': '“&” is not allowed in dropdown choices.',
 });
 
 type ChoiceBlock = BlockOf<'single_choice'> | BlockOf<'multi_choice'> | BlockOf<'ranking'> | BlockOf<'matching'> | BlockOf<'constant_sum'> | BlockOf<'maxdiff'>;
@@ -51,7 +54,8 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
   const [fresh, setFresh] = useState<OptionId | null>(null);
   /* The code column is rarely needed, so rows stay label-only unless asked for (or a filled field uses the values). */
   const [codesOn, setCodesOn] = useState(false);
-  const write = (next: ChoiceOption[], extra: Record<string, unknown> = {}) => patchBlockConfig(block, { options: next, ...extra });
+  const dropdown = isDropdown(block);
+  const write = (next: ChoiceOption[], extra: Record<string, unknown> = {}) => patchBlockConfig(block, { options: dropdown ? withoutForbidden(next) : next, ...extra });
 
   const edit = (id: OptionId, patch: OptionPatch) => {
     const next = options.map((o) => {
@@ -133,7 +137,8 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
               />
             ))}
           </SortableOptions>
-          <div className="flex items-center gap-1">
+          {/* Lined up with the option inputs: past the 20px drag handle, short of the 32px remove button. */}
+          <div className="ml-5 mr-8 flex items-center gap-1">
             <Button type="button" variant="outline" size="sm" className="flex-1 border-dashed text-muted-foreground hover:text-foreground" onClick={() => setFresh(add())}>
               <Plus className="size-3.5" /> {t(M['options.add'])}
             </Button>
@@ -141,6 +146,7 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
           </div>
         </div>
       )}
+      {dropdown ? <p className="ml-5 text-[12px] leading-4 text-muted-foreground">{t(M['options.no_ampersand'])}</p> : null}
       {block.type !== 'ranking' && block.type !== 'matching' && block.type !== 'constant_sum' && block.type !== 'maxdiff' ? (
         <ToggleRow
           label={t(M['options.other'])}
@@ -155,16 +161,18 @@ export function OptionsEditor({ block }: { block: ChoiceBlock }) {
           onChange={(on) => patchBlockConfig(block, { shuffle: on ? (block.type === 'ranking' || block.type === 'matching' || block.type === 'maxdiff' ? true : { keepLast: 0 }) : undefined })}
         />
       ) : null}
-      <Disclosure title={t(M['options.more'])} inUse={fillRule !== undefined || block.apiOptions !== undefined}>
-        <ToggleRow
-          label={t(M[valueColumn ? 'options.show_values' : 'options.show_codes'])}
-          hint={t(M[valueColumn ? 'options.show_values_hint' : 'options.show_codes_hint'])}
-          checked={showCode}
-          onChange={setCodesOn}
-        />
-        {block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
-        <ApiOptionsSection block={block} />
-      </Disclosure>
+      {SHOWN_SETTINGS.dropdownMoreOptions || !dropdown ? (
+        <Disclosure title={t(M['options.more'])} inUse={fillRule !== undefined || block.apiOptions !== undefined}>
+          <ToggleRow
+            label={t(M[valueColumn ? 'options.show_values' : 'options.show_codes'])}
+            hint={t(M[valueColumn ? 'options.show_values_hint' : 'options.show_codes_hint'])}
+            checked={showCode}
+            onChange={setCodesOn}
+          />
+          {block.type === 'single_choice' && block.config.display === 'dropdown' ? <FillFromOption block={block} /> : null}
+          <ApiOptionsSection block={block} />
+        </Disclosure>
+      ) : null}
     </>
   );
 }

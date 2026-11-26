@@ -86,7 +86,8 @@ export function blankDefinition(formId: string, ids: IdSource = APP_IDS): FormDe
       },
     },
     behavior: {
-      submit: { label: t(M['form.submit_label']), align: 'left' },
+      /* New forms put Submit on the right; Submit settings → Alignment changes it per form. */
+      submit: { label: t(M['form.submit_label']), align: 'right' },
       navigation: { allowBack: true, showPageTitles: false },
       saveAndResume: { enabled: false, showButton: false, delivery: [], expiryDays: 30 },
       localAutosave: { enabled: false, allowWithSensitive: false },

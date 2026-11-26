@@ -148,28 +148,6 @@ button {
   animation: success-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@keyframes design-view-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes design-view-back {
-  from {
-    opacity: 0;
-    transform: translateX(-36px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes design-tab-in {
   from {
     opacity: 0;
@@ -184,29 +162,6 @@ button {
 @keyframes design-switch-draw {
   from { stroke-dashoffset: 100; }
   to { stroke-dashoffset: 0; }
-}
-
-.design-view-in {
-  animation: design-view-in 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes design-view-out {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-}
-
-.design-view-out {
-  animation: design-view-out 420ms cubic-bezier(0.4, 0, 1, 1) forwards;
-}
-
-.design-view-back {
-  animation: design-view-back 440ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .design-tab-in {
@@ -279,14 +234,147 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .design-view-in,
-  .design-view-back,
   .design-tab-in,
   .design-switch-rule path,
   .builder-land > header > *,
   .builder-land-body > aside:first-child > *,
   .builder-land-canvas {
     animation: none;
+  }
+}
+
+/*
+ * Switching between Edit, Preview and Settings (switchBuilderView in lib/viewTransition.ts). While <html> carries
+ * .builder-view-switch, the moving parts get their own layers: the stage (canvas or preview) glides to its new size,
+ * the toolbox slides away to the left, the right panel slides in or out (or, between block settings and form
+ * settings, widens while one hands over to the other). The top bar stays put. Reduced motion never starts the
+ * transition at all.
+ */
+:root.builder-view-switch .vt-builder-stage {
+  view-transition-name: builder-stage;
+}
+
+:root.builder-view-switch .vt-builder-toolbox {
+  view-transition-name: builder-toolbox;
+  /* The toolbox's own width animation would fight the transition's. */
+  transition: none;
+}
+
+:root.builder-view-switch .vt-builder-side {
+  view-transition-name: builder-side;
+  transition: none;
+}
+
+:root.builder-view-switch::view-transition-group(*) {
+  animation-duration: 460ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * Nothing may fade to the background, which reads as a blink. The top bar and the rest of the page swap in one frame
+ * (they are the same apart from the parts moving on their own layers).
+ */
+:root.builder-view-switch::view-transition-old(root),
+:root.builder-view-switch::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Snapshots keep their real size while their box moves and resizes: no stretching, the box clips or reveals. */
+:root.builder-view-switch::view-transition-group(builder-stage),
+:root.builder-view-switch::view-transition-group(builder-toolbox) {
+  overflow: clip;
+}
+
+:root.builder-view-switch::view-transition-old(builder-stage),
+:root.builder-view-switch::view-transition-new(builder-stage) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: 50% 0;
+}
+
+/*
+ * The stage and the side panel hand over without a dip: the new view is there at once, underneath, and the old one
+ * dissolves off the top, most of the way within the first few frames, so the two are never seen at equal strength.
+ */
+:root.builder-view-switch::view-transition-new(builder-stage),
+:root.builder-view-switch::view-transition-new(builder-side) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root.builder-view-switch::view-transition-old(builder-stage),
+:root.builder-view-switch::view-transition-old(builder-side) {
+  z-index: 1;
+  animation: view-dissolve 170ms cubic-bezier(0, 0, 0.2, 1) both;
+  mix-blend-mode: normal;
+}
+
+@keyframes view-dissolve {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The toolbox only slides: its box clips it away to the left, or reveals it, with nothing fading. */
+:root.builder-view-switch::view-transition-old(builder-toolbox),
+:root.builder-view-switch::view-transition-new(builder-toolbox) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root.builder-view-switch::view-transition-old(builder-toolbox),
+:root.builder-view-switch::view-transition-new(builder-toolbox) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: 100% 0;
+}
+
+:root.builder-view-switch::view-transition-old(builder-side),
+:root.builder-view-switch::view-transition-new(builder-side) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: 0 0;
+}
+
+:root.builder-view-switch::view-transition-new(builder-side):only-child {
+  animation: view-side-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:root.builder-view-switch::view-transition-old(builder-side):only-child {
+  animation: view-side-out 340ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes view-side-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes view-side-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* The view switch's highlight, and the dark labels clipped to it, glide to the selected tab together (ViewTabs.tsx). */
+.view-tabs-pill {
+  transition-property: left, right, clip-path;
+  transition-duration: 420ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A tab list's selected highlight gliding to the picked tab (TabGlide.tsx), on the same curve as the view switch. */
+.tab-glide {
+  transition-property: transform, width, height;
+  transition-duration: 420ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-tabs-pill,
+  .tab-glide {
+    transition: none;
   }
 }
 

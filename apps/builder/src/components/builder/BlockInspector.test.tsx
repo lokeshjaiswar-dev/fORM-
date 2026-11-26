@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { BlockId, ChoiceOption, ConditionId, IsoInstant, OptionId, Rule, RuleId } from '@form/schema';
@@ -9,6 +9,11 @@ import { labelString } from '@/fields/style';
 import { previewVersion } from '@/lib/preview';
 import { useUiStore } from '@/state/uiStore';
 import { block, doc, resetStore, rule, text } from '@/test/fixtures';
+
+/* These tests cover the settings that are hidden for now, so they run with every one of them shown. */
+vi.mock('@/components/builder/inspector/shownSettings', () => ({
+  SHOWN_SETTINGS: { pattern: true, unique: true, apiValidation: true, advanced: true, privacy: true, numberDisplay: true, dropdownDisplay: true, dropdownMoreOptions: true },
+}));
 
 const get = (id: string) => doc().blocks[id as BlockId] as unknown as { config: Record<string, unknown> } & Record<string, unknown>;
 const options = () => get('color').config['options'] as ChoiceOption[];

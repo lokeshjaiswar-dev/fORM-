@@ -13,6 +13,7 @@ import { Button, CheckboxField, Dialog, DialogContent, DialogDescription, Dialog
 import { NiceSelect } from '@/components/NiceSelect';
 import { Field, ToggleRow } from '@/components/builder/inspector/parts';
 import { OptionRow, SortableOptions, type OptionPatch } from '@/components/builder/inspector/OptionList';
+import { isDropdown, withoutForbidden } from '@/fields/dropdownChoices';
 
 /*
  * One vocabulary everywhere: an option list is "linked to" an earlier question, each of that question's answers has a
@@ -191,7 +192,7 @@ function applyPaste(blockId: BlockId, run: (options: readonly ChoiceOption[]) =>
   const latest = currentDoc().blocks[blockId];
   if (!isChoice(latest)) return null;
   const result = run(latest.config.options);
-  patchBlockConfig(latest, { options: result.options });
+  patchBlockConfig(latest, { options: isDropdown(latest) ? withoutForbidden(result.options) : result.options });
   return result;
 }
 

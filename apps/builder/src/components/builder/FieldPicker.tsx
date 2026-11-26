@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { customFields } from '@/fields/custom/repository';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
 import { Tooltip } from '@/components/Tooltip';
+import { GLIDE_TRIGGER, TabGlide } from '@/components/TabGlide';
 
 const M = defineMessages('builder', {
   'picker.title': 'Toolbox',
@@ -65,7 +66,7 @@ export function FieldPicker() {
   };
 
   return (
-    <aside className={cn('min-h-0 shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]', sidebarOpen && !designOpen ? PICKER_WIDTH : 'w-0')}>
+    <aside className={cn('vt-builder-toolbox min-h-0 shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]', sidebarOpen && !designOpen ? PICKER_WIDTH : 'w-0')}>
       <div className={cn('flex h-full min-h-0 flex-col', PICKER_WIDTH)}>
         {/* One 32px row: the title and its buttons, or, while searching, the search bar in the same place. */}
         <div className="flex h-8 items-center px-3 mt-2.5">
@@ -95,9 +96,10 @@ export function FieldPicker() {
 
         <Tabs value={tab} onValueChange={(next) => setTab(next as PickerTab)} variant="pill" size="sm" fullWidth className="flex min-h-0 flex-1 flex-col gap-0">
           <div className="px-3 pt-3">
-            <TabsList className="w-full rounded-[6px] p-0.5">
-              <TabsTrigger value="elements" className="min-h-7 data-[state=active]:text-primary-text">{t(M['picker.tab_fields'])}</TabsTrigger>
-              <TabsTrigger value="summary" className="min-h-7 data-[state=active]:text-primary-text">{t(M['picker.tab_structure'])}</TabsTrigger>
+            <TabsList className="relative w-full rounded-[6px] p-0.5">
+              <TabGlide active={tab} className="rounded-md bg-card shadow-sm" />
+              <TabsTrigger value="elements" className={cn(GLIDE_TRIGGER, 'min-h-7 duration-300 data-[state=active]:text-primary-text')}>{t(M['picker.tab_fields'])}</TabsTrigger>
+              <TabsTrigger value="summary" className={cn(GLIDE_TRIGGER, 'min-h-7 duration-300 data-[state=active]:text-primary-text')}>{t(M['picker.tab_structure'])}</TabsTrigger>
             </TabsList>
           </div>
           <TabsContent value="elements" className="mt-0 min-h-0 flex-1">
@@ -149,8 +151,7 @@ function PickerSearch({ value, onChange, onClose, placeholder }: { value: string
  * For now the Toolbox offers only these fields, in this order, as one list without group headings. Set to null to bring
  * back every field, grouped by category. The slash menu and forms that already hold other fields are not affected.
  */
-const TOOLBOX_ONLY: readonly string[] | null = null;
-/* The short list used for now when needed: ['short_text', 'long_text', 'email', 'phone', 'number', 'single_choice.dropdown', 'date'] */
+const TOOLBOX_ONLY: readonly string[] | null = ['short_text', 'long_text', 'email', 'phone', 'number', 'single_choice.dropdown', 'date'];
 
 /** The palette, grouped by category: groups sit 20px apart, each heading 6px above its own steady 32px rows. */
 function PaletteList({ query }: { query: string }) {

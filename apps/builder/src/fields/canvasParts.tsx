@@ -153,8 +153,9 @@ export function CanvasCheck() {
   return <Checkbox inert aria-hidden />;
 }
 
-export function CanvasDate() {
-  return <DatePicker readOnly clearable={false} className="pointer-events-none" />;
+/** A date box as the form shows it; `placeholder` replaces the date pattern hint when the author set one. */
+export function CanvasDate({ placeholder }: { placeholder?: string | undefined } = {}) {
+  return <DatePicker readOnly clearable={false} className="pointer-events-none" {...(placeholder?.trim() ? { placeholder } : {})} />;
 }
 
 export function CanvasTime() {

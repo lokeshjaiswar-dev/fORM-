@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { OptionId } from '@form/schema';
@@ -19,6 +19,9 @@ const stateGstin = () => [
   block('short_text', 'gstin', { label: 'GSTIN' }),
 ];
 
+/* These tests cover the Rules, Sections and API autofill tabs, so they turn them on; FormDesignPanel.hidden.test.tsx checks the shipped defaults. */
+vi.mock('@/components/builder/design/shownTabs', () => ({ SHOWN_DESIGN_TABS: { logic: true, sections: true, lookup: true } }));
+
 beforeEach(() => resetStore(stateGstin()));
 
 describe('Form settings Logic', () => {
@@ -27,7 +30,7 @@ describe('Form settings Logic', () => {
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
     await user.click(screen.getByRole('tab', { name: 'Rules' }));
-    screen.debug(undefined, 4000); await user.click(screen.getByText('Add a rule'));
+    await user.click(screen.getByText('Add a rule'));
     expect(doc().logic.rules).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Cancel new rule' })).toBeInTheDocument();
   });

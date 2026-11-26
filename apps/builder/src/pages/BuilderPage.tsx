@@ -18,7 +18,7 @@ import { useHistoryShortcuts } from '@/state/history';
 import { useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { TextLink } from '@dmacq/ui';
-import { useViewTransitionArrival } from '@/lib/viewTransition';
+import { useBuilderViewSettled, useViewTransitionArrival } from '@/lib/viewTransition';
 
 /** `/builder/:id` and `/builder/:id/preview`: the form the URL names, loaded from the repository. */
 export function BuilderPage() {
@@ -68,6 +68,7 @@ function Builder() {
   const [mode] = useBuilderMode();
   useViewTransitionArrival();
   const designOpen = useUiStore((s) => s.designOpen);
+  useBuilderViewSettled(designOpen ? 'settings' : mode);
   const structure = useDoc((d) => d.pages.map((p) => p.children.join(',')).join('|'));
   useHistoryShortcuts();
   useBlockClipboard();
@@ -84,8 +85,9 @@ function Builder() {
         <div className="builder-land-body flex min-h-0 flex-1 bg-(--bluedark-200)">
           <FieldPicker />
           <div className="builder-land-canvas flex min-h-0 min-w-0 flex-1">
+            {/* Settings always sits beside the live preview, whichever of Edit or Preview it was opened from. */}
             <FormDesignPanel showTrigger={false}>
-              {mode === 'edit' ? (
+              {mode === 'edit' && !designOpen ? (
                 <ErrorBoundary key="edit" label="canvas">
                   <FormCanvas />
                 </ErrorBoundary>

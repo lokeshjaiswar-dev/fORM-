@@ -20,6 +20,7 @@ export function DateInput({ block, field }: ControlProps<'date'>) {
       onBlur={answer.onBlur}
       {...(min ? { min } : {})}
       {...(max ? { max } : {})}
+      {...(block.config.placeholder?.trim() ? { placeholder: block.config.placeholder } : {})}
       {...pickerAttrs(field)}
     />
   );

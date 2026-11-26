@@ -51,20 +51,24 @@ export const categoryLabel = (category: Category): string => {
   return id ? t(id) : category;
 };
 
-/** Tile colours per category (icon tile background and glyph), from the Figma Initials palette (5333:115881). */
+/**
+ * Tile colours per category (icon tile background and glyph). Every category uses the same light blue (#b7d0ff) for
+ * now; give a category its own colour here to tell groups apart again.
+ */
 const TILE_GLYPH = 'text-[#0c1927]';
+const TILE_LIGHT_BLUE = `bg-[#b7d0ff] ${TILE_GLYPH}`;
 export const TILE_STYLE: Readonly<Record<Category, string>> = {
-  basic: `bg-[#a4f1ff] ${TILE_GLYPH}`,
-  contact: `bg-[#a4f1ff] ${TILE_GLYPH}`,
-  choice: `bg-[#d6e6aa] ${TILE_GLYPH}`,
-  date_time: `bg-[#ffc8e2] ${TILE_GLYPH}`,
-  rating: `bg-[#ffde8c] ${TILE_GLYPH}`,
-  media: `bg-[#ffc2c2] ${TILE_GLYPH}`,
-  layout: `bg-[#e3eaf3] ${TILE_GLYPH}`,
-  advanced: `bg-[#c7d9ff] ${TILE_GLYPH}`,
-  payments: `bg-[#d6e6aa] ${TILE_GLYPH}`,
-  compliance: `bg-[#c7d9ff] ${TILE_GLYPH}`,
-  snippets: `bg-[#ffdcb9] ${TILE_GLYPH}`,
+  basic: TILE_LIGHT_BLUE,
+  contact: TILE_LIGHT_BLUE,
+  choice: TILE_LIGHT_BLUE,
+  date_time: TILE_LIGHT_BLUE,
+  rating: TILE_LIGHT_BLUE,
+  media: TILE_LIGHT_BLUE,
+  layout: TILE_LIGHT_BLUE,
+  advanced: TILE_LIGHT_BLUE,
+  payments: TILE_LIGHT_BLUE,
+  compliance: TILE_LIGHT_BLUE,
+  snippets: TILE_LIGHT_BLUE,
 };
 
 function blockTiles(type: AvailableType): Tile[] {
@@ -98,12 +102,27 @@ export const TILES: readonly Tile[] = allTiles.filter(
   (tile) => tile.kind === 'page_break' || (!HIDDEN_PALETTE_TYPES.has(tile.choice.type) && !HIDDEN_PALETTE_IDS.has(tile.id)),
 );
 
-/** The tile of a block type (its first palette entry), for the canvas and the drag overlay. */
+/**
+ * The tile of a block type, for the settings header, the canvas and the drag overlay: the palette entry whose settings
+ * the block still has; otherwise the closest one (the most settings in common, then the fewest settings of its own),
+ * so a dropdown with "Search options" turned off is still a "Dropdown"; otherwise the type's own entry.
+ */
 export const tileOf = (type: string, overrides?: Readonly<Record<string, unknown>>): Tile | undefined => {
   const of = allTiles.filter((tile) => tile.kind === 'block' && tile.choice.type === type);
+  const settings = (tile: Tile) => (tile.kind === 'block' ? Object.entries(tile.choice.configOverrides) : []);
   if (overrides) {
-    const match = of.find((tile) => tile.kind === 'block' && Object.entries(tile.choice.configOverrides).every(([k, v]) => overrides[k] === v));
+    const match = of.find((tile) => settings(tile).every(([k, v]) => overrides[k] === v));
     if (match) return match;
+    let closest: Tile | undefined;
+    let best = 0;
+    for (const tile of of) {
+      const shared = settings(tile).filter(([k, v]) => overrides[k] === v).length;
+      if (shared > best || (shared === best && shared > 0 && closest && settings(tile).length < settings(closest).length)) {
+        closest = tile;
+        best = shared;
+      }
+    }
+    if (closest) return closest;
   }
   return of.find((tile) => tile.id === type) ?? of[0];
 };
