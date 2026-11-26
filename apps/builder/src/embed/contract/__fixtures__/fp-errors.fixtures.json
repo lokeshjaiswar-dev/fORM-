@@ -1,0 +1,363 @@
+{
+  "$comment": "Every code of the Forms+ error envelope (DESIGN.md 3.4): HTTP status, default English message for the DMS pages (classic and dms-ui show it when they have nothing better), and what a client may do next. `reconnect`: the UI offers \"Reconnect to DMS\". `retryable`: the same request, repeated unchanged, may succeed. The envelope is {success:false, code, message, details?, request_id}; request_id is the X-Request-Id header when it is a UUID, else a new one. Existing legacy shapes (HTTP 200 success:false validation, 404 ALREADY_EXISTS) are not part of this contract (BD-04). An unknown code is shown with `genericMessage`.",
+  "contract": "fp-errors",
+  "version": 1,
+  "genericMessage": "Something went wrong. Try again, and give the reference to your administrator if it keeps failing.",
+  "codes": [
+    {
+      "code": "FP_ORIGIN_DENIED",
+      "status": 403,
+      "message": "Forms+ cannot be opened from here.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "FP_TICKET_CHANNEL_DENIED",
+      "status": 403,
+      "message": "Forms+ cannot be opened from here.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "WORKSPACE_FORBIDDEN",
+      "status": 403,
+      "message": "You are not a member of this workspace.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "FORBIDDEN_RIGHT",
+      "status": 403,
+      "message": "You do not have permission to do this.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "NOT_FOUND",
+      "status": 404,
+      "message": "This master or record is not available.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "MASTER_NOT_CONVERTED",
+      "status": 422,
+      "message": "This master has not been moved to Forms+ yet.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "MODE_NOT_TICKETED",
+      "status": 422,
+      "message": "Forms+ could not be opened. Try again, and give the reference to your administrator if it keeps failing.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "VALIDATION_FAILED",
+      "status": 422,
+      "message": "Forms+ could not be opened. Try again, and give the reference to your administrator if it keeps failing.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "FP_TICKET_INVALID",
+      "status": 401,
+      "message": "This link is no longer valid. Go back to DMS and open the form again.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "LAUNCH_STORE_UNAVAILABLE",
+      "status": 503,
+      "message": "Forms+ is temporarily unavailable. Try again in a moment.",
+      "reconnect": false,
+      "retryable": true
+    },
+    {
+      "code": "FP_SESSION_INVALID",
+      "status": 401,
+      "message": "Your Forms+ session ended. Reconnect to DMS to continue.",
+      "reconnect": true,
+      "retryable": false
+    },
+    {
+      "code": "FP_CONTEXT_MISMATCH",
+      "status": 401,
+      "message": "Your Forms+ session ended. Reconnect to DMS to continue.",
+      "reconnect": true,
+      "retryable": false
+    },
+    {
+      "code": "FP_SCOPE_DENIED",
+      "status": 403,
+      "message": "This form cannot do that. Go back to DMS and open it again.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "FIELD_VISIBILITY_FORBIDDEN",
+      "status": 403,
+      "message": "Only the master creator, an owner or an administrator can change hidden or secret settings.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "PRIMARY_CANNOT_BE_HIDDEN",
+      "status": 422,
+      "message": "The primary field cannot be hidden or secret.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "FIELD_OMITTED",
+      "status": 422,
+      "message": "The form no longer lists a field that is stored in DMS. Reload and try again.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "UNKNOWN_FIELD",
+      "status": 422,
+      "message": "A field to remove does not exist in this master.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "REMOVAL_NOT_CONFIRMED",
+      "status": 422,
+      "message": "Type the field name exactly to confirm removing it.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "REMOVAL_COUNT_CHANGED",
+      "status": 409,
+      "message": "More records now hold a value in this field. Confirm the removal again.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "REMOVAL_INCOMPLETE",
+      "status": 500,
+      "message": "Nothing was changed. Try again.",
+      "reconnect": false,
+      "retryable": true
+    },
+    {
+      "code": "MASTER_CHANGED",
+      "status": 409,
+      "message": "This master was changed by someone else. Reload and try again.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "SECRET_MASK_NOT_ALLOWED",
+      "status": 422,
+      "message": "A masked secret cannot be saved as a value. Enter the real value or leave the field empty.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "HIDDEN_FIELD_NOT_WRITABLE",
+      "status": 422,
+      "message": "This form contains a field that cannot be filled in.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "MASTER_ID_MISMATCH",
+      "status": 422,
+      "message": "This form does not belong to this link.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "LINK_EXPIRED",
+      "status": 410,
+      "message": "This link has expired. Ask the sender for a new one.",
+      "reconnect": false,
+      "retryable": false
+    },
+    {
+      "code": "RATE_LIMITED",
+      "status": 429,
+      "message": "Too many requests. Wait a moment and try again.",
+      "reconnect": false,
+      "retryable": true
+    }
+  ],
+  "envelopes": [
+    {
+      "name": "scope-denied",
+      "input": {
+        "success": false,
+        "code": "FP_SCOPE_DENIED",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      }
+    },
+    {
+      "name": "null-request-id",
+      "input": {
+        "success": false,
+        "code": "FP_SCOPE_DENIED",
+        "message": "This form cannot do that.",
+        "request_id": null
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "with-details",
+      "input": {
+        "success": false,
+        "code": "REMOVAL_COUNT_CHANGED",
+        "message": "More records now hold a value.",
+        "details": {
+          "field_id": "a1000000-0000-4000-8000-000000000002",
+          "actual": 5
+        },
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true,
+        "status": 409,
+        "code": "REMOVAL_COUNT_CHANGED"
+      }
+    },
+    {
+      "name": "rate-limited",
+      "input": {
+        "success": false,
+        "code": "RATE_LIMITED",
+        "message": "Too many requests.",
+        "details": {
+          "retry_after": 30
+        },
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true,
+        "status": 429,
+        "code": "RATE_LIMITED"
+      }
+    },
+    {
+      "name": "success-true",
+      "input": {
+        "success": true,
+        "code": "FP_SCOPE_DENIED",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "unknown-code",
+      "input": {
+        "success": false,
+        "code": "SOMETHING_NEW",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "lowercase-code",
+      "input": {
+        "success": false,
+        "code": "fp_scope_denied",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "missing-request-id",
+      "input": {
+        "success": false,
+        "code": "FP_SCOPE_DENIED",
+        "message": "This form cannot do that."
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "request-id-not-uuid",
+      "input": {
+        "success": false,
+        "code": "FP_SCOPE_DENIED",
+        "message": "This form cannot do that.",
+        "request_id": "abc"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "empty-message",
+      "input": {
+        "success": false,
+        "code": "FP_SCOPE_DENIED",
+        "message": "",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "extra-key-trace",
+      "input": {
+        "success": false,
+        "code": "FP_SCOPE_DENIED",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001",
+        "trace": "x"
+      },
+      "expect": {
+        "valid": false
+      }
+    }
+  ],
+  "envelopesAnyCode": [
+    {
+      "name": "unknown-but-well-formed-code",
+      "input": {
+        "success": false,
+        "code": "SOMETHING_NEW",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lowercase-code",
+      "input": {
+        "success": false,
+        "code": "something_new",
+        "message": "This form cannot do that.",
+        "request_id": "7e000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,361 @@
+{
+  "$comment": "The session channel of dms-api (SEC-DESIGN.md 1.6, DESIGN.md 3.3): scopes per mode, the legacy-to-session path map the fORM- client applies, the resource binding of every route, and the failures every session request can meet. Cases are {name, input, expect:{valid, status, code}} and need the tenant database and the ticket store, so only dms-api replays them (requires: server). The path map and the scope sets are also asserted against contract/schemas.ts by the fORM- tests and against routes/formplus.php by the dms-api route table test.",
+  "contract": "fp-session",
+  "version": 1,
+  "pathPrefix": "/api/dms/v1/formplus/s/",
+  "scopesByMode": {
+    "dms-master": {
+      "create": [
+        "master:create",
+        "lookup:read"
+      ],
+      "edit": [
+        "master:read",
+        "master:update",
+        "master:usage",
+        "lookup:read"
+      ]
+    },
+    "dms-record": {
+      "add": [
+        "master:read",
+        "record:create",
+        "lookup:read"
+      ],
+      "edit": [
+        "master:read",
+        "record:read",
+        "record:update",
+        "lookup:read"
+      ]
+    }
+  },
+  "routes": [
+    {
+      "name": "fp.s.master-form.store",
+      "method": "POST",
+      "legacy": "dms/v1/master/form",
+      "session": "dms/v1/formplus/s/master/form",
+      "scope": "master:create",
+      "binding": "session.master_id is null and session.created_master is false; on 201 the session gets master_id = new id, created_master = true and the edit scope set"
+    },
+    {
+      "name": "fp.s.master-form.show",
+      "method": "GET",
+      "legacy": "dms/v1/master/form/{id}",
+      "session": "dms/v1/formplus/s/master/form/{id}",
+      "scope": "master:read",
+      "binding": "path id == session.master_id"
+    },
+    {
+      "name": "fp.s.master-form.update",
+      "method": "PATCH",
+      "legacy": "dms/v1/master/form/{id}",
+      "session": "dms/v1/formplus/s/master/form/{id}",
+      "scope": "master:update",
+      "binding": "path id == session.master_id; the session channel refuses a metadata-only PATCH (no form_builder_fields and no json_data): FP_SCOPE_DENIED"
+    },
+    {
+      "name": "fp.s.master-form.field-usage",
+      "method": "GET",
+      "legacy": "dms/v1/master/form/{id}/field-usage",
+      "session": "dms/v1/formplus/s/master/form/{id}/field-usage",
+      "scope": "master:usage",
+      "binding": "path id == session.master_id"
+    },
+    {
+      "name": "fp.s.masters.show",
+      "method": "GET",
+      "legacy": "dms/masters/{id}",
+      "session": "dms/v1/formplus/s/masters/{id}",
+      "scope": "lookup:read",
+      "binding": "builder (dms-master): any master the user can view; record (dms-record): id is one of the fp_lookup.master_id values of the session master stored elements"
+    },
+    {
+      "name": "fp.s.master-records.index",
+      "method": "GET",
+      "legacy": "dms/master-records",
+      "session": "dms/v1/formplus/s/master-records",
+      "scope": "lookup:read",
+      "binding": "same binding as masters.show on query id; per_page <= 21; q <= 100 chars"
+    },
+    {
+      "name": "fp.s.master-records.show",
+      "method": "GET",
+      "legacy": "dms/master-records/{id}",
+      "session": "dms/v1/formplus/s/master-records/{id}",
+      "scope": "record:read",
+      "binding": "path id == session.record_id and query master_id == session.master_id"
+    },
+    {
+      "name": "fp.s.master-records.store",
+      "method": "POST",
+      "legacy": "dms/master-records",
+      "session": "dms/v1/formplus/s/master-records",
+      "scope": "record:create",
+      "binding": "body master_id == session.master_id"
+    },
+    {
+      "name": "fp.s.master-records.update",
+      "method": "PATCH",
+      "legacy": "dms/master-records/{id}",
+      "session": "dms/v1/formplus/s/master-records/{id}",
+      "scope": "record:update",
+      "binding": "path id == session.record_id and body master_id == session.master_id"
+    },
+    {
+      "name": "fp.s.session.show",
+      "method": "GET",
+      "legacy": null,
+      "session": "dms/v1/formplus/s/session",
+      "scope": "any",
+      "binding": "none; counts as activity"
+    },
+    {
+      "name": "fp.s.session.destroy",
+      "method": "DELETE",
+      "legacy": null,
+      "session": "dms/v1/formplus/s/session",
+      "scope": "any",
+      "binding": "none; deletes the session"
+    }
+  ],
+  "failures": [
+    {
+      "name": "no-authorization",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/session",
+        "headers": {}
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_SESSION_INVALID"
+      },
+      "why": "Authorization must be exactly Bearer fps1_<43 b64url>",
+      "requires": "server"
+    },
+    {
+      "name": "passport-jwt-as-credential",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/session",
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9.e30.sig"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_SESSION_INVALID"
+      },
+      "why": "the session group refuses Passport bearers (T-DMSINT-11)",
+      "requires": "server"
+    },
+    {
+      "name": "ticket-as-credential",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/session",
+        "headers": {
+          "Authorization": "Bearer fpt1_AGg3qcaBunc6CADC1f7SaTqorF2JPgmsR7wrSUhJKNI"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_SESSION_INVALID"
+      },
+      "why": "a ticket is not a credential",
+      "requires": "server"
+    },
+    {
+      "name": "tenant-header-differs",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/master/form/{master_id}",
+        "headers": {
+          "X-Tenant-Id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_CONTEXT_MISMATCH"
+      },
+      "why": "T-DMSINT-09",
+      "requires": "server"
+    },
+    {
+      "name": "workspace-header-differs",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/master/form/{master_id}",
+        "headers": {
+          "X-Workspace-Id": "0a000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_CONTEXT_MISMATCH"
+      },
+      "why": "T-DMSINT-10",
+      "requires": "server"
+    },
+    {
+      "name": "two-workspace-headers",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/master/form/{master_id}",
+        "headers": {
+          "X-Workspace-Id": "0a000000-0000-4000-8000-000000000001, 0a000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_CONTEXT_MISMATCH"
+      },
+      "why": "more than one X-Workspace-Id",
+      "requires": "server"
+    },
+    {
+      "name": "tenant-in-query",
+      "input": {
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/master/form/{master_id}?tenant_id=22222222-2222-4222-8222-222222222222"
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_CONTEXT_MISMATCH"
+      },
+      "why": "tenant_id, tenantId, workspace_id, workspaceId in query or JSON body",
+      "requires": "server"
+    },
+    {
+      "name": "workspace-in-body",
+      "input": {
+        "method": "PATCH",
+        "path": "/api/dms/v1/formplus/s/master/form/{master_id}",
+        "body": {
+          "workspace_id": "0a000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 401,
+        "code": "FP_CONTEXT_MISMATCH"
+      },
+      "why": "T-DMSINT-10",
+      "requires": "server"
+    },
+    {
+      "name": "edit-session-patches-other-master",
+      "input": {
+        "session": "dms-master:edit",
+        "method": "PATCH",
+        "path": "/api/dms/v1/formplus/s/master/form/{other_master_id}"
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      },
+      "why": "resource binding: id != session.master_id (T-DMSINT-12)",
+      "requires": "server"
+    },
+    {
+      "name": "record-session-writes-master-form",
+      "input": {
+        "session": "dms-record:edit",
+        "method": "POST",
+        "path": "/api/dms/v1/formplus/s/master/form"
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      },
+      "why": "scope master:create is not in the record set",
+      "requires": "server"
+    },
+    {
+      "name": "record-session-patches-other-record",
+      "input": {
+        "session": "dms-record:edit",
+        "method": "PATCH",
+        "path": "/api/dms/v1/formplus/s/master-records/{other_record_id}"
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      },
+      "why": "path id != session.record_id",
+      "requires": "server"
+    },
+    {
+      "name": "create-session-posts-twice",
+      "input": {
+        "session": "dms-master:create",
+        "method": "POST",
+        "path": "/api/dms/v1/formplus/s/master/form",
+        "note": "second POST after a 201"
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      },
+      "why": "created_master is true after the first 201 (T-DMSINT-13)",
+      "requires": "server"
+    },
+    {
+      "name": "metadata-only-patch-on-session",
+      "input": {
+        "session": "dms-master:edit",
+        "method": "PATCH",
+        "path": "/api/dms/v1/formplus/s/master/form/{master_id}",
+        "body": {
+          "name": "X",
+          "updated_at": "2026-11-25T10:00:00.000000Z"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      },
+      "why": "only DMS pages (Passport) use the metadata-only PATCH (DESIGN 3.6)",
+      "requires": "server"
+    },
+    {
+      "name": "lookup-of-a-master-not-declared",
+      "input": {
+        "session": "dms-record:add",
+        "method": "GET",
+        "path": "/api/dms/v1/formplus/s/master-records?id={not_a_lookup_target}"
+      },
+      "expect": {
+        "valid": true,
+        "status": 403,
+        "code": "FP_SCOPE_DENIED"
+      },
+      "why": "record sessions may only read masters their stored elements declare as lookups",
+      "requires": "server"
+    }
+  ],
+  "sessionLifetimes": {
+    "dms-master": {
+      "idle": 1800,
+      "absolute": 28800
+    },
+    "dms-record": {
+      "idle": 1800,
+      "absolute": 1800
+    }
+  }
+}

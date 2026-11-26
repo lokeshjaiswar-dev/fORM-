@@ -1,0 +1,227 @@
+{
+  "$comment": "What fORM- appends to return_url and how the DMS return handlers (classic FormPlusReturnHandler, dms-ui FormPlusReturnHandler) parse it (DESIGN.md 3.5). The handler reads only the fp_* keys, strictly: a malformed or repeated one means \"not a return\" and nothing is shown. A syntactically valid fp_code that is not in fp-errors.fixtures.json shows the generic message. After handling, params are removed with history.replaceState.",
+  "contract": "formplus-return",
+  "version": 1,
+  "params": {
+    "fp_status": "saved | cancelled | error",
+    "fp_master_id": "^[A-Za-z0-9_-]{1,64}$",
+    "fp_record_id": "^[A-Za-z0-9_-]{1,64}$ (only with saved)",
+    "fp_code": "^[A-Z_]{1,64}$ (only with error)"
+  },
+  "cases": [
+    {
+      "name": "saved-record",
+      "input": {
+        "search": "?fp_status=saved&fp_master_id=a1000000-0000-4000-8000-000000000001&fp_record_id=d3000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "saved",
+          "fp_master_id": "a1000000-0000-4000-8000-000000000001",
+          "fp_record_id": "d3000000-0000-4000-8000-000000000001"
+        }
+      }
+    },
+    {
+      "name": "saved-master",
+      "input": {
+        "search": "fp_status=saved&fp_master_id=a1000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "saved",
+          "fp_master_id": "a1000000-0000-4000-8000-000000000001"
+        }
+      }
+    },
+    {
+      "name": "cancelled",
+      "input": {
+        "search": "?fp_status=cancelled&fp_master_id=a1000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "cancelled",
+          "fp_master_id": "a1000000-0000-4000-8000-000000000001"
+        }
+      }
+    },
+    {
+      "name": "cancelled-create-has-no-master",
+      "input": {
+        "search": "?fp_status=cancelled"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "cancelled"
+        }
+      }
+    },
+    {
+      "name": "error-known-code",
+      "input": {
+        "search": "?fp_status=error&fp_master_id=a1000000-0000-4000-8000-000000000001&fp_code=NOT_FOUND"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "error",
+          "fp_master_id": "a1000000-0000-4000-8000-000000000001",
+          "fp_code": "NOT_FOUND"
+        },
+        "knownCode": true
+      }
+    },
+    {
+      "name": "error-without-code",
+      "input": {
+        "search": "?fp_status=error"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "error"
+        }
+      }
+    },
+    {
+      "name": "error-unknown-code-shows-generic",
+      "input": {
+        "search": "?fp_status=error&fp_code=SOMETHING_NEW"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "error",
+          "fp_code": "SOMETHING_NEW"
+        },
+        "knownCode": false
+      }
+    },
+    {
+      "name": "other-parameters-are-ignored",
+      "input": {
+        "search": "?tab=2&fp_status=saved&fp_master_id=a1000000-0000-4000-8000-000000000001&utm=x"
+      },
+      "expect": {
+        "valid": true,
+        "params": {
+          "fp_status": "saved",
+          "fp_master_id": "a1000000-0000-4000-8000-000000000001"
+        }
+      }
+    },
+    {
+      "name": "no-fp-status",
+      "input": {
+        "search": "?tab=2"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "empty",
+      "input": {
+        "search": ""
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "unknown-status",
+      "input": {
+        "search": "?fp_status=done"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "uppercase-status",
+      "input": {
+        "search": "?fp_status=SAVED"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "repeated-status",
+      "input": {
+        "search": "?fp_status=saved&fp_status=error"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "master-id-with-slash",
+      "input": {
+        "search": "?fp_status=saved&fp_master_id=a/b"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "master-id-over-64",
+      "input": {
+        "search": "?fp_status=saved&fp_master_id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "record-id-on-cancelled",
+      "input": {
+        "search": "?fp_status=cancelled&fp_record_id=d3000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "code-on-saved",
+      "input": {
+        "search": "?fp_status=saved&fp_code=NOT_FOUND"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "code-lowercase",
+      "input": {
+        "search": "?fp_status=error&fp_code=not_found"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "code-over-64",
+      "input": {
+        "search": "?fp_status=error&fp_code=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "code-with-digit",
+      "input": {
+        "search": "?fp_status=error&fp_code=E404"
+      },
+      "expect": {
+        "valid": false
+      }
+    }
+  ]
+}

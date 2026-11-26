@@ -1,0 +1,1027 @@
+{
+  "$comment": "Share links and anonymous payloads (SEC-DESIGN.md 5.2.9, 6.3; DESIGN.md 3.8). Tokens: new ones are `e` + 8 lowercase hex expiry (unix seconds) + 32 lowercase alphanumerics; legacy ones are 32 lowercase alphanumerics; slug links are not tokens and never expire (CTO-22). `outcomes` apply shareLinkOutcome(link, now, config); an expired link answers 410 LINK_EXPIRED on read and submit before any payload is built. `payloads` are the anonymous form payloads of document-form-builders-by-slug and v1/master-share public|invite: hidden fields are absent, secret fields carry is_secret true and no value, all 7 element types.",
+  "contract": "share-link",
+  "version": 1,
+  "now": 1800000000,
+  "regex": {
+    "v2": "^e[0-9a-f]{8}[a-z0-9]{32}$",
+    "legacy": "^[a-z0-9]{32}$"
+  },
+  "config": {
+    "invite_ttl_days": 30,
+    "legacy_public_sunset": null,
+    "expiry_grace_until": null
+  },
+  "tokens": [
+    {
+      "name": "v2-token",
+      "input": {
+        "token": "e6b715f00abcdefghijklmnopqrstuvwxyz012345"
+      },
+      "expect": {
+        "valid": true,
+        "shape": "v2",
+        "expiry": 1802592000
+      }
+    },
+    {
+      "name": "v2-expired-token-still-v2",
+      "input": {
+        "token": "e6b49d1ffabcdefghijklmnopqrstuvwxyz012345"
+      },
+      "expect": {
+        "valid": true,
+        "shape": "v2",
+        "expiry": 1799999999
+      }
+    },
+    {
+      "name": "legacy-32",
+      "input": {
+        "token": "q3r8t1xk0b7mzh5d2wnf9yc4jlsapeu6"
+      },
+      "expect": {
+        "valid": true,
+        "shape": "legacy"
+      }
+    },
+    {
+      "name": "slug",
+      "input": {
+        "token": "vendor-onboarding"
+      },
+      "expect": {
+        "valid": false,
+        "shape": "other"
+      }
+    },
+    {
+      "name": "v2-with-uppercase",
+      "input": {
+        "token": "e6b49d200abcdefghijklmnopqrstuvwxyz01234A"
+      },
+      "expect": {
+        "valid": false,
+        "shape": "other"
+      }
+    },
+    {
+      "name": "v2-expiry-not-hex",
+      "input": {
+        "token": "ezzzzzzzzabcdefghijklmnopqrstuvwxyz012345"
+      },
+      "expect": {
+        "valid": false,
+        "shape": "other"
+      }
+    },
+    {
+      "name": "v2-31-chars-tail",
+      "input": {
+        "token": "e6b49d200abcdefghijklmnopqrstuvwxyz01234"
+      },
+      "expect": {
+        "valid": false,
+        "shape": "other"
+      }
+    },
+    {
+      "name": "legacy-31",
+      "input": {
+        "token": "q3r8t1xk0b7mzh5d2wnf9yc4jlsapeu"
+      },
+      "expect": {
+        "valid": false,
+        "shape": "other"
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "name": "public-v2-before-expiry",
+      "input": {
+        "link": {
+          "kind": "public_v2",
+          "token": "e6b715f00abcdefghijklmnopqrstuvwxyz012345"
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok"
+      }
+    },
+    {
+      "name": "public-v2-after-expiry",
+      "input": {
+        "link": {
+          "kind": "public_v2",
+          "token": "e6b49d1ffabcdefghijklmnopqrstuvwxyz012345"
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "expired"
+      }
+    },
+    {
+      "name": "invite-v2-after-expiry",
+      "input": {
+        "link": {
+          "kind": "invite_v2",
+          "token": "e6b49d1ffabcdefghijklmnopqrstuvwxyz012345"
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "expired"
+      }
+    },
+    {
+      "name": "invite-v2-on-the-last-second",
+      "input": {
+        "link": {
+          "kind": "invite_v2",
+          "token": "e6b49d200abcdefghijklmnopqrstuvwxyz012345"
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok"
+      }
+    },
+    {
+      "name": "public-legacy-no-sunset",
+      "input": {
+        "link": {
+          "kind": "public_legacy",
+          "token": "q3r8t1xk0b7mzh5d2wnf9yc4jlsapeu6"
+        },
+        "now": 1834560000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok",
+        "why": "CTO-22: legacy public links keep working until the founder sets legacy_public_sunset"
+      }
+    },
+    {
+      "name": "public-legacy-after-sunset",
+      "input": {
+        "link": {
+          "kind": "public_legacy",
+          "token": "q3r8t1xk0b7mzh5d2wnf9yc4jlsapeu6"
+        },
+        "now": 1800172800,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": 1800086400,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "expired"
+      }
+    },
+    {
+      "name": "invite-legacy-rollout-not-started",
+      "input": {
+        "link": {
+          "kind": "invite_legacy",
+          "invited_at": 1796544000
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok",
+        "why": "expiry_grace_until null: no legacy invite expiry yet"
+      }
+    },
+    {
+      "name": "invite-legacy-inside-grace",
+      "input": {
+        "link": {
+          "kind": "invite_legacy",
+          "invited_at": 1796544000
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": 1802592000
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok",
+        "why": "older than the ttl but never before expiry_grace_until"
+      }
+    },
+    {
+      "name": "invite-legacy-after-grace",
+      "input": {
+        "link": {
+          "kind": "invite_legacy",
+          "invited_at": 1796544000
+        },
+        "now": 1802592001,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": 1802592000
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "expired"
+      }
+    },
+    {
+      "name": "invite-legacy-fresh-after-grace",
+      "input": {
+        "link": {
+          "kind": "invite_legacy",
+          "invited_at": 1802592000
+        },
+        "now": 1803456000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": 1802592000
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok",
+        "why": "invited_at + 30 days is later than the grace date"
+      }
+    },
+    {
+      "name": "slug-never-expires",
+      "input": {
+        "link": {
+          "kind": "slug",
+          "is_public_enabled": true
+        },
+        "now": 1834560000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "ok",
+        "why": "CTO-22"
+      }
+    },
+    {
+      "name": "slug-with-public-sharing-off",
+      "input": {
+        "link": {
+          "kind": "slug",
+          "is_public_enabled": false
+        },
+        "now": 1800000000,
+        "config": {
+          "invite_ttl_days": 30,
+          "legacy_public_sunset": null,
+          "expiry_grace_until": null
+        }
+      },
+      "expect": {
+        "valid": true,
+        "outcome": "disabled",
+        "why": "refused as today"
+      }
+    }
+  ],
+  "payloads": [
+    {
+      "name": "all-seven-types",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "primary": true
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          }
+        ],
+        "primary_key": "Vendor Name"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "secret-field-is-write-only",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "primary": true
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000008",
+            "type": "textinput",
+            "label": "Tax Id",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": true
+          }
+        ],
+        "primary_key": "Vendor Name"
+      },
+      "expect": {
+        "valid": true
+      },
+      "why": "is_secret true, no value in the payload"
+    },
+    {
+      "name": "with-tenant-and-workspace",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "primary": true
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          }
+        ],
+        "primary_key": "Vendor Name",
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "workspace_id": "0a000000-0000-4000-8000-000000000001"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "hidden-field-present",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "primary": true
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000009",
+            "type": "textinput",
+            "label": "Internal Note",
+            "value": "Internal Note",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": true,
+            "is_secret": false
+          }
+        ],
+        "primary_key": "Vendor Name"
+      },
+      "expect": {
+        "valid": false
+      },
+      "why": "hidden fields are dropped server-side, always"
+    },
+    {
+      "name": "is-secret-missing",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "primary": true
+          }
+        ],
+        "primary_key": "Vendor Name"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "is-hidden-missing",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_secret": false,
+            "primary": true
+          }
+        ],
+        "primary_key": "Vendor Name"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "type-outside-the-seven",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "primary": true
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000010",
+            "type": "checkbox",
+            "label": "Agree",
+            "value": "Agree",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          }
+        ],
+        "primary_key": "Vendor Name"
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "missing-form-builders",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "primary_key": null
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "extra-top-level-key",
+      "input": {
+        "master_id": "a1000000-0000-4000-8000-000000000001",
+        "master_name": "Vendor",
+        "form_builders": [
+          {
+            "id": "b1000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "primary": true
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000002",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000003",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000004",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000005",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000006",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ]
+          },
+          {
+            "id": "b1000000-0000-4000-8000-000000000007",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "required": false,
+            "placeholder": "",
+            "is_hidden": false,
+            "is_secret": false
+          }
+        ],
+        "primary_key": "Vendor Name",
+        "token": "x"
+      },
+      "expect": {
+        "valid": false
+      }
+    }
+  ],
+  "expired": [
+    {
+      "name": "public-read-410",
+      "input": {
+        "status": 410,
+        "body": {
+          "success": false,
+          "code": "LINK_EXPIRED",
+          "message": "This link has expired. Ask the sender for a new one.",
+          "request_id": "7e000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 410,
+        "code": "LINK_EXPIRED"
+      }
+    },
+    {
+      "name": "wrong-code",
+      "input": {
+        "status": 410,
+        "body": {
+          "success": false,
+          "code": "NOT_FOUND",
+          "message": "x",
+          "request_id": "7e000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expect": {
+        "valid": false
+      }
+    }
+  ]
+}

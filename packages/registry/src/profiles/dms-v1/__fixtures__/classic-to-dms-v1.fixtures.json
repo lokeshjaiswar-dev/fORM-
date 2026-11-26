@@ -1,0 +1,2716 @@
+{
+  "$comment": "Golden cases for the classic-native -> formplus conversion (`formplus:migrate-openform --classic`, DESIGN.md 8, SEC-DESIGN.md 8.2). Canonical: fORM- packages/registry/src/profiles/dms-v1/__fixtures__/. Byte-identical copy: dms-api tests/Fixtures/formplus/. Modelled on openform-to-dms-v1.fixtures.json. A classic element is already in the dms-v1 dialect, so json_data is kept byte for byte: `expected.element` equals `input`, `expected.masterField.properties` equals the stored properties (all 12 keys of the legacy writer, MasterService::processFormBuilderFields, survive). The one normalisation is `normalisations`: layout elements without a column are dropped and reported. Columns of _dynamic_master_* and record values are never touched. Consumers: dms-api ClassicConversionTest (plan and apply), fORM- registry round-trip test (load + save of every case keeps every key).",
+  "contract": "classic-to-dms-v1",
+  "version": 1,
+  "converterVersion": "classic-dms-v1/1",
+  "classicTypes": [
+    "textinput",
+    "numberinput",
+    "email",
+    "phonenumber",
+    "multilineinput",
+    "dropdown",
+    "date"
+  ],
+  "classicOnlyKeys": [
+    "advanced_rules",
+    "parent_field_id",
+    "increment",
+    "incrementOption",
+    "isDefaultToDate",
+    "prefix",
+    "suffix",
+    "numeric",
+    "specialChars",
+    "is_primary",
+    "primary"
+  ],
+  "propertyKeys": [
+    "is_required",
+    "is_primary",
+    "unique",
+    "is_numeric",
+    "allow_special_chars",
+    "is_auto_increment",
+    "auto_increment_pattern",
+    "auto_increment_type",
+    "auto_increment_padding",
+    "isDefaultToDate",
+    "is_hidden",
+    "is_secret"
+  ],
+  "layoutTypes": [
+    "header",
+    "paragraph",
+    "linebreak"
+  ],
+  "normalisations": [
+    "layout elements (header, paragraph, linebreak) are dropped from json_data and listed under dropped; nothing else changes"
+  ],
+  "blockingRules": [
+    "duplicate_name: two kept elements whose trimmed names match case-insensitively",
+    "empty_name: a kept element whose trimmed name and master field name are both empty",
+    "unsupported_element: a type outside the 7 that owns a master_fields column and has no read-only legacy mapping",
+    "workflow_bound: rows in master_workflow_events unless --include-workflow-bound and MasterWorkflowStructuralGuard reports no structural change",
+    "workflow_unavailable: workflow integration enabled and wf-api unreachable"
+  ],
+  "actions": [
+    "converted_classic",
+    "blocked",
+    "skipped_formplus",
+    "skipped_empty"
+  ],
+  "elementCases": [
+    {
+      "name": "textinput-primary",
+      "covers": [
+        "type:textinput",
+        "key:primary",
+        "key:is_primary",
+        "key:numeric",
+        "key:specialChars"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000001",
+        "type": "textinput",
+        "label": "Vendor Name",
+        "value": "Vendor Name",
+        "placeholder": "",
+        "required": true,
+        "primary": true,
+        "is_primary": true,
+        "numeric": false,
+        "specialChars": false
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000001",
+        "name": "Vendor Name",
+        "type": "textinput",
+        "dynamic_field_name": "field_1",
+        "options": null,
+        "properties": {
+          "is_required": true,
+          "is_primary": true,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "label": "Vendor Name",
+          "value": "Vendor Name",
+          "placeholder": "",
+          "required": true,
+          "primary": true,
+          "is_primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        "masterField": {
+          "type": "textinput",
+          "properties": {
+            "is_required": true,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      },
+      "note": "classic writes both primary and is_primary; fORM- models primary and keeps is_primary in x-dms, so the pair round-trips"
+    },
+    {
+      "name": "textinput-numeric-special",
+      "covers": [
+        "type:textinput",
+        "key:numeric",
+        "key:specialChars"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000002",
+        "type": "textinput",
+        "label": "Vendor Tax Id",
+        "value": "Vendor Tax Id",
+        "placeholder": "GSTIN",
+        "required": false,
+        "numeric": true,
+        "specialChars": true
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000002",
+        "name": "Vendor Tax Id",
+        "type": "textinput",
+        "dynamic_field_name": "field_2",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": true,
+          "allow_special_chars": true,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000002",
+          "type": "textinput",
+          "label": "Vendor Tax Id",
+          "value": "Vendor Tax Id",
+          "placeholder": "GSTIN",
+          "required": false,
+          "numeric": true,
+          "specialChars": true
+        },
+        "masterField": {
+          "type": "textinput",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": true,
+            "allow_special_chars": true,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "numberinput",
+      "covers": [
+        "type:numberinput"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000003",
+        "type": "numberinput",
+        "label": "Vendor Code",
+        "value": "Vendor Code",
+        "placeholder": "e.g. 1042",
+        "required": false
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000003",
+        "name": "Vendor Code",
+        "type": "numberinput",
+        "dynamic_field_name": "field_3",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "type": "numberinput",
+          "label": "Vendor Code",
+          "value": "Vendor Code",
+          "placeholder": "e.g. 1042",
+          "required": false
+        },
+        "masterField": {
+          "type": "numberinput",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "email",
+      "covers": [
+        "type:email"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000004",
+        "type": "email",
+        "label": "Vendor Email",
+        "value": "Vendor Email",
+        "placeholder": "",
+        "required": true
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000004",
+        "name": "Vendor Email",
+        "type": "email",
+        "dynamic_field_name": "field_4",
+        "options": null,
+        "properties": {
+          "is_required": true,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000004",
+          "type": "email",
+          "label": "Vendor Email",
+          "value": "Vendor Email",
+          "placeholder": "",
+          "required": true
+        },
+        "masterField": {
+          "type": "email",
+          "properties": {
+            "is_required": true,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "phonenumber",
+      "covers": [
+        "type:phonenumber"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000005",
+        "type": "phonenumber",
+        "label": "Vendor Phone",
+        "value": "Vendor Phone",
+        "placeholder": "",
+        "required": false
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000005",
+        "name": "Vendor Phone",
+        "type": "phonenumber",
+        "dynamic_field_name": "field_5",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000005",
+          "type": "phonenumber",
+          "label": "Vendor Phone",
+          "value": "Vendor Phone",
+          "placeholder": "",
+          "required": false
+        },
+        "masterField": {
+          "type": "phonenumber",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "multilineinput",
+      "covers": [
+        "type:multilineinput"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000006",
+        "type": "multilineinput",
+        "label": "Vendor Address",
+        "value": "Vendor Address",
+        "placeholder": "Street, city",
+        "required": false
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000006",
+        "name": "Vendor Address",
+        "type": "multilineinput",
+        "dynamic_field_name": "field_6",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000006",
+          "type": "multilineinput",
+          "label": "Vendor Address",
+          "value": "Vendor Address",
+          "placeholder": "Street, city",
+          "required": false
+        },
+        "masterField": {
+          "type": "multilineinput",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "dropdown-with-advanced-rules",
+      "covers": [
+        "type:dropdown",
+        "key:advanced_rules"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000007",
+        "type": "dropdown",
+        "label": "Vendor Category",
+        "value": "Vendor Category",
+        "placeholder": "",
+        "required": false,
+        "options": [
+          {
+            "name": "Wholesale",
+            "value": "Wholesale"
+          },
+          {
+            "name": "Retail",
+            "value": "Retail"
+          }
+        ],
+        "advanced_rules": {
+          "enabled": true,
+          "child_field_id": "c3000000-0000-4000-8000-000000000008",
+          "mappings": [
+            {
+              "parent_option_value": "Wholesale",
+              "is_show_all": false,
+              "child_option_values": [
+                "Hardware",
+                "Software"
+              ]
+            },
+            {
+              "parent_option_value": "Retail",
+              "is_show_all": true,
+              "child_option_values": []
+            }
+          ]
+        }
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000007",
+        "name": "Vendor Category",
+        "type": "dropdown",
+        "dynamic_field_name": "field_7",
+        "options": [
+          {
+            "name": "Wholesale",
+            "value": "Wholesale"
+          },
+          {
+            "name": "Retail",
+            "value": "Retail"
+          }
+        ],
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000007",
+          "type": "dropdown",
+          "label": "Vendor Category",
+          "value": "Vendor Category",
+          "placeholder": "",
+          "required": false,
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ],
+          "advanced_rules": {
+            "enabled": true,
+            "child_field_id": "c3000000-0000-4000-8000-000000000008",
+            "mappings": [
+              {
+                "parent_option_value": "Wholesale",
+                "is_show_all": false,
+                "child_option_values": [
+                  "Hardware",
+                  "Software"
+                ]
+              },
+              {
+                "parent_option_value": "Retail",
+                "is_show_all": true,
+                "child_option_values": []
+              }
+            ]
+          }
+        },
+        "masterField": {
+          "type": "dropdown",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          },
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ]
+        }
+      },
+      "note": "advanced_rules is kept byte for byte and rides in x-dms; the dependent options are still served by the legacy routes"
+    },
+    {
+      "name": "dropdown-dependent-child",
+      "covers": [
+        "type:dropdown",
+        "key:parent_field_id"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000008",
+        "type": "dropdown",
+        "label": "Vendor Sub Category",
+        "value": "Vendor Sub Category",
+        "placeholder": "",
+        "required": false,
+        "options": [
+          {
+            "name": "Hardware",
+            "value": "Hardware"
+          },
+          {
+            "name": "Software",
+            "value": "Software"
+          },
+          {
+            "name": "Consulting",
+            "value": "Consulting"
+          }
+        ],
+        "parent_field_id": "c3000000-0000-4000-8000-000000000007"
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000008",
+        "name": "Vendor Sub Category",
+        "type": "dropdown",
+        "dynamic_field_name": "field_8",
+        "options": [
+          {
+            "name": "Hardware",
+            "value": "Hardware"
+          },
+          {
+            "name": "Software",
+            "value": "Software"
+          },
+          {
+            "name": "Consulting",
+            "value": "Consulting"
+          }
+        ],
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000008",
+          "type": "dropdown",
+          "label": "Vendor Sub Category",
+          "value": "Vendor Sub Category",
+          "placeholder": "",
+          "required": false,
+          "options": [
+            {
+              "name": "Hardware",
+              "value": "Hardware"
+            },
+            {
+              "name": "Software",
+              "value": "Software"
+            },
+            {
+              "name": "Consulting",
+              "value": "Consulting"
+            }
+          ],
+          "parent_field_id": "c3000000-0000-4000-8000-000000000007"
+        },
+        "masterField": {
+          "type": "dropdown",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          },
+          "options": [
+            {
+              "name": "Hardware",
+              "value": "Hardware"
+            },
+            {
+              "name": "Software",
+              "value": "Software"
+            },
+            {
+              "name": "Consulting",
+              "value": "Consulting"
+            }
+          ]
+        }
+      },
+      "note": "parent_field_id is the read-only remote parent the record renderers use; it is not linkedTo"
+    },
+    {
+      "name": "textinput-increment-prefix",
+      "covers": [
+        "type:textinput",
+        "key:increment",
+        "key:incrementOption",
+        "key:prefix"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000009",
+        "type": "textinput",
+        "label": "Vendor No",
+        "value": "Vendor No",
+        "placeholder": "",
+        "required": false,
+        "increment": true,
+        "incrementOption": "prefix",
+        "prefix": "VND-",
+        "autoIncrementPattern": 4
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000009",
+        "name": "Vendor No",
+        "type": "textinput",
+        "dynamic_field_name": "field_9",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": true,
+          "auto_increment_pattern": "VND-",
+          "auto_increment_type": "prefix",
+          "auto_increment_padding": 4,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000009",
+          "type": "textinput",
+          "label": "Vendor No",
+          "value": "Vendor No",
+          "placeholder": "",
+          "required": false,
+          "increment": true,
+          "incrementOption": "prefix",
+          "prefix": "VND-",
+          "autoIncrementPattern": 4
+        },
+        "masterField": {
+          "type": "textinput",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": true,
+            "auto_increment_pattern": "VND-",
+            "auto_increment_type": "prefix",
+            "auto_increment_padding": 4,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "numberinput-increment-suffix",
+      "covers": [
+        "type:numberinput",
+        "key:suffix"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000010",
+        "type": "numberinput",
+        "label": "Sequence",
+        "value": "Sequence",
+        "placeholder": "",
+        "required": false,
+        "increment": true,
+        "incrementOption": "suffix",
+        "suffix": "-FY26",
+        "autoIncrementPattern": 3
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000010",
+        "name": "Sequence",
+        "type": "numberinput",
+        "dynamic_field_name": "field_10",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": true,
+          "auto_increment_pattern": "-FY26",
+          "auto_increment_type": "suffix",
+          "auto_increment_padding": 3,
+          "isDefaultToDate": false,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000010",
+          "type": "numberinput",
+          "label": "Sequence",
+          "value": "Sequence",
+          "placeholder": "",
+          "required": false,
+          "increment": true,
+          "incrementOption": "suffix",
+          "suffix": "-FY26",
+          "autoIncrementPattern": 3
+        },
+        "masterField": {
+          "type": "numberinput",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": true,
+            "auto_increment_pattern": "-FY26",
+            "auto_increment_type": "suffix",
+            "auto_increment_padding": 3,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "date-default-today",
+      "covers": [
+        "type:date",
+        "key:isDefaultToDate"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000011",
+        "type": "date",
+        "label": "Onboarded On",
+        "value": "Onboarded On",
+        "placeholder": "",
+        "required": false,
+        "isDefaultToDate": true
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000011",
+        "name": "Onboarded On",
+        "type": "date",
+        "dynamic_field_name": "field_11",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": false,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": true,
+          "is_hidden": false,
+          "is_secret": false
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000011",
+          "type": "date",
+          "label": "Onboarded On",
+          "value": "Onboarded On",
+          "placeholder": "",
+          "required": false,
+          "isDefaultToDate": true
+        },
+        "masterField": {
+          "type": "date",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": true,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      }
+    },
+    {
+      "name": "hidden-and-secret-properties-kept",
+      "covers": [
+        "type:textinput",
+        "prop:is_hidden",
+        "prop:is_secret",
+        "prop:unique"
+      ],
+      "input": {
+        "id": "c3000000-0000-4000-8000-000000000012",
+        "type": "textinput",
+        "label": "Internal Note",
+        "value": "Internal Note",
+        "placeholder": "",
+        "required": false
+      },
+      "masterField": {
+        "id": "c3000000-0000-4000-8000-000000000012",
+        "name": "Internal Note",
+        "type": "textinput",
+        "dynamic_field_name": "field_12",
+        "options": null,
+        "properties": {
+          "is_required": false,
+          "is_primary": false,
+          "unique": true,
+          "is_numeric": false,
+          "allow_special_chars": false,
+          "is_auto_increment": false,
+          "auto_increment_pattern": null,
+          "auto_increment_type": null,
+          "auto_increment_padding": 0,
+          "isDefaultToDate": false,
+          "is_hidden": true,
+          "is_secret": true
+        }
+      },
+      "expected": {
+        "element": {
+          "id": "c3000000-0000-4000-8000-000000000012",
+          "type": "textinput",
+          "label": "Internal Note",
+          "value": "Internal Note",
+          "placeholder": "",
+          "required": false
+        },
+        "masterField": {
+          "type": "textinput",
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": true,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": true,
+            "is_secret": true
+          }
+        }
+      },
+      "note": "is_hidden, is_secret and unique live only in master_fields.properties: they survive byte for byte (C5), and the element is unchanged"
+    }
+  ],
+  "masterCases": [
+    {
+      "name": "classic-native-converted",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000001",
+        "source": "dms",
+        "primary_key": "Vendor Name"
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "label": "Vendor Name",
+          "value": "Vendor Name",
+          "placeholder": "",
+          "required": true,
+          "primary": true,
+          "is_primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "type": "numberinput",
+          "label": "Vendor Code",
+          "value": "Vendor Code",
+          "placeholder": "e.g. 1042",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000004",
+          "type": "email",
+          "label": "Vendor Email",
+          "value": "Vendor Email",
+          "placeholder": "",
+          "required": true
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000005",
+          "type": "phonenumber",
+          "label": "Vendor Phone",
+          "value": "Vendor Phone",
+          "placeholder": "",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000006",
+          "type": "multilineinput",
+          "label": "Vendor Address",
+          "value": "Vendor Address",
+          "placeholder": "Street, city",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000007",
+          "type": "dropdown",
+          "label": "Vendor Category",
+          "value": "Vendor Category",
+          "placeholder": "",
+          "required": false,
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ],
+          "advanced_rules": {
+            "enabled": true,
+            "child_field_id": "c3000000-0000-4000-8000-000000000008",
+            "mappings": [
+              {
+                "parent_option_value": "Wholesale",
+                "is_show_all": false,
+                "child_option_values": [
+                  "Hardware",
+                  "Software"
+                ]
+              },
+              {
+                "parent_option_value": "Retail",
+                "is_show_all": true,
+                "child_option_values": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000008",
+          "type": "dropdown",
+          "label": "Vendor Sub Category",
+          "value": "Vendor Sub Category",
+          "placeholder": "",
+          "required": false,
+          "options": [
+            {
+              "name": "Hardware",
+              "value": "Hardware"
+            },
+            {
+              "name": "Software",
+              "value": "Software"
+            },
+            {
+              "name": "Consulting",
+              "value": "Consulting"
+            }
+          ],
+          "parent_field_id": "c3000000-0000-4000-8000-000000000007"
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000011",
+          "type": "date",
+          "label": "Onboarded On",
+          "value": "Onboarded On",
+          "placeholder": "",
+          "required": false,
+          "isDefaultToDate": true
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "name": "Vendor Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "name": "Vendor Code",
+          "type": "numberinput",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000004",
+          "name": "Vendor Email",
+          "type": "email",
+          "dynamic_field_name": "field_3",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000005",
+          "name": "Vendor Phone",
+          "type": "phonenumber",
+          "dynamic_field_name": "field_4",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000006",
+          "name": "Vendor Address",
+          "type": "multilineinput",
+          "dynamic_field_name": "field_5",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000007",
+          "name": "Vendor Category",
+          "type": "dropdown",
+          "dynamic_field_name": "field_6",
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ],
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000008",
+          "name": "Vendor Sub Category",
+          "type": "dropdown",
+          "dynamic_field_name": "field_7",
+          "options": [
+            {
+              "name": "Hardware",
+              "value": "Hardware"
+            },
+            {
+              "name": "Software",
+              "value": "Software"
+            },
+            {
+              "name": "Consulting",
+              "value": "Consulting"
+            }
+          ],
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000011",
+          "name": "Onboarded On",
+          "type": "date",
+          "dynamic_field_name": "field_8",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": true,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "converted_classic",
+        "dialect": "classic",
+        "source": "formplus",
+        "primary_key": "Vendor Name",
+        "elements": [
+          {
+            "id": "c3000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "placeholder": "",
+            "required": true,
+            "primary": true,
+            "is_primary": true,
+            "numeric": false,
+            "specialChars": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000003",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "placeholder": "e.g. 1042",
+            "required": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000004",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "placeholder": "",
+            "required": true
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000005",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "placeholder": "",
+            "required": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000006",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "placeholder": "Street, city",
+            "required": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000007",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "placeholder": "",
+            "required": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ],
+            "advanced_rules": {
+              "enabled": true,
+              "child_field_id": "c3000000-0000-4000-8000-000000000008",
+              "mappings": [
+                {
+                  "parent_option_value": "Wholesale",
+                  "is_show_all": false,
+                  "child_option_values": [
+                    "Hardware",
+                    "Software"
+                  ]
+                },
+                {
+                  "parent_option_value": "Retail",
+                  "is_show_all": true,
+                  "child_option_values": []
+                }
+              ]
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000008",
+            "type": "dropdown",
+            "label": "Vendor Sub Category",
+            "value": "Vendor Sub Category",
+            "placeholder": "",
+            "required": false,
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Software",
+                "value": "Software"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "parent_field_id": "c3000000-0000-4000-8000-000000000007"
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000011",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "placeholder": "",
+            "required": false,
+            "isDefaultToDate": true
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c3000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "properties": {
+              "is_required": true,
+              "is_primary": true,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000003",
+            "type": "numberinput",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000004",
+            "type": "email",
+            "properties": {
+              "is_required": true,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000005",
+            "type": "phonenumber",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000006",
+            "type": "multilineinput",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000007",
+            "type": "dropdown",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000008",
+            "type": "dropdown",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000011",
+            "type": "date",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": true,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          }
+        ],
+        "dropped": [],
+        "blocked": []
+      }
+    },
+    {
+      "name": "layout-elements-dropped",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000002",
+        "source": "dms",
+        "primary_key": "Vendor Name"
+      },
+      "elements": [
+        {
+          "id": "hdr-1",
+          "type": "header",
+          "label": "Vendor details",
+          "value": ""
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "label": "Vendor Name",
+          "value": "Vendor Name",
+          "placeholder": "",
+          "required": true,
+          "primary": true,
+          "is_primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "type": "numberinput",
+          "label": "Vendor Code",
+          "value": "Vendor Code",
+          "placeholder": "e.g. 1042",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000004",
+          "type": "email",
+          "label": "Vendor Email",
+          "value": "Vendor Email",
+          "placeholder": "",
+          "required": true
+        },
+        {
+          "id": "par-1",
+          "type": "paragraph",
+          "label": "Fill in all fields",
+          "value": ""
+        },
+        {
+          "id": "lb-1",
+          "type": "linebreak",
+          "label": "",
+          "value": ""
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000005",
+          "type": "phonenumber",
+          "label": "Vendor Phone",
+          "value": "Vendor Phone",
+          "placeholder": "",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000006",
+          "type": "multilineinput",
+          "label": "Vendor Address",
+          "value": "Vendor Address",
+          "placeholder": "Street, city",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000007",
+          "type": "dropdown",
+          "label": "Vendor Category",
+          "value": "Vendor Category",
+          "placeholder": "",
+          "required": false,
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ],
+          "advanced_rules": {
+            "enabled": true,
+            "child_field_id": "c3000000-0000-4000-8000-000000000008",
+            "mappings": [
+              {
+                "parent_option_value": "Wholesale",
+                "is_show_all": false,
+                "child_option_values": [
+                  "Hardware",
+                  "Software"
+                ]
+              },
+              {
+                "parent_option_value": "Retail",
+                "is_show_all": true,
+                "child_option_values": []
+              }
+            ]
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000008",
+          "type": "dropdown",
+          "label": "Vendor Sub Category",
+          "value": "Vendor Sub Category",
+          "placeholder": "",
+          "required": false,
+          "options": [
+            {
+              "name": "Hardware",
+              "value": "Hardware"
+            },
+            {
+              "name": "Software",
+              "value": "Software"
+            },
+            {
+              "name": "Consulting",
+              "value": "Consulting"
+            }
+          ],
+          "parent_field_id": "c3000000-0000-4000-8000-000000000007"
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000011",
+          "type": "date",
+          "label": "Onboarded On",
+          "value": "Onboarded On",
+          "placeholder": "",
+          "required": false,
+          "isDefaultToDate": true
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "name": "Vendor Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "name": "Vendor Code",
+          "type": "numberinput",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000004",
+          "name": "Vendor Email",
+          "type": "email",
+          "dynamic_field_name": "field_3",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000005",
+          "name": "Vendor Phone",
+          "type": "phonenumber",
+          "dynamic_field_name": "field_4",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000006",
+          "name": "Vendor Address",
+          "type": "multilineinput",
+          "dynamic_field_name": "field_5",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000007",
+          "name": "Vendor Category",
+          "type": "dropdown",
+          "dynamic_field_name": "field_6",
+          "options": [
+            {
+              "name": "Wholesale",
+              "value": "Wholesale"
+            },
+            {
+              "name": "Retail",
+              "value": "Retail"
+            }
+          ],
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000008",
+          "name": "Vendor Sub Category",
+          "type": "dropdown",
+          "dynamic_field_name": "field_7",
+          "options": [
+            {
+              "name": "Hardware",
+              "value": "Hardware"
+            },
+            {
+              "name": "Software",
+              "value": "Software"
+            },
+            {
+              "name": "Consulting",
+              "value": "Consulting"
+            }
+          ],
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000011",
+          "name": "Onboarded On",
+          "type": "date",
+          "dynamic_field_name": "field_8",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": true,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "converted_classic",
+        "dialect": "classic",
+        "source": "formplus",
+        "primary_key": "Vendor Name",
+        "elements": [
+          {
+            "id": "c3000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "Vendor Name",
+            "value": "Vendor Name",
+            "placeholder": "",
+            "required": true,
+            "primary": true,
+            "is_primary": true,
+            "numeric": false,
+            "specialChars": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000003",
+            "type": "numberinput",
+            "label": "Vendor Code",
+            "value": "Vendor Code",
+            "placeholder": "e.g. 1042",
+            "required": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000004",
+            "type": "email",
+            "label": "Vendor Email",
+            "value": "Vendor Email",
+            "placeholder": "",
+            "required": true
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000005",
+            "type": "phonenumber",
+            "label": "Vendor Phone",
+            "value": "Vendor Phone",
+            "placeholder": "",
+            "required": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000006",
+            "type": "multilineinput",
+            "label": "Vendor Address",
+            "value": "Vendor Address",
+            "placeholder": "Street, city",
+            "required": false
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000007",
+            "type": "dropdown",
+            "label": "Vendor Category",
+            "value": "Vendor Category",
+            "placeholder": "",
+            "required": false,
+            "options": [
+              {
+                "name": "Wholesale",
+                "value": "Wholesale"
+              },
+              {
+                "name": "Retail",
+                "value": "Retail"
+              }
+            ],
+            "advanced_rules": {
+              "enabled": true,
+              "child_field_id": "c3000000-0000-4000-8000-000000000008",
+              "mappings": [
+                {
+                  "parent_option_value": "Wholesale",
+                  "is_show_all": false,
+                  "child_option_values": [
+                    "Hardware",
+                    "Software"
+                  ]
+                },
+                {
+                  "parent_option_value": "Retail",
+                  "is_show_all": true,
+                  "child_option_values": []
+                }
+              ]
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000008",
+            "type": "dropdown",
+            "label": "Vendor Sub Category",
+            "value": "Vendor Sub Category",
+            "placeholder": "",
+            "required": false,
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Software",
+                "value": "Software"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "parent_field_id": "c3000000-0000-4000-8000-000000000007"
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000011",
+            "type": "date",
+            "label": "Onboarded On",
+            "value": "Onboarded On",
+            "placeholder": "",
+            "required": false,
+            "isDefaultToDate": true
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c3000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "properties": {
+              "is_required": true,
+              "is_primary": true,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000003",
+            "type": "numberinput",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000004",
+            "type": "email",
+            "properties": {
+              "is_required": true,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000005",
+            "type": "phonenumber",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000006",
+            "type": "multilineinput",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000007",
+            "type": "dropdown",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000008",
+            "type": "dropdown",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": false,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          },
+          {
+            "id": "c3000000-0000-4000-8000-000000000011",
+            "type": "date",
+            "properties": {
+              "is_required": false,
+              "is_primary": false,
+              "unique": false,
+              "is_numeric": false,
+              "allow_special_chars": false,
+              "is_auto_increment": false,
+              "auto_increment_pattern": null,
+              "auto_increment_type": null,
+              "auto_increment_padding": 0,
+              "isDefaultToDate": true,
+              "is_hidden": false,
+              "is_secret": false
+            }
+          }
+        ],
+        "dropped": [
+          {
+            "id": "hdr-1",
+            "type": "header"
+          },
+          {
+            "id": "par-1",
+            "type": "paragraph"
+          },
+          {
+            "id": "lb-1",
+            "type": "linebreak"
+          }
+        ],
+        "blocked": []
+      },
+      "note": "header, paragraph and linebreak own no column and carry no values; dropping them is the one normalisation (as the OpenForm converter drops layout blocks) and they are listed in the report"
+    },
+    {
+      "name": "duplicate-names-blocked",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000003",
+        "source": "dms",
+        "primary_key": "Code"
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000021",
+          "type": "textinput",
+          "label": "Code",
+          "value": "Code",
+          "placeholder": "",
+          "required": false,
+          "primary": true
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000022",
+          "type": "textinput",
+          "label": " code ",
+          "value": " code ",
+          "placeholder": "",
+          "required": false
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000021",
+          "name": "Code",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000022",
+          "name": " code ",
+          "type": "textinput",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "blocked",
+        "dialect": "classic",
+        "source": "dms",
+        "unchanged": true,
+        "blocked": [
+          {
+            "reason": "duplicate_name",
+            "names": [
+              "Code",
+              "code"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty-name-blocked",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000004",
+        "source": "dms",
+        "primary_key": null
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000031",
+          "type": "textinput",
+          "label": "",
+          "value": "",
+          "placeholder": "",
+          "required": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000032",
+          "type": "email",
+          "label": "Email",
+          "value": "Email",
+          "placeholder": "",
+          "required": false
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000031",
+          "name": "",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000032",
+          "name": "Email",
+          "type": "email",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "blocked",
+        "dialect": "classic",
+        "source": "dms",
+        "unchanged": true,
+        "blocked": [
+          {
+            "reason": "empty_name",
+            "ids": [
+              "c3000000-0000-4000-8000-000000000031"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unsupported-element-owning-a-column-blocked",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000005",
+        "source": "dms",
+        "primary_key": "Name"
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000041",
+          "type": "textinput",
+          "label": "Name",
+          "value": "Name",
+          "placeholder": "",
+          "required": false,
+          "primary": true
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000042",
+          "type": "qrcode",
+          "label": "Badge",
+          "value": "Badge",
+          "placeholder": "",
+          "required": false
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000041",
+          "name": "Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000042",
+          "name": "Badge",
+          "type": "qrcode",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "blocked",
+        "dialect": "classic",
+        "source": "dms",
+        "unchanged": true,
+        "blocked": [
+          {
+            "reason": "unsupported_element",
+            "ids": [
+              "c3000000-0000-4000-8000-000000000042"
+            ],
+            "types": [
+              "qrcode"
+            ]
+          }
+        ]
+      },
+      "note": "an element outside the 7 types that owns a master_fields column and has no read-only legacy mapping (C7)"
+    },
+    {
+      "name": "workflow-bound-blocked",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000006",
+        "source": "dms",
+        "primary_key": "Vendor Name"
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "label": "Vendor Name",
+          "value": "Vendor Name",
+          "placeholder": "",
+          "required": true,
+          "primary": true,
+          "is_primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "type": "numberinput",
+          "label": "Vendor Code",
+          "value": "Vendor Code",
+          "placeholder": "e.g. 1042",
+          "required": false
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "name": "Vendor Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "name": "Vendor Code",
+          "type": "numberinput",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "workflow": {
+        "events": 1,
+        "integration_enabled": true,
+        "reachable": true
+      },
+      "expected": {
+        "action": "blocked",
+        "dialect": "classic",
+        "source": "dms",
+        "unchanged": true,
+        "blocked": [
+          {
+            "reason": "workflow_bound"
+          }
+        ]
+      },
+      "note": "master_workflow_events has a row: blocked unless --include-workflow-bound and the structural guard reports no change"
+    },
+    {
+      "name": "workflow-unavailable-blocked",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000007",
+        "source": "dms",
+        "primary_key": "Vendor Name"
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "label": "Vendor Name",
+          "value": "Vendor Name",
+          "placeholder": "",
+          "required": true,
+          "primary": true,
+          "is_primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "type": "numberinput",
+          "label": "Vendor Code",
+          "value": "Vendor Code",
+          "placeholder": "e.g. 1042",
+          "required": false
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "name": "Vendor Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "name": "Vendor Code",
+          "type": "numberinput",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "workflow": {
+        "events": 1,
+        "integration_enabled": true,
+        "reachable": false,
+        "include_workflow_bound": true
+      },
+      "expected": {
+        "action": "blocked",
+        "dialect": "classic",
+        "source": "dms",
+        "unchanged": true,
+        "blocked": [
+          {
+            "reason": "workflow_unavailable"
+          }
+        ]
+      },
+      "note": "never assumed safe when wf-api is unreachable"
+    },
+    {
+      "name": "already-formplus-idempotent",
+      "master": {
+        "id": "a3000000-0000-4000-8000-000000000008",
+        "source": "formplus",
+        "primary_key": "Vendor Name"
+      },
+      "elements": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "type": "textinput",
+          "label": "Vendor Name",
+          "value": "Vendor Name",
+          "placeholder": "",
+          "required": true,
+          "primary": true,
+          "is_primary": true,
+          "numeric": false,
+          "specialChars": false
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "type": "numberinput",
+          "label": "Vendor Code",
+          "value": "Vendor Code",
+          "placeholder": "e.g. 1042",
+          "required": false
+        }
+      ],
+      "masterFields": [
+        {
+          "id": "c3000000-0000-4000-8000-000000000001",
+          "name": "Vendor Name",
+          "type": "textinput",
+          "dynamic_field_name": "field_1",
+          "options": null,
+          "properties": {
+            "is_required": true,
+            "is_primary": true,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        },
+        {
+          "id": "c3000000-0000-4000-8000-000000000003",
+          "name": "Vendor Code",
+          "type": "numberinput",
+          "dynamic_field_name": "field_2",
+          "options": null,
+          "properties": {
+            "is_required": false,
+            "is_primary": false,
+            "unique": false,
+            "is_numeric": false,
+            "allow_special_chars": false,
+            "is_auto_increment": false,
+            "auto_increment_pattern": null,
+            "auto_increment_type": null,
+            "auto_increment_padding": 0,
+            "isDefaultToDate": false,
+            "is_hidden": false,
+            "is_secret": false
+          }
+        }
+      ],
+      "expected": {
+        "action": "skipped_formplus",
+        "source": "formplus",
+        "unchanged": true
+      }
+    }
+  ]
+}
