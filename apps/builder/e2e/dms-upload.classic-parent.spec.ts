@@ -192,7 +192,7 @@ test('classic host + fORM- child, edit mode: the stored secret is masked in the 
   expect(JSON.stringify(await received(page, 'state'))).not.toContain('2077');
 });
 
-test('classic host + a child that never answers hello: after the 4 s handshake timeout the legacy renderer takes over EMPTY', async ({ page }) => {
+test('classic host + a child that never answers hello (create): after the 4 s handshake timeout the legacy renderer takes over EMPTY', async ({ page }) => {
   await openStep2(page, '/fp-silent.html');
   await expect(page.getByTestId('formplus-host')).toBeVisible();
   const started = Date.now();
@@ -200,9 +200,29 @@ test('classic host + a child that never answers hello: after the 4 s handshake t
   expect(Date.now() - started).toBeGreaterThan(2_500); // not before the 4 s timer (the page had already been running a moment)
   await expect(page.locator('iframe')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as Harness).fpWarnings)).toContain('[formplus] fallback handshake_timeout');
-  // No cached values exist any more: the legacy form starts empty, and submit still works through it.
+  // Create mode: no cached values exist any more: the legacy form starts empty, and submit still works through it.
   expect(JSON.parse((await page.getByTestId('legacy-renderer').textContent()) ?? 'null')).toEqual({});
   expect(await collect(page)).toEqual({ status: 'ok', valid: true, data: {} });
+});
+
+test('classic host + a child that never answers hello (edit): the legacy renderer is prefilled from DMS\'s stored, masked record, and the save keeps stored values and the secret mask out (BD-11)', async ({ page }) => {
+  await openStep2(page, '/fp-silent.html', '?edit=1&secret=Vendor%20Code');
+  await expect(page.getByTestId('legacy-renderer')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('iframe')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as Harness).fpWarnings)).toContain('[formplus] fallback handshake_timeout');
+  // Edit mode: an EMPTY form would save "" over every field the person left alone. DMS's own record (never a child value) prefills it.
+  const shown = JSON.parse((await page.getByTestId('legacy-renderer').textContent()) ?? 'null') as Record<string, unknown>;
+  expect(shown['Vendor Name']).toBe('Acme Traders');
+  expect(shown['Invoice Amount']).toBe('125000');
+  expect(shown['Vendor Code']).toBe('\u2022\u2022\u2022\u2022\u2022\u2022'); // the server mask, as flag-off shows it
+  // The untouched legacy form (the stub returns what it was handed) is saved: stored values stay, the mask never goes back.
+  const result = await collect(page);
+  expect(result.status).toBe('ok');
+  expect(result.valid).toBe(true);
+  expect(result.data!['Vendor Name']).toBe('Acme Traders');
+  expect(result.data!['Invoice Amount']).toBe('125000');
+  expect(result.data).not.toHaveProperty('Vendor Code');
+  expect(JSON.stringify(result.data)).not.toContain('\u2022');
 });
 
 test('classic host + a child that completes the handshake but never collects: "timeout" after 8 s, the iframe stays, no fallback', async ({ page }) => {
