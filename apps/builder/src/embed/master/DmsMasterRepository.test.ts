@@ -6,7 +6,7 @@ import usageFixtures from '@/embed/contract/__fixtures__/field-usage.fixtures.js
 import { DmsApiError, DmsAuthError, createDmsClient, type DmsClient } from '@/embed/dmsClient';
 import type { ResolvedLaunch } from '@/embed/launch';
 import {
-  DmsCommitRefused, DmsMasterRepository, NotAFormPlusMaster, RemovalCancelled, RemovalRequired, warningKeyOf, type AskRemoval, type RemovalNeed,
+  DmsCommitRefused, DmsMasterRepository, NotAFormPlusMaster, RemovalCancelled, RemovalRequired, warningKeyOf, type AskRemoval, type RemovalConsent, type RemovalNeed,
 } from '@/embed/master/DmsMasterRepository';
 import { waitFor } from '@testing-library/react';
 import { dismissReconnect, sessionSnapshot } from '@/embed/session/dmsSession';
@@ -467,6 +467,21 @@ describe('DmsMasterRepository: removal consent (SEC-DESIGN 7.3, T-DMSINT-56)', (
     expect(ask.mock.calls.map(([n]) => [n.count, n.recount])).toEqual([[3, false], [5, true]]);
     const sent = dms.calls.filter((c) => c.method === 'PATCH').map((c) => (c.body as { remove: Array<{ confirmed_count: number }> }).remove[0]!.confirmed_count);
     expect(sent).toEqual([3, 5]);
+  });
+
+  it('409 REMOVAL_COUNT_CHANGED naming the field in another case still re-asks that field (ids compare without case)', async () => {
+    let patches = 0;
+    const { dms, repo, doc } = await openAndDelete((method) => {
+      if (method !== 'PATCH') return undefined;
+      patches += 1;
+      return patches === 1 ? json(409, { success: false, code: 'REMOVAL_COUNT_CHANGED', message: 'x', details: { field_id: CODE.toUpperCase(), actual: 7 }, request_id: null }) : undefined;
+    });
+    const ask = vi.fn(async (need: RemovalNeed) => need.name);
+    await repo.commit(doc, { askRemoval: ask });
+    expect(ask.mock.calls.map(([n]) => [n.fieldId, n.count, n.recount])).toEqual([[CODE, 3, false], [CODE, 7, true]]);
+    const sent = dms.calls.filter((c) => c.method === 'PATCH').map((c) => (c.body as { remove: RemovalConsent[] }).remove);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual([{ field_id: CODE, confirmed_name: sent[0]![0]!.confirmed_name, confirmed_count: 7 }]);
   });
 
   it('a 409 that cannot be resolved (no field named, nothing grew) is passed on, not looped on', async () => {

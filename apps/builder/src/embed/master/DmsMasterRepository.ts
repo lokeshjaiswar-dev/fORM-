@@ -363,18 +363,24 @@ export class DmsMasterRepository implements DocumentRepository {
   private async reask(e: unknown, ask: AskRemoval, consents: Map<string, RemovalConsent>): Promise<boolean> {
     const changed = removalCountChangedOf(e);
     if (changed === null) return false;
-    const counts = new Map<string, number>();
-    if (changed.fieldId !== null && changed.actual !== null) counts.set(changed.fieldId, changed.actual);
-    else {
+    /* Ids compare without case, as in `consentTo` (a UUID may come back in either case); the consent keeps the id the form sent. */
+    const consentOf = (id: string): RemovalConsent | undefined => consents.get(id) ?? [...consents.values()].find((c) => c.field_id.toLowerCase() === id.toLowerCase());
+    const counts = new Map<RemovalConsent, number>();
+    if (changed.fieldId !== null && changed.actual !== null) {
+      const was = consentOf(changed.fieldId);
+      if (was) counts.set(was, changed.actual);
+    } else {
       // The answer did not say which field: count them all again.
       const usage = await this.fieldUsage();
-      for (const f of usage.fields) if (consents.has(f.id)) counts.set(f.id, f.records_with_value);
+      for (const f of usage.fields) {
+        const was = consentOf(f.id);
+        if (was) counts.set(was, f.records_with_value);
+      }
     }
     let again = false;
-    for (const [id, count] of counts) {
-      const was = consents.get(id);
-      if (!was || count <= was.confirmed_count) continue;
-      await this.askOne({ fieldId: id, name: was.confirmed_name, count, recount: true }, ask, consents);
+    for (const [was, count] of counts) {
+      if (count <= was.confirmed_count) continue;
+      await this.askOne({ fieldId: was.field_id, name: was.confirmed_name, count, recount: true }, ask, consents);
       again = true;
     }
     return again;
