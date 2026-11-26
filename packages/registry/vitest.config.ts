@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     name: 'registry',
     environment: 'node',
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'src/**/*.test.ts'],
     typecheck: {
       enabled: true,
       only: false,

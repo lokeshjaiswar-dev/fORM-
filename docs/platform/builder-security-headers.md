@@ -109,7 +109,7 @@ docker build -f apps/builder/Dockerfile \
   -t form-builder .
 ```
 
-The build args are the same `VITE_*` names the Vite servers read (`VITE_API_URL`, `VITE_FP_DMS_API_BASE`, `VITE_FP_DMS_API_ORIGINS`, `VITE_FP_EMBED_PARENTS`, `VITE_WEBHOOK_DOCS_URL`). They are baked into the bundle and into two header files, `plain.conf` and `embed.conf`, which `security/render-nginx.ts` writes at build time from `security/headers.ts` (so the image, `headers:nginx` and the Vite servers cannot drift). Nothing secret is a build arg.
+The build args are the same `VITE_*` names the Vite servers read (`VITE_API_URL`, `VITE_FP_DMS_API_BASE`, `VITE_FP_DMS_API_ORIGINS`, `VITE_FP_EMBED_PARENTS`, `VITE_WEBHOOK_DOCS_URL`, plus `FP_PUBLIC_ORIGINS` and `VITE_FP_LEGACY_DESCRIPTOR`). They are baked into the bundle and into three header files, which `security/render-nginx.ts` writes at build time from `security/headers.ts` (so the image, `headers:nginx` and the Vite servers cannot drift): `plain.conf` (the SPA), `embed-page.conf` (`/embed/dms-master` and `/embed/dms-record`, the plain set without `report-uri`) and `upload.conf` (`/embed/dms-upload`: the sandboxed set `sandboxedEmbed` in the default build, today's framable set without `report-uri` in the `VITE_FP_LEGACY_DESCRIPTOR=1` build used for the M2 upload-v2 bridge). Nothing secret is a build arg.
 
 `apps/builder/deploy/nginx.conf.template` is rendered by the image entrypoint (only `FP_WEB_ROOT` and `FP_HEADERS_DIR` are substituted):
 
@@ -117,14 +117,15 @@ The build args are the same `VITE_*` names the Vite servers read (`VITE_API_URL`
 |---|---|
 | `/formplus/healthz` | `200 ok`, no headers, not logged (probe) |
 | `/formplus` | `301 /formplus/` |
-| `/formplus/embed/dms-upload` | the SPA with `embed.conf`: `frame-ancestors 'self' <VITE_FP_EMBED_PARENTS>`, no `X-Frame-Options` |
+| `/formplus/embed/dms-upload` | the SPA with `upload.conf`: default build, the sandboxed set (CSP `sandbox`, `connect-src 'none'`, `Cache-Control: no-store`, no `report-uri`); `VITE_FP_LEGACY_DESCRIPTOR=1` build, `frame-ancestors 'self' <VITE_FP_EMBED_PARENTS>` and no `X-Frame-Options` |
 | `/formplus/assets/*` | hashed build output with `plain.conf`, `Cache-Control: public, max-age=31536000, immutable` |
-| `/formplus/*` (SPA fallback, `/formplus/embed/dms-master` and `/formplus/embed/dms-record` included) | `index.html` with `plain.conf`: `frame-ancestors 'none'`, `X-Frame-Options: DENY` (the master builder and the record form are full-page launches) |
+| `/formplus/embed/*` (`dms-master` and `dms-record`) | `index.html` with `embed-page.conf`: `frame-ancestors 'none'`, `X-Frame-Options: DENY`, no `report-uri` (full-page launches) |
+| `/formplus/*` (SPA fallback) | `index.html` with `plain.conf`: `frame-ancestors 'none'`, `X-Frame-Options: DENY` |
 | `/formbuilder/sharemaster` | `301 /sharemaster`, query string kept (the share token rides in it) |
 | any other `/formbuilder/*` | `410 Gone` with the static page `deploy/moved.html` (OpenForm is retired, decisions.md item 6) |
 | anything else | `404` |
 
-The ingress sends `/formplus/` and `/formbuilder/` to this container; `/sharemaster` stays with DMS. `connect-src` of both header files lists every DMS API origin (`VITE_FP_DMS_API_ORIGINS` plus the origin of each absolute `VITE_FP_DMS_API_BASE` entry), so the browser may call DMS; without them every DMS call is blocked. `security/deploy.test.ts` checks the template and the generated files; the template was also run through `nginx -t` and exercised with curl in a throwaway nginx container.
+The ingress sends `/formplus/` and `/formbuilder/` to this container; `/sharemaster` stays with DMS. `connect-src` of the plain and embed-page header files lists every DMS API origin (`VITE_FP_DMS_API_ORIGINS` plus the origin of each absolute `VITE_FP_DMS_API_BASE` entry), so the browser may call DMS; without them every DMS call is blocked. `security/deploy.test.ts` checks the template and the generated files; the template was also run through `nginx -t` and exercised with curl in a throwaway nginx container.
 
 ## Development and preview
 
