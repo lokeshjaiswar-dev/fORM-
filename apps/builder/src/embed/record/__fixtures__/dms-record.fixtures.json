@@ -401,7 +401,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master record updated successfully",
+            "message": "Master Record updated",
             "data": {
               "id": "d3000000-0000-4000-8000-0000000000b1"
             }
@@ -436,7 +436,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master record updated successfully",
+            "message": "Master Record updated",
             "data": {
               "id": "d3000000-0000-4000-8000-0000000000b1"
             }
