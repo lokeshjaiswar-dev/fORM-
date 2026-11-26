@@ -44,7 +44,7 @@ const childFrame = (page: Page): Frame => {
 };
 
 /** What the page's own script can do in this document, as strings (a throw is `threw:<name>`). */
-function probe() {
+function probe(): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   const attempt = async (name: string, fn: () => unknown) => {
     try {
@@ -66,7 +66,9 @@ function probe() {
     await attempt('fetch', async () => {
       await fetch('/api/dms/masters', { credentials: 'include' });
     });
-    return { ...out, origin: self.origin, href: location.pathname };
+    out['origin'] = self.origin;
+    out['href'] = location.pathname;
+    return out;
   })();
 }
 
