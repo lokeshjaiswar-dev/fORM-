@@ -783,7 +783,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master form updated successfully",
+            "message": "Master updated successfully",
             "data": {
               "id": "a1000000-0000-4000-8000-0000000000b1",
               "updated_at": "2026-11-26T09:45:00.000000Z"
@@ -847,7 +847,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master form updated successfully",
+            "message": "Master updated successfully",
             "data": {
               "id": "a1000000-0000-4000-8000-0000000000b1",
               "updated_at": "2026-11-26T09:45:00.000000Z"
@@ -1049,7 +1049,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master form updated successfully",
+            "message": "Master updated successfully",
             "data": {
               "id": "a1000000-0000-4000-8000-0000000000b1",
               "updated_at": "2026-11-26T09:45:00.000000Z"
@@ -1429,7 +1429,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master form updated successfully",
+            "message": "Master updated successfully",
             "data": {
               "id": "a1000000-0000-4000-8000-0000000000b1",
               "updated_at": "2026-11-26T09:45:00.000000Z"
