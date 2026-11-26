@@ -1,0 +1,215 @@
+{
+  "$comment": "GET /api/dms/v1/master/form/{id}/field-usage and the session twin (SEC-DESIGN.md 7.2): counts of records holding a value per field (column IS NOT NULL AND <> ''), never values. Hidden fields are listed only for users who can reveal them. `input` is the HTTP answer; the schema applies to input.body.data. The success envelope is the one every DMS route uses ({success, message, data}).",
+  "contract": "field-usage",
+  "version": 1,
+  "request": {
+    "method": "GET",
+    "path": "/api/dms/v1/master/form/a1000000-0000-4000-8000-000000000001/field-usage",
+    "session": "/api/dms/v1/formplus/s/master/form/a1000000-0000-4000-8000-000000000001/field-usage",
+    "rights": "masters.update + canView + membership (legacy twin); scope master:usage (session)"
+  },
+  "cases": [
+    {
+      "name": "revealer-sees-hidden-fields",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 12,
+            "fields": [
+              {
+                "id": "c2000000-0000-4000-8000-000000000101",
+                "name": "Vendor Name",
+                "records_with_value": 12
+              },
+              {
+                "id": "c2000000-0000-4000-8000-000000000102",
+                "name": "Tax Id",
+                "records_with_value": 9
+              },
+              {
+                "id": "c2000000-0000-4000-8000-000000000108",
+                "name": "Internal Note",
+                "records_with_value": 3
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 200
+      }
+    },
+    {
+      "name": "non-revealer-hidden-fields-omitted",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 12,
+            "fields": [
+              {
+                "id": "c2000000-0000-4000-8000-000000000101",
+                "name": "Vendor Name",
+                "records_with_value": 12
+              },
+              {
+                "id": "c2000000-0000-4000-8000-000000000102",
+                "name": "Tax Id",
+                "records_with_value": 9
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 200
+      }
+    },
+    {
+      "name": "empty-master",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 0,
+            "fields": []
+          }
+        }
+      },
+      "expect": {
+        "valid": true,
+        "status": 200
+      }
+    },
+    {
+      "name": "value-leaked",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 12,
+            "fields": [
+              {
+                "id": "c2000000-0000-4000-8000-000000000101",
+                "name": "Vendor Name",
+                "records_with_value": 12,
+                "values": [
+                  "Acme"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false
+      },
+      "why": "counts only, never values"
+    },
+    {
+      "name": "negative-count",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 12,
+            "fields": [
+              {
+                "id": "c2000000-0000-4000-8000-000000000101",
+                "name": "Vendor Name",
+                "records_with_value": -1
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "field-id-not-uuid",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 12,
+            "fields": [
+              {
+                "id": "Vendor Name",
+                "name": "Vendor Name",
+                "records_with_value": 12
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "missing-total",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "fields": []
+          }
+        }
+      },
+      "expect": {
+        "valid": false
+      }
+    },
+    {
+      "name": "extra-key",
+      "input": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Field usage retrieved successfully",
+          "data": {
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "total_records": 12,
+            "fields": [
+              {
+                "id": "c2000000-0000-4000-8000-000000000101",
+                "name": "Vendor Name",
+                "records_with_value": 12
+              }
+            ],
+            "hidden_field_count": 1
+          }
+        }
+      },
+      "expect": {
+        "valid": false
+      }
+    }
+  ]
+}

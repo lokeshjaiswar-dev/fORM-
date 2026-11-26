@@ -570,5 +570,966 @@
       "numeric=false,specialChars=true": "^[^0-9]*$",
       "numeric=true,specialChars=true": null
     }
+  },
+  "v2Cases": {
+    "$comment": "ADDITIVE (run dmsplus-int, DESIGN.md 3.1, 3.6, SEC-DESIGN.md 5.2, 7.3): hidden/secret round trip, hidden_field_count and can.reveal_fields, remove[] PATCH, metadata-only PATCH and the new error codes. Cases are {name, as, request, response, then?}: `as` names the seeded user (owner can reveal fields, editor cannot); the response lists only the keys a replay compares (success, code, details); message and request_id are checked by shape (fp-errors.fixtures.json). Recorded from the SEC-DESIGN shapes; re-recorded by the api-masters provider replay.",
+    "cases": [
+      {
+        "name": "show-as-revealer",
+        "as": "owner",
+        "request": {
+          "method": "GET",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Master form retrieved successfully",
+            "data": {
+              "id": "a1000000-0000-4000-8000-0000000000b1",
+              "name": "Vendor Register",
+              "primary_key": "Vendor Name",
+              "source": "formplus",
+              "workspace_id": "ws-1",
+              "updated_at": "2026-11-26T09:30:00.000000Z",
+              "doctype_ids": [],
+              "folder_ids": [],
+              "form_builder_fields": [
+                {
+                  "id": "b1000000-0000-4000-8000-000000000001",
+                  "type": "textinput",
+                  "name": "Vendor Name",
+                  "value": "Vendor Name",
+                  "label": "Vendor Name",
+                  "required": true,
+                  "placeholder": "",
+                  "primary": true,
+                  "is_hidden": false,
+                  "is_secret": false
+                },
+                {
+                  "id": "b1000000-0000-4000-8000-000000000002",
+                  "type": "numberinput",
+                  "name": "Vendor Code",
+                  "value": "Vendor Code",
+                  "label": "Vendor Code",
+                  "required": false,
+                  "placeholder": "",
+                  "is_hidden": false,
+                  "is_secret": false
+                },
+                {
+                  "id": "b1000000-0000-4000-8000-000000000008",
+                  "type": "textinput",
+                  "name": "Tax Id",
+                  "value": "Tax Id",
+                  "label": "Tax Id",
+                  "required": false,
+                  "placeholder": "",
+                  "is_hidden": false,
+                  "is_secret": true
+                },
+                {
+                  "id": "b1000000-0000-4000-8000-000000000009",
+                  "type": "multilineinput",
+                  "name": "Internal Note",
+                  "value": "Internal Note",
+                  "label": "Internal Note",
+                  "required": false,
+                  "placeholder": "",
+                  "is_hidden": true,
+                  "is_secret": false
+                }
+              ],
+              "form_builder_slug": "vendor-register",
+              "hidden_field_count": 0,
+              "can": {
+                "reveal_fields": true
+              }
+            }
+          }
+        },
+        "note": "a revealer (creator, owner, administrator) gets every field with its flags; hidden_field_count counts the hidden fields left out of THIS answer"
+      },
+      {
+        "name": "show-as-non-revealer",
+        "as": "editor",
+        "request": {
+          "method": "GET",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1"
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Master form retrieved successfully",
+            "data": {
+              "id": "a1000000-0000-4000-8000-0000000000b1",
+              "name": "Vendor Register",
+              "primary_key": "Vendor Name",
+              "source": "formplus",
+              "workspace_id": "ws-1",
+              "updated_at": "2026-11-26T09:30:00.000000Z",
+              "doctype_ids": [],
+              "folder_ids": [],
+              "form_builder_fields": [
+                {
+                  "id": "b1000000-0000-4000-8000-000000000001",
+                  "type": "textinput",
+                  "name": "Vendor Name",
+                  "value": "Vendor Name",
+                  "label": "Vendor Name",
+                  "required": true,
+                  "placeholder": "",
+                  "primary": true,
+                  "is_hidden": false,
+                  "is_secret": false
+                },
+                {
+                  "id": "b1000000-0000-4000-8000-000000000002",
+                  "type": "numberinput",
+                  "name": "Vendor Code",
+                  "value": "Vendor Code",
+                  "label": "Vendor Code",
+                  "required": false,
+                  "placeholder": "",
+                  "is_hidden": false,
+                  "is_secret": false
+                },
+                {
+                  "id": "b1000000-0000-4000-8000-000000000008",
+                  "type": "textinput",
+                  "name": "Tax Id",
+                  "value": "Tax Id",
+                  "label": "Tax Id",
+                  "required": false,
+                  "placeholder": "",
+                  "is_hidden": false,
+                  "is_secret": true
+                }
+              ],
+              "form_builder_slug": "vendor-register",
+              "hidden_field_count": 1,
+              "can": {
+                "reveal_fields": false
+              }
+            }
+          }
+        },
+        "note": "Internal Note (hidden) is absent; Tax Id (secret) keeps its definition with is_secret true; the builder shows \"1 hidden field you cannot see is kept\""
+      },
+      {
+        "name": "patch-sets-secret-flag-roundtrip",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000002",
+                "type": "numberinput",
+                "name": "Vendor Code",
+                "value": "Vendor Code",
+                "label": "Vendor Code",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Master form updated successfully",
+            "data": {
+              "id": "a1000000-0000-4000-8000-0000000000b1",
+              "updated_at": "2026-11-26T09:45:00.000000Z"
+            }
+          }
+        },
+        "then": {
+          "show": "Vendor Code has is_secret true; every other stored property key of every field is unchanged"
+        }
+      },
+      {
+        "name": "patch-non-revealer-echoes-what-it-got",
+        "as": "editor",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000002",
+                "type": "numberinput",
+                "name": "Vendor Code",
+                "value": "Vendor Code",
+                "label": "Vendor Code",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Master form updated successfully",
+            "data": {
+              "id": "a1000000-0000-4000-8000-0000000000b1",
+              "updated_at": "2026-11-26T09:45:00.000000Z"
+            }
+          }
+        },
+        "then": {
+          "show": "Internal Note is intact (row, column values, json_data element): a stored hidden field the actor cannot reveal is preserved, not removed"
+        }
+      },
+      {
+        "name": "patch-visibility-change-by-non-revealer",
+        "as": "editor",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000002",
+                "type": "numberinput",
+                "name": "Vendor Code",
+                "value": "Vendor Code",
+                "label": "Vendor Code",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": false
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 403,
+          "body": {
+            "success": false,
+            "code": "FIELD_VISIBILITY_FORBIDDEN"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        }
+      },
+      {
+        "name": "patch-primary-field-hidden",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": true,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000002",
+                "type": "numberinput",
+                "name": "Vendor Code",
+                "value": "Vendor Code",
+                "label": "Vendor Code",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 422,
+          "body": {
+            "success": false,
+            "code": "PRIMARY_CANNOT_BE_HIDDEN"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        }
+      },
+      {
+        "name": "patch-remove-confirmed",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ],
+            "remove": [
+              {
+                "field_id": "b1000000-0000-4000-8000-000000000002",
+                "confirmed_name": "Vendor Code",
+                "confirmed_count": 3
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Master form updated successfully",
+            "data": {
+              "id": "a1000000-0000-4000-8000-0000000000b1",
+              "updated_at": "2026-11-26T09:45:00.000000Z"
+            }
+          }
+        },
+        "then": {
+          "show": "Vendor Code is gone and its column is NULL for all records; audit rows Master Updated and Master Field Removed (consent typed-name)"
+        }
+      },
+      {
+        "name": "patch-omitted-field-without-remove",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 422,
+          "body": {
+            "success": false,
+            "code": "FIELD_OMITTED",
+            "details": {
+              "field_ids": [
+                "b1000000-0000-4000-8000-000000000002"
+              ]
+            }
+          }
+        },
+        "then": {
+          "nothing_written": true
+        }
+      },
+      {
+        "name": "patch-remove-unknown-field",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000002",
+                "type": "numberinput",
+                "name": "Vendor Code",
+                "value": "Vendor Code",
+                "label": "Vendor Code",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ],
+            "remove": [
+              {
+                "field_id": "b1000000-0000-4000-8000-00000000ffff",
+                "confirmed_name": "Ghost",
+                "confirmed_count": 0
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 422,
+          "body": {
+            "success": false,
+            "code": "UNKNOWN_FIELD"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        }
+      },
+      {
+        "name": "patch-remove-a-hidden-field-as-non-revealer",
+        "as": "editor",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000002",
+                "type": "numberinput",
+                "name": "Vendor Code",
+                "value": "Vendor Code",
+                "label": "Vendor Code",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              }
+            ],
+            "remove": [
+              {
+                "field_id": "b1000000-0000-4000-8000-000000000009",
+                "confirmed_name": "Internal Note",
+                "confirmed_count": 3
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 422,
+          "body": {
+            "success": false,
+            "code": "UNKNOWN_FIELD"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        },
+        "note": "the same answer as an id that does not exist: no oracle for hidden fields"
+      },
+      {
+        "name": "patch-remove-wrong-name",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ],
+            "remove": [
+              {
+                "field_id": "b1000000-0000-4000-8000-000000000002",
+                "confirmed_name": "vendor code",
+                "confirmed_count": 3
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 422,
+          "body": {
+            "success": false,
+            "code": "REMOVAL_NOT_CONFIRMED"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        }
+      },
+      {
+        "name": "patch-remove-count-grew",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ],
+            "remove": [
+              {
+                "field_id": "b1000000-0000-4000-8000-000000000002",
+                "confirmed_name": "Vendor Code",
+                "confirmed_count": 2
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 409,
+          "body": {
+            "success": false,
+            "code": "REMOVAL_COUNT_CHANGED",
+            "details": {
+              "field_id": "b1000000-0000-4000-8000-000000000002",
+              "actual": 3
+            }
+          }
+        },
+        "then": {
+          "nothing_written": true
+        },
+        "note": "3 records hold a value now, the author consented to 2"
+      },
+      {
+        "name": "patch-metadata-only",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register 2026",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [
+              "e1000000-0000-4000-8000-000000000001"
+            ],
+            "folder_ids": []
+          }
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Master form updated successfully",
+            "data": {
+              "id": "a1000000-0000-4000-8000-0000000000b1",
+              "updated_at": "2026-11-26T09:45:00.000000Z"
+            }
+          }
+        },
+        "then": {
+          "show": "name and doctype links changed; fields, columns and json_data untouched; audit row Master Updated with changed.name and changed.doctype_ids"
+        }
+      },
+      {
+        "name": "patch-metadata-only-stale-token",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register 2026",
+            "updated_at": "2026-11-20T00:00:00.000000Z"
+          }
+        },
+        "response": {
+          "status": 409,
+          "body": {
+            "success": false,
+            "code": "MASTER_CHANGED"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        }
+      },
+      {
+        "name": "patch-removal-fails-after-the-wipe",
+        "as": "owner",
+        "request": {
+          "method": "PATCH",
+          "path": "/dms/v1/master/form/a1000000-0000-4000-8000-0000000000b1",
+          "body": {
+            "name": "Vendor Register",
+            "updated_at": "2026-11-26T09:30:00.000000Z",
+            "doctype_ids": [],
+            "folder_ids": [],
+            "form_builder_fields": [
+              {
+                "id": "b1000000-0000-4000-8000-000000000001",
+                "type": "textinput",
+                "name": "Vendor Name",
+                "value": "Vendor Name",
+                "label": "Vendor Name",
+                "required": true,
+                "placeholder": "",
+                "primary": true,
+                "is_hidden": false,
+                "is_secret": false
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000008",
+                "type": "textinput",
+                "name": "Tax Id",
+                "value": "Tax Id",
+                "label": "Tax Id",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": false,
+                "is_secret": true
+              },
+              {
+                "id": "b1000000-0000-4000-8000-000000000009",
+                "type": "multilineinput",
+                "name": "Internal Note",
+                "value": "Internal Note",
+                "label": "Internal Note",
+                "required": false,
+                "placeholder": "",
+                "is_hidden": true,
+                "is_secret": false
+              }
+            ],
+            "remove": [
+              {
+                "field_id": "b1000000-0000-4000-8000-000000000002",
+                "confirmed_name": "Vendor Code",
+                "confirmed_count": 3
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 500,
+          "body": {
+            "success": false,
+            "code": "REMOVAL_INCOMPLETE"
+          }
+        },
+        "then": {
+          "nothing_written": true
+        },
+        "requires": "failure injection (a column that still holds a value after the wipe)"
+      }
+    ]
   }
 }

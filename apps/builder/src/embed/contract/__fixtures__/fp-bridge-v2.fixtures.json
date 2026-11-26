@@ -1,0 +1,3076 @@
+{
+  "$comment": "fp-bridge/2 (SEC-DESIGN.md 3.4, DESIGN.md 3.7): classic live upload host <-> fORM- dms-upload child over a MessagePort in a sandboxed iframe. `hello` and `port` travel on the window (via: window); everything else on the port. Every message is a closed object: an unknown key is invalid, so no message can carry a bearer. Only `collected` carries values, once per `req`; `state` never does. `init` carries is_secret, legacy, linkedTo, optionParents and fp_lookup per field, a `masked` list (a masked secret is null in `values`) and no hidden fields. Requests carry `id`, results echo it as `replyTo` (as in /1). Each case is {name, input, expect:{valid, why?}} plus `via` and `dir`. Field ids c2... are made up.",
+  "contract": "fp-bridge-v2",
+  "version": 1,
+  "protocol": "fp-bridge/2",
+  "childUrl": {
+    "prod": "/formplus/embed/dms-upload?fp_v=2",
+    "iframe": {
+      "sandbox": "allow-scripts allow-forms",
+      "referrerpolicy": "no-referrer"
+    }
+  },
+  "limits": {
+    "elements": 200,
+    "valueChars": 50000,
+    "lookupRows": 20,
+    "lookupsPerInit": 8,
+    "lookupRequestsPerMinute": 60,
+    "helloTimeoutMs": 4000
+  },
+  "cases": [
+    {
+      "name": "hello",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "hello"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "window",
+      "dir": "child->parent"
+    },
+    {
+      "name": "hello-carries-a-token",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "hello",
+        "token": "x"
+      },
+      "expect": {
+        "valid": false,
+        "why": "no message has a field that could hold a bearer"
+      },
+      "via": "window",
+      "dir": "child->parent"
+    },
+    {
+      "name": "hello-wrong-protocol",
+      "input": {
+        "protocol": "fp-bridge/1",
+        "type": "hello"
+      },
+      "expect": {
+        "valid": false,
+        "why": "/1 is retired"
+      },
+      "via": "window",
+      "dir": "child->parent"
+    },
+    {
+      "name": "port",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "port",
+        "dialogId": "dlg-1"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "window",
+      "dir": "parent->child"
+    },
+    {
+      "name": "port-without-dialog-id",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "port"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "window",
+      "dir": "parent->child"
+    },
+    {
+      "name": "port-extra-key",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "port",
+        "dialogId": "dlg-1",
+        "origin": "https://dms.example.test"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "window",
+      "dir": "parent->child"
+    },
+    {
+      "name": "unknown-type",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "change",
+        "values": {}
+      },
+      "expect": {
+        "valid": false,
+        "why": "/1 change is replaced by state"
+      },
+      "via": "port"
+    },
+    {
+      "name": "init",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-create-empty",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [],
+        "masterFields": [],
+        "values": {},
+        "masked": [],
+        "lookups": [],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "create",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-readonly",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": true,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-hidden-field-sent",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true,
+            "is_hidden": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "hidden fields are never sent (dms-api drops them for the reader)"
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-secret-prefilled",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": "secret-value",
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "a secret value never crosses"
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-null-not-masked",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "null means masked and must be listed"
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-masked-id-without-null",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102",
+          "c2000000-0000-4000-8000-000000000101"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "a masked id must be null in values"
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-value-for-unknown-field",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods",
+          "c2000000-0000-4000-8000-000000000999": "x"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-lookup-not-declared",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor",
+          "other"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "only declared lookups may be asked for"
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-bad-field-id",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "Vendor Name": "Acme"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "values are keyed by field id"
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-extra-key",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        },
+        "token": "x"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-missing-masked",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-bad-locale",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000101",
+            "type": "textinput",
+            "label": "",
+            "value": "Vendor Name",
+            "required": true,
+            "placeholder": "",
+            "primary": true,
+            "numeric": false,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000102",
+            "type": "textinput",
+            "label": "",
+            "value": "Tax Id",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": false,
+            "field_source": "master",
+            "is_secret": true
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000103",
+            "type": "dropdown",
+            "label": "",
+            "value": "Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Goods",
+                "value": "Goods"
+              },
+              {
+                "name": "Services",
+                "value": "Services"
+              }
+            ],
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000104",
+            "type": "dropdown",
+            "label": "",
+            "value": "Sub Category",
+            "required": false,
+            "placeholder": "",
+            "options": [
+              {
+                "name": "Hardware",
+                "value": "Hardware"
+              },
+              {
+                "name": "Consulting",
+                "value": "Consulting"
+              }
+            ],
+            "linkedTo": "c2000000-0000-4000-8000-000000000103",
+            "optionParents": {
+              "Hardware": [
+                "Goods"
+              ],
+              "Consulting": [
+                "Services"
+              ]
+            },
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000105",
+            "type": "textinput",
+            "label": "",
+            "value": "Preferred Vendor",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "fp_lookup": {
+              "v": 1,
+              "id": "vendor",
+              "master_id": "a1000000-0000-4000-8000-000000000001",
+              "label_field_id": "c2000000-0000-4000-8000-000000000901",
+              "fill": [
+                {
+                  "from": "c2000000-0000-4000-8000-000000000902",
+                  "to": "c2000000-0000-4000-8000-000000000106"
+                }
+              ],
+              "min_chars": 2
+            }
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000106",
+            "type": "numberinput",
+            "label": "",
+            "value": "Vendor Code",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "field_source": "master",
+            "is_secret": false,
+            "legacy": {
+              "from": "files",
+              "readOnly": true
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "EN_in",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "init-legacy-without-read-only-flag",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "init",
+        "dialogId": "dlg-1",
+        "doctypeFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000001",
+            "type": "textinput",
+            "label": "",
+            "value": "Invoice No",
+            "required": false,
+            "placeholder": "",
+            "numeric": true,
+            "specialChars": true,
+            "increment": true,
+            "incrementOption": "prefix",
+            "prefix": "INV-",
+            "autoIncrementPattern": 4,
+            "autoIncrementValue": "INV-0007",
+            "field_source": "doctype",
+            "is_secret": false
+          },
+          {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "date",
+            "label": "",
+            "value": "Invoice Date",
+            "required": true,
+            "placeholder": "",
+            "isDefaultToDate": true,
+            "defaultDate": "26-11-2026",
+            "field_source": "doctype",
+            "is_secret": false
+          }
+        ],
+        "masterFields": [
+          {
+            "id": "c2000000-0000-4000-8000-000000000107",
+            "type": "multilineinput",
+            "label": "",
+            "value": "Docs",
+            "required": false,
+            "placeholder": "",
+            "legacy": {
+              "from": "files"
+            }
+          }
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000001": "INV-0007",
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000102": null,
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "masked": [
+          "c2000000-0000-4000-8000-000000000102"
+        ],
+        "lookups": [
+          "vendor"
+        ],
+        "locale": "en-IN",
+        "readOnly": false,
+        "context": {
+          "mode": "edit",
+          "today": "26-11-2026"
+        }
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "initialized",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "initialized",
+        "dialogId": "dlg-1",
+        "fieldCount": 9,
+        "unsupported": []
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "initialized-negative-count",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "initialized",
+        "dialogId": "dlg-1",
+        "fieldCount": -1,
+        "unsupported": []
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "resize",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "resize",
+        "height": 480
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "resize-height-text",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "resize",
+        "height": "480"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "state",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "state",
+        "dialogId": "dlg-1",
+        "valid": true,
+        "dirty": true,
+        "touched": [
+          "c2000000-0000-4000-8000-000000000101",
+          "c2000000-0000-4000-8000-000000000102"
+        ]
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "state-carries-values",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "state",
+        "dialogId": "dlg-1",
+        "valid": true,
+        "dirty": true,
+        "touched": [
+          "c2000000-0000-4000-8000-000000000101"
+        ],
+        "values": {
+          "c2000000-0000-4000-8000-000000000101": "Acme"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "why": "state never carries values (E2)"
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "state-touched-not-an-id",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "state",
+        "dialogId": "dlg-1",
+        "valid": true,
+        "dirty": true,
+        "touched": [
+          "Vendor Name"
+        ]
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "options-request",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "options.request",
+        "id": "c-opt-1",
+        "fieldId": "c2000000-0000-4000-8000-000000000104",
+        "parentValue": "Goods",
+        "page": 1,
+        "search": ""
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "options-request-no-parent",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "options.request",
+        "id": "c-opt-2",
+        "fieldId": "c2000000-0000-4000-8000-000000000103",
+        "parentValue": null,
+        "page": 2,
+        "search": "go"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "options-request-page-0",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "options.request",
+        "id": "c-opt-1",
+        "fieldId": "c2000000-0000-4000-8000-000000000104",
+        "parentValue": null,
+        "page": 0,
+        "search": ""
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "options-request-without-id",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "options.request",
+        "fieldId": "c2000000-0000-4000-8000-000000000104",
+        "parentValue": null,
+        "page": 1,
+        "search": ""
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "options-result",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "options.result",
+        "replyTo": "c-opt-1",
+        "fieldId": "c2000000-0000-4000-8000-000000000104",
+        "options": [
+          {
+            "name": "Hardware",
+            "value": "Hardware"
+          }
+        ],
+        "hasMore": false
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "options-result-without-reply-to",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "options.result",
+        "fieldId": "c2000000-0000-4000-8000-000000000104",
+        "options": [],
+        "hasMore": false
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "lookup-request",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.request",
+        "id": "c-lookup-1",
+        "lookupId": "vendor",
+        "search": "ac"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "lookup-request-search-over-100",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.request",
+        "id": "c-lookup-1",
+        "lookupId": "vendor",
+        "search": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "lookup-request-bad-id",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.request",
+        "id": "c-lookup-1",
+        "lookupId": "ven dor",
+        "search": ""
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "lookup-result",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.result",
+        "replyTo": "c-lookup-1",
+        "lookupId": "vendor",
+        "status": "ok",
+        "rows": [
+          {
+            "label": "Acme",
+            "cells": {
+              "c2000000-0000-4000-8000-000000000106": "1042"
+            }
+          }
+        ],
+        "truncated": false
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "lookup-result-forbidden",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.result",
+        "replyTo": "c-lookup-1",
+        "lookupId": "vendor",
+        "status": "forbidden",
+        "rows": [],
+        "truncated": false
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "lookup-result-21-rows",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.result",
+        "replyTo": "c-lookup-1",
+        "lookupId": "vendor",
+        "status": "ok",
+        "rows": [
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          },
+          {
+            "label": "A",
+            "cells": {}
+          }
+        ],
+        "truncated": true
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "lookup-result-unknown-status",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "lookup.result",
+        "replyTo": "c-lookup-1",
+        "lookupId": "vendor",
+        "status": "maybe",
+        "rows": [],
+        "truncated": false
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "collect",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collect",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "collect-req-too-short",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collect",
+        "dialogId": "dlg-1",
+        "req": "abc"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "parent->child"
+    },
+    {
+      "name": "collected",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001",
+        "valid": true,
+        "errors": [],
+        "values": {
+          "c2000000-0000-4000-8000-000000000101": "Acme",
+          "c2000000-0000-4000-8000-000000000103": "Goods"
+        },
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "collected-untouched-secret-absent",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001",
+        "valid": true,
+        "errors": [],
+        "values": {
+          "c2000000-0000-4000-8000-000000000101": "Acme"
+        },
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": true,
+        "why": "Tax Id is untouched and therefore absent"
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "collected-with-errors",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001",
+        "valid": false,
+        "errors": [
+          {
+            "fieldId": "c2000000-0000-4000-8000-000000000101",
+            "code": "required",
+            "message": "This field is required."
+          }
+        ],
+        "values": {},
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "collected-without-req",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "valid": true,
+        "errors": [],
+        "values": {},
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "collected-values-keyed-by-name",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001",
+        "valid": true,
+        "errors": [],
+        "values": {
+          "Vendor Name": "Acme"
+        },
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": false,
+        "why": "ids only; the parent maps ids to names"
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "collected-null-value",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001",
+        "valid": true,
+        "errors": [],
+        "values": {
+          "c2000000-0000-4000-8000-000000000101": null
+        },
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "collected-masked-key",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "collected",
+        "dialogId": "dlg-1",
+        "req": "r4nd0m-req-0000000001",
+        "valid": true,
+        "errors": [],
+        "values": {
+          "c2000000-0000-4000-8000-000000000102__masked": "true"
+        },
+        "prefillHash": "a1b2c3d4e5f60718"
+      },
+      "expect": {
+        "valid": false,
+        "why": "no __masked key is ever sent"
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "error-fatal",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "error",
+        "code": "render_failed",
+        "fatal": true
+      },
+      "expect": {
+        "valid": true
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "error-with-message",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "error",
+        "code": "render_failed",
+        "fatal": true,
+        "message": "boom"
+      },
+      "expect": {
+        "valid": false,
+        "why": "the table lists {code, fatal} only"
+      },
+      "via": "port",
+      "dir": "child->parent"
+    },
+    {
+      "name": "error-unknown-code",
+      "input": {
+        "protocol": "fp-bridge/2",
+        "type": "error",
+        "code": "teapot",
+        "fatal": false
+      },
+      "expect": {
+        "valid": false
+      },
+      "via": "port",
+      "dir": "child->parent"
+    }
+  ]
+}
