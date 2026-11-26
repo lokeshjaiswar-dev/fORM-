@@ -29,7 +29,7 @@ export interface ChannelLike {
 export interface ReconnectDeps {
   /** For tests; defaults to `window.fetch`. */
   fetch?: typeof fetch;
-  /** For tests; defaults to `window.open(url, '_blank')`. */
+  /** For tests; defaults to `window.open(url, '_blank', 'noopener')`. */
   openWindow?: (url: string) => void;
   /** For tests; defaults to `new BroadcastChannel(name)`, or null when the browser has none. */
   createChannel?: (name: string) => ChannelLike | null;
@@ -98,8 +98,9 @@ export function reconnectTabUrl(reconnectUrl: string, challenge: string, target:
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const defaultChannel = (name: string): ChannelLike | null => (typeof BroadcastChannel === 'undefined' ? null : (new BroadcastChannel(name) as unknown as ChannelLike));
+/** `noopener`: the DMS tab answers on the BroadcastChannel and never needs (or gets) a handle on this page. */
 const defaultOpen = (url: string): void => {
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener');
 };
 
 /**
