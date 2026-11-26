@@ -1,5 +1,5 @@
 import { graphemeLength } from '@form/i18n';
-import { defineField, placeholderTexts } from '../define.ts';
+import { configTexts, defineField } from '../define.ts';
 import { PALETTE_LABELS } from '../messages.ts';
 import { TEXT_OPS } from '../operators.ts';
 import { NULL, entry, isRootPath, lengthCheck } from './shared.ts';
@@ -60,6 +60,6 @@ export const longText = defineField({
   toScalar: (value, path) => (isRootPath(path) ? { t: 'text', v: value } : NULL),
   isEmpty: (value) => value === '',
   cells: (value) => [value],
-  texts: placeholderTexts,
+  texts: (block) => configTexts(block, ['placeholder']),
   hasDefault: (block) => block.config.defaultValue !== undefined,
 });

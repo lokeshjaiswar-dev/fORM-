@@ -1,4 +1,4 @@
-import { defineField, placeholderTexts } from '../define.ts';
+import { configTexts, defineField } from '../define.ts';
 import { PALETTE_LABELS, regionOf } from '../messages.ts';
 import { TEXT_OPS } from '../operators.ts';
 import { isValidPhoneNumber } from '../util/calling-codes.ts';
@@ -27,5 +27,5 @@ export const phone = defineField({
   },
   isEmpty: (value) => value.e164 === '',
   cells: (value) => [value.e164],
-  texts: placeholderTexts,
+  texts: (block) => configTexts(block, ['placeholder']),
 });

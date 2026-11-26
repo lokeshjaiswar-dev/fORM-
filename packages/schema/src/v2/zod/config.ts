@@ -16,6 +16,8 @@ import {
 
 const label = z.string().max(200);
 const count = z.number().int().min(0);
+/** An optional on/off setting. */
+const flag = z.boolean().exactOptional();
 const textChrome = {
   placeholder: label.exactOptional(),
   prefix: z.string().max(32).exactOptional(),
@@ -44,7 +46,7 @@ export const LongTextConfigSchema = z.strictObject({
   defaultValue: DefaultTextSchema.exactOptional(),
   rows: z.number().int().min(1).max(50).exactOptional(),
   limit: z.strictObject({ unit: z.enum(['characters', 'words']), min: count.max(50_000).exactOptional(), max: count.max(50_000).exactOptional() }).exactOptional(),
-  showCounter: z.boolean().exactOptional(),
+  showCounter: flag,
 });
 
 export const NamePartSchema = z.enum(NAME_PARTS);
@@ -62,9 +64,9 @@ export const FullNameConfigSchema = z.strictObject({
 export const EmailConfigSchema = z.strictObject({
   ...textChrome,
   defaultValue: DefaultTextSchema.exactOptional(),
-  confirm: z.boolean().exactOptional(),
-  blockFreeProviders: z.boolean().exactOptional(),
-  blockDisposable: z.boolean().exactOptional(),
+  confirm: flag,
+  blockFreeProviders: flag,
+  blockDisposable: flag,
   allowedDomains: z.array(z.string().min(1).max(253)).exactOptional(),
   verify: z.strictObject({ enabled: z.boolean(), codeLength: z.literal([4, 6]), ttlMinutes: z.number().int().min(1).max(60) }).exactOptional(),
 });
@@ -94,8 +96,8 @@ export const NumberConfigSchema = z.strictObject({
   min: DecimalStringSchema.exactOptional(),
   max: DecimalStringSchema.exactOptional(),
   step: DecimalStringSchema.exactOptional(),
-  integerOnly: z.boolean().exactOptional(),
-  allowNegative: z.boolean().exactOptional(),
+  integerOnly: flag,
+  allowNegative: flag,
   format: NumericValueFormatSchema.exactOptional(),
 });
 
@@ -107,7 +109,7 @@ export const ChoiceOptionSchema = z.strictObject({
   code: z.string().max(200).exactOptional(),
   image: AssetRefSchema.exactOptional(),
   score: DecimalStringSchema.exactOptional(),
-  correct: z.boolean().exactOptional(),
+  correct: flag,
   origin: OriginSchema.exactOptional(),
   parentOptionIds: z.array(OptionIdSchema).max(5000).exactOptional(),
 });
@@ -125,7 +127,7 @@ const choiceCommon = {
   other: OtherOptionSchema.exactOptional(),
   shuffle: z.union([z.literal(false), z.strictObject({ keepLast: count })]).exactOptional(),
   columns: z.literal([1, 2, 3, 4]).exactOptional(),
-  searchable: z.boolean().exactOptional(),
+  searchable: flag,
   placeholder: label.exactOptional(),
   dependsOn: BlockIdSchema.exactOptional(),
 };
@@ -180,7 +182,7 @@ export const MatchingConfigSchema = z.strictObject({
   prompts: z.array(MatchingPromptSchema).min(1).max(50),
   options: z.array(ChoiceOptionSchema).min(1).max(100),
   exclusive: z.boolean(),
-  shuffle: z.boolean().exactOptional(),
+  shuffle: flag,
 });
 export const LikertStatementSchema = z.strictObject({ id: LikertStatementIdSchema, label });
 export const LikertConfigSchema = z.strictObject({
@@ -197,7 +199,7 @@ export const ConstantSumConfigSchema = z.strictObject({
 });
 export const MaxDiffConfigSchema = z.strictObject({
   options: z.array(ChoiceOptionSchema).min(3).max(50),
-  shuffle: z.boolean().exactOptional(),
+  shuffle: flag,
 });
 export const CardSortItemSchema = z.strictObject({ id: CardItemIdSchema, label });
 export const CardSortBucketSchema = z.strictObject({ id: CardBucketIdSchema, label });
@@ -215,8 +217,8 @@ export const SemanticDifferentialConfigSchema = z.strictObject({
 export const NumberRangeConfigSchema = z.strictObject({
   min: DecimalStringSchema.exactOptional(),
   max: DecimalStringSchema.exactOptional(),
-  integerOnly: z.boolean().exactOptional(),
-  allowNegative: z.boolean().exactOptional(),
+  integerOnly: flag,
+  allowNegative: flag,
 });
 export const ScheduleGridConfigSchema = z.strictObject({
   weekdays: z.array(WeekdaySchema).min(1).max(7),
@@ -256,7 +258,7 @@ export const LinearScaleConfigSchema = z.strictObject({
 export const NpsConfigSchema = z.strictObject({ lowLabel: label.exactOptional(), highLabel: label.exactOptional() });
 export const RankingConfigSchema = z.strictObject({
   options: z.array(ChoiceOptionSchema).min(1).max(100),
-  shuffle: z.boolean().exactOptional(),
+  shuffle: flag,
   rankTop: z.number().int().min(1).exactOptional(),
 });
 
@@ -274,7 +276,7 @@ export const MatrixConfigSchema = z.strictObject({
   rows: z.array(MatrixRowSchema).min(1).max(100),
   columns: z.array(MatrixColumnSchema).min(1).max(20),
   requireEach: z.enum(['none', 'row', 'cell']),
-  shuffleRows: z.boolean().exactOptional(),
+  shuffleRows: flag,
   mobileLayout: z.enum(['table', 'accordion']).exactOptional(),
 });
 
@@ -356,7 +358,7 @@ export const ConsentConfigSchema = z.strictObject({
 
 export const CaptchaConfigSchema = z.strictObject({
   provider: z.enum(['platform_default', 'hcaptcha', 'turnstile', 'recaptcha_v3', 'proof_of_work']),
-  invisible: z.boolean().exactOptional(),
+  invisible: flag,
 });
 
 export const ProductOptionSchema = z.strictObject({
@@ -386,7 +388,7 @@ export const ProductSchema = z.strictObject({
   quantity: z.strictObject({ min: count, max: count, default: count }).exactOptional(),
   options: z.array(ProductOptionSchema).exactOptional(),
   stockTracked: z.boolean(),
-  tax: z.strictObject({ hsnSac: z.string().max(16).exactOptional(), ratePct: DecimalStringSchema.exactOptional(), inclusive: z.boolean().exactOptional() }).exactOptional(),
+  tax: z.strictObject({ hsnSac: z.string().max(16).exactOptional(), ratePct: DecimalStringSchema.exactOptional(), inclusive: flag }).exactOptional(),
   shipping: z.strictObject({ first: MinorUnitsSchema, additional: MinorUnitsSchema.exactOptional() }).exactOptional(),
   origin: OriginSchema.exactOptional(),
 });
@@ -448,7 +450,7 @@ export const AppointmentConfigSchema = z.strictObject({
   reminders: z.array(z.strictObject({ minutesBefore: z.number().int().min(1), emailBlockId: BlockIdSchema })).exactOptional(),
   calendarConnectionId: ConnectionIdSchema.exactOptional(),
   attachIcs: z.boolean(),
-  allowMultipleTimes: z.boolean().exactOptional(),
+  allowMultipleTimes: flag,
 });
 
 export const CalculationConfigSchema = z.strictObject({
@@ -457,14 +459,14 @@ export const CalculationConfigSchema = z.strictObject({
   format: ValueFormatSchema.exactOptional(),
   display: z.enum(['visible', 'hidden']),
   declassify: z.strictObject({ reason: z.string().min(1).max(1000) }).exactOptional(),
-  skipHidden: z.boolean().exactOptional(),
+  skipHidden: flag,
 });
 export const ContextSourceSchema = z.enum(CONTEXT_SOURCES);
 const ContextParamNameSchema = z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/);
 export const ContextStaticFactSchema = z.strictObject({ key: ContextParamNameSchema, value: z.string().min(1).max(10_000) });
 export const ContextConfigSchema = z.strictObject({
   sources: z.array(ContextSourceSchema).max(CONTEXT_SOURCES.length),
-  stripQuery: z.boolean().exactOptional(),
+  stripQuery: flag,
   display: z.enum(['visible', 'hidden']).exactOptional(),
   urlParams: z.array(ContextParamNameSchema).max(20).exactOptional(),
   staticFacts: z.array(ContextStaticFactSchema).max(20).exactOptional(),
@@ -511,7 +513,7 @@ export const SectionConfigSchema = z.strictObject({
   description: RichDocSchema.exactOptional(),
   children: z.array(BlockIdSchema),
   collapsible: z.boolean(),
-  initiallyCollapsed: z.boolean().exactOptional(),
+  initiallyCollapsed: flag,
 });
 
 export const BLOCK_CONFIG_SCHEMAS = {

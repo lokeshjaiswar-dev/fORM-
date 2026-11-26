@@ -1,5 +1,5 @@
 import type { DateBound } from '@form/schema';
-import { defineField, placeholderTexts } from '../define.ts';
+import { configTexts, defineField } from '../define.ts';
 import { PALETTE_LABELS, datePatternFor } from '../messages.ts';
 import { TEMPORAL_OPS } from '../operators.ts';
 import { weekdayOf } from '../util/calendar.ts';
@@ -35,7 +35,7 @@ export const date = defineField({
       || limits.disallowDates?.some((d) => (typeof d === 'string' ? d === value : d.from <= value && value <= d.to));
     if (blocked) report('date_not_allowed');
   },
-  texts: placeholderTexts,
+  texts: (block) => configTexts(block, ['placeholder']),
   paths: { '': 'date' },
   operators: { date: TEMPORAL_OPS },
   toScalar: (value, path) => (isRootPath(path) ? { t: 'date', v: value } : NULL),
