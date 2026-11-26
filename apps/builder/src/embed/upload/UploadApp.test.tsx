@@ -67,6 +67,8 @@ describe('UploadApp', () => {
     parent.post(v2Init());
     expect(await screen.findByRole('heading', { name: 'Document details' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Master details' })).toBeInTheDocument();
+    // The class that scopes upload-panel.css (the classic panel look) is on this page's root as on the /1 page's.
+    expect(screen.getByRole('heading', { name: 'Document details' }).closest('[data-testid=upload-root]')).toHaveClass('fp-upload');
     await waitFor(() => expect(parent.of('initialized')).toHaveLength(1));
     expect(parent.of('initialized')[0]).toEqual({ protocol: 'fp-bridge/2', type: 'initialized', dialogId: 'dlg-1', fieldCount: 9, unsupported: [] });
     expect(screen.getByRole('textbox', { name: /Invoice No/ })).toHaveValue('INV-0007');

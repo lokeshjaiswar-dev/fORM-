@@ -127,7 +127,7 @@ function Host({ parents }: { parents: readonly string[] }) {
   }, [connected]);
 
   return (
-    <div ref={wrap} data-testid="upload-root" data-revision={view?.revision ?? 0}>
+    <div ref={wrap} className="fp-upload" data-testid="upload-root" data-revision={view?.revision ?? 0}>
       {view ? (
         <UploadForm
           view={view}

@@ -2,3 +2,4 @@
 @import "@dmacq/ui/styles.css";
 @import "@dmacq/ui/fonts.css";
 @import "@form/renderer/styles.css";
+@import "./upload-panel.css";

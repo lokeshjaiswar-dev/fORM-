@@ -138,7 +138,7 @@ function Host({ parentOrigin, version, caps }: { parentOrigin: string; version: 
 
   if (mismatch) return <Notice problem="version" />;
   return (
-    <div ref={wrap} data-testid="upload-root" data-revision={view?.revision ?? 0}>
+    <div ref={wrap} className="fp-upload" data-testid="upload-root" data-revision={view?.revision ?? 0}>
       {view ? (
         <UploadForm
           view={view}

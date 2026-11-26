@@ -1,0 +1,125 @@
+/*
+ * The upload step's frame as a part of the classic "Doc Properties" panel around it, not a page of its own.
+ *
+ * Scope: `.fp-upload`, the root `div` of both bridge pages (UploadApp, fp-bridge/2, and legacy/DmsUploadPageV1, fp-bridge/1), so the
+ * two look the same. This file is imported by the upload entry only and every rule starts with `.fp-upload`, so the standalone
+ * renderer, the dms-master / dms-record pages and the other profiles are untouched.
+ *
+ * Reference: classic's own renderer in the same panel (measured on LAN 105 with ?fp=0 at 1440 and 1280): Noto Sans 12.6px; label
+ * 400 / #666 with 8px under it; controls 40px high, radius 8px, 1px rgba(0,0,0,.23) border, black text, black border on hover, a
+ * 2px #2950da border on focus; 16px between fields; no page band, no card and no section boxes. The panel supplies the 16px of
+ * content padding, so the frame itself has no outer margin.
+ *
+ * `!important` on some custom properties: the renderer sets its theme tokens as an inline `style` on `.fr-root` (themeCssVars),
+ * which beats a stylesheet rule unless that one is `!important`. These are ordinary stylesheet rules (`style-src 'self'` stays).
+ * Specificity: the rules below are `.fp-upload .fr-root[data-mode]` (0,3,0) plus their target, and come after the renderer's own
+ * (the renderer's heaviest competing rule is (0,3,0)), so they win without more `!important`.
+ */
+
+/* The frame paints nothing: the parent supplies the background (UploadApp also clears it at runtime). Its height follows the
+   form (`resize`), so no scrollbar is shown; the hidden one still scrolls, for a popup that reaches past the end. */
+html:has(.fp-upload),
+html:has(.fp-upload) body {
+  background: transparent;
+  scrollbar-width: none;
+}
+
+html:has(.fp-upload)::-webkit-scrollbar,
+html:has(.fp-upload) body::-webkit-scrollbar {
+  display: none;
+}
+
+.fp-upload {
+  --fp-divider: #e5e7eb;
+}
+
+/* Page: no band, no centred card, no viewport-sized grid (its `100svh` fed the frame's own height back into the form: an empty tail). */
+.fp-upload .fr-root[data-mode] {
+  /* The tokens (set inline on .fr-root) as classic's panel has them. */
+  --fr-font: "Noto Sans Variable", "Noto Sans", Helvetica, Arial, sans-serif !important;
+  --fr-size: 12.6px !important;
+  --fr-radius: 8px !important;
+  --fr-accent: #2950da !important;
+  --fr-text: #4d4d4d !important;
+  --fr-inputText: #000 !important;
+  --fr-inputBorder: rgb(0 0 0 / 0.23) !important;
+  --fr-label-color: #666;
+  --fr-label-weight: 400;
+  --fr-placeholder: #767676;
+  --fr-border-hover: rgb(0 0 0 / 0.87);
+  --fr-field-hover: var(--fr-inputBg);
+  /* Focus is the field's own 2px accent line, inside its box (classic's look). A halo outside would be cut off at the frame's edge. */
+  --fr-focus: inset 0 0 0 1px var(--fr-accent);
+  --fr-focus-error: inset 0 0 0 1px var(--fr-error);
+  display: block;
+  min-height: 0;
+  height: auto;
+  background: transparent;
+  background-image: none;
+}
+
+.fp-upload .fr-root[data-mode] .fr-form {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Sections: a light heading, and one divider between them. No box. */
+.fp-upload .fr-root[data-mode] .fr-section {
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.fp-upload .fr-root[data-mode] .fr-blocks > .fr-row ~ .fr-row .fr-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--fp-divider);
+}
+
+.fp-upload .fr-root[data-mode] .fr-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.fp-upload .fr-root[data-mode] .fr-label {
+  margin-bottom: 8px;
+}
+
+/* Controls are 40px high (the renderer's are 42px). */
+.fp-upload .fr-root[data-mode] .fr-input,
+.fp-upload .fr-root[data-mode] .fr-affix {
+  min-height: 40px;
+}
+
+/* An unchosen dropdown reads like a placeholder, as in classic ("Select option" in grey); the options keep the input colour. */
+.fp-upload .fr-root[data-mode] select.fr-select:has(option[value='']:checked) {
+  color: var(--fr-placeholder);
+}
+
+.fp-upload .fr-root[data-mode] select.fr-select option {
+  color: var(--fr-inputText);
+}
+
+/* A field shows its focus as its own border; the generic 2px outline with a 2px offset would sit outside the frame at its edges. */
+.fp-upload .fr-root[data-mode] .fr-input:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+/* Hints and errors: small, but not smaller than 12px. */
+.fp-upload .fr-root[data-mode] .fr-error,
+.fp-upload .fr-root[data-mode] .fr-hint,
+.fp-upload .fr-root[data-mode] .fr-counter,
+.fp-upload .fr-root[data-mode] .fr-description {
+  font-size: 12px;
+}
+
+.fp-upload .fr-root[data-mode] .fr-error {
+  margin-top: 4px;
+}

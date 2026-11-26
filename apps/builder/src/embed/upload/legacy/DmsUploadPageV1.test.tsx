@@ -54,6 +54,8 @@ describe('DmsUploadPageV1', () => {
     fromParent(fixtures.handshake[1]);
     expect(await screen.findByRole('heading', { name: 'Document details' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Master details' })).toBeInTheDocument();
+    // The class that scopes upload-panel.css (the classic panel look) is on this page's root as on the /2 page's.
+    expect(screen.getByRole('heading', { name: 'Document details' }).closest('[data-testid=upload-root]')).toHaveClass('fp-upload');
     expect(of('initialized')[0]).toMatchObject({ replyTo: 'p-init-1', payload: { fieldCount: 14, unsupported: [] } });
     const doc = within(screen.getByRole('heading', { name: 'Document details' }).closest('section')!);
     expect(doc.getByRole('textbox', { name: /Invoice No/ })).toHaveValue('INV-0007');
