@@ -38,6 +38,9 @@ export interface DmsElement {
   options?: DmsOption[];
   select?: { options: DmsOption[] };
   parent_field_id?: string;
+  /** dms-api's master field flags (SEC-DESIGN 5.2): first-class `x-dms` keys in a block, see `visibility.ts`. */
+  is_hidden?: boolean;
+  is_secret?: boolean;
   /**
    * Linked (cascading) dropdown, a fORM- addition kept as plain field-level keys (dms-api stores and returns unknown
    * field-level keys untouched; per-option keys would not survive its option normalisation).

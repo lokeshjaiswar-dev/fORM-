@@ -15,3 +15,5 @@ export { dmsTypeOf, TEXT_PATTERNS } from './shared.ts';
 export { LEGACY_KEY, legacyOfElement, legacyOfBlock, isLegacyReadOnly } from './legacy.ts';
 export type { DmsLegacyMarker } from './legacy.ts';
 export { parseFpLookup, DMS_LOOKUP_LIMITS } from './lookup.ts';
+export { IS_HIDDEN, IS_SECRET, VISIBILITY_KEYS, flagOf, flagsOfElement, isRestricted, visibilityOfBlock, visibilityOfElement, xWithVisibility } from './visibility.ts';
+export type { DmsVisibility } from './visibility.ts';
