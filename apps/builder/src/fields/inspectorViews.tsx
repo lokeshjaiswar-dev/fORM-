@@ -14,6 +14,7 @@ import { APP_IDS, inlineDoc, isField, plainText } from '@/lib/definition';
 import { formatFormula, markRowRefs, parseFormula } from '@/lib/formula';
 import { switchFieldType } from '@/lib/switchFieldType';
 import { useProfile } from '@/embed/useProfile';
+import { DmsVisibilitySettings } from '@/components/builder/DmsVisibilitySettings';
 import { isOptionValueField } from '@/state/commands/rules';
 import { patchBlockConfig } from '@/fields/configSink';
 import { addChildBlock, requestDeleteBlock } from '@/state/actions';
@@ -350,6 +351,11 @@ function Placeholder({ block }: { block: AnyBlock }) {
 
 type Chrome = BlockOf<'short_text' | 'email' | 'number' | 'url'>;
 
+/** Hidden / secret (profile dms-v1 only, and only for a user who may change them): the last settings of each of the seven DMS field types. */
+function DmsVisibility({ block }: { block: BlockOf<'short_text' | 'phone' | 'number' | 'email' | 'long_text' | 'single_choice' | 'date'> }) {
+  return useProfile() === 'dms-v1' ? <DmsVisibilitySettings block={block} /> : null;
+}
+
 function Affixes({ block }: { block: Chrome }) {
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -364,6 +370,8 @@ export function ChromeGeneral({ block }: { block: Chrome }) {
     <>
       <Placeholder block={block} />
       <Affixes block={block} />
+      {/* email and number render this too and add their own at the end of their view, so only a short text adds it here */}
+      {block.type === 'short_text' ? <DmsVisibility block={block} /> : null}
     </>
   );
 }
@@ -403,6 +411,7 @@ export function EmailGeneral({ block }: InspectorProps<'email'>) {
         checked={block.config.verify?.enabled === true}
         onChange={(on) => setConfig(block, { verify: on ? { enabled: true, codeLength: 6, ttlMinutes: 10 } : undefined })}
       />
+      <DmsVisibility block={block} />
     </>
   );
 }
@@ -447,6 +456,7 @@ export function LongTextGeneral({ block }: InspectorProps<'long_text'>) {
     <>
       <Placeholder block={block} />
       <NumberField label={t(M['inspector.rows'])} value={block.config.rows} parse={parseInteger(1, 50)} onChange={(rows) => setConfig(block, { rows })} />
+      <DmsVisibility block={block} />
     </>
   );
 }
@@ -491,6 +501,7 @@ export function PhoneGeneral({ block }: InspectorProps<'phone'>) {
         }}
       />
       <ToggleRow label={t(M['inspector.country_select'])} checked={block.config.showCountrySelect} onChange={(showCountrySelect) => setConfig(block, { showCountrySelect })} />
+      <DmsVisibility block={block} />
     </>
   );
 }
@@ -508,6 +519,7 @@ export function NumberGeneral({ block }: InspectorProps<'number'>) {
         options={[{ value: 'input', label: t(M['inspector.display_input']) }, { value: 'stepper', label: t(M['inspector.display_stepper']) }]}
         onChange={(display) => setConfig(block, { display })}
       />
+      <DmsVisibility block={block} />
     </>
   );
 }
@@ -551,6 +563,7 @@ export function ChoiceGeneral({ block }: { block: BlockOf<'single_choice' | 'mul
     <>
       <Placeholder block={block} />
       <ToggleRow label={t(M['inspector.searchable'])} checked={block.config.searchable === true} onChange={(on) => setConfig(block, { searchable: on || undefined })} />
+      {block.type === 'single_choice' ? <DmsVisibility block={block} /> : null}
     </>
   );
 }
@@ -738,6 +751,7 @@ export function DateGeneral({ block }: InspectorProps<'date'>) {
         ]}
         onChange={(picker) => setConfig(block, { picker })}
       />
+      <DmsVisibility block={block} />
     </>
   );
 }

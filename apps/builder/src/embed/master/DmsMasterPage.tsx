@@ -13,8 +13,13 @@ import { SessionBanners } from '@/components/builder/SessionBanners';
 import { useBlockClipboard } from '@/components/builder/useBlockClipboard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Tooltip } from '@/components/Tooltip';
-import { DmsAuthError } from '@/embed/dmsClient';
-import { describeDmsError, schemaSyncOf } from '@/embed/master/describeDmsError';
+import { DmsApiError, DmsAuthError } from '@/embed/dmsClient';
+import { describeDmsError, referenceLine, schemaSyncOf, terminalLoadCodeOf, type TerminalLoadCode } from '@/embed/master/describeDmsError';
+import { RemovalDialog } from '@/embed/master/removal/RemovalDialog';
+import { RemovalMarks } from '@/embed/master/removal/RemovalMarks';
+import { useRemovalConsent } from '@/embed/master/removal/useRemovalConsent';
+import { useRemovalMarks } from '@/embed/master/removal/useRemovalMarks';
+import { RevealCtx } from '@/embed/master/revealContext';
 import { currentLaunch, rememberMasterId, returnTarget, type ResolvedLaunch } from '@/embed/launch';
 import { ProfileProvider } from '@/embed/profile';
 import { blockText } from '@/lib/definition';
@@ -23,7 +28,7 @@ import { useFormSession } from '@/persistence/useFormSession';
 import { currentDoc, useDocumentStore } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo, useHistoryShortcuts } from '@/state/history';
 import { useUiStore } from '@/state/uiStore';
-import { DmsCommitRefused, DmsMasterRepository, NotAFormPlusMaster, type CommitResult } from '@/embed/master/DmsMasterRepository';
+import { DmsCommitRefused, DmsMasterRepository, NotAFormPlusMaster, RemovalCancelled, type CommitResult } from '@/embed/master/DmsMasterRepository';
 
 /** `/embed/dms-master`: fORM- as the DMS master builder (profile `dms-v1`). Outside the fORM- session: DMS is the system of record. */
 export function DmsMasterPage({ navigate = (url: string) => window.location.assign(url) }: { navigate?: (url: string) => void }) {
@@ -70,11 +75,16 @@ function MasterApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (ur
   );
 }
 
-function BackToDms({ launch, status }: { launch: ResolvedLaunch; status?: 'cancelled' }) {
+/**
+ * "Back to DMS". After a load the page cannot continue from (NOT_FOUND, FORBIDDEN_RIGHT, FP_SCOPE_DENIED, MASTER_NOT_CONVERTED) the link
+ * carries `fp_status=error&fp_code=<code>` (DESIGN 3.5), so DMS can say why; otherwise it is the plain return link.
+ */
+function BackToDms({ launch, status, errorCode }: { launch: ResolvedLaunch; status?: 'cancelled'; errorCode?: TerminalLoadCode | null }) {
   if (!launch.returnUrl) return null;
+  const href = errorCode ? returnTarget(launch.returnUrl, 'error', launch.masterId, errorCode) : status ? returnTarget(launch.returnUrl, status) : launch.returnUrl;
   return (
     <p>
-      <a className="underline" href={status ? returnTarget(launch.returnUrl, status) : launch.returnUrl}>
+      <a className="underline" href={href}>
         Back to DMS
       </a>
     </p>
@@ -94,10 +104,15 @@ function MasterSession({ repo, launch, navigate }: { repo: DmsMasterRepository; 
       </Message>
     );
   }
+  /* A master that is not a Forms+ master is the same dead end as DMS answering MASTER_NOT_CONVERTED. */
+  const code: TerminalLoadCode | null = why instanceof NotAFormPlusMaster ? 'MASTER_NOT_CONVERTED' : terminalLoadCodeOf(why);
+  const message = why instanceof DmsApiError ? describeDmsError(why) : session.status === 'missing' ? 'DMS has no such master.' : session.status === 'error' ? session.message : '';
+  const reference = referenceLine(why);
   return (
     <Message title={why instanceof NotAFormPlusMaster ? 'This master cannot be edited here' : 'This master cannot be opened'}>
-      <p>{session.status === 'missing' ? 'DMS has no such master.' : session.status === 'error' ? session.message : ''}</p>
-      <BackToDms launch={launch} />
+      <p>{message}</p>
+      {reference ? <p className="text-[13px]" data-testid="fp-error-reference">{reference}</p> : null}
+      <BackToDms launch={launch} errorCode={code} />
     </Message>
   );
 }
@@ -119,7 +134,12 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
   const issues = checked && checked.doc === doc ? checked.issues : EMPTY_ISSUES;
   const confirmed = checked && checked.doc === doc ? checked.confirmed : null;
   const [problem, setProblem] = useState<string | null>(null);
+  const [problemRef, setProblemRef] = useState<string | null>(null);
   const [problemSaved, setProblemSaved] = useState(false);
+  /* Deleting a block DMS stores only marks it; Save asks for consent per marked field (SEC-DESIGN 7.3). */
+  const consent = useRemovalConsent();
+  const { marks, restore } = useRemovalMarks(repo.current?.fields);
+  const hiddenCount = repo.current?.hiddenFieldCount ?? 0;
   const [signedOut, setSignedOut] = useState(false);
   const [saved, setSaved] = useState<CommitResult | null>(null);
   const dirty = doc !== baseline;
@@ -136,12 +156,13 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
     if (busy) return;
     setBusy(true);
     setProblem(null);
+    setProblemRef(null);
     setProblemSaved(false);
     /* What DMS receives is the doc as it is now; edits made while the request is in flight are not in it. */
     const sent = currentDoc();
     const wasCreating = repo.current === null;
     try {
-      const result = await repo.commit(sent, { confirmedWarnings: confirmed });
+      const result = await repo.commit(sent, { confirmedWarnings: confirmed, askRemoval: consent.ask });
       if (wasCreating) rememberMasterId('dms-master', result.masterId);
       setBaseline(sent);
       setChecked(null);
@@ -155,6 +176,11 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
     } catch (e) {
       if (e instanceof DmsCommitRefused) {
         setChecked({ doc: sent, issues: e.issues, confirmed: e.needsConfirmation ? e.warningKey : null });
+      } else if (e instanceof RemovalCancelled) {
+        /* Cancel puts the block back and sends nothing. Other marked fields stay marked and are asked about again on the next save. */
+        if (!restore(e.fieldId)) {
+          setProblem('The field could not be put back. Reload this page to start again; nothing was changed in DMS.');
+        }
       } else if (e instanceof DmsAuthError) setSignedOut(true);
       else {
         /* SCHEMA_SYNC_FAILED with saved:true: DMS holds this doc already (and, on a create, the master exists), so it is the new baseline. */
@@ -167,6 +193,7 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
           setProblemSaved(true);
         }
         setProblem(describeDmsError(e));
+        setProblemRef(referenceLine(e));
       }
     } finally {
       setBusy(false);
@@ -199,97 +226,117 @@ function MasterBuilder({ repo, launch, navigate }: { repo: DmsMasterRepository; 
   const needsConfirm = errors.length === 0 && warnings.length > 0 && confirmed !== null;
 
   return (
-    <BuilderDnd>
-      <div className="flex h-svh bg-background text-foreground" data-testid="dms-master-builder">
-        <FieldPicker />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[45px] shrink-0 items-center gap-1 border-b border-border bg-background px-3">
-            {!sidebarOpen && (
-              <Tooltip content="Open sidebar">
-                <Button type="button" variant="ghost" size="icon-sm" aria-label="Open sidebar" onClick={() => setSidebarOpen(true)}>
-                  <PanelLeft className="size-4" />
-                </Button>
-              </Tooltip>
-            )}
-            <div className="min-w-0 flex-1 truncate text-[14px] text-muted-foreground">
-              <span className="text-foreground">{doc.title || 'Master name'}</span>
-              <span className="ml-2 text-[13px] text-text-subtle" role="status">
-                {creating ? 'New master' : dirty ? 'Changes not saved to DMS' : 'Saved in DMS'}
-              </span>
-            </div>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="Undo" disabled={!canUndo} onClick={undo}>
-              <Undo2 className="size-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="Redo" disabled={!canRedo} onClick={redo}>
-              <Redo2 className="size-4" />
-            </Button>
-            {launch.returnUrl ? (
-              <Button type="button" variant="outline" size="sm" onClick={cancel} disabled={busy}>
-                Cancel
+    <RevealCtx.Provider value={repo.current?.canReveal ?? null}>
+      <BuilderDnd>
+        <div className="flex h-svh bg-background text-foreground" data-testid="dms-master-builder">
+          <FieldPicker />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="flex h-[45px] shrink-0 items-center gap-1 border-b border-border bg-background px-3">
+              {!sidebarOpen && (
+                <Tooltip content="Open sidebar">
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Open sidebar" onClick={() => setSidebarOpen(true)}>
+                    <PanelLeft className="size-4" />
+                  </Button>
+                </Tooltip>
+              )}
+              <div className="min-w-0 flex-1 truncate text-[14px] text-muted-foreground">
+                <span className="text-foreground">{doc.title || 'Master name'}</span>
+                <span className="ml-2 text-[13px] text-text-subtle" role="status">
+                  {creating ? 'New master' : dirty ? 'Changes not saved to DMS' : 'Saved in DMS'}
+                </span>
+              </div>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Undo" disabled={!canUndo} onClick={undo}>
+                <Undo2 className="size-4" />
               </Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="Redo" disabled={!canRedo} onClick={redo}>
+                <Redo2 className="size-4" />
+              </Button>
+              {launch.returnUrl ? (
+                <Button type="button" variant="outline" size="sm" onClick={cancel} disabled={busy}>
+                  Cancel
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" onClick={() => void save()} disabled={busy}>
+                {busy ? 'Saving...' : needsConfirm ? 'Save anyway' : 'Save to DMS'}
+              </Button>
+            </header>
+            <SessionBanners />
+            {hiddenCount > 0 ? (
+              <div className="p-2 pb-0">
+                <Alert variant="info" data-testid="fp-hidden-count-banner">
+                  <AlertDescription>
+                    {hiddenCount === 1 ? '1 hidden field you cannot see is kept' : `${hiddenCount} hidden fields you cannot see are kept`}. DMS keeps them and their values when you save.
+                  </AlertDescription>
+                </Alert>
+              </div>
             ) : null}
-            <Button type="button" size="sm" onClick={() => void save()} disabled={busy}>
-              {busy ? 'Saving...' : needsConfirm ? 'Save anyway' : 'Save to DMS'}
-            </Button>
-          </header>
-          <SessionBanners />
-          {problem || issues.length > 0 ? (
-            <div className="space-y-1 p-2" aria-live="polite">
-              {problem ? (
-                <Alert variant="destructive">
-                  <AlertTitle>{problemSaved ? 'Saved, but the data table needs another save' : 'The master was not saved'}</AlertTitle>
-                  <AlertDescription>{problem}</AlertDescription>
-                </Alert>
-              ) : null}
-              {errors.length > 0 ? (
-                <Alert variant="destructive">
-                  <AlertTitle>Fix these before saving</AlertTitle>
-                  <AlertDescription>
-                    <ul className="list-disc pl-5">
-                      {errors.map((i, n) => (
-                        <li key={`${i.code}-${i.blockId ?? n}`}>
-                          {i.blockId ? (
-                            <button type="button" className="text-left underline" onClick={() => goTo(i.blockId)}>
-                              {blockText(currentDoc().blocks[i.blockId as BlockId]) || 'This field'}: {i.message}
-                            </button>
-                          ) : (
-                            i.message
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-              {warnings.length > 0 ? (
-                <Alert variant="warning">
-                  <AlertTitle>DMS keeps less than the builder shows</AlertTitle>
-                  <AlertDescription>
-                    <ul className="list-disc pl-5">
-                      {warnings.map((i, n) => (
-                        <li key={`${i.code}-${i.blockId ?? n}`}>
-                          {i.blockId ? `${blockText(currentDoc().blocks[i.blockId as BlockId]) || 'A field'}: ` : ''}
-                          {i.message}
-                        </li>
-                      ))}
-                    </ul>
-                    {needsConfirm ? <p className="mt-1">Press Save anyway to continue without them.</p> : null}
-                  </AlertDescription>
-                </Alert>
-              ) : null}
+            {marks.length > 0 ? (
+              <div className="p-2 pb-0">
+                <RemovalMarks marks={marks} onRestore={(id) => void restore(id)} />
+              </div>
+            ) : null}
+            {problem || issues.length > 0 ? (
+              <div className="space-y-1 p-2" aria-live="polite">
+                {problem ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>{problemSaved ? 'Saved, but the data table needs another save' : 'The master was not saved'}</AlertTitle>
+                    <AlertDescription>
+                      {problem}
+                      {problemRef ? <span className="mt-1 block text-[13px]" data-testid="fp-error-reference">{problemRef}</span> : null}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                {errors.length > 0 ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>Fix these before saving</AlertTitle>
+                    <AlertDescription>
+                      <ul className="list-disc pl-5">
+                        {errors.map((i, n) => (
+                          <li key={`${i.code}-${i.blockId ?? n}`}>
+                            {i.blockId ? (
+                              <button type="button" className="text-left underline" onClick={() => goTo(i.blockId)}>
+                                {blockText(currentDoc().blocks[i.blockId as BlockId]) || 'This field'}: {i.message}
+                              </button>
+                            ) : (
+                              i.message
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                {warnings.length > 0 ? (
+                  <Alert variant="warning">
+                    <AlertTitle>DMS keeps less than the builder shows</AlertTitle>
+                    <AlertDescription>
+                      <ul className="list-disc pl-5">
+                        {warnings.map((i, n) => (
+                          <li key={`${i.code}-${i.blockId ?? n}`}>
+                            {i.blockId ? `${blockText(currentDoc().blocks[i.blockId as BlockId]) || 'A field'}: ` : ''}
+                            {i.message}
+                          </li>
+                        ))}
+                      </ul>
+                      {needsConfirm ? <p className="mt-1">Press Save anyway to continue without them.</p> : null}
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="flex min-h-0 flex-1">
+              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+                <ErrorBoundary key="edit" label="canvas">
+                  <FormCanvas />
+                </ErrorBoundary>
+              </div>
+              <BlockInspector />
             </div>
-          ) : null}
-          <div className="flex min-h-0 flex-1">
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-              <ErrorBoundary key="edit" label="canvas">
-                <FormCanvas />
-              </ErrorBoundary>
-            </div>
-            <BlockInspector />
           </div>
+          <DeleteBlockDialog />
+          <RemovalDialog pending={consent.pending} />
         </div>
-        <DeleteBlockDialog />
-      </div>
-    </BuilderDnd>
+      </BuilderDnd>
+    </RevealCtx.Provider>
   );
 }

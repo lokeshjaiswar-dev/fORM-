@@ -10,7 +10,8 @@ import { dmsDirectRemoteSource } from '@/embed/lookup/dmsDirectRemoteSource';
 import { currentLaunch, type ResolvedLaunch } from '@/embed/launch';
 import { ProfileProvider } from '@/embed/profile';
 import { fieldNameOf, recordReturnTarget, writableElements, type DmsRecordValues, type LoadedDmsRecord } from './contract';
-import { describeRecordError } from './describeRecordError';
+import { describeRecordError, referenceLine, terminalCodeOf } from './describeRecordError';
+import type { TerminalLoadCode } from '@/embed/master/describeDmsError';
 import { DmsRecordRepository } from './DmsRecordRepository';
 import { planRecordForm, viewerClock, type RecordForm } from './recordForm';
 
@@ -38,9 +39,17 @@ function Message({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function BackToDms({ launch, loaded }: { launch: ResolvedLaunch; loaded?: LoadedDmsRecord | null }) {
+/**
+ * "Back to DMS". After a load the page cannot continue from (NOT_FOUND, FORBIDDEN_RIGHT, FP_SCOPE_DENIED, MASTER_NOT_CONVERTED) the link
+ * carries `fp_status=error&fp_code=<code>` (DESIGN 3.5); otherwise it is the plain return link (or the cancelled one once a record loaded).
+ */
+function BackToDms({ launch, loaded, errorCode }: { launch: ResolvedLaunch; loaded?: LoadedDmsRecord | null; errorCode?: TerminalLoadCode | null }) {
   if (!launch.returnUrl || !launch.masterId) return null;
-  const href = loaded ? recordReturnTarget(launch.returnUrl, 'cancelled', launch.masterId) : launch.returnUrl;
+  const href = errorCode
+    ? recordReturnTarget(launch.returnUrl, 'error', launch.masterId, undefined, errorCode)
+    : loaded
+      ? recordReturnTarget(launch.returnUrl, 'cancelled', launch.masterId)
+      : launch.returnUrl;
   return (
     <p>
       <a className="underline" href={href}>
@@ -70,7 +79,7 @@ export function DmsRecordPage({ navigate = (url: string) => window.location.assi
 type Load =
   | { state: 'loading' }
   | { state: 'signedOut' }
-  | { state: 'failed'; message: string }
+  | { state: 'failed'; message: string; reference: string | null; code: TerminalLoadCode | null }
   | { state: 'ready'; loaded: LoadedDmsRecord; form: RecordForm | null; formError: string | null };
 
 function RecordApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (url: string) => void }) {
@@ -83,12 +92,14 @@ function RecordApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (ur
       .load(launch.masterId as string, launch.recordId)
       .then((loaded) => {
         if (!live) return;
-        const planned = loaded.source === 'formplus' ? planRecordForm(loaded.elements, loaded.values, loaded.masterName, viewerClock(), loaded.recordId) : null;
+        const planned = loaded.source === 'formplus' ? planRecordForm(loaded.elements, loaded.values, loaded.masterName, viewerClock(), loaded.recordId, { stored: new Set(loaded.masked), replacing: new Set() }) : null;
         setLoad({ state: 'ready', loaded, form: planned?.ok ? planned.form : null, formError: planned && !planned.ok ? planned.message : null });
       })
       .catch((e: unknown) => {
         if (!live) return;
-        setLoad(e instanceof DmsAuthError ? { state: 'signedOut' } : { state: 'failed', message: e instanceof DmsApiError && e.status === 404 ? 'DMS has no such master or record.' : describeRecordError(e)[0] ?? '' });
+        if (e instanceof DmsAuthError) return setLoad({ state: 'signedOut' });
+        const message = e instanceof DmsApiError && e.status === 404 && terminalCodeOf(e) === null ? 'DMS has no such master or record.' : (describeRecordError(e)[0] ?? '');
+        setLoad({ state: 'failed', message, reference: referenceLine(e), code: terminalCodeOf(e) });
       });
     return () => {
       live = false;
@@ -108,15 +119,16 @@ function RecordApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (ur
     return (
       <Message title="This record cannot be opened">
         <p>{load.message}</p>
-        <BackToDms launch={launch} />
+        {load.reference ? <p className="text-[13px]" data-testid="fp-error-reference">{load.reference}</p> : null}
+        <BackToDms launch={launch} errorCode={load.code} />
       </Message>
     );
   }
   if (load.loaded.source !== 'formplus') {
     return (
-      <Message title="This master has not been converted to Forms+">
+      <Message title="This master has not been moved to Forms+ yet">
         <p>Records of this master cannot be added or edited here yet. Ask an administrator to convert the master, then try again.</p>
-        <BackToDms launch={launch} />
+        <BackToDms launch={launch} errorCode="MASTER_NOT_CONVERTED" />
       </Message>
     );
   }
@@ -128,15 +140,21 @@ function RecordApp({ launch, navigate }: { launch: ResolvedLaunch; navigate: (ur
       </Message>
     );
   }
-  return <RecordEditor repo={repo} launch={launch} loaded={load.loaded} form={load.form} navigate={navigate} />;
+  return <RecordEditor repo={repo} launch={launch} loaded={load.loaded} initialForm={load.form} navigate={navigate} />;
 }
 
-function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecordRepository; launch: ResolvedLaunch; loaded: LoadedDmsRecord; form: RecordForm; navigate: (url: string) => void }) {
+function RecordEditor({ repo, launch, loaded, initialForm, navigate }: { repo: DmsRecordRepository; launch: ResolvedLaunch; loaded: LoadedDmsRecord; initialForm: RecordForm; navigate: (url: string) => void }) {
   const handle = useRef<RendererHandle | null>(null);
-  const answers = useRef<Answers>(form.initialAnswers);
+  /* The form can be planned again when a stored secret is replaced (it then gets a field of its own); typed answers carry over. */
+  const [form, setForm] = useState(initialForm);
+  const [formKey, setFormKey] = useState(0);
+  const answers = useRef<Answers>(initialForm.initialAnswers);
+  const [startAnswers, setStartAnswers] = useState<Answers>(initialForm.initialAnswers);
+  const [replacing, setReplacing] = useState<ReadonlySet<string>>(new Set());
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
+  const [reference, setReference] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const adding = loaded.recordId === null;
@@ -149,7 +167,22 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
   /* Typed values are the only copy until Save. */
   const allowLeave = useLeaveGuard(dirty);
 
-  /** Every field's DMS string by name; a field the person did not touch keeps the exact string DMS stored. */
+  /** The secrets of this record that hold a stored value DMS never sends back: write-only, listed as "Stored (hidden)" with "Replace". */
+  const storedSecrets = useMemo(() => writableElements(loaded.elements).map(fieldNameOf).filter((name) => loaded.masked.includes(name)), [loaded]);
+
+  function setReplace(name: string, on: boolean) {
+    const next = new Set(replacing);
+    if (on) next.add(name);
+    else next.delete(name);
+    const planned = planRecordForm(loaded.elements, loaded.values, loaded.masterName, viewerClock(), loaded.recordId, { stored: new Set(loaded.masked), replacing: next });
+    if (!planned.ok) return;
+    setStartAnswers(answers.current);
+    setForm(planned.form);
+    setReplacing(next);
+    setFormKey((k) => k + 1);
+  }
+
+  /** Every field's DMS string by name; a field the person did not touch keeps the exact string DMS stored (a secret's is never held: `''`). */
   function collect(): DmsRecordValues {
     const out: DmsRecordValues = {};
     for (const el of writableElements(loaded.elements)) {
@@ -166,6 +199,7 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
     if (busy) return;
     setBusy(true);
     setProblems([]);
+    setReference(null);
     try {
       const errors = (await handle.current?.validate()) ?? [];
       /* A field nobody touched keeps what DMS stores (an edit never sends it), even if it breaks today's rule. */
@@ -185,7 +219,10 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
       else setSavedId(recordId);
     } catch (e) {
       if (e instanceof DmsAuthError) setSignedOut(true);
-      else setProblems(describeRecordError(e));
+      else {
+        setProblems(describeRecordError(e));
+        setReference(referenceLine(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -242,16 +279,34 @@ function RecordEditor({ repo, launch, loaded, form, navigate }: { repo: DmsRecor
                   <li key={p}>{p}</li>
                 ))}
               </ul>
+              {reference ? <p className="mt-1 text-[13px]" data-testid="fp-error-reference">{reference}</p> : null}
             </AlertDescription>
           </Alert>
         </div>
       ) : null}
+      {storedSecrets.length > 0 ? (
+        <section className="mx-auto mt-4 max-w-[720px] space-y-2 px-4" aria-label="Secret fields" data-testid="fp-secret-fields">
+          {storedSecrets.map((name) => {
+            const on = replacing.has(name);
+            return (
+              <div key={name} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-[14px]" data-testid={`fp-secret-${name}`}>
+                <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                <span className="text-muted-foreground" data-testid="fp-secret-state">{on ? 'Replacing: type the new value below' : 'Stored (hidden)'}</span>
+                <Button type="button" variant="outline" size="sm" aria-label={`${on ? 'Keep stored value of' : 'Replace'} ${name}`} onClick={() => setReplace(name, !on)}>
+                  {on ? 'Keep stored value' : 'Replace'}
+                </Button>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
       <FormRenderer
+        key={formKey}
         version={form.version}
         mode="live"
         status={{ state: 'open' }}
         locale={BUILDER_LOCALE as Locale}
-        initialAnswers={form.initialAnswers}
+        initialAnswers={startAnswers}
         session={{ startedAt: form.startedAt }}
         onSubmit={() => undefined}
         uploader={refuseUpload}

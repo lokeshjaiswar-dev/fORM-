@@ -1,12 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { SessionContext } from '@/embed/contract';
 import fixtures from './__fixtures__/dms-record.fixtures.json' with { type: 'json' };
-import { encodeDescriptor, resetLaunchMemo, type LaunchDescriptor } from '@/embed/launch';
+import { dismissReconnect, sessionSnapshot } from '@/embed/session/dmsSession';
+import { installTestSession, resetTestSession } from '@/embed/session/testing';
 import { DmsRecordPage } from './DmsRecordPage';
 
+/*
+ * /embed/dms-record under the ticket launch (run dmsplus-int): the session a successful exchange leaves is installed (`installRecord`), the
+ * page keeps calling `currentLaunch()` and `createDmsClient()`, and the DMS double answers from the fixture on the session routes the client
+ * maps to (DESIGN 3.3). The secret-field cases are in DmsRecordPage.secret.test.tsx.
+ */
+
 const API = fixtures.descriptor.add.apiBase;
-const RETURN = fixtures.descriptor.add.returnUrl;
+/** A return URL on the origin the test build lists as a return origin (`session/testing.ts`). */
+const RETURN = 'https://dms.example.test/dms/tenant-1/documents/master';
+const MASTER_ID = fixtures.descriptor.add.masterId;
+const RECORD_ID = fixtures.descriptor.edit.recordId;
+
+/** The legacy path of a session path (`/dms/v1/formplus/s/master-records/x` is `/dms/master-records/x`): the fixtures are written in the legacy names. */
+const legacyOf = (path: string): string => {
+  const rest = path.replace('/dms/v1/formplus/s/', '');
+  return rest.startsWith('master/form') ? `/dms/v1/${rest}` : `/dms/${rest}`;
+};
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
@@ -17,9 +34,9 @@ function dms(over: { master?: unknown; record?: unknown; patch?: Response; post?
   const calls: Call[] = [];
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    expect(url.startsWith(`${API}/`)).toBe(true);
+    expect(url.startsWith(`${API}/dms/v1/formplus/s/`)).toBe(true);
     const method = init?.method ?? 'GET';
-    const path = url.slice(API.length);
+    const path = legacyOf(url.slice(API.length));
     calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
     if (method === 'GET' && path === fixtures.loadMaster.request.path) return json(over.masterStatus ?? 200, over.master ?? fixtures.loadMaster.response.body);
     if (method === 'GET' && path === fixtures.loadRecord.request.path) return json(200, over.record ?? fixtures.loadRecord.response.body);
@@ -31,32 +48,33 @@ function dms(over: { master?: unknown; record?: unknown; patch?: Response; post?
   return calls;
 }
 
-function open(d: LaunchDescriptor | null, navigate = vi.fn()) {
-  window.history.replaceState(null, '', `/embed/dms-record${d ? `#fp=${encodeDescriptor(d)}` : ''}`);
+/** The session of a record launch: `add` (no record id) or `edit`. */
+function installRecord(kind: 'add' | 'edit', over: Partial<SessionContext> = {}) {
+  installTestSession({
+    apiBase: API,
+    context: { mode: 'dms-record', master_id: MASTER_ID, record_id: kind === 'edit' ? RECORD_ID : null, master_seed: null, return_url: RETURN, ...over },
+  });
+}
+function open(kind: 'add' | 'edit' | null, navigate = vi.fn(), over: Partial<SessionContext> = {}) {
+  if (kind !== null) installRecord(kind, over);
   render(<DmsRecordPage navigate={navigate} />);
   return navigate;
 }
-const add = () => fixtures.descriptor.add as LaunchDescriptor;
-const edit = () => fixtures.descriptor.edit as LaunchDescriptor;
+const add = () => 'add' as const;
+const edit = () => 'edit' as const;
 const READY = { timeout: 15_000 };
 
-beforeEach(() => {
-  vi.stubEnv('VITE_FP_DMS_API_BASE', API);
-  vi.stubEnv('VITE_FP_RETURN_ORIGINS', 'https://dms.example');
-  resetLaunchMemo();
-  localStorage.setItem('token', 'user-token');
-});
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
-  localStorage.clear();
+  resetTestSession();
 });
 
 describe('/embed/dms-record launch', () => {
-  it('refuses a descriptor of another mode and sends nothing', async () => {
+  it('a session for another screen (a master builder launch) is not this page\'s: it asks to start from DMS and sends nothing', async () => {
     const calls = dms();
-    open({ ...add(), mode: 'dms-master' });
-    expect(await screen.findByText(/for another DMS screen/)).toBeInTheDocument();
+    installTestSession({ apiBase: API, context: { mode: 'dms-master', master_id: MASTER_ID, record_id: null, master_seed: null, return_url: RETURN } });
+    render(<DmsRecordPage navigate={vi.fn()} />);
+    expect(await screen.findByText(/Open this page from DMS/)).toBeInTheDocument();
     expect(calls).toHaveLength(0);
   });
   it('without a launch it asks to start from DMS', () => {
@@ -65,17 +83,10 @@ describe('/embed/dms-record launch', () => {
     expect(screen.getByText(/Open this page from DMS/)).toBeInTheDocument();
     expect(calls).toHaveLength(0);
   });
-  it('a descriptor without a master id is refused', () => {
+  it('a record launch without a master id is refused', () => {
     const calls = dms();
-    const { masterId: _m, ...rest } = add();
-    open(rest as LaunchDescriptor);
+    open('add', vi.fn(), { master_id: null });
     expect(screen.getByText(/missing or unexpected details/)).toBeInTheDocument();
-    expect(calls).toHaveLength(0);
-  });
-  it('an apiBase that is not allowlisted is refused', () => {
-    const calls = dms();
-    open({ ...add(), apiBase: 'https://evil.example/api' });
-    expect(screen.getByText(/not set up to talk to/)).toBeInTheDocument();
     expect(calls).toHaveLength(0);
   });
 });
@@ -275,31 +286,66 @@ describe('/embed/dms-record edit', () => {
     expect(await screen.findByText('Record is locked')).toBeInTheDocument();
   });
 
-  it('401 on save shows "Sign in to DMS again" and keeps the form and input', async () => {
-    dms({ patch: json(401, { message: 'Unauthenticated.' }) });
+  it('a session that ended mid-save parks the save; closing the reconnect prompt shows "Sign in to DMS again" and keeps the form and input', async () => {
+    dms({ patch: json(401, { success: false, code: 'FP_SESSION_INVALID', message: 'x', request_id: null }) });
     const navigate = open(edit());
     const name = await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
     const user = userEvent.setup();
     await user.type(name, 'x');
     await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(sessionSnapshot().phase).toBe('invalid'));
+    act(() => dismissReconnect());
     expect(await screen.findByText('Sign in to DMS again')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /Vendor Name/ })).toHaveValue('Acmex');
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('401 on load shows the sign-in screen and no form', async () => {
-    dms({ masterStatus: 401, master: {} });
+  it('a session that ended on load shows the sign-in screen and no form', async () => {
+    dms({ masterStatus: 401, master: { success: false, code: 'FP_SESSION_INVALID', message: 'x', request_id: null } });
     open(edit());
+    await waitFor(() => expect(sessionSnapshot().phase).toBe('invalid'));
+    act(() => dismissReconnect());
     expect(await screen.findByText('Sign in to DMS again')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).toBeNull();
   });
+});
 
-  it('no DMS token: sign-in screen, no request', async () => {
-    localStorage.clear();
-    const calls = dms();
+describe('/embed/dms-record load errors (DESIGN 3.4, 3.5): a terminal code gives "Back to DMS" with fp_status=error', () => {
+  const envelope = (code: string) => ({ success: false, code, message: 'server wording', request_id: '7e000000-0000-4000-8000-0000000000dd' });
+
+  it.each([
+    [404, 'NOT_FOUND', 'This master or record is not available.'],
+    [403, 'FORBIDDEN_RIGHT', 'You do not have permission to do this.'],
+    [403, 'FP_SCOPE_DENIED', 'This form cannot do that. Go back to DMS and open it again.'],
+    [422, 'MASTER_NOT_CONVERTED', 'This master has not been moved to Forms+ yet.'],
+  ] as const)('%i %s: the contract message, the reference and a return link carrying the code', async (status, code, message) => {
+    dms({ masterStatus: status, master: envelope(code) });
     open(edit());
-    expect(await screen.findByText('Sign in to DMS again')).toBeInTheDocument();
-    expect(calls).toHaveLength(0);
+    expect(await screen.findByText('This record cannot be opened', undefined, READY)).toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByText('Reference: 7e000000-0000-4000-8000-0000000000dd')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to DMS' })).toHaveAttribute('href', `${RETURN}?fp_status=error&fp_master_id=${MASTER_ID}&fp_code=${code}`);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('a load failure that is not terminal gets the plain return link', async () => {
+    dms({ masterStatus: 503, master: envelope('LAUNCH_STORE_UNAVAILABLE') });
+    open(edit());
+    expect(await screen.findByText('Forms+ is temporarily unavailable. Try again in a moment.', undefined, READY)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to DMS' })).toHaveAttribute('href', RETURN);
+  });
+
+  it('a save failure stays in the page with its message and reference, and the typed value kept', async () => {
+    dms({ patch: json(422, envelope('SECRET_MASK_NOT_ALLOWED')) });
+    const navigate = open(edit());
+    const name = await screen.findByRole('textbox', { name: /Vendor Name/ }, READY);
+    const user = userEvent.setup();
+    await user.type(name, '!');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('A masked secret cannot be saved as a value. Enter the real value or leave the field empty.')).toBeInTheDocument();
+    expect(screen.getByText('Reference: 7e000000-0000-4000-8000-0000000000dd')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /Vendor Name/ })).toHaveValue('Acme!');
+    expect(navigate).not.toHaveBeenCalled();
   });
 });
 
@@ -309,7 +355,8 @@ describe('/embed/dms-record non-Forms+ master', () => {
     body.data.source = 'dms';
     const calls = dms({ master: body });
     open(edit());
-    expect(await screen.findByText('This master has not been converted to Forms+')).toBeInTheDocument();
+    expect(await screen.findByText('This master has not been moved to Forms+ yet', undefined, READY)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to DMS' })).toHaveAttribute('href', `${RETURN}?fp_status=error&fp_master_id=${MASTER_ID}&fp_code=MASTER_NOT_CONVERTED`);
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     expect(calls).toHaveLength(1);
