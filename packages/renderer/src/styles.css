@@ -196,8 +196,9 @@
   letter-spacing: -0.02em;
 }
 
+/* Lighter than a real title, yet at least 3:1 against the surface (WCAG large text); 40% fell to about 2.3:1. */
 :where(.fr-root) .fr-title-placeholder {
-  color: color-mix(in srgb, var(--fr-text) 40%, transparent);
+  color: color-mix(in srgb, var(--fr-text) 65%, transparent);
 }
 
 :where(.fr-root) .fr-header .fr-description {
@@ -2416,17 +2417,48 @@
 }
 
 :where(.fr-root) .fr-primary {
-  background: var(--fr-accent);
-  color: var(--fr-accentText);
+  /*
+   * DMacq Design System <Button> primary, size xlarge (Figma 2619:1133): solid interactive/bg/primary, 8px corners,
+   * 48px tall, 12px × 16px padding, 16px/24px medium label, no gradient or shadow. The form's font carries the label.
+   * Colours: the design system's blue (#2950da, hover #2243b6) by default; a theme with its own accent sets
+   * --fr-submit-* on the root (theme/cssVars.ts); a colour picked in the Submit settings arrives inline and wins.
+   */
+  min-height: 48px;
+  padding: 12px 16px;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--fr-radius);
+  background: var(--fr-submit-bg, #2950da);
+  color: var(--fr-submit-text, #ffffff);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+  transition: background-color 150ms ease, filter 150ms ease;
 }
 
-/* The next step of the same colour: a fixed darkening, so it reads on any accent (a block's own submit colour is inline and wins). */
-:where(.fr-root) .fr-primary:hover:not(:disabled, [aria-disabled='true']) {
-  background: color-mix(in srgb, var(--fr-accent) 86%, #000);
+:where(.fr-root) .fr-primary:hover:not(:disabled) {
+  background: var(--fr-submit-bg-hover, #2243b6);
 }
 
-:where(.fr-root) .fr-primary:active:not(:disabled, [aria-disabled='true']) {
-  background: color-mix(in srgb, var(--fr-accent) 76%, #000);
+/* A custom colour is inline, so hover and press darken it instead of replacing it. */
+:where(.fr-root) .fr-primary[style*='background']:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+:where(.fr-root) .fr-primary:active:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+:where(.fr-root) .fr-primary:disabled,
+:where(.fr-root) .fr-primary[aria-disabled='true'] {
+  opacity: 0.6;
+}
+
+/* Figma: focus ring interactive/border/focus, 2px, 2px offset. */
+:where(.fr-root) .fr-primary:focus-visible {
+  outline: 2px solid var(--fr-submit-bg, #2950da);
+  outline-offset: 2px;
 }
 
 /* A "full width" submit button; the class name is the contract with submitButtonPresentation, not a utility framework. */
@@ -2438,22 +2470,22 @@
   border-radius: var(--fr-radius);
 }
 
+/*
+ * Submit settings sizes. Medium (the default) is the design system's xlarge above; Small is its large (Figma
+ * 2619:1143); Large goes one step past the design system with the same proportions.
+ */
 :where(.fr-root) .fr-primary[data-submit-size='sm'] {
-  min-height: 34px;
-  padding: 6px 14px;
-  font-size: 0.875rem;
-}
-
-:where(.fr-root) .fr-primary[data-submit-size='md'] {
   min-height: 40px;
-  padding: 8px 18px;
-  font-size: 1rem;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  line-height: 20px;
 }
 
 :where(.fr-root) .fr-primary[data-submit-size='lg'] {
-  min-height: 48px;
-  padding: 10px 24px;
-  font-size: 1.0625rem;
+  min-height: 56px;
+  padding: 16px 24px;
+  font-size: 1.125rem;
+  line-height: 24px;
 }
 
 :where(.fr-root) .fr-secondary {

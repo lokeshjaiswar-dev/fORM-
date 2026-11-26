@@ -1,0 +1,104 @@
+/*
+ * Illustrations of the Create form overlay (Figma DMacq Design System 5412:2253), one 4.4s loop each, from the Figma
+ * motion tracks: on the blank form three fields drop in as the + is pressed; on the template card the side cards fan
+ * out, the front one lifts and the selected check pops in. Under reduced motion both hold their finished picture.
+ */
+.create-form-dialog {
+  --cf-ease: cubic-bezier(0.5, 0, 0.5, 1);
+  --cf-pop: cubic-bezier(0.45, 1.45, 0.8, 1);
+}
+
+/* the blank form: each field fades and rises 6px into place, all three leave together near the end */
+.create-form-dialog .cf-field {
+  opacity: 0;
+  translate: 0 6px;
+  animation: 4.4s linear infinite both;
+}
+.create-form-dialog .cf-field-1 { animation-name: cf-field-1; }
+.create-form-dialog .cf-field-2 { animation-name: cf-field-2; }
+.create-form-dialog .cf-field-3 { animation-name: cf-field-3; }
+@keyframes cf-field-1 {
+  0%, 11.36% { opacity: 0; translate: 0 6px; animation-timing-function: var(--cf-ease); }
+  18.18% { opacity: 1; }
+  19.32%, 79.55% { opacity: 1; translate: 0 0; animation-timing-function: ease-in-out; }
+  88.64%, 100% { opacity: 0; translate: 0 0; }
+}
+@keyframes cf-field-2 {
+  0%, 29.55% { opacity: 0; translate: 0 6px; animation-timing-function: var(--cf-ease); }
+  36.36% { opacity: 1; }
+  37.5%, 79.55% { opacity: 1; translate: 0 0; animation-timing-function: ease-in-out; }
+  88.64%, 100% { opacity: 0; translate: 0 0; }
+}
+@keyframes cf-field-3 {
+  0%, 47.73% { opacity: 0; translate: 0 6px; animation-timing-function: var(--cf-ease); }
+  54.55% { opacity: 1; }
+  55.68%, 79.55% { opacity: 1; translate: 0 0; animation-timing-function: ease-in-out; }
+  88.64%, 100% { opacity: 0; translate: 0 0; }
+}
+
+/* the + is pressed once for each field */
+.create-form-dialog .cf-add {
+  animation: cf-add 4.4s linear infinite;
+}
+@keyframes cf-add {
+  0%, 5.68% { scale: 1; animation-timing-function: ease-out; }
+  9.09% { scale: 0.86; animation-timing-function: var(--cf-pop); }
+  14.09%, 23.86% { scale: 1; animation-timing-function: ease-out; }
+  27.27% { scale: 0.86; animation-timing-function: var(--cf-pop); }
+  32.27%, 42.05% { scale: 1; animation-timing-function: ease-out; }
+  45.45% { scale: 0.86; animation-timing-function: var(--cf-pop); }
+  50.45%, 100% { scale: 1; }
+}
+
+/* the template fan: side cards rest at -8 and +8 degrees and spread 4 degrees and 8px further */
+.create-form-dialog .cf-card-left { rotate: -8deg; animation: cf-left 4.4s linear infinite; }
+.create-form-dialog .cf-card-right { rotate: 8deg; animation: cf-right 4.4s linear infinite; }
+@keyframes cf-left {
+  0%, 6.82% { rotate: -8deg; translate: 0 0; animation-timing-function: var(--cf-ease); }
+  18.18%, 79.55% { rotate: -12deg; translate: -8px 0; animation-timing-function: ease-in-out; }
+  90.91%, 100% { rotate: -8deg; translate: 0 0; }
+}
+@keyframes cf-right {
+  0%, 6.82% { rotate: 8deg; translate: 0 0; animation-timing-function: var(--cf-ease); }
+  18.18%, 79.55% { rotate: 12deg; translate: 8px 0; animation-timing-function: ease-in-out; }
+  90.91%, 100% { rotate: 8deg; translate: 0 0; }
+}
+.create-form-dialog .cf-card-front { animation: cf-front 4.4s linear infinite; }
+@keyframes cf-front {
+  0%, 13.64% { scale: 1; translate: 0 0; animation-timing-function: var(--cf-ease); }
+  22.73%, 79.55% { scale: 1.04; translate: 0 -6px; animation-timing-function: ease-in-out; }
+  90.91%, 100% { scale: 1; translate: 0 0; }
+}
+.create-form-dialog .cf-badge {
+  opacity: 0;
+  scale: 0.4;
+  animation: cf-badge-pop 4.4s linear infinite both, cf-badge-lift 4.4s linear infinite both;
+}
+/* pops in once the front card is up, fades before the fan closes */
+@keyframes cf-badge-pop {
+  0%, 25% { opacity: 0; scale: 0.4; animation-timing-function: var(--cf-pop); }
+  28.41% { opacity: 1; }
+  32.95%, 77.27% { opacity: 1; scale: 1; animation-timing-function: ease-in; }
+  82.95%, 100% { opacity: 0; scale: 1; }
+}
+/* rides up and down with the front card */
+@keyframes cf-badge-lift {
+  0%, 13.64% { translate: 0 0; animation-timing-function: var(--cf-ease); }
+  22.73%, 79.55% { translate: 0 -6px; animation-timing-function: ease-in-out; }
+  90.91%, 100% { translate: 0 0; }
+}
+
+/* reduced motion: the finished picture, still */
+@media (prefers-reduced-motion: reduce) {
+  .create-form-dialog .cf-field,
+  .create-form-dialog .cf-add,
+  .create-form-dialog .cf-card,
+  .create-form-dialog .cf-badge {
+    animation: none;
+  }
+  .create-form-dialog .cf-field { opacity: 1; translate: 0 0; }
+  .create-form-dialog .cf-card-front { scale: 1.04; translate: 0 -6px; }
+  .create-form-dialog .cf-card-left { rotate: -12deg; translate: -8px 0; }
+  .create-form-dialog .cf-card-right { rotate: 12deg; translate: 8px 0; }
+  .create-form-dialog .cf-badge { opacity: 1; scale: 1; translate: 0 -6px; }
+}

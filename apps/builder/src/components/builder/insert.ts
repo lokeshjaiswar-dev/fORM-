@@ -1,9 +1,10 @@
 import { REGISTRY } from '@form/registry';
+import type { BlockId } from '@form/schema';
 import type { Tile } from '@/fields/tiles';
 import { inlineDoc, placementOf } from '@/lib/definition';
-import { addBlock, addRepeatingGroup, insertPageBreak } from '@/state/actions';
+import { addBlock, addRepeatingGroup, insertPageBreak, placeBeside } from '@/state/actions';
 import { currentDoc } from '@/state/documentStore';
-import type { PageSlot } from '@/state/commands/types';
+import type { BlockPatch, PageSlot } from '@/state/commands/types';
 
 /** Inserts what a palette or slash-menu tile names at `at`: a block for a registry entry, or a page break. */
 export function insertTile(tile: Tile, at?: PageSlot): void {
@@ -20,10 +21,27 @@ export function insertTile(tile: Tile, at?: PageSlot): void {
       }
     }
   } else {
-    const kind = REGISTRY[tile.choice.type].kind;
-    const content = kind === 'content' || kind === 'container' || kind === 'transient';
-    const overrides = tile.choice.configOverrides;
-    const fillBlank = tile.choice.type === 'short_text' && 'placeholder' in overrides && overrides.placeholder === '_____';
-    addBlock(tile.choice, at, content ? {} : { label: inlineDoc(tile.label), ...(tile.required ? { required: true } : {}), ...(fillBlank ? { hideLabel: true } : {}) });
+    addBlock(tile.choice, at, tilePatch(tile));
   }
+}
+
+/** What a block made from a palette tile starts with: a value field is named after its tile. */
+function tilePatch(tile: Extract<Tile, { kind: 'block' }>): BlockPatch {
+  const kind = REGISTRY[tile.choice.type].kind;
+  if (kind === 'content' || kind === 'container' || kind === 'transient') return {};
+  const overrides = tile.choice.configOverrides;
+  const fillBlank = tile.choice.type === 'short_text' && 'placeholder' in overrides && overrides.placeholder === '_____';
+  return { label: inlineDoc(tile.label), ...(tile.required ? { required: true } : {}), ...(fillBlank ? { hideLabel: true } : {}) };
+}
+
+/**
+ * Places a new block for a palette tile beside `hostId` as a half-width pair, made the same way as a click or a drop
+ * between blocks (named after its tile). A page break cannot sit beside a block, so it is inserted at the end instead.
+ */
+export function placeTileBeside(hostId: BlockId, tile: Tile): void {
+  if (tile.kind !== 'block') {
+    insertTile(tile);
+    return;
+  }
+  placeBeside(hostId, { choice: tile.choice, patch: tilePatch(tile) });
 }

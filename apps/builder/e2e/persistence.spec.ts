@@ -2,7 +2,7 @@ import { expect, test, type Page } from './test.ts';
 import { openNewForm } from './helpers.ts';
 
 async function startWithShortAnswer(page: Page) {
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   await page.getByPlaceholder('Type ‘/’ to insert blocks').fill('/short');
   await page.getByRole('option', { name: /Short answer/ }).click();
 }
@@ -10,7 +10,7 @@ async function startWithShortAnswer(page: Page) {
 test('reload restores the form from its saved draft, and the forms list shows it', async ({ page }) => {
   await openNewForm(page);
   await page.getByPlaceholder('Form title').fill('Saved form');
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   await insert.fill('Persisted text');
   await insert.press('Enter');
@@ -20,9 +20,10 @@ test('reload restores the form from its saved draft, and the forms list shows it
   await expect(page.getByPlaceholder('Form title')).toHaveValue('Saved form');
   await expect(page.getByText('Persisted text', { exact: true })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Forms' }).click();
+  await page.getByRole('link', { name: 'Back to forms' }).click();
   await expect(page).toHaveURL(/\/forms$/);
-  await expect(page.getByRole('link', { name: /Saved form/ })).toBeVisible();
+  /* The sidebar's Recent list links it too; the forms table is the list under test. */
+  await expect(page.getByRole('main').getByRole('link', { name: /Saved form/ })).toBeVisible();
 });
 
 test('the URL and the mode follow each other, Back and Forward included (B23)', async ({ page }) => {

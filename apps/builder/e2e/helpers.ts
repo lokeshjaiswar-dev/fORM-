@@ -1,13 +1,20 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Starts a new, blank form from the forms list (New form → Blank form) and waits for the builder at its own id; returns the id. */
+/** Starts a new, blank form from the forms list (New form → Start from scratch) and waits for the builder at its own id; returns the id. */
 export async function openNewForm(page: Page): Promise<string> {
   await page.goto('/forms');
   await page.getByRole('button', { name: 'New form' }).click();
-  await page.getByRole('button', { name: /Blank form/ }).click();
+  await page.getByRole('button', { name: 'Start from scratch' }).click();
   await page.waitForURL(/\/builder\/[^/]+$/);
   await expect(page.getByPlaceholder('Form title')).toBeVisible();
   return new URL(page.url()).pathname.split('/')[2] ?? '';
+}
+
+/** Hovers the `n`-th block on the canvas so its margin controls (drag handle, insert, menu) take the pointer. */
+export async function hoverBlock(page: Page, n: number) {
+  const block = page.locator('[data-block-id]').nth(n);
+  await block.hover();
+  return block;
 }
 
 /** Inserts a palette entry from the slash menu on the insert line. */
@@ -25,20 +32,20 @@ export async function label(page: Page, text: string) {
   await page.evaluate('document.activeElement?.blur()');
 }
 
-/** Opens the settings of the `n`-th block on the canvas (its drag handle). */
+/** Opens the settings of the `n`-th block on the canvas (a click on its drag handle). */
 export async function openSettings(page: Page, n: number) {
-  await page.locator('button.size-6.cursor-grab').nth(n).click();
+  const block = await hoverBlock(page, n);
+  await block.getByRole('button', { name: 'Drag to reorder · click for settings' }).click();
 }
 
 /**
- * Turns on section breaks for the form: the palette offers a Section break only once Form settings → Sections has the
- * switch on. Leaves the settings dialog closed.
+ * Turns on section breaks for the form: the Toolbox offers a Section break only once Form settings → Sections has the
+ * switch on (Settings sits beside the preview, in the top bar's view switch). Returns to Edit.
  */
 export async function enableSectionBreaks(page: Page) {
-  await page.getByRole('button', { name: 'Form settings' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Form settings' });
-  await dialog.getByRole('tab', { name: 'Sections' }).click();
-  await dialog.getByRole('switch', { name: 'Section break' }).click();
-  await dialog.getByRole('button', { name: 'Close' }).click();
-  await expect(dialog).toBeHidden();
+  const views = page.getByRole('group', { name: 'Builder view' });
+  await views.getByRole('button', { name: 'Form settings' }).click();
+  await page.getByRole('tab', { name: 'Sections' }).click();
+  await page.getByRole('switch', { name: 'Section break' }).click();
+  await views.getByRole('button', { name: 'Edit', exact: true }).click();
 }

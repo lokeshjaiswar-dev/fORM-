@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormDesignPanel } from '@/components/builder/FormDesignPanel';
 import { doc, resetStore } from '@/test/fixtures';
@@ -12,6 +12,7 @@ describe('FormDesignPanel', () => {
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
     expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Colors' }));
     await user.click(screen.getByRole('button', { name: 'Violet' }));
     expect(doc().theme.tokens.colors.accent).toBe('#7c3aed');
     expect(doc().theme.tokens.colors.page).toBe('#ede9fe');
@@ -25,6 +26,16 @@ describe('FormDesignPanel', () => {
     expect(await screen.findByRole('tooltip', { name: 'Form settings' })).toBeInTheDocument();
   });
 
+  it('opens on Themes, the quickest way to a finished look, and orders the tabs by how often they are needed', async () => {
+    const user = userEvent.setup();
+    render(<FormDesignPanel />);
+    await user.click(screen.getByRole('button', { name: 'Form settings' }));
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Themes', 'Colors', 'Layout', 'Submit', 'Rules', 'Sections', 'API autofill']);
+    expect(screen.getByRole('tab', { name: 'Themes' })).toHaveAttribute('aria-selected', 'true');
+    await user.type(screen.getByRole('searchbox', { name: 'Search themes' }), 'zzzz');
+    expect(screen.getByText('No themes match “zzzz”.')).toBeInTheDocument();
+  });
+
   it('applies a named theme', async () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
@@ -35,20 +46,21 @@ describe('FormDesignPanel', () => {
     expect(doc().theme.tokens.inputStyle).toBe('filled');
   });
 
-  it('applies style tokens from the Styles tab without closing the panel', async () => {
+  it('applies layout tokens from the Layout tab with one click each, without closing the panel', async () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    await user.click(screen.getByRole('tab', { name: 'Styles' }));
+    await user.click(screen.getByRole('tab', { name: 'Layout' }));
     expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
-    await user.click(screen.getByRole('combobox', { name: 'Form width' }));
-    await user.click(await screen.findByRole('option', { name: 'Wide' }));
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Form width' })).getByRole('radio', { name: 'Wide' }));
     expect(doc().theme.tokens.formWidth).toBe('wide');
-    await user.click(screen.getByRole('combobox', { name: 'Input style' }));
-    await user.click(await screen.findByRole('option', { name: 'Filled' }));
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Input style' })).getByRole('radio', { name: 'Filled' }));
     expect(doc().theme.tokens.inputStyle).toBe('filled');
-    await user.click(screen.getByRole('button', { name: 'Progress bar: Off' }));
+    const progress = screen.getByRole('switch', { name: 'Progress bar' });
+    expect(progress).not.toBeChecked();
+    await user.click(progress);
     expect(doc().theme.tokens.progress).toBe('bar');
+    expect(progress).toBeChecked();
     expect(screen.getByRole('region', { name: 'Form settings' })).toBeInTheDocument();
   });
 
@@ -99,10 +111,9 @@ describe('FormDesignPanel', () => {
     await user.click(screen.getByRole('switch', { name: 'Section break' }));
     expect(doc().behavior.sectionNav?.enabled).toBe(true);
     expect(doc().behavior.sectionNav?.mode).toBe('scroll');
-    expect(screen.getByRole('combobox', { name: 'Behaviour' })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Behaviour' })).toBeInTheDocument();
     expect(screen.getByLabelText('Section colour')).toBeInTheDocument();
-    await user.click(screen.getByRole('combobox', { name: 'Behaviour' }));
-    await user.click(await screen.findByRole('option', { name: 'Break the page' }));
+    await user.click(screen.getByRole('radio', { name: 'Break the page' }));
     expect(doc().behavior.sectionNav?.mode).toBe('paged');
   });
 });

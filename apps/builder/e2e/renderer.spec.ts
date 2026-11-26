@@ -21,7 +21,7 @@ async function recordSubmissions(page: Page) {
 
 test('three pages: logic hides a required field, the form submits, and the hidden answer is absent from onSubmit', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   await insert(page, '/short', /Short answer/);
   await label(page, 'Attending');
   await insert(page, '/page', /Page break/);
@@ -74,7 +74,7 @@ test('the preview has no serious or critical axe violations, before and after va
   await openNewForm(page);
   /* The preview dims a placeholder where an untitled form's title goes; a published form never shows it, so the form is titled. */
   await page.getByPlaceholder('Form title').fill('Contact us');
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   const fields: Array<[string, RegExp, string]> = [
     ['/short', /Short answer/, 'Full name'],
     ['/email', /Email/, 'Email address'],

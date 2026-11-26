@@ -59,7 +59,8 @@ function PatternDate({ field, format, answer, block }: ControlProps<'date'> & { 
     if (typed !== value) setText(value ? formatDate(value, format) : typed ? '' : text);
   }
 
-  const placeholder = format.order.map((p) => t(NAME[p])).join(format.separator);
+  /* The author's own placeholder (Date settings) replaces the pattern hint ("dd/mm/yyyy"). */
+  const placeholder = block.config.placeholder?.trim() || format.order.map((p) => t(NAME[p])).join(format.separator);
   const limits = block.config.limits;
   return (
     <div className="fr-date-field">

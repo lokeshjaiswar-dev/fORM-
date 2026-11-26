@@ -10,7 +10,7 @@ import { blockText, placementOf } from '@/lib/definition';
 import { moveBlock, placeBeside } from '@/state/actions';
 import { currentDoc, useBlock } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
-import { insertTile } from '@/components/builder/insert';
+import { insertTile, placeTileBeside } from '@/components/builder/insert';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { DropIndicatorContext, type DropIndicator } from '@/components/builder/dropIndicator';
 
@@ -129,9 +129,8 @@ export function BuilderDnd({ children }: { children: ReactNode }) {
     }
     if (overId.startsWith(BESIDE)) {
       const hostId = overId.slice(BESIDE.length) as BlockId;
-      if (!tile) placeBeside(hostId, { id: String(dragged.id) as BlockId });
-      else if (tile.kind === 'block') placeBeside(hostId, { choice: tile.choice });
-      else insertTile(tile);
+      if (tile) placeTileBeside(hostId, tile);
+      else placeBeside(hostId, { id: String(dragged.id) as BlockId });
       return;
     }
     const at = placementOf(currentDoc(), overId as BlockId);

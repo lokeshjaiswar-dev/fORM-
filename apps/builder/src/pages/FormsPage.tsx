@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
@@ -7,8 +7,8 @@ import { t } from '@/i18n';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
 import { AccountMenu } from '@/auth/AccountMenu';
 import { useActiveOrg } from '@/auth/client';
-import { GalleryFallback } from '@/components/templates/TemplateDialog';
-import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
+import { preloadGallery } from '@/components/templates/gallery';
+import { CreateFormDialog, type CreateStep } from '@/components/forms/CreateFormDialog';
 import { mergeFromRepository } from '@/lib/mergeSelected';
 import { uid } from '@/lib/utils';
 import type { StoredForm } from '@/persistence/DocumentRepository';
@@ -23,6 +23,7 @@ import { rowTitle } from '@/pages/forms/rowTitle';
 import { useFormActions } from '@/pages/forms/useFormActions';
 import { useFormsList, type ListRow } from '@/pages/forms/useFormsList';
 import { builderPath } from '@/pages/useBuilderMode';
+import { navigateWithTransition } from '@/lib/viewTransition';
 
 const M = defineMessages('builder', {
   'forms.title': 'Forms',
@@ -33,11 +34,6 @@ const M = defineMessages('builder', {
   'forms.delete_title': 'Delete this form?',
   'forms.delete_body': '“{title}” was never saved to the server, so it cannot be restored. This cannot be undone.',
   'forms.delete_confirm': 'Delete form',
-  'new.title': 'New form',
-  'new.description': 'Start from a blank form or from a template. Templates work offline.',
-  'new.blank': 'Blank form',
-  'new.blank_hint': 'An empty page to build on',
-  'new.templates': 'From a template',
   'forms.merge': 'Merge selected',
   'forms.merge_need_two': 'Select at least two forms to merge.',
   'forms.merge_failed': 'Those forms could not be merged.',
@@ -61,7 +57,10 @@ export function FormsPage() {
   const list = useFormsList(repo, org);
   const [error, setError] = useState<string | null>(null);
   const actions = useFormActions(repo, org, list, setError);
-  const [creating, setCreating] = useState(false);
+  /* Which step of the Create a form overlay is open: the choice (New form), or null while it is closed. */
+  const [creating, setCreating] = useState<CreateStep | null>(null);
+  /** A new form is being saved and opened: a second click on a start option does nothing. */
+  const startingRef = useRef(false);
   /** A form only this browser has, asked to be deleted: it cannot be restored, so the member confirms first. */
   const [removing, setRemoving] = useState<ListRow | null>(null);
   const { lifecycle, sort, favourite } = list;
@@ -77,22 +76,31 @@ export function FormsPage() {
 
   useEffect(preloadGallery, []);
 
-  async function saveThenOpen(form: StoredForm): Promise<void> {
+  async function saveThenOpen(form: StoredForm): Promise<boolean> {
     try {
       await repo.save(form);
     } catch {
       setError(t(M['forms.not_saved']));
-      return;
+      return false;
     }
-    navigate(builderPath(form.id));
+    /* Crossfades the page into the builder where the browser supports view transitions (see index.css). */
+    navigateWithTransition(() => navigate(builderPath(form.id)));
+    return true;
   }
 
+  /*
+   * The create window stays open while the new form is saved, so the page crossfades from it straight into the builder
+   * instead of closing first and showing the list for a moment. It closes here only if the save fails.
+   */
   async function create(doc?: FormDefinition) {
+    if (startingRef.current) return;
+    startingRef.current = true;
     setError(null);
-    setCreating(false);
     const id = uid();
     const now = new Date().toISOString();
-    await saveThenOpen(doc ? newStoredForm(id, now, doc) : newStoredForm(id, now));
+    const opened = await saveThenOpen(doc ? newStoredForm(id, now, doc) : newStoredForm(id, now));
+    startingRef.current = false;
+    if (!opened) setCreating(null);
   }
 
   function toggleSelected(id: string) {
@@ -162,7 +170,7 @@ export function FormsPage() {
       </div>
       <h1 className="text-[40px] font-bold leading-[1.15] tracking-[-0.02em]">{t(M['forms.title'])}</h1>
       <div className="mt-6 flex gap-2">
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => setCreating('choose')}>
           <Plus /> {t(M['forms.new'])}
         </Button>
         {loaded && lifecycle !== 'trashed' && loaded.items.length >= 2 ? (
@@ -195,30 +203,13 @@ export function FormsPage() {
         />
       </div>
       <FormsListPanel list={list} actions={actions} selected={selected} onToggleSelected={toggleSelected} onConfirmDelete={setRemoving} />
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t(M['new.title'])}</DialogTitle>
-            <DialogDescription>{t(M['new.description'])}</DialogDescription>
-          </DialogHeader>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void create()}
-            className="mb-4 h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-left"
-          >
-            <Plus className="size-4 shrink-0" />
-            <span>
-              <span className="block font-medium">{t(M['new.blank'])}</span>
-              <span className="block text-sm font-normal text-muted-foreground">{t(M['new.blank_hint'])}</span>
-            </span>
-          </Button>
-          <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['new.templates'])}</p>
-          <Suspense fallback={<GalleryFallback />}>
-            <TemplateGallery onCancel={() => setCreating(false)} onUse={(definition) => void create(definition)} />
-          </Suspense>
-        </DialogContent>
-      </Dialog>
+      <CreateFormDialog
+        open={creating !== null}
+        onOpenChange={(next) => !next && setCreating(null)}
+        initialStep={creating ?? 'choose'}
+        onBlank={() => void create()}
+        onTemplate={(definition) => void create(definition)}
+      />
       <Dialog open={conflicts !== null} onOpenChange={(next) => !next && setConflicts(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>

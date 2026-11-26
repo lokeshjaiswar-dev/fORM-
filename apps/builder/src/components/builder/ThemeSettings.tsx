@@ -10,8 +10,8 @@ import { useDoc } from '@/state/documentStore';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Switch } from '@dmacq/ui';
 import { AccessPanel } from '@/components/builder/access/AccessPanel';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { cn } from '@/lib/utils';
 import { NiceSelect } from '@/components/NiceSelect';
+import { InspectorSection } from '@/components/builder/inspector/parts';
 
 const CONFETTI_STYLES: ConfettiStyle[] = ['classic', 'pastel', 'ocean', 'sunset'];
 const CONFETTI_LABEL: Record<ConfettiStyle, 'settings.confetti_classic' | 'settings.confetti_pastel' | 'settings.confetti_ocean' | 'settings.confetti_sunset'> = {
@@ -26,6 +26,8 @@ const M = defineMessages('builder', {
   'settings.description': 'Theme and form settings.',
   'settings.form': 'Form settings',
   'settings.submit': 'Submit button',
+  'settings.section_button': 'Button',
+  'settings.section_after': 'After submitting',
   'settings.thanks': 'Thank-you message',
   'settings.redirect': 'Redirect after submit',
   'settings.redirect_hint': 'An https address; leave empty to show the thank-you message',
@@ -85,9 +87,10 @@ export function ThemeSettings({ open, onOpenChange }: { open: boolean; onOpenCha
 
 /**
  * Submit button, thank-you message, redirect and confetti (the form's definition), then the Access section: who may open
- * the form and when, its password and its address (FormOps on the server, WP-1.07).
+ * the form and when, its password and its address (FormOps on the server, WP-1.07). Laid out as the settings panel's
+ * sections (Button, After submitting, Access).
  */
-export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
+export function SubmissionSettings() {
   const def = useDoc((d) => d);
   const message = messageEnding(def);
   const [redirect, setRedirect] = useDraft(redirectOf(def));
@@ -103,12 +106,13 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
   const setConfetti = (on: boolean) =>
     setEndings(def.endings.map((e) => (e.id === message?.id ? { ...message, confetti: on } : e)), def.defaultEndingId, { ...def.behavior, successAnimation: on });
 
-  const field = dark ? 'border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground' : undefined;
-  const labelCls = dark ? 'text-sidebar-foreground/80' : undefined;
+  const field = undefined;
+  const labelCls = undefined;
   const hintCls = redirectValid ? 'text-[12px] text-muted-foreground' : 'text-[12px] text-destructive';
 
   return (
-    <div className="space-y-4">
+    <>
+      <InspectorSection title={t(M['settings.section_button'])}>
       <div className="space-y-1.5">
         <Label htmlFor="submit-label" className={labelCls}>{t(M['settings.submit'])}</Label>
         <Input
@@ -128,10 +132,12 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
           }}
         />
       </div>
+      </InspectorSection>
+      <InspectorSection title={t(M['settings.section_after'])}>
       {message ? (
         <div className="space-y-1.5">
           <Label className={labelCls}>{t(M['settings.thanks'])}</Label>
-          <div className={cn('rounded-md border px-2', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border')}>
+          <div className="ds-field block px-2 py-1">
             <RichEditor value={message.content} onChange={setThanks} className="text-sm leading-6" placeholder={t(M['settings.thanks'])} />
           </div>
         </div>
@@ -154,7 +160,7 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
         />
         <p className={hintCls}>{t(redirectValid ? M['settings.redirect_hint'] : M['settings.redirect_invalid'])}</p>
       </div>
-      <Toggle dark={dark} id="successAnimation" label={t(M['settings.confetti'])} checked={def.behavior.successAnimation} onChange={setConfetti} />
+      <Toggle id="successAnimation" label={t(M['settings.confetti'])} checked={def.behavior.successAnimation} onChange={setConfetti} />
       {def.behavior.successAnimation && message ? (
         <div className="space-y-1.5">
           <Label htmlFor="confetti-style" className={labelCls}>{t(M['settings.confetti_style'])}</Label>
@@ -166,15 +172,18 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
           />
         </div>
       ) : null}
-      <AccessPanel dark={dark} />
-    </div>
+      </InspectorSection>
+      <InspectorSection>
+        <AccessPanel />
+      </InspectorSection>
+    </>
   );
 }
 
-function Toggle({ id, label, checked, onChange, dark }: { id: string; label: string; checked: boolean; onChange: (on: boolean) => void; dark?: boolean }) {
+function Toggle({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (on: boolean) => void }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <Label htmlFor={id} className={dark ? 'text-sidebar-foreground/80' : undefined}>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
     </div>
   );

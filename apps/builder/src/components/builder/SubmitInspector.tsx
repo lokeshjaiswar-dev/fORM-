@@ -15,8 +15,8 @@ import { applyPatch, type Patch } from '@/lib/patch';
 import { labelString } from '@/fields/style';
 import { setBehavior } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Field, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
-import { ToggleGroup, ToggleGroupItem, Input, Label } from '@dmacq/ui';
+import { Field, SectionTitle, SelectField, TextField, ToggleRow, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
+import { Input, Label } from '@dmacq/ui';
 
 const M = defineMessages('builder', {
   'inspector.submit_type': 'Submit button',
@@ -107,20 +107,17 @@ export function SubmitInspector() {
         }}
       />
       <Field label={t(M['inspector.submit_align'])}>
-        <ToggleGroup
+        <SegmentedGroup
           type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
           aria-label={t(M['inspector.submit_align'])}
           value={submit.align}
           onValueChange={(a) => a && setSubmit({ align: a as Behavior['submit']['align'] })}
         >
-          <ToggleGroupItem value="left" className="flex-1">{t(M['inspector.submit_align_left'])}</ToggleGroupItem>
-          <ToggleGroupItem value="center" className="flex-1">{t(M['inspector.submit_align_center'])}</ToggleGroupItem>
-          <ToggleGroupItem value="right" className="flex-1">{t(M['inspector.submit_align_right'])}</ToggleGroupItem>
-          <ToggleGroupItem value="full" className="flex-1">{t(M['inspector.submit_align_full'])}</ToggleGroupItem>
-        </ToggleGroup>
+          <Segment value="left">{t(M['inspector.submit_align_left'])}</Segment>
+          <Segment value="center">{t(M['inspector.submit_align_center'])}</Segment>
+          <Segment value="right">{t(M['inspector.submit_align_right'])}</Segment>
+          <Segment value="full">{t(M['inspector.submit_align_full'])}</Segment>
+        </SegmentedGroup>
       </Field>
       <SectionTitle>{t(M['inspector.submit_look'])}</SectionTitle>
       <p className="text-[12px] text-muted-foreground">{t(M['inspector.submit_theme_hint'])}</p>

@@ -17,7 +17,7 @@ for (const c of CASES) {
 
     test('the forms list and the builder load', async ({ page }) => {
       await page.goto('/forms');
-      await expect(page.getByRole('heading', { name: 'Forms' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Forms', exact: true })).toBeVisible();
       await expect(page.getByRole('note', { name: 'Edition' })).toHaveCount(0);
       await openNewForm(page);
       await expect(page.getByRole('note', { name: 'Edition' })).toHaveCount(0);
@@ -32,7 +32,7 @@ test.describe('API unreachable', () => {
 
   test('without a last-known edition the builder still loads', async ({ page }) => {
     await page.goto('/forms');
-    await expect(page.getByRole('heading', { name: 'Forms' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Forms', exact: true })).toBeVisible();
     await expect(page.getByRole('note', { name: 'Edition' })).toHaveCount(0);
   });
 });

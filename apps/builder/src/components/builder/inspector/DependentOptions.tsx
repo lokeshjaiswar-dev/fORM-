@@ -13,6 +13,9 @@ import { Button, CheckboxField, Dialog, DialogContent, DialogDescription, Dialog
 import { NiceSelect } from '@/components/NiceSelect';
 import { Field, ToggleRow } from '@/components/builder/inspector/parts';
 import { OptionRow, SortableOptions, type OptionPatch } from '@/components/builder/inspector/OptionList';
+import { forbidsAmpersand, withoutForbidden } from '@/fields/dropdownChoices';
+import type { ProfileName } from '@/embed/launch';
+import { useProfile } from '@/embed/useProfile';
 
 /*
  * One vocabulary everywhere: an option list is "linked to" an earlier question, each of that question's answers has a
@@ -135,7 +138,7 @@ export function LinkSetting({ block }: { block: DependentBlock }) {
     <>
       <ToggleRow
         label={t(M['linked.toggle'])}
-        hint={on ? undefined : t(M['linked.toggle_hint'])}
+        hint={t(M['linked.toggle_hint'])}
         checked={on}
         onChange={(next) => {
           setOpened(next);
@@ -209,16 +212,17 @@ function PasteDialog({ open, onOpenChange, title, help, apply }: { open: boolean
 }
 
 /** Writes pasted options to the block as it is now (the dialog may have been open while it changed). */
-function applyPaste(blockId: BlockId, run: (options: readonly ChoiceOption[]) => PasteResult): PasteResult | null {
+function applyPaste(blockId: BlockId, profile: ProfileName, run: (options: readonly ChoiceOption[]) => PasteResult): PasteResult | null {
   const latest = currentDoc().blocks[blockId];
   if (!isChoice(latest)) return null;
   const result = run(latest.config.options);
-  patchBlockConfig(latest, { options: result.options });
+  patchBlockConfig(latest, { options: forbidsAmpersand(profile, latest) ? withoutForbidden(result.options) : result.options });
   return result;
 }
 
 /** "Paste list" for a plain (unlinked) option list: one option per line. */
 export function PasteList({ block }: { block: DependentBlock }) {
+  const profile = useProfile();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -231,7 +235,7 @@ export function PasteList({ block }: { block: DependentBlock }) {
         title={t(M['options.paste_title'])}
         help={t(M['options.paste_help'])}
         apply={(text) => {
-          applyPaste(block.id, (options) => pasteIntoGroup(options, null, text, () => APP_IDS.newId()));
+          applyPaste(block.id, profile, (options) => pasteIntoGroup(options, null, text, () => APP_IDS.newId()));
           return null;
         }}
       />
@@ -269,6 +273,7 @@ export interface GroupedOptionsProps {
  * added, pasted, sorted and removed inside their group; an option in two groups is one option, listed in both.
  */
 export function GroupedOptions({ block, parent, images, valueColumn, showCode, onEdit, onDelete, onMove, onAdd, onLink }: GroupedOptionsProps) {
+  const profile = useProfile();
   const options = block.config.options;
   const parentName = nameOf(parent);
   const parentIds = new Set<string>(parent.config.options.map((p) => p.id));
@@ -415,7 +420,7 @@ export function GroupedOptions({ block, parent, images, valueColumn, showCode, o
         help={t(M['linked.paste_help'])}
         apply={(text) => {
           if (!pasteInto) return null;
-          applyPaste(block.id, (current) => pasteIntoGroup(current, pasteInto.parentId, text, () => APP_IDS.newId()));
+          applyPaste(block.id, profile, (current) => pasteIntoGroup(current, pasteInto.parentId, text, () => APP_IDS.newId()));
           reveal(pasteInto.key);
           return null;
         }}
@@ -426,7 +431,7 @@ export function GroupedOptions({ block, parent, images, valueColumn, showCode, o
         title={t(M['linked.import_title'], { parent: parentName })}
         help={t(M['linked.import_help'], { parent: parentName })}
         apply={(text) => {
-          const result = applyPaste(block.id, (current) => importPairs(current, parent.config.options, text, () => APP_IDS.newId()));
+          const result = applyPaste(block.id, profile, (current) => importPairs(current, parent.config.options, text, () => APP_IDS.newId()));
           if (!result?.unknownParents.length) return null;
           const names = result.unknownParents.map((n) => `“${n}”`).join(', ');
           return `${t(M['linked.done'], { added: result.added, linked: result.linked })} ${t(M['linked.unknown'], { parent: parentName, names })}`;

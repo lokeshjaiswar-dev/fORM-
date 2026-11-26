@@ -3,8 +3,8 @@ import { enableSectionBreaks, insert, label, openNewForm, openSettings } from '.
 
 test('section breaks name a stepper that highlights the current section', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
   await enableSectionBreaks(page);
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   await insert(page, '/section', /Section break/);
   await insert(page, '/short', /Short answer/);
   await insert(page, '/section', /Section break/);
@@ -14,16 +14,12 @@ test('section breaks name a stepper that highlights the current section', async 
   await expect(page.getByRole('navigation', { name: 'Form sections' })).toContainText('Section 2');
 
   await openSettings(page, 0);
-  const settings = page.getByRole('complementary', { name: 'Block settings' });
-  await settings.getByLabel('Section name').fill('Personal information');
-  /* How the navigator marks the current section is a setting of the form (Form settings → Sections), not of one break. */
-  await page.getByRole('button', { name: 'Form settings' }).click();
-  const form = page.getByRole('dialog', { name: 'Form settings' });
-  await form.getByRole('tab', { name: 'Sections' }).click();
-  await form.getByRole('combobox', { name: 'Current section' }).click();
-  await page.getByRole('option', { name: 'Pulse' }).click();
-  await form.getByRole('button', { name: 'Close' }).click();
-  await expect(form).toBeHidden();
+  await page.getByRole('complementary', { name: 'Block settings' }).getByRole('textbox', { name: 'Section name' }).fill('Personal information');
+  /* How the current section is marked is a form setting: Form settings → Sections → Look. */
+  await page.getByRole('group', { name: 'Builder view' }).getByRole('button', { name: 'Form settings' }).click();
+  await page.getByRole('tab', { name: 'Sections' }).click();
+  await page.getByRole('combobox', { name: 'Current section' }).click();
+  await page.getByRole('option', { name: 'Pulse', exact: true }).click();
 
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const nav = page.getByRole('navigation', { name: 'Form sections' });
@@ -34,7 +30,7 @@ test('section breaks name a stepper that highlights the current section', async 
 
 test('a 3-page form with a required field on page 3 advances from page 1', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   await insert(page, '/short', /Short answer/);
   await insert(page, '/page', /Page break/);
   await insert(page, '/short', /Short answer/);

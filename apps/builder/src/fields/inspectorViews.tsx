@@ -23,6 +23,8 @@ import { TILES } from '@/fields/tiles';
 import { ChoiceOtherValidation, FileMinLimits } from '@/fields/validationViews';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, Input, TextLink } from '@dmacq/ui';
+import { useShownSettings } from '@/components/builder/inspector/shownSettings';
+import { isDropdown, withoutForbidden } from '@/fields/dropdownChoices';
 
 /* The type's own inspector sections; `INSPECTOR` in fields/inspector.ts maps each available type to them. */
 
@@ -422,6 +424,7 @@ function shortTextPatternError(source: string): string | null {
 }
 
 export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
+  const shown = useShownSettings();
   const pattern = block.config.pattern?.source ?? '';
   return (
     <>
@@ -429,14 +432,16 @@ export function ShortTextValidation({ block }: InspectorProps<'short_text'>) {
         <NumberField label={t(M['inspector.min_length'])} value={block.config.minLength} parse={count(SHORT_TEXT_MAX)} onChange={(minLength) => setConfig(block, { minLength })} />
         <NumberField label={t(M['inspector.max_length'])} value={block.config.maxLength} parse={count(SHORT_TEXT_MAX)} onChange={(maxLength) => setConfig(block, { maxLength })} />
       </div>
-      <TextField
-        label={t(M['inspector.pattern'])}
-        hint={t(M['inspector.pattern_hint'])}
-        value={pattern}
-        placeholder="^[A-Z].+"
-        error={pattern ? shortTextPatternError(pattern) : null}
-        onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
-      />
+      {shown.pattern ? (
+        <TextField
+          label={t(M['inspector.pattern'])}
+          hint={t(M['inspector.pattern_hint'])}
+          value={pattern}
+          placeholder="^[A-Z].+"
+          error={pattern ? shortTextPatternError(pattern) : null}
+          onChange={(source) => setConfig(block, { pattern: source && source.length <= 256 ? { source } : undefined })}
+        />
+      ) : null}
       <ConfigProblem block={block} />
     </>
   );
@@ -498,16 +503,19 @@ export function PhoneGeneral({ block }: InspectorProps<'phone'>) {
 export function NumberGeneral({ block }: InspectorProps<'number'>) {
   /* Auto increment turns the field into a unique_id serial, a type DMS masters do not have (profile dms-v1). */
   const autoIncrement = useProfile() === 'full';
+  const shown = useShownSettings();
   return (
     <>
       {autoIncrement ? <ToggleRow label={t(M['inspector.auto_increment'])} hint={t(M['inspector.auto_increment_hint'])} checked={false} onChange={(on) => on && switchFieldType(block.id, 'unique_id')} /> : null}
       <ChromeGeneral block={block} />
-      <SelectField
-        label={t(M['inspector.display'])}
-        value={block.config.display}
-        options={[{ value: 'input', label: t(M['inspector.display_input']) }, { value: 'stepper', label: t(M['inspector.display_stepper']) }]}
-        onChange={(display) => setConfig(block, { display })}
-      />
+      {shown.numberDisplay ? (
+        <SelectField
+          label={t(M['inspector.display'])}
+          value={block.config.display}
+          options={[{ value: 'input', label: t(M['inspector.display_input']) }, { value: 'stepper', label: t(M['inspector.display_stepper']) }]}
+          onChange={(display) => setConfig(block, { display })}
+        />
+      ) : null}
     </>
   );
 }
@@ -529,6 +537,7 @@ export function NumberValidation({ block }: InspectorProps<'number'>) {
 
 /** How the options are shown: the first decision about a choice question, so it heads its Options section. */
 function ChoiceDisplay({ block }: { block: BlockOf<'single_choice' | 'multi_choice'> }) {
+  const profile = useProfile();
   const list = block.type === 'single_choice' ? 'radio' : 'checkbox';
   return (
     <SelectField
@@ -539,7 +548,8 @@ function ChoiceDisplay({ block }: { block: BlockOf<'single_choice' | 'multi_choi
         { value: 'dropdown', label: t(M['inspector.display_dropdown']) },
         { value: 'image', label: t(M['inspector.display_image']) },
       ]}
-      onChange={(display) => setConfig(block, { display })}
+      /* In the Masters builder a list becoming a dropdown loses any "&" in its choices (see fields/dropdownChoices.ts). */
+      onChange={(display) => setConfig(block, display === 'dropdown' && profile === 'dms-v1' ? { display, options: withoutForbidden(block.config.options) } : { display })}
     />
   );
 }
@@ -727,6 +737,7 @@ export function DateGeneral({ block }: InspectorProps<'date'>) {
           else if (today) setConfig(block, { defaultValue: undefined });
         }}
       />
+      <Placeholder block={block} />
       <SelectField label={t(M['inspector.date_pattern'])} value={block.config.pattern} options={DATE_PATTERNS.map((p) => ({ value: p, label: p }))} onChange={(pattern) => setConfig(block, { pattern })} />
       <SelectField
         label={t(M['inspector.picker'])}
@@ -1259,9 +1270,12 @@ export function SectionBreakGeneral({ block }: InspectorProps<'section_break'>) 
 }
 
 export function ChoiceOptions({ block }: { block: BlockOf<'single_choice' | 'multi_choice' | 'ranking' | 'matching' | 'constant_sum' | 'maxdiff'> }) {
+  const shown = useShownSettings();
   return (
     <>
-      {block.type === 'single_choice' || block.type === 'multi_choice' ? <ChoiceDisplay block={block} /> : null}
+      {(block.type === 'single_choice' || block.type === 'multi_choice') && (shown.dropdownDisplay || !isDropdown(block)) ? (
+        <ChoiceDisplay block={block} />
+      ) : null}
       <OptionsEditor block={block} />
     </>
   );

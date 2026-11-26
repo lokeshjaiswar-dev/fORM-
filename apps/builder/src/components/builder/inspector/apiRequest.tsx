@@ -5,8 +5,8 @@ import { defineMessages } from '@form/i18n';
 import { isSafeUrl, type ApiPair, type ApiRequestConfig, type SafeUrl } from '@form/schema';
 import { t } from '@/i18n';
 import type { Patch } from '@/lib/patch';
-import { Alert, AlertDescription, Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
-import { Field, TextField } from '@/components/builder/inspector/parts';
+import { Alert, AlertDescription, Button, Input } from '@dmacq/ui';
+import { Field, TextField, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
 import { useActiveOrg } from '@/auth/client';
 import { NiceSelect } from '@/components/NiceSelect';
 import { canManageApiCredentials, listApiCredentials, type ApiCredential } from '@/persistence/remoteApi';
@@ -162,18 +162,15 @@ export function ApiRequestFields({
         <AlertDescription>{t(M[list ? 'inspector.api_exposure_list' : 'inspector.api_exposure'])}</AlertDescription>
       </Alert>
       <Field label={t(M['inspector.api_method'])}>
-        <ToggleGroup
+        <SegmentedGroup
           type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
           aria-label={t(M['inspector.api_method'])}
           value={api.method ?? 'POST'}
           onValueChange={(method) => method && onPatch({ method: method as 'GET' | 'POST' })}
         >
-          <ToggleGroupItem value="GET" className="flex-1">{t(M['inspector.api_get'])}</ToggleGroupItem>
-          <ToggleGroupItem value="POST" className="flex-1">{t(M['inspector.api_post'])}</ToggleGroupItem>
-        </ToggleGroup>
+          <Segment value="GET">{t(M['inspector.api_get'])}</Segment>
+          <Segment value="POST">{t(M['inspector.api_post'])}</Segment>
+        </SegmentedGroup>
       </Field>
       <TextField
         label={t(M['inspector.api_url'])}
@@ -210,18 +207,15 @@ export function ApiRequestFields({
         </Alert>
       ) : null}
       <Field label={t(M['inspector.api_parser'])}>
-        <ToggleGroup
+        <SegmentedGroup
           type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
           aria-label={t(M['inspector.api_parser'])}
           value={api.parser ?? 'json'}
           onValueChange={(parser) => parser && onPatch({ parser: parser as 'json' | 'xml' })}
         >
-          <ToggleGroupItem value="json" className="flex-1">{t(M['inspector.api_json'])}</ToggleGroupItem>
-          <ToggleGroupItem value="xml" className="flex-1">{t(M['inspector.api_xml'])}</ToggleGroupItem>
-        </ToggleGroup>
+          <Segment value="json">{t(M['inspector.api_json'])}</Segment>
+          <Segment value="xml">{t(M['inspector.api_xml'])}</Segment>
+        </SegmentedGroup>
       </Field>
     </>
   );

@@ -149,13 +149,14 @@ describe('routes', () => {
     expect(path()).toBe('/forms');
   });
 
-  it('New form → Blank opens an empty v2 form at its own id (B23)', async () => {
+  it('New form → Start from scratch opens an empty v2 form at its own id (B23)', async () => {
     const repo = new MemoryRepository();
     renderApp(repo, '/forms');
     await screen.findByText(/No forms yet/, {}, OPENS);
     fireEvent.click(screen.getByRole('button', { name: 'New form' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Blank form/ }, OPENS));
-    expect(await screen.findByRole('button', { name: 'Press Enter to start from scratch' }, OPENS)).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Create a form' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start from scratch' }));
+    expect(await screen.findByRole('button', { name: /^Drag & drop your first element/ }, OPENS)).toBeInTheDocument();
     const id = path()?.replace('/builder/', '') ?? '';
     expect(id).not.toBe('demo');
     expect(repo.records.get(id)).toMatchObject({ id, rev: 0, format: DOCUMENT_FORMAT, doc: { formId: id, schemaVersion: 2, blocks: {} } });
@@ -269,7 +270,7 @@ describe('routes', () => {
     renderApp(repo, '/forms');
     await screen.findByText(/No forms yet/);
     fireEvent.click(screen.getByRole('button', { name: 'New form' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Blank form/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start from scratch' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be saved in this browser');
     expect(path()).toBe('/forms');
   });

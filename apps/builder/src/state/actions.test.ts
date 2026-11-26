@@ -162,6 +162,54 @@ describe('builder actions', () => {
     expect(layout('b')).toEqual({ width: 'half' });
   });
 
+  it('half width joins a lone half-width block just above, in one row', () => {
+    resetStore([block('short_text', 'a', { layout: { width: 'half', startNewRow: true } }), block('short_text', 'b'), block('short_text', 'c')]);
+    setBlockWidth(id('b'), 'half');
+    expect(layout('a')).toEqual({ width: 'half', startNewRow: true });
+    expect(layout('b')).toEqual({ width: 'half' });
+    undo();
+    expect(layout('b')).toBeUndefined();
+  });
+
+  it('half width pairs with a lone half-width block just below when the one above is not free', () => {
+    resetStore([block('short_text', 'a'), block('short_text', 'b'), block('short_text', 'c', { layout: { width: 'half', startNewRow: true } })]);
+    setBlockWidth(id('b'), 'half');
+    expect(layout('b')).toEqual({ width: 'half', startNewRow: true });
+    expect(layout('c')).toEqual({ width: 'half' });
+  });
+
+  it('half width starts its own row when the block above already has a partner and nothing below is free', () => {
+    resetStore([
+      block('short_text', 'a', { layout: { width: 'half', startNewRow: true } }),
+      block('short_text', 'b', { layout: { width: 'half' } }),
+      block('short_text', 'c'),
+      block('short_text', 'd'),
+    ]);
+    setBlockWidth(id('c'), 'half');
+    expect(layout('b')).toEqual({ width: 'half' });
+    expect(layout('c')).toEqual({ width: 'half', startNewRow: true });
+  });
+
+  it('half width does not take the partner of a block below that is already paired', () => {
+    resetStore([
+      block('short_text', 'a'),
+      block('short_text', 'b', { layout: { width: 'half', startNewRow: true } }),
+      block('short_text', 'c', { layout: { width: 'half' } }),
+    ]);
+    setBlockWidth(id('a'), 'half');
+    expect(layout('a')).toEqual({ width: 'half', startNewRow: true });
+    expect(layout('b')).toEqual({ width: 'half', startNewRow: true });
+    expect(layout('c')).toEqual({ width: 'half' });
+  });
+
+  it('choosing half again on a paired block keeps the pair', () => {
+    resetStore([block('short_text', 'a', { layout: { width: 'half', startNewRow: true } }), block('short_text', 'b', { layout: { width: 'half' } })]);
+    setBlockWidth(id('a'), 'half');
+    setBlockWidth(id('b'), 'half');
+    expect(layout('a')).toEqual({ width: 'half', startNewRow: true });
+    expect(layout('b')).toEqual({ width: 'half' });
+  });
+
   it('BL-150: deleting the first block of a pair leaves the second on its own row', () => {
     resetStore([
       block('short_text', 'x', { layout: { width: 'half', startNewRow: true } }),

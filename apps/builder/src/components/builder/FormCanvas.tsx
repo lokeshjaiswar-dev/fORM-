@@ -194,7 +194,7 @@ export function FormCanvas() {
       ) : null}
       <div className="relative col-start-1 row-start-1 flex min-h-full items-start justify-center px-4 pb-24 pt-12 @2xl:px-8">
         <div
-          className="relative h-auto w-full self-start px-12 py-12 shadow-[0_16px_48px_rgba(0,0,0,0.10)] @2xl:px-14"
+          className="relative h-auto w-full self-start px-12 py-12 shadow-(--elevation-low) @2xl:px-14"
           style={{
             maxWidth: 'calc(var(--fr-width) + 3rem)',
             backgroundColor: 'var(--fr-surface)',

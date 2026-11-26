@@ -151,6 +151,8 @@ export interface DateLimits {
 }
 export interface DateConfig {
   pattern: DatePattern; separator?: '-' | '/' | '.';
+  /** Shown in the empty field; the picker's own date pattern hint when unset. */
+  placeholder?: string;
   picker: 'calendar' | 'selects' | 'native';
   defaultValue?: { kind: 'today' } | { kind: 'fixed'; date: IsoDate };
   limits?: DateLimits;

@@ -148,28 +148,6 @@ button {
   animation: success-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@keyframes design-view-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes design-view-back {
-  from {
-    opacity: 0;
-    transform: translateX(-36px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes design-tab-in {
   from {
     opacity: 0;
@@ -186,29 +164,6 @@ button {
   to { stroke-dashoffset: 0; }
 }
 
-.design-view-in {
-  animation: design-view-in 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes design-view-out {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-}
-
-.design-view-out {
-  animation: design-view-out 420ms cubic-bezier(0.4, 0, 1, 1) forwards;
-}
-
-.design-view-back {
-  animation: design-view-back 440ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 .design-tab-in {
   animation: design-tab-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -219,11 +174,214 @@ button {
   animation: design-switch-draw 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/*
+ * Opening a form from the forms list. The page crossfades into the builder (a same-document view transition, see
+ * lib/viewTransition.ts); the builder's frame is already in place, and its contents then ease in:
+ * the header's controls, the toolbox from the left, the canvas rising slightly. `backwards` fill leaves no transform
+ * behind once the animation ends, so fixed and dragged elements inside keep their normal positioning.
+ */
+::view-transition-old(root) {
+  animation: builder-page-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: builder-page-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes builder-page-out {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes builder-page-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes builder-land-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes builder-land-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@keyframes builder-land-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.builder-land > header > * {
+  animation: builder-land-fade 320ms ease-out 60ms backwards;
+}
+
+.builder-land-body > aside:first-child > * {
+  animation: builder-land-left 420ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+}
+
+.builder-land-canvas {
+  animation: builder-land-up 520ms cubic-bezier(0.22, 1, 0.36, 1) 140ms backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .design-view-in,
-  .design-view-back,
   .design-tab-in,
-  .design-switch-rule path {
+  .design-switch-rule path,
+  .builder-land > header > *,
+  .builder-land-body > aside:first-child > *,
+  .builder-land-canvas {
+    animation: none;
+  }
+}
+
+/*
+ * Switching between Edit, Preview and Settings (switchBuilderView in lib/viewTransition.ts). While <html> carries
+ * .builder-view-switch, the moving parts get their own layers: the stage (canvas or preview) glides to its new size,
+ * the toolbox slides away to the left, the right panel slides in or out (or, between block settings and form
+ * settings, widens while one hands over to the other). The top bar stays put. Reduced motion never starts the
+ * transition at all.
+ */
+:root.builder-view-switch .vt-builder-stage {
+  view-transition-name: builder-stage;
+}
+
+:root.builder-view-switch .vt-builder-toolbox {
+  view-transition-name: builder-toolbox;
+  /* The toolbox's own width animation would fight the transition's. */
+  transition: none;
+}
+
+:root.builder-view-switch .vt-builder-side {
+  view-transition-name: builder-side;
+  transition: none;
+}
+
+:root.builder-view-switch::view-transition-group(*) {
+  animation-duration: 460ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * Nothing may fade to the background, which reads as a blink. The top bar and the rest of the page swap in one frame
+ * (they are the same apart from the parts moving on their own layers).
+ */
+:root.builder-view-switch::view-transition-old(root),
+:root.builder-view-switch::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Snapshots keep their real size while their box moves and resizes: no stretching, the box clips or reveals. */
+:root.builder-view-switch::view-transition-group(builder-stage),
+:root.builder-view-switch::view-transition-group(builder-toolbox) {
+  overflow: clip;
+}
+
+:root.builder-view-switch::view-transition-old(builder-stage),
+:root.builder-view-switch::view-transition-new(builder-stage) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: 50% 0;
+}
+
+/*
+ * The stage and the side panel hand over without a dip: the new view is there at once, underneath, and the old one
+ * dissolves off the top, most of the way within the first few frames, so the two are never seen at equal strength.
+ */
+:root.builder-view-switch::view-transition-new(builder-stage),
+:root.builder-view-switch::view-transition-new(builder-side) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root.builder-view-switch::view-transition-old(builder-stage),
+:root.builder-view-switch::view-transition-old(builder-side) {
+  z-index: 1;
+  animation: view-dissolve 170ms cubic-bezier(0, 0, 0.2, 1) both;
+  mix-blend-mode: normal;
+}
+
+@keyframes view-dissolve {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The toolbox only slides: its box clips it away to the left, or reveals it, with nothing fading. */
+:root.builder-view-switch::view-transition-old(builder-toolbox),
+:root.builder-view-switch::view-transition-new(builder-toolbox) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root.builder-view-switch::view-transition-old(builder-toolbox),
+:root.builder-view-switch::view-transition-new(builder-toolbox) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: 100% 0;
+}
+
+:root.builder-view-switch::view-transition-old(builder-side),
+:root.builder-view-switch::view-transition-new(builder-side) {
+  block-size: 100%;
+  object-fit: none;
+  object-position: 0 0;
+}
+
+:root.builder-view-switch::view-transition-new(builder-side):only-child {
+  animation: view-side-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:root.builder-view-switch::view-transition-old(builder-side):only-child {
+  animation: view-side-out 340ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes view-side-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes view-side-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* The view switch's highlight, and the dark labels clipped to it, glide to the selected tab together (ViewTabs.tsx). */
+.view-tabs-pill {
+  transition-property: left, right, clip-path;
+  transition-duration: 420ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A tab list's selected highlight gliding to the picked tab (TabGlide.tsx), on the same curve as the view switch. */
+.tab-glide {
+  transition-property: transform, width, height;
+  transition-duration: 420ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-tabs-pill,
+  .tab-glide {
+    transition: none;
+  }
+}
+
+/* Its own rule: a browser without view transitions drops a selector list that names their pseudo-elements. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
     animation: none;
   }
 }
@@ -371,4 +529,177 @@ img.ProseMirror-separator {
   border-radius: 0;
   background-color: transparent !important;
   box-shadow: none;
+}
+
+/*
+ * Tooltips, as the Figma "Tooltip" (4624:2074), size small: a dark slate box with 6px corners, 8 x 4px padding,
+ * 12/16 regular white text wrapping at 240px, the low raised shadow, a 12 x 4.5px arrow, and a shortcut chip outlined
+ * in faint white. A rich tooltip keeps its semibold title line.
+ */
+[data-slot='tooltip-content'][data-variant='dark'] {
+  max-width: 240px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-wrap: wrap; /* fill each line to 240px, as Figma does, instead of balancing them shorter */
+  box-shadow: 0 2px 8px 0 rgb(25 40 57 / 0.09);
+}
+[data-slot='tooltip-content'][data-variant='dark'] kbd {
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / 0.4);
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  color: rgb(255 255 255 / 0.8);
+}
+/*
+ * The arrow: Figma's tip (12 x 4.5px, flared base, rounded point) drawn as a mask over the Radix arrow, pointing at
+ * the trigger on every side (Radix turns the arrow's wrapper). The element is 1px taller and lifted 1px into the box,
+ * with that 1px band filled, so the tip and the box join with no hairline between them at any zoom.
+ */
+[data-slot='tooltip-content'][data-variant='dark'] svg:last-child {
+  width: 12px;
+  height: 5.5px;
+  rotate: none;
+  transform: none;
+  translate: 0 -1px;
+  border-radius: 0;
+  background-color: var(--ds-tooltip-bg);
+  fill: transparent;
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 4.5'%3E%3Cpath d='M4.7878 3.8681L2.9265 1.5256C2.1503 0.5488 1.0976 0 0 0H12C10.9024 0 9.8497 0.5488 9.0735 1.5256L7.2122 3.8681C6.5427 4.7106 5.4573 4.7106 4.7878 3.8681Z'/%3E%3C/svg%3E") center bottom / 12px 4.5px no-repeat,
+    linear-gradient(#000 0 0) center top / 100% 1.5px no-repeat;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 4.5'%3E%3Cpath d='M4.7878 3.8681L2.9265 1.5256C2.1503 0.5488 1.0976 0 0 0H12C10.9024 0 9.8497 0.5488 9.0735 1.5256L7.2122 3.8681C6.5427 4.7106 5.4573 4.7106 4.7878 3.8681Z'/%3E%3C/svg%3E") center bottom / 12px 4.5px no-repeat,
+    linear-gradient(#000 0 0) center top / 100% 1.5px no-repeat;
+}
+[data-slot='tooltip-content'][data-variant='dark'] svg:last-child * {
+  fill: transparent;
+}
+
+/* The design system's checkboxes, radios and searchable menus in the builder, as the Figma controls (moved here from the renderer: its native controls do not use them). */
+/*
+ * The search box at the top of a searchable dropdown (Figma Dropdown Menu, inline Search Bar): it is focused as soon
+ * as the list opens, so it shows no blue focus box, only the divider under it. The caret and the highlighted option
+ * show where typing goes. The list opens in a portal, outside .fr-root.
+ */
+.ds-menu [data-slot='command-input-wrapper']:has(:focus-visible) {
+  outline: none;
+}
+
+/*
+ * Checkboxes and radios, as the Figma "Checkbox Base" (4479:925) and "Radio Base" (4498:737): off, on (and
+ * indeterminate) in the normal, hover, focus and disabled states, with and without an error. The design-system
+ * controls already have the sizes (sm = Figma 16px, md = Figma 20px) and paint from --box-bg / --box-border /
+ * --box-icon; these set Figma's colours. Every rule names the checked state, so a state never paints over another.
+ */
+.ds-check,
+.ds-radio {
+  --ck-off: #6c849d; /* interactive/border/neutral/default */
+  --ck-hover-fill: rgb(108 132 157 / 0.32); /* interactive/bg/neutral/faded-highlighted */
+  --ck-on: #2950da; /* interactive/bg/primary/default */
+  --ck-on-hover: #2243b6; /* interactive/bg/primary/highlighted */
+  --ck-error: #d44a4a; /* interactive/border/negative/default */
+  --ck-error-hover: #be3a3a; /* interactive/border/negative/highlighted */
+  --ck-disabled: #90a5bb; /* interactive/icon/neutral/disabled */
+  --ck-disabled-fill: rgb(108 132 157 / 0.06);
+  --ck-focus: #305eff; /* interactive/border/focus/default */
+}
+
+/* off */
+.ds-check[data-state='unchecked'],
+.ds-radio[data-state='unchecked'] {
+  --box-bg: transparent;
+  --box-border: var(--ck-off);
+}
+.ds-check[data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-hover-fill);
+  --box-border: var(--ck-off);
+}
+.ds-check[data-state='unchecked']:disabled,
+.ds-radio[data-state='unchecked']:disabled {
+  --box-bg: transparent;
+  --box-border: var(--ck-disabled);
+}
+
+/* on (and the checkbox's indeterminate dash) */
+.ds-check:is([data-state='checked'], [data-state='indeterminate']),
+.ds-radio[data-state='checked'] {
+  --box-bg: var(--ck-on);
+  --box-border: var(--ck-on);
+  --box-icon: #fff;
+}
+.ds-check:is([data-state='checked'], [data-state='indeterminate']):is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[data-state='checked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-on-hover);
+  --box-border: var(--ck-on-hover);
+}
+/* on, disabled: a faint box with a grey border and a grey tick or dot */
+.ds-check:is([data-state='checked'], [data-state='indeterminate']):disabled,
+.ds-radio[data-state='checked']:disabled {
+  --box-bg: var(--ck-disabled-fill);
+  --box-border: var(--ck-disabled);
+  --box-icon: var(--ck-disabled);
+}
+.ds-radio[data-state='checked']:disabled .ds-radio-dot {
+  background-color: var(--ck-disabled);
+}
+
+/* error */
+.ds-check[aria-invalid='true'][data-state='unchecked'],
+.ds-radio[aria-invalid='true'][data-state='unchecked'] {
+  --box-bg: transparent;
+  --box-border: var(--ck-error);
+}
+.ds-check[aria-invalid='true'][data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[aria-invalid='true'][data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-hover-fill);
+  --box-border: var(--ck-error-hover);
+}
+.ds-check[aria-invalid='true']:is([data-state='checked'], [data-state='indeterminate']),
+.ds-radio[aria-invalid='true'][data-state='checked'] {
+  --box-bg: var(--ck-error);
+  --box-border: var(--ck-error);
+}
+.ds-check[aria-invalid='true']:is([data-state='checked'], [data-state='indeterminate']):is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[aria-invalid='true'][data-state='checked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-error-hover);
+  --box-border: var(--ck-error-hover);
+}
+/* disabled ignores the error */
+.ds-check[aria-invalid='true'][data-state='unchecked']:disabled,
+.ds-radio[aria-invalid='true'][data-state='unchecked']:disabled {
+  --box-bg: transparent;
+  --box-border: var(--ck-disabled);
+}
+.ds-check[aria-invalid='true']:is([data-state='checked'], [data-state='indeterminate']):disabled,
+.ds-radio[aria-invalid='true'][data-state='checked']:disabled {
+  --box-bg: var(--ck-disabled-fill);
+  --box-border: var(--ck-disabled);
+  --box-icon: var(--ck-disabled);
+}
+
+/* focus: the box keeps its look; a 2px focus ring with a 2px gap goes around it */
+.ds-check:is(:focus-visible, [data-force='focus']) .ds-check-box,
+.ds-radio:is(:focus-visible, [data-force='focus']) .ds-radio-box {
+  outline: 2px solid var(--ck-focus);
+  outline-offset: 2px;
+}
+
+/* Figma corners and border widths: 4px corners; the 20px size has a 2px border */
+.ds-check .ds-check-box {
+  border-radius: 4px;
+}
+.ds-check[data-size='md'] .ds-check-box,
+.ds-radio[data-size='md'] .ds-radio-box {
+  border-width: 2px;
 }

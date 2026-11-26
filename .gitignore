@@ -59,3 +59,7 @@ playwright-report
 .pnpm-store/
 # local secrets for deploy
 deploy/docker/secrets/
+
+# Python bytecode
+__pycache__/
+*.pyc

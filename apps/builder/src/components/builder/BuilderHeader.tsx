@@ -1,267 +1,169 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, Redo2, Undo2, LayoutTemplate, PanelLeft, Paintbrush } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { LayoutTemplate, MoreHorizontal, PanelLeft, Redo2, Share2, Undo2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { defineMessages } from '@form/i18n';
-import type { BlockId } from '@form/schema';
 import { t } from '@/i18n';
-import { useDoc, currentDoc } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
-import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@dmacq/ui';
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/Tooltip';
-import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
-import { CopyLink } from '@/components/CopyLink';
 import { PublishIssuesDialog } from '@/components/builder/PublishIssuesDialog';
-import { rememberAfterSignIn } from '@/auth/returnTo';
-import {
-  DraftNotSaved,
-  OrgRequired,
-  PublishBlocked,
-  PublishConflict,
-  SignInRequired,
-  checkPublishable,
-  fillUrl,
-  publishLive,
-  rememberedSlug,
-  type PublishIssueView,
-} from '@/persistence/publishApi';
+import { FormName } from '@/components/builder/header/FormName';
+import { ViewTabs } from '@/components/builder/header/ViewTabs';
+import { ShareDialog } from '@/components/builder/header/ShareDialog';
+import { usePublish } from '@/components/builder/header/usePublish';
 
 const M = defineMessages('builder', {
   'header.saved_local': 'Saved on this device',
   'header.conflict': 'Changed elsewhere',
-  'header.plan_mismatch': 'This browser and the server disagree about how the form compiles. Reload the page, then publish again.',
-  'header.conflict_toast': 'This form changed somewhere else. Choose which version to keep, then publish again.',
   'header.settings': 'Settings',
 });
 
-/** What the publish dialog lists: the server's issues, and whether any of them blocks. */
-interface PublishIssues {
-  issues: PublishIssueView[];
-  count: number;
-}
+/** Templates and More (Share) are hidden from the bar for now; set to true to bring them back. */
+const SHOW_EXTRA_ACTIONS = false;
 
+/** Dark top bar across the whole builder (Figma DMacq Design System 5356:183289): name, view tabs, draft and publish. */
 export function BuilderHeader() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const title = useDoc((d) => d.title);
-  const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  const designOpen = useUiStore((s) => s.designOpen);
-  const setDesignOpen = useUiStore((s) => s.setDesignOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const save = useUiStore((s) => s.save);
-  const canUndo = useCanUndo();
-  const canRedo = useCanRedo();
+  const publishing = usePublish(id);
   const [templates, setTemplates] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [link, setLink] = useState<string | null>(() => {
-    const slug = rememberedSlug(id);
-    return slug ? fillUrl(slug) : null;
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [listed, setListed] = useState<PublishIssues | null>(null);
-
-  useEffect(() => {
-    const slug = rememberedSlug(id);
-    setLink(slug ? fillUrl(slug) : null);
-  }, [id]);
-
-  /** Freezes the saved draft as the live version and shows the share link. */
-  async function publish() {
-    const live = await publishLive(id, currentDoc());
-    setListed(null);
-    setLink(fillUrl(live.slug));
-    setShareOpen(true);
-  }
-
-  /**
-   * Publish: the draft is saved, the server checks it (`/validate`), and only a draft with no error goes on to
-   * publish. Warnings are listed first and published on confirmation (`confirmed`).
-   */
-  async function onPublish(confirmed = false) {
-    setBusy(true);
-    setError(null);
-    try {
-      await flushAutosave();
-      if (!confirmed) {
-        const check = await checkPublishable(id);
-        const blocking = check.issues.some((i) => i.severity === 'error');
-        if (blocking || check.issues.length) {
-          setListed({ issues: check.issues, count: check.issueCount });
-          return;
-        }
-      }
-      await publish();
-    } catch (err) {
-      // Not signed in (or the session ended): the draft is already saved in this browser, so sign in and come back.
-      if (err instanceof SignInRequired || (err instanceof ApiProblem && err.status === 401)) {
-        rememberAfterSignIn(pathname);
-        toast('Sign in to publish. Your form is saved in this browser.');
-        navigate('/auth/sign-in');
-        return;
-      }
-      if (err instanceof OrgRequired) {
-        rememberAfterSignIn(pathname);
-        toast('Create an organisation first: forms are published into one.');
-        navigate('/orgs/new');
-        return;
-      }
-      if (err instanceof PublishBlocked && err.code === 'PUBLISH_BLOCKED') {
-        setListed({ issues: err.issues, count: err.issueCount });
-        return;
-      }
-      // The merge dialog is open already; it is what the author needs to answer.
-      if (err instanceof PublishConflict) {
-        toast(t(M['header.conflict_toast']));
-        return;
-      }
-      if (err instanceof DraftNotSaved && err.conflict) return;
-      setShareOpen(true);
-      if (err instanceof PublishBlocked) setError(t(M['header.plan_mismatch']));
-      else if (err instanceof ApiUnreachable) setError('The API is not running, so this form cannot be shared yet.');
-      else if (err instanceof ApiProblem) {
-        setError(
-          err.code === 'SERVICE_UNAVAILABLE' || err.code === 'INTERNAL'
-            ? 'This form could not be published right now. Try Publish again in a moment.'
-            : err.message || 'This form could not be published.',
-        );
-      }
-      else setError(err instanceof Error ? err.message : 'This form could not be published.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** Opens the inspector of the block an issue is about (in Edit, where the inspector is). */
-  function goToField(blockId: BlockId) {
-    if (!currentDoc().blocks[blockId]) return;
-    setListed(null);
-    if (mode === 'preview') setMode('edit');
-    useUiStore.getState().openInspector(blockId);
-  }
 
   return (
     <>
-      <header className="flex h-[45px] shrink-0 items-center gap-0.5 border-b border-border bg-background px-3">
-        {!sidebarOpen && (
-          <Ghost onClick={() => setSidebarOpen(true)} label="Open sidebar">
-            <PanelLeft className="size-4" />
-          </Ghost>
-        )}
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 text-[14px] text-muted-foreground">
-          <Link to="/forms" className="truncate rounded-[4px] px-1.5 py-0.5 hover:bg-state-hover">
-            Forms
-          </Link>
-          <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
-          <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-foreground hover:bg-state-hover">
-            <span className="truncate">{title || 'Form title'}</span>
-          </span>
-          <span
-            role="status"
-            title={save.state === 'error' ? save.message : undefined}
-            className="ml-1 flex shrink-0 items-center gap-1.5 text-[13px] text-text-subtle"
-          >
-            <SaveDot state={save.state} />
-            {saveLabel(save)}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-0.5">
-          {(['edit', 'preview'] as const).map((m) => (
-            <Button key={m} type="button" variant="ghost" size="sm" pressed={mode === m} onClick={() => setMode(m)}>
-              {m === 'edit' ? 'Edit' : 'Preview'}
+      <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground">
+        <div className="flex min-w-0 items-center gap-2">
+          {!sidebarOpen && (
+            <IconAction onClick={() => setSidebarOpen(true)} label="Open sidebar">
+              <PanelLeft className="size-4" />
+            </IconAction>
+          )}
+          <Tooltip content="Back to forms">
+            <Button asChild variant="ghost" color="whiteOnPrimary" size="icon" className="shrink-0 text-sidebar-muted">
+              <Link to="/forms" aria-label="Back to forms">
+                <X className="size-5" />
+              </Link>
             </Button>
-          ))}
+          </Tooltip>
+          <FormName />
+          <SaveStatus save={save} />
         </div>
 
-        <Ghost disabled={!canUndo} onClick={undo} label="Undo" shortcut={`${modKey()}+Z`}>
-          <Undo2 className="size-4" />
-        </Ghost>
-        <Ghost disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
-          <Redo2 className="size-4" />
-        </Ghost>
-        <Tooltip content={designOpen ? 'Close form settings' : 'Form settings'}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            pressed={designOpen}
-            aria-label={designOpen ? 'Close form settings' : 'Form settings'}
-            onClick={() => setDesignOpen(!designOpen)}
-            className="mx-1 border-primary/40 bg-primary/10 font-semibold text-primary hover:bg-primary/20"
-          >
-            <Paintbrush className="size-4" />
-            Form settings
+        <ViewTabs />
+
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          <HistoryAndTools onTemplates={() => setTemplates(true)} onShare={publishing.link ? () => publishing.setShareOpen(true) : null} />
+          {id ? (
+            <Button variant="ghost" color="whiteOnPrimary" asChild>
+              {/* The form's emails, webhooks and email log: what happens after a response is stored. */}
+              <Link to={`/forms/${encodeURIComponent(id)}/settings`}>{t(M['header.settings'])}</Link>
+            </Button>
+          ) : null}
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-sidebar-border" />
+          <SaveDraftButton />
+          <Button type="button" disabled={publishing.busy || !id} onClick={() => void publishing.publish()}>
+            {publishing.busy ? 'Publishing…' : 'Publish'}
           </Button>
-        </Tooltip>
-        <Ghost onClick={() => setTemplates(true)} label="Templates">
-          <LayoutTemplate className="size-4" />
-        </Ghost>
-        {id ? (
-          <Button variant="ghost" size="sm" asChild>
-            {/* The form's emails, webhooks and email log: what happens after a response is stored. */}
-            <Link to={`/forms/${encodeURIComponent(id)}/settings`}>{t(M['header.settings'])}</Link>
-          </Button>
-        ) : null}
-        <Button type="button" size="sm" className="ml-1" disabled={busy || !id} onClick={() => void onPublish()}>
-          {busy ? 'Publishing…' : 'Publish'}
-        </Button>
-        {link ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
-            Share
-          </Button>
-        ) : null}
+        </div>
       </header>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
       <PublishIssuesDialog
-        issues={listed?.issues ?? null}
-        issueCount={listed?.count ?? 0}
-        blocked={listed?.issues.some((i) => i.severity === 'error') ?? false}
-        busy={busy}
-        onClose={() => setListed(null)}
-        onPublishAnyway={() => void onPublish(true)}
-        onGoToField={goToField}
+        issues={publishing.listed?.issues ?? null}
+        issueCount={publishing.listed?.count ?? 0}
+        blocked={publishing.listed?.issues.some((i) => i.severity === 'error') ?? false}
+        busy={publishing.busy}
+        onClose={publishing.closeListed}
+        onPublishAnyway={() => void publishing.publish(true)}
+        onGoToField={publishing.goToField}
       />
-      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{link ? 'Share form' : 'Publish form'}</DialogTitle>
-            <DialogDescription>
-              {link
-                ? 'Anyone with this link can fill the form on a phone or another computer. They do not need to sign in.'
-                : 'Publish this form to get a link you can open on any device.'}
-            </DialogDescription>
-          </DialogHeader>
-          {error ? (
-            <p role="alert" className="text-[14px] text-destructive">
-              {error}
-            </p>
-          ) : null}
-          {link ? (
-            <CopyLink
-              link={link}
-              label="Share link"
-              onCopied={() => {
-                setError(null);
-                toast('Link copied');
-              }}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <ShareDialog state={publishing} />
     </>
   );
 }
 
-/** Animated status dot: a soft pulse while saving, solid green when saved, red when the save failed. */
+/** Undo and Redo as icons; Templates and More (Share) follow them when SHOW_EXTRA_ACTIONS is on. */
+function HistoryAndTools({ onTemplates, onShare }: { onTemplates: () => void; onShare: (() => void) | null }) {
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <IconAction disabled={!canUndo} onClick={undo} label="Undo" shortcut={`${modKey()}+Z`}>
+        <Undo2 className="size-4" />
+      </IconAction>
+      <IconAction disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
+        <Redo2 className="size-4" />
+      </IconAction>
+      {SHOW_EXTRA_ACTIONS ? (
+        <>
+          <IconAction onClick={onTemplates} label="Templates">
+            <LayoutTemplate className="size-4" />
+          </IconAction>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" color="whiteOnPrimary" size="icon" aria-label="More actions" className="text-sidebar-muted">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onShare ? (
+                <DropdownMenuItem onSelect={onShare}>
+                  <Share2 />
+                  Share
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Writes the pending change now instead of waiting for autosave, and says whether it was written. */
+function SaveDraftButton() {
+  const [busy, setBusy] = useState(false);
+  async function saveDraft() {
+    setBusy(true);
+    try {
+      await flushAutosave();
+      const after = useUiStore.getState().save;
+      if (after.state === 'error') toast.error(after.message || 'The draft could not be saved.');
+      else toast.success('Draft saved');
+    } catch {
+      toast.error('The draft could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button type="button" variant="ghost" color="whiteOnPrimary" disabled={busy} onClick={() => void saveDraft()}>
+      Save As Draft
+    </Button>
+  );
+}
+
+/* Hidden from view for now but still announced to screen readers; drop `sr-only` to show it again. */
+function SaveStatus({ save }: { save: SaveState }) {
+  return (
+    <span
+      role="status"
+      title={save.state === 'error' ? save.message : undefined}
+      className="sr-only flex shrink-0 items-center gap-1.5 text-[12px] text-sidebar-muted"
+    >
+      {save.state === 'idle' ? null : <SaveDot state={save.state} />}
+      {saveLabel(save)}
+    </span>
+  );
+}
+
+/** Animated status dot: a soft pulse while saving, solid when saved, red when the save failed. */
 function SaveDot({ state }: { state: SaveState['state'] }) {
-  const color = state === 'error' ? 'bg-destructive' : state === 'saved' ? 'bg-primary' : 'bg-text-subtle';
+  const color = state === 'error' ? 'bg-destructive' : state === 'saved' ? 'bg-positive' : 'bg-sidebar-muted';
   return (
     <span className="relative flex size-2 shrink-0" aria-hidden>
       {state === 'saving' ? <span className={`ws-live absolute inline-flex size-full rounded-full ${color}`} /> : null}
@@ -287,7 +189,7 @@ function saveLabel(save: SaveState): string {
   }
 }
 
-function Ghost({
+function IconAction({
   children,
   onClick,
   label,
@@ -302,7 +204,7 @@ function Ghost({
 }) {
   return (
     <Tooltip content={label} shortcut={shortcut}>
-      <Button type="button" variant="ghost" size="icon-sm" aria-label={label} disabled={disabled} onClick={onClick}>
+      <Button type="button" variant="ghost" color="whiteOnPrimary" size="icon" aria-label={label} disabled={disabled} onClick={onClick} className="text-sidebar-muted">
         {children}
       </Button>
     </Tooltip>

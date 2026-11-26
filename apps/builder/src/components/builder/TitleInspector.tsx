@@ -6,8 +6,8 @@ import type { Patch } from '@/lib/patch';
 import { useDraft } from '@/lib/useDraft';
 import { setTitleStyle } from '@/state/actions';
 import { useDoc } from '@/state/documentStore';
-import { Field, SectionTitle, SelectField } from '@/components/builder/inspector/parts';
-import { Input, Label, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
+import { Field, SectionTitle, SelectField, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
+import { Input, Label } from '@dmacq/ui';
 
 const M = defineMessages('builder', {
   'inspector.form_title_type': 'Form title',
@@ -109,19 +109,16 @@ export function TitleInspector() {
         <TitleSize value={style.sizePx} onChange={(sizePx) => set({ sizePx })} />
       </Field>
       <Field label={t(M['inspector.form_title_align'])}>
-        <ToggleGroup
+        <SegmentedGroup
           type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
           aria-label={t(M['inspector.form_title_align'])}
           value={style.align ?? 'left'}
           onValueChange={(a) => a && set({ align: a === 'left' ? undefined : (a as FormTitleStyle['align']) })}
         >
-          <ToggleGroupItem value="left" className="flex-1">{t(M['inspector.form_title_align_left'])}</ToggleGroupItem>
-          <ToggleGroupItem value="center" className="flex-1">{t(M['inspector.form_title_align_center'])}</ToggleGroupItem>
-          <ToggleGroupItem value="right" className="flex-1">{t(M['inspector.form_title_align_right'])}</ToggleGroupItem>
-        </ToggleGroup>
+          <Segment value="left">{t(M['inspector.form_title_align_left'])}</Segment>
+          <Segment value="center">{t(M['inspector.form_title_align_center'])}</Segment>
+          <Segment value="right">{t(M['inspector.form_title_align_right'])}</Segment>
+        </SegmentedGroup>
       </Field>
       <SelectField
         label={t(M['inspector.form_title_weight'])}

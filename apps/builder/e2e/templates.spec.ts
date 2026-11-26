@@ -1,7 +1,8 @@
 import { expect, test, type Page } from './test.ts';
-import { openNewForm, openSettings } from './helpers.ts';
+import { hoverBlock, openNewForm, openSettings } from './helpers.ts';
 
-test('New-form gallery: the pack templates, instantiated with the network cut off', async ({ page }) => {
+/* The builder header's Templates button is hidden for now (SHOW_EXTRA_ACTIONS in BuilderHeader.tsx). */
+test.skip('New-form gallery: the pack templates, instantiated with the network cut off', async ({ page }) => {
   await openNewForm(page);
   await page.context().setOffline(true);
   await page.getByRole('button', { name: 'Templates' }).click();
@@ -25,7 +26,8 @@ test('New-form gallery: the pack templates, instantiated with the network cut of
 
 /** A page break right after the `n`-th block, from that block's insert menu. */
 async function pageBreakAfter(page: Page, n: number) {
-  await page.getByRole('button', { name: 'Insert block' }).nth(n).click();
+  const block = await hoverBlock(page, n);
+  await block.getByRole('button', { name: 'Insert block' }).click();
   await page.keyboard.type('page');
   await page.getByRole('option', { name: 'Page break' }).click();
 }
@@ -43,6 +45,7 @@ async function recordSubmissions(page: Page) {
 test('create from a template → three pages with a show rule → preview → submit', async ({ page }) => {
   await page.goto('/forms');
   await page.getByRole('button', { name: 'New form' }).click();
+  await page.getByRole('button', { name: 'Start from a template' }).click();
   await expect(page.getByRole('button', { name: /^Event registration/ })).toBeVisible();
   await page.context().setOffline(true);
   await page.getByRole('button', { name: /^Event registration/ }).click();
