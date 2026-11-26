@@ -85,9 +85,60 @@ export function builderSecurityHeaders(options: BuilderHeaderOptions): Record<st
   return headers;
 }
 
-/** The `/embed/*` pages (fORM- hosted inside DMS+): the same headers, but framable by `parents` (and the page's own origin). */
+/**
+ * The `/embed/*` pages (fORM- hosted inside DMS+): the same headers, but framable by `parents` (and the page's own origin), and
+ * with no `report-uri`, `report-to` or `Reporting-Endpoints`: the DMS hosts have no receiver for them (DESIGN BD-09, FACTS A22).
+ */
 export function embedHeaders(options: BuilderHeaderOptions, parents: readonly string[]): Record<string, string> {
-  return builderSecurityHeaders({ ...options, frameAncestors: parents });
+  const { reportUri: _reportUri, reportTo: _reportTo, ...quiet } = options;
+  return builderSecurityHeaders({ ...quiet, frameAncestors: parents });
+}
+
+/** The inputs of the sandboxed upload header set. */
+export interface SandboxedEmbedOptions {
+  /** `VITE_FP_EMBED_PARENTS`: the origins that may frame the page (`frame-ancestors 'self' <parents>`). */
+  parents: readonly string[];
+  /**
+   * `FP_PUBLIC_ORIGINS`: this deployment's own public origin(s), listed explicitly beside `'self'` in `script-src`, `style-src`,
+   * `font-src` and `img-src`. Inside an opaque-origin document (the sandbox) `'self'` is not matched the same way by every engine
+   * (SEC-DESIGN 3.3 B3). Default: the parents (the DMS app host serves fORM- under `/formplus`).
+   */
+  publicOrigins?: readonly string[];
+}
+
+/**
+ * The response headers of `/formplus/embed/dms-upload` (SEC-DESIGN 3.3, set `sandboxedEmbed`). The document gets an opaque origin
+ * from the `sandbox` directive even when it is opened top-level, so `document.cookie`, web storage and IndexedDB throw and every
+ * request to the DMS host is cross-origin with `Origin: null`. No network (`connect-src 'none'`), nothing can be posted
+ * (`form-action 'none'`), no report endpoint (no receiver on DMS hosts), nothing cached, no referrer.
+ */
+export function sandboxedEmbedCsp(options: SandboxedEmbedOptions): string {
+  const listed = options.publicOrigins !== undefined && options.publicOrigins.length > 0 ? options.publicOrigins : options.parents;
+  const explicit = origins(listed);
+  const directives: Directives = [
+    ['sandbox', 'allow-scripts', 'allow-forms'],
+    ['default-src', "'none'"],
+    ['script-src', "'self'", ...explicit],
+    ['style-src', "'self'", ...explicit],
+    ['img-src', "'self'", ...explicit, 'data:', 'blob:'],
+    ['font-src', "'self'", ...explicit],
+    ['connect-src', "'none'"],
+    ['object-src', "'none'"],
+    ['base-uri', "'none'"],
+    ['form-action', "'none'"],
+    ['frame-ancestors', "'self'", ...origins(options.parents)],
+    ...TRUSTED_TYPES,
+  ];
+  return serialize(directives);
+}
+
+export function sandboxedEmbedHeaders(options: SandboxedEmbedOptions): Record<string, string> {
+  return {
+    'Content-Security-Policy': sandboxedEmbedCsp(options),
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'no-store',
+  };
 }
 
 const originList = (raw: string | undefined): string[] => (raw ?? '').split(',').map((o) => o.trim()).filter(Boolean);
@@ -107,9 +158,10 @@ export function productionHeaders(env: { PUBLIC_API_URL?: string | undefined; FP
 }
 
 /**
- * The production headers of the framable embed route(s): `FP_EMBED_PARENTS` (comma separated origins) may frame them.
- * `connect-src` also lists `FP_DMS_API_ORIGINS` (the DMS API origins the embed pages call; the dev and preview
- * servers do the same from `VITE_FP_DMS_API_ORIGINS`).
+ * The production headers of the framable embed route when the build is the M2 LEGACY one (`VITE_FP_LEGACY_DESCRIPTOR=1`): today's
+ * set (`frame-ancestors 'self' <FP_EMBED_PARENTS>`, the same-origin `/1` host needs it) without `report-uri`, and `no-store`.
+ * `connect-src` also lists `FP_DMS_API_ORIGINS` (the DMS API origins the embed pages call; the dev and preview servers do the same
+ * from `VITE_FP_DMS_API_ORIGINS`).
  */
 export function productionEmbedHeaders(env: {
   PUBLIC_API_URL?: string | undefined;
@@ -118,10 +170,14 @@ export function productionEmbedHeaders(env: {
 }): Record<string, string> {
   const api = env.PUBLIC_API_URL ? new URL(env.PUBLIC_API_URL).origin : undefined;
   const dms = originList(env.FP_DMS_API_ORIGINS).map((o) => new URL(o).origin);
-  return embedHeaders(
-    { mode: 'production', connectOrigins: [...(api ? [api] : []), ...dms], reportUri: `${api ?? ''}${API_CSP_REPORT_PATH}` },
-    originList(env.FP_EMBED_PARENTS),
-  );
+  return embedHeaders({ mode: 'production', connectOrigins: [...(api ? [api] : []), ...dms] }, originList(env.FP_EMBED_PARENTS));
+}
+
+/** The full-page embeds (`/embed/dms-master`, `/embed/dms-record`): the plain set (never framed, X-Frame-Options DENY) without `report-uri`. */
+export function productionEmbedPageHeaders(env: { PUBLIC_API_URL?: string | undefined; FP_DMS_API_ORIGINS?: string | undefined }): Record<string, string> {
+  const api = env.PUBLIC_API_URL ? new URL(env.PUBLIC_API_URL).origin : undefined;
+  const dms = originList(env.FP_DMS_API_ORIGINS).map((o) => new URL(o).origin);
+  return builderSecurityHeaders({ mode: 'production', connectOrigins: [...(api ? [api] : []), ...dms] });
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -130,27 +186,45 @@ type Env = Readonly<Record<string, string | undefined>>;
  * The settings of one deployment as the build sees them: the `VITE_*` names a Docker build passes (the same ones the
  * Vite servers read) and the `FP_*` / `PUBLIC_API_URL` names `headers:nginx` has always taken (they win when both are set).
  * `VITE_FP_DMS_API_BASE` adds the origin of each absolute entry to the DMS origins, as the Vite config does.
+ * `FP_PUBLIC_ORIGINS` (this deployment's public origin(s)) defaults to the embed parents; `LEGACY` is `VITE_FP_LEGACY_DESCRIPTOR=1`.
  */
-export function deployEnv(env: Env): { PUBLIC_API_URL: string | undefined; FP_DMS_API_ORIGINS: string | undefined; FP_EMBED_PARENTS: string | undefined } {
+export function deployEnv(env: Env): {
+  PUBLIC_API_URL: string | undefined;
+  FP_DMS_API_ORIGINS: string | undefined;
+  FP_EMBED_PARENTS: string | undefined;
+  FP_PUBLIC_ORIGINS: string | undefined;
+  LEGACY: boolean;
+} {
   const bases = originList(env.VITE_FP_DMS_API_BASE).filter((b) => /^https?:/i.test(b)).map((b) => new URL(b).origin);
   const dms = [...originList(env.FP_DMS_API_ORIGINS ?? env.VITE_FP_DMS_API_ORIGINS), ...bases];
+  const parents = env.FP_EMBED_PARENTS ?? env.VITE_FP_EMBED_PARENTS;
+  const publicOrigins = env.FP_PUBLIC_ORIGINS || env.VITE_FP_PUBLIC_ORIGINS || parents;
   return {
     PUBLIC_API_URL: env.PUBLIC_API_URL || env.VITE_API_URL || undefined,
     FP_DMS_API_ORIGINS: dms.length > 0 ? dms.join(',') : undefined,
-    FP_EMBED_PARENTS: env.FP_EMBED_PARENTS ?? env.VITE_FP_EMBED_PARENTS,
+    FP_EMBED_PARENTS: parents,
+    FP_PUBLIC_ORIGINS: publicOrigins,
+    LEGACY: (env.VITE_FP_LEGACY_DESCRIPTOR ?? env.FP_LEGACY_DESCRIPTOR) === '1',
   };
 }
 
-/** The two production header sets: `plain` for every route (frame-ancestors 'none'), `embed` for the framable `/embed/dms-upload`. */
-export function productionHeaderSets(env: Env): { plain: Record<string, string>; embed: Record<string, string> } {
+/**
+ * The production header sets of one build. `plain`: every route (frame-ancestors 'none'). `embedPage`: `/embed/dms-master|dms-record`
+ * (plain, no report-uri). `upload`: the framable `/embed/dms-upload`: `sandboxedEmbed` (SEC-DESIGN 3.3) in the default build, today's
+ * framable set in the M2 legacy build. `embed` is that legacy framable set whatever the build (kept for `headers:nginx`).
+ */
+export function productionHeaderSets(env: Env): { plain: Record<string, string>; embedPage: Record<string, string>; embed: Record<string, string>; upload: Record<string, string> } {
   const e = deployEnv(env);
-  return { plain: productionHeaders(e), embed: productionEmbedHeaders(e) };
+  const embed = { ...productionEmbedHeaders(e), 'Cache-Control': 'no-store' };
+  const upload = e.LEGACY ? embed : sandboxedEmbedHeaders({ parents: originList(e.FP_EMBED_PARENTS), publicOrigins: originList(e.FP_PUBLIC_ORIGINS) });
+  return { plain: productionHeaders(e), embedPage: productionEmbedPageHeaders(e), embed, upload };
 }
 
-/** The production headers a path gets: the embed set for a framable route, the plain set for everything else (`dms-master`, `dms-record` included). */
+/** The production headers a path gets: the upload set for the framable route, the embed-page set for `/embed/*`, the plain set for everything else. */
 export function productionHeadersForPath(url: string | undefined, env: Env, base = '/'): Record<string, string> {
   const sets = productionHeaderSets(env);
-  return isFramablePath(url, base) ? sets.embed : sets.plain;
+  if (isFramablePath(url, base)) return sets.upload;
+  return isEmbedPath(url, base) ? sets.embedPage : sets.plain;
 }
 
 /** The embed routes that run inside a frame. Every other `/embed/*` route (`dms-master`, `dms-record`) is a top-level page and stays unframable. */

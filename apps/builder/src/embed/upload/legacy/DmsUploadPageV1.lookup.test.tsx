@@ -1,9 +1,9 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fixtures, initPayload } from '../bridge/fixtures.ts';
-import { parseMessage, type BridgeMessage } from '../bridge/protocol.ts';
-import DmsUploadPage from './DmsUploadPage.tsx';
+import { fixtures, initPayload } from '../../bridge/fixtures.ts';
+import { parseMessage, type BridgeMessage } from '../../bridge/protocol.ts';
+import DmsUploadPageV1 from './DmsUploadPageV1.tsx';
 
 /* The page with a stand-in parent: the lookup picker is a searchable field only when the parent announced fp_caps=lookup (T-BR-L6), and the parent's rows fill the mapped fields. */
 
@@ -34,13 +34,16 @@ const init = () => {
   return { protocol: 'fp-bridge/1', type: 'init', id: 'p-init-1', payload };
 };
 
+beforeEach(() => void vi.stubEnv('VITE_FP_EMBED_PARENTS', ORIGIN));
+
 afterEach(() => {
+  vi.unstubAllEnvs();
   document.body.innerHTML = '';
   Reflect.deleteProperty(window, 'parent');
   vi.restoreAllMocks();
 });
 
-describe('DmsUploadPage lookups', () => {
+describe('DmsUploadPageV1 lookups', () => {
   describe('without fp_caps=lookup', () => {
     beforeEach(() => {
       window.history.replaceState({}, '', `/embed/dms-upload?fp_parent=${encodeURIComponent(ORIGIN)}&fp_v=1`);
@@ -49,7 +52,7 @@ describe('DmsUploadPage lookups', () => {
 
     it('T-BR-L6: ready.capabilities is the handshake fixture, the picker is a plain input and typing sends no lookup.request', async () => {
       const user = userEvent.setup();
-      render(<DmsUploadPage />);
+      render(<DmsUploadPageV1 />);
       expect(of('ready')[0]!.payload).toEqual((fixtures.handshake[0] as Extract<BridgeMessage, { type: 'ready' }>).payload);
       fromParent(init());
       await user.type(await screen.findByRole('textbox', { name: /Vendor/ }), 'acme');
@@ -67,7 +70,7 @@ describe('DmsUploadPage lookups', () => {
 
     it('ready.capabilities does not change; typing asks the parent once the debounce has passed, and a picked row fills the mapped fields', async () => {
       const user = userEvent.setup();
-      render(<DmsUploadPage />);
+      render(<DmsUploadPageV1 />);
       expect(of('ready')[0]!.payload).toEqual((fixtures.handshake[0] as Extract<BridgeMessage, { type: 'ready' }>).payload);
       fromParent(init());
       await user.type(await screen.findByRole('combobox', { name: /Vendor/ }), 'acm');
@@ -88,7 +91,7 @@ describe('DmsUploadPage lookups', () => {
 
     it('an answer from the wrong window or origin changes nothing (T-BR-L1)', async () => {
       const user = userEvent.setup();
-      render(<DmsUploadPage />);
+      render(<DmsUploadPageV1 />);
       fromParent(init());
       await user.type(await screen.findByRole('combobox', { name: /Vendor/ }), 'acm');
       await waitFor(() => expect(of('lookup.request')).toHaveLength(1), { timeout: 3000 });

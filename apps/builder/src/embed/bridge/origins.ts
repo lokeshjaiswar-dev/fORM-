@@ -1,14 +1,16 @@
+import { originOf, parseEmbedParents as parseParents } from './parents.ts';
+
 /*
  * Who may frame the upload page and talk to it. The parent names itself in `?fp_parent=<origin>`, which is a claim, not
- * proof: the child accepts it only when it is on the allowlist (`VITE_FP_EMBED_PARENTS`, comma separated origins; unset =
- * this page's own origin, the same-host deployment), and then still checks `event.source` and `event.origin` of every
+ * proof: the child accepts it only when it is on the allowlist (`VITE_FP_EMBED_PARENTS`, comma separated origins; unset = deny),
+ * and then still checks `event.source` and `event.origin` of every
  * message against it (childTransport.ts). Wildcards are not supported.
  */
 
 export interface EmbedEnv {
   /** This page's origin. */
   origin: string;
-  /** Normalised allowlist; never empty. */
+  /** Normalised allowlist; empty = no parent is accepted. */
   parents: readonly string[];
   /** `fp_v`, when the parent sent one. */
   version: string | null;
@@ -29,20 +31,12 @@ export function parseCaps(search: string): EmbedCap[] {
   return EMBED_CAPS.filter((cap) => named.includes(cap));
 }
 
-const originOf = (raw: string): string | null => {
-  try {
-    const url = new URL(raw.trim());
-    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
-};
-
-/** `VITE_FP_EMBED_PARENTS` as normalised origins; entries that are not http(s) origins are dropped. */
-export function parseEmbedParents(raw: unknown, ownOrigin: string): string[] {
-  const listed = typeof raw === 'string' ? raw.split(',').map(originOf).filter((o): o is string => o !== null) : [];
-  return [...new Set(listed.length > 0 ? listed : [ownOrigin])];
+/**
+ * `VITE_FP_EMBED_PARENTS` as normalised origins; entries that are not http(s) origins are dropped. An empty or unusable list
+ * is `[]`, which denies every parent (it used to default to `ownOrigin`; SEC-DESIGN 3.4). `ownOrigin` is kept for callers.
+ */
+export function parseEmbedParents(raw: unknown, _ownOrigin?: string): string[] {
+  return parseParents(raw);
 }
 
 export function embedEnv(search: string, ownOrigin: string, rawParents: unknown = (import.meta.env as Record<string, unknown>).VITE_FP_EMBED_PARENTS): EmbedEnv {

@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
-import { DEV_CSP_REPORT_PATH, builderSecurityHeaders, embedHeaders } from './security/headers.ts';
-import { cspReportCollector, embedFraming, noInjectedStyles } from './security/vite.ts';
+import { DEV_CSP_REPORT_PATH, builderSecurityHeaders, embedHeaders, sandboxedEmbedHeaders } from './security/headers.ts';
+import { assetCors, cspReportCollector, embedFraming, noInjectedStyles } from './security/vite.ts';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
@@ -116,16 +116,34 @@ export default defineConfig(({ mode }) => {
   const proxy = apiUrl ? {} : { '/v1': process.env.FR_DEV_API_URL ?? 'http://127.0.0.1:8080' };
   /* Reports go to the local collector, through `report-uri` only (see BuilderHeaderOptions.reportTo). */
   const reports = { reportUri: DEV_CSP_REPORT_PATH, reportTo: false };
-  /* VITE_FP_EMBED_PARENTS: origins that may frame /embed/* (DMS+); unset = only this origin. The child checks the same list (src/embed/bridge/origins.ts). */
+  /* VITE_FP_EMBED_PARENTS: origins that may frame /embed/dms-upload (DMS+); unset = nobody. The child checks the same list (src/embed/bridge/parents.ts). */
   const embedParents = (env.VITE_FP_EMBED_PARENTS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
-  const embedFor = (headerMode: 'development' | 'production') => embedHeaders({ mode: headerMode, connectOrigins, ...reports }, embedParents);
+  /* FP_PUBLIC_ORIGINS (no VITE_ prefix: loadEnv does not see it, so it is read from the process): this deployment's own public origin(s), named explicitly in the sandboxed upload CSP; default the parents (SEC-DESIGN 3.3 B3). */
+  const publicOrigins = (process.env['FP_PUBLIC_ORIGINS'] || env.VITE_FP_PUBLIC_ORIGINS || env.VITE_FP_EMBED_PARENTS || '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean);
+  /* VITE_FP_LEGACY_DESCRIPTOR=1: the M2 legacy build. The upload child also answers fp-bridge/1 and keeps today's framable header set. */
+  const legacyDescriptor = env.VITE_FP_LEGACY_DESCRIPTOR === '1';
+  /* The framable /embed/dms-upload: the sandboxed set in the default production build (vite preview), today's framable set otherwise. */
+  const uploadHeaders = (headerMode: 'development' | 'production') =>
+    headerMode === 'production' && !legacyDescriptor ? sandboxedEmbedHeaders({ parents: embedParents, publicOrigins }) : embedHeaders({ mode: headerMode, connectOrigins, ...reports }, embedParents);
   return {
     /* VITE_BASE=/formplus/ serves the builder under a path prefix (DMS's dev rewrite); unset keeps today's root. */
     base: env.VITE_BASE || '/',
-    plugins: [react(), tailwindcss(), cspReportCollector(), embedFraming(embedFor(mode === 'development' ? 'development' : 'production'), env.VITE_BASE || '/'), noInjectedStyles(), radixViewportStyles(), adoptedScrollLockStyles()],
+    plugins: [react(), tailwindcss(), cspReportCollector(), assetCors(env.VITE_BASE || '/'), embedFraming(uploadHeaders(mode === 'development' ? 'development' : 'production'), env.VITE_BASE || '/', { rewriteTo: 'embed-upload.html' }), noInjectedStyles(), radixViewportStyles(), adoptedScrollLockStyles()],
     /* Template packs (@form/templates) are imported as assets: `?inline` bundles their bytes into the app. */
     assetsInclude: ['**/*.formpack'],
+    /* A literal in the bundle, so a default build (no VITE_FP_LEGACY_DESCRIPTOR) folds the legacy /1 branch away and ships no fp-bridge/1 code. */
+    define: { 'import.meta.env.VITE_FP_LEGACY_DESCRIPTOR': JSON.stringify(legacyDescriptor ? '1' : '') },
     build: {
+      /*
+       * Two pages: the SPA, and the upload step's own entry (opaque origin, no router, no storage, no network; src/embed/upload/entry.tsx).
+       * Two entries share chunks, and Rolldown then runs a shared module (zod, the schemas) before the entry that configures it. The
+       * builder's CSP has no 'unsafe-eval': `z.config({ jitless: true })` (src/csp.ts, src/embed/upload/jitless.ts) must run BEFORE zod
+       * creates a schema, or zod's `new Function` probe is a violation on every page. `strictExecutionOrder` keeps ESM order across chunks.
+       */
+      rolldownOptions: {
+        input: { main: path.resolve(root, 'index.html'), 'embed-upload': path.resolve(root, 'embed-upload.html') },
+        output: { strictExecutionOrder: true },
+      },
       /*
        * Fonts are always files. Vite inlines any asset under 4 kB as a `data:` URL, and one small JetBrains Mono subset
        * (from @dmacq/ui/fonts.css) falls under that, so the built stylesheet asked for `data:font/woff2`. The policy's

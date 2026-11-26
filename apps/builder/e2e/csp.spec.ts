@@ -41,6 +41,16 @@ test('the builder is served with the production policy and Referrer-Policy', asy
   expect(csp.split('; ')).toContain(`report-uri ${REPORTS}`);
 });
 
+test('the embed pages send no report endpoint: /embed/dms-upload is sandboxed, /embed/dms-master and the SPA keep their own policies (BD-09, SEC-DESIGN 3.3)', async ({ request }) => {
+  const upload = (await request.get('/embed/dms-upload')).headers();
+  expect(upload['content-security-policy']).toMatch(/^sandbox allow-scripts allow-forms; /);
+  expect(upload['content-security-policy']).not.toMatch(/report-uri|report-to/);
+  expect(upload['reporting-endpoints']).toBeUndefined();
+  expect(upload['referrer-policy']).toBe('no-referrer');
+  // The full-page embeds are served by the SPA here (vite preview), with the plain policy; only nginx has a separate embed-page set.
+  expect((await request.get('/forms')).headers()['content-security-policy']).toContain(`report-uri ${REPORTS}`);
+});
+
 test('violations are blocked, raise securitypolicyviolation, and are reported', async ({ page, cspViolations }) => {
   await page.goto(run());
   await expect(page.getByRole('button', { name: 'New form' })).toBeVisible();

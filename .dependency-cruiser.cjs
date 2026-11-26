@@ -143,6 +143,39 @@ module.exports = {
       to: { path: '^apps/' },
     },
     {
+      name: 'upload-entry-isolated',
+      comment: 'SEC-DESIGN 3.3 B1: the sandboxed upload page (apps/builder/src/embed/upload/entry.tsx, own Vite entry embed-upload.html) runs in an opaque origin where web storage, cookies and IndexedDB throw. Nothing it can reach, directly or transitively, may touch them: not the edition loader, the sign-in return target, the pending-invite store, the persistence layer or the theme upload cache.',
+      severity: 'error',
+      from: { path: '^apps/builder/src/embed/upload/entry\\.tsx$' },
+      to: {
+        reachable: true,
+        path: [
+          '^apps/builder/src/edition/edition\\.ts$',
+          '^apps/builder/src/auth/returnTo\\.ts$',
+          '^apps/builder/src/org/pendingInvite\\.ts$',
+          '^apps/builder/src/persistence/',
+          '^apps/builder/src/components/builder/design/uploads\\.ts$',
+        ],
+      },
+    },
+    {
+      name: 'upload-child-v2-only',
+      comment: 'SEC-DESIGN 3.5: the default build of the upload child speaks fp-bridge/2 only. The /2 app (UploadApp.tsx) must not reach the retired /1 modules (bridge/protocol, bridge/childTransport, bridge/origins) or the legacy page; DmsUploadPage.tsx alone imports the legacy page, behind the VITE_FP_LEGACY_DESCRIPTOR constant that a default build folds away.',
+      severity: 'error',
+      from: { path: '^apps/builder/src/embed/upload/UploadApp\\.tsx$' },
+      to: {
+        reachable: true,
+        path: ['^apps/builder/src/embed/bridge/(protocol|childTransport|origins)\\.ts$', '^apps/builder/src/embed/upload/legacy/'],
+      },
+    },
+    {
+      name: 'upload-legacy-only-from-the-switch',
+      comment: 'The retired /1 page and controller (embed/upload/legacy) are loaded by DmsUploadPage.tsx only (a dynamic import behind a build-time constant) and by their own tests.',
+      severity: 'error',
+      from: { path: '^apps/builder/src/', pathNot: ['^apps/builder/src/embed/upload/legacy/', '^apps/builder/src/embed/upload/DmsUploadPage\\.tsx$'] },
+      to: { path: '^apps/builder/src/embed/upload/legacy/' },
+    },
+    {
       name: 'no-app-to-app',
       severity: 'error',
       from: { path: '^apps/([^/]+)/' },

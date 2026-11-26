@@ -1,13 +1,29 @@
 import { isDmsV1Type, legacyOfElement, parseDmsDate, parseDmsPhone, type DmsLegacyMarker, type DmsV1Type } from '@form/registry/profiles/dms-v1';
-import type { BridgeElement, FieldError, FieldErrorCode, InitPayload } from '../bridge/protocol.ts';
+import type { BridgeElementOfInit } from '../bridge/protocolV2.ts';
 
 /*
  * The upload form as DMS sees it: the fields of the doctype then the master, each with its DMS type, and what DMS
  * accepts for it. Nothing here renders. `validateValues` is the child's authority over `valid` (contract
- * fp-bridge/1): the seven types of dms-api's BaseFieldsValidationRule plus classic's own `required` and email check.
+ * fp-bridge/2): the seven types of dms-api's BaseFieldsValidationRule plus classic's own `required` and email check.
  * Values are DMS strings keyed by field id: date `DD-MM-YYYY`, digits for a number or phone, the option value for a
- * dropdown, `""` when empty.
+ * dropdown, `""` when empty. A secret field is never prefilled: DMS sends `null` and lists it in `masked` when a value is
+ * stored, and the child never holds that value (SEC-DESIGN 5.3).
  */
+
+export type FieldErrorCode = 'required' | 'pattern' | 'too_long' | 'invalid_email' | 'not_a_number' | 'not_integer' | 'below_min' | 'above_max' | 'not_in_options' | 'invalid_date';
+export interface FieldError { fieldId: string; code: FieldErrorCode; message: string }
+export type BridgeElement = BridgeElementOfInit;
+
+/** What the model needs of an `init` (the fp-bridge/2 message satisfies it; so does the retired /1 payload). */
+export interface ModelInput {
+  doctypeFields: readonly BridgeElement[];
+  masterFields: readonly BridgeElement[];
+  readOnly: boolean;
+  context: { mode: 'create' | 'edit'; today: string };
+  locale: string;
+  /** Ids DMS holds a value for but may not show (value `null` in `values`). */
+  masked?: readonly string[];
+}
 
 export type Section = 'doctype' | 'master';
 export interface Option { name: string; value: string }
@@ -30,6 +46,10 @@ export interface UploadField {
   legacy: DmsLegacyMarker | null;
   /** The element as DMS sent it. */
   element: BridgeElement;
+  /** `is_secret`: write-only here; never prefilled, sent back only when the person touched it. */
+  secret: boolean;
+  /** A secret (or other) field DMS holds a value for that this page may not show; the field starts empty and shows "Stored (hidden)". */
+  masked: boolean;
   /** A dropdown whose options come from the parent (none sent, or tied to another field). */
   remoteOptions: boolean;
   /** The id of the dropdown this one depends on, when that field is in the form. */
@@ -50,8 +70,11 @@ export interface UploadModel {
 
 export type ModelResult = { ok: true; model: UploadModel } | { ok: false; message: string };
 
-export function buildModel(init: InitPayload): ModelResult {
+export const STORED_HIDDEN = 'Stored (hidden)';
+
+export function buildModel(init: ModelInput): ModelResult {
   const fields: UploadField[] = [];
+  const masked = new Set((init.masked ?? []).map((id) => id.toLowerCase()));
   const byId = new Map<string, UploadField>();
   const add = (element: BridgeElement, section: Section): string | null => {
     const key = element.id.toLowerCase();
@@ -68,6 +91,8 @@ export function buildModel(init: InitPayload): ModelResult {
       increment,
       legacy: legacyOfElement(element as never),
       element,
+      secret: element.is_secret === true,
+      masked: masked.has(key) && legacyOfElement(element as never) === null,
       remoteOptions: element.type === 'dropdown' && ((element.options ?? []).length === 0 || element.parent_field_id !== undefined),
       parentId: element.type === 'dropdown' && element.parent_field_id !== undefined ? element.parent_field_id : null,
     };
@@ -106,9 +131,9 @@ export function buildModel(init: InitPayload): ModelResult {
 export const editableFields = (model: UploadModel): UploadField[] => model.fields.filter((f) => f.supported && !f.increment && f.legacy === null);
 
 /** The stored DMS string for a field in `init.values` (ids compare case-insensitively), `""` when none. */
-export function givenValue(given: Readonly<Record<string, string>>, id: string): string {
+export function givenValue(given: Readonly<Record<string, string | null>>, id: string): string {
   const key = id.toLowerCase();
-  for (const [k, v] of Object.entries(given)) if (k.toLowerCase() === key) return v;
+  for (const [k, v] of Object.entries(given)) if (k.toLowerCase() === key) return v ?? '';
   return '';
 }
 
@@ -121,11 +146,18 @@ export function normaliseDate(raw: string): string {
   return iso ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}` : raw;
 }
 
-/** The starting value of every editable field: DMS's value (dates normalised), else today for a "default to today" date, else `""`. */
-export function initialValues(model: UploadModel, given: Readonly<Record<string, string>>): Record<string, string> {
+/**
+ * The starting value of every editable field: DMS's value (dates normalised), else today for a "default to today" date, else `""`.
+ * A secret or masked field always starts empty, whatever `given` holds: a secret value is never prefilled (SEC-DESIGN 5.3).
+ */
+export function initialValues(model: UploadModel, given: Readonly<Record<string, string | null>>): Record<string, string> {
   const lower = new Map(Object.entries(given).map(([k, v]) => [k.toLowerCase(), v]));
   const out: Record<string, string> = {};
   for (const field of editableFields(model)) {
+    if (field.secret || field.masked) {
+      out[field.id] = '';
+      continue;
+    }
     const raw = lower.get(field.id.toLowerCase()) ?? '';
     out[field.id] = field.type === 'date' ? (raw === '' ? (field.element.isDefaultToDate === true ? model.today : '') : normaliseDate(raw)) : raw;
   }
@@ -133,7 +165,7 @@ export function initialValues(model: UploadModel, given: Readonly<Record<string,
 }
 
 /** What an auto-increment field shows: the number DMS will assign (create) or the stored value (edit). */
-export function incrementDisplay(model: UploadModel, field: UploadField, given: Readonly<Record<string, string>>): string {
+export function incrementDisplay(model: UploadModel, field: UploadField, given: Readonly<Record<string, string | null>>): string {
   if (model.mode === 'create') {
     const next = field.element.autoIncrementValue;
     return next === null || next === undefined ? '' : String(next);
@@ -195,11 +227,15 @@ export function validateField(field: UploadField, raw: string, options: readonly
   }
 }
 
-/** Errors in field order (doctype, then master). A read-only form has nothing to fix, so it never reports any. */
-export function validateValues(model: UploadModel, values: Readonly<Record<string, string>>, options: Readonly<Record<string, readonly Option[]>>): FieldError[] {
+/**
+ * Errors in field order (doctype, then master). A read-only form has nothing to fix, so it never reports any. A masked field
+ * that the person has not touched (`touched`) holds a stored value this page cannot see: it is never "required" and never judged.
+ */
+export function validateValues(model: UploadModel, values: Readonly<Record<string, string>>, options: Readonly<Record<string, readonly Option[]>>, touched: ReadonlySet<string> = new Set()): FieldError[] {
   if (model.readOnly) return [];
   const errors: FieldError[] = [];
   for (const field of editableFields(model)) {
+    if (field.masked && !touched.has(field.id)) continue;
     const verdict = validateField(field, values[field.id] ?? '', optionsFor(field, options));
     if (verdict) errors.push({ fieldId: field.id, ...verdict });
   }
