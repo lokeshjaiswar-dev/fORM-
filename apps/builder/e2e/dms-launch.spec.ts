@@ -42,7 +42,7 @@ async function plantCanaries(page: Page) {
     const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie')!;
     Object.defineProperty(Document.prototype, 'cookie', {
       configurable: true,
-      enumerable: desc.enumerable,
+      enumerable: desc.enumerable ?? true,
       get(this: Document) {
         w.__cookieReads += 1;
         return desc.get!.call(this) as string;

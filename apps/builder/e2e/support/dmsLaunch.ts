@@ -36,7 +36,7 @@ export interface IssueOptions {
   mode: 'dms-master' | 'dms-record';
   masterId?: string | null;
   recordId?: string | null;
-  seed?: { name: string; doctype_ids: string[]; folder_ids: string[]; classification: 'public' | 'confidential' | 'restricted' | null } | null;
+  seed?: { name: string; doctype_ids: readonly string[]; folder_ids: readonly string[]; classification: 'public' | 'confidential' | 'restricted' | null } | null;
   user?: { id: string; name: string };
   /** Seconds, as the exchange reports them. */
   absoluteExpiresIn?: number;
@@ -96,7 +96,11 @@ export class DmsStub {
   private reconnectUser: { id: string; name: string } | null = null;
   private lastIssue: IssueOptions | null = null;
 
-  constructor(private readonly options: StubOptions = {}) {}
+  private readonly options: StubOptions;
+
+  constructor(options: StubOptions = {}) {
+    this.options = options;
+  }
 
   /** What `POST launch-tickets` stores: a ticket bound to the challenge of a fresh verifier. */
   issue(options: IssueOptions): Issued {
