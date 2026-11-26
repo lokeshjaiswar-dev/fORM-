@@ -4,9 +4,11 @@ import type { DmsClient } from '@/embed/dmsClient';
 import { DMS_FETCH_ROWS, projectMasterRecords, sourceElementsOf, sourceFieldsOf, sourceMasterPath, type SourceField } from './dmsRows';
 
 /*
- * `/embed/dms-record`: the top-level page has the user's own DMS token, so it asks dms-api for the source master's records
- * itself (`GET master-records?id=&q=&page=1&per_page=`), the way the record load does. The token goes only to the launch's
- * `apiBase` (dmsClient), and no fORM- server is called (A15(7)/P-43). The same projection as the bridge path.
+ * `/embed/dms-record` and the builder preview: the top-level page holds a session credential, so it asks dms-api for the source
+ * master's records itself (`GET master-records?id=&q=&page=1&per_page=`), the way the record load does. The session client maps both
+ * reads to the session group (`lookup:read`, DESIGN 3.3) and sends the credential only to the session's API base; dms-api binds `id`
+ * to a master the session may read and caps `per_page` at 21 and `q` at 100 characters (SEC 1.6), which is what this file asks for.
+ * No fORM- server is called (A15(7)/P-43). The same projection as the bridge path.
  */
 
 const MAX_QUERY = 100;

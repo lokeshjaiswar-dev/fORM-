@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { DmsMasterPage } from '@/embed/master/DmsMasterPage';
 import { DmsRecordPage } from '@/embed/record/DmsRecordPage';
-import DmsUploadPage from '@/embed/upload/DmsUploadPage';
+import { SessionGate } from '@/embed/session/SessionGate';
 
 const framed = (): boolean => typeof window !== 'undefined' && window.parent !== window;
 
@@ -15,16 +15,33 @@ function NotAvailableHere() {
 }
 
 /**
- * `/embed/*`: fORM- hosted inside another product (DMS+). These routes sit outside `RequireSession`: the host's own
- * session is what counts, not a fORM- account, and the persistence adapters never touch the fORM- API. Anything
- * that is not a known mode goes to the forms list like any other unknown address.
+ * `/embed/*`: fORM- hosted inside another product (DMS+). These routes sit outside `RequireSession`: DMS is the system of record, and
+ * the persistence adapters never touch the fORM- API. `dms-master` and `dms-record` run inside `SessionGate`: DMS hands over a one-use
+ * ticket in the URL fragment, the gate exchanges it for a short-lived session credential that lives only in memory
+ * (session/dmsSession.ts), and the pages are rendered once DMS has said who the user is and what this page is for.
+ *
+ * `dms-upload` is not a route of this app: nginx serves its own entry (a sandboxed frame with no credential and no network, SEC-DESIGN
+ * 3). A hit on it here, framed or not, is an unknown embed path.
  */
 export function EmbedRoutes() {
   return (
     <Routes>
-      <Route path="dms-master" element={<DmsMasterPage />} />
-      <Route path="dms-upload" element={<DmsUploadPage />} />
-      <Route path="dms-record" element={<DmsRecordPage />} />
+      <Route
+        path="dms-master"
+        element={
+          <SessionGate mode="dms-master">
+            <DmsMasterPage />
+          </SessionGate>
+        }
+      />
+      <Route
+        path="dms-record"
+        element={
+          <SessionGate mode="dms-record">
+            <DmsRecordPage />
+          </SessionGate>
+        }
+      />
       <Route path="*" element={framed() ? <NotAvailableHere /> : <Navigate to="/forms" replace />} />
     </Routes>
   );
