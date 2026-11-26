@@ -585,7 +585,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master form retrieved successfully",
+            "message": "Master retrieved successfully",
             "data": {
               "id": "a1000000-0000-4000-8000-0000000000b1",
               "name": "Vendor Register",
@@ -663,7 +663,7 @@
           "status": 200,
           "body": {
             "success": true,
-            "message": "Master form retrieved successfully",
+            "message": "Master retrieved successfully",
             "data": {
               "id": "a1000000-0000-4000-8000-0000000000b1",
               "name": "Vendor Register",
