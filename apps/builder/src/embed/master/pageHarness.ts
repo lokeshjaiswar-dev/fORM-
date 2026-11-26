@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { createElement } from 'react';
+import { createElement, type ComponentType, type ReactNode } from 'react';
 import { vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@dmacq/ui';
@@ -104,5 +104,7 @@ export function renderMaster(navigate: (url: string) => void = vi.fn()) {
   const page = createElement(DmsMasterPage, { navigate });
   const router = createElement(MemoryRouter, { initialEntries: ['/embed/dms-master'] }, page);
   const tooltips = createElement(TooltipProvider, null, router);
-  return { navigate, ...render(createElement(SubmissionsProvider, { repo: new MemorySubmissions(), children: tooltips })) };
+  /* The provider declares `children` as a required prop, which createElement's third argument cannot satisfy for the type checker. */
+  const Submissions = SubmissionsProvider as unknown as ComponentType<{ repo: MemorySubmissions; children?: ReactNode }>;
+  return { navigate, ...render(createElement(Submissions, { repo: new MemorySubmissions() }, tooltips)) };
 }
