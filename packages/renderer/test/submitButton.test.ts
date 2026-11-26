@@ -25,8 +25,8 @@ describe('submitButtonPresentation', () => {
   });
 
   it('gives a picked fill readable text when no text colour is picked', () => {
-    expect(submitButtonPresentation({ label: 'Go', align: 'left', bgColor: '#1e3a8a' }).style).toEqual({ background: '#1e3a8a', color: '#ffffff' });
-    expect(submitButtonPresentation({ label: 'Go', align: 'left', bgColor: '#facc15' }).style).toEqual({ background: '#facc15', color: '#000000' });
+    expect(submitButtonPresentation({ label: 'Go', align: 'left', bgColor: id<HexColor>('#1e3a8a') }).style).toEqual({ background: '#1e3a8a', color: '#ffffff' });
+    expect(submitButtonPresentation({ label: 'Go', align: 'left', bgColor: id<HexColor>('#facc15') }).style).toEqual({ background: '#facc15', color: '#000000' });
   });
 
   it('leaves the colours to the theme when the Submit settings pick none', () => {

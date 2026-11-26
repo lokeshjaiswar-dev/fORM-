@@ -17,7 +17,7 @@ import {
 const label = z.string().max(200);
 const count = z.number().int().min(0);
 const textChrome = {
-  placeholder: z.string().max(200).exactOptional(),
+  placeholder: label.exactOptional(),
   prefix: z.string().max(32).exactOptional(),
   suffix: z.string().max(32).exactOptional(),
 };
@@ -40,7 +40,7 @@ export const ShortTextConfigSchema = z.strictObject({
   mask: InputMaskSchema.exactOptional(),
 });
 export const LongTextConfigSchema = z.strictObject({
-  placeholder: z.string().max(200).exactOptional(),
+  placeholder: label.exactOptional(),
   defaultValue: DefaultTextSchema.exactOptional(),
   rows: z.number().int().min(1).max(50).exactOptional(),
   limit: z.strictObject({ unit: z.enum(['characters', 'words']), min: count.max(50_000).exactOptional(), max: count.max(50_000).exactOptional() }).exactOptional(),
@@ -70,7 +70,7 @@ export const EmailConfigSchema = z.strictObject({
 });
 
 export const PhoneConfigSchema = z.strictObject({
-  placeholder: z.string().max(200).exactOptional(),
+  placeholder: label.exactOptional(),
   defaultCountry: CountryCodeSchema,
   allowedCountries: z.array(CountryCodeSchema).exactOptional(),
   showCountrySelect: z.boolean(),
@@ -162,7 +162,7 @@ const minuteStep = z.literal([1, 5, 10, 15, 30]);
 export const DateConfigSchema = z.strictObject({
   pattern: DatePatternSchema,
   separator: z.enum(['-', '/', '.']).exactOptional(),
-  placeholder: z.string().max(200).exactOptional(),
+  placeholder: label.exactOptional(),
   picker: z.enum(['calendar', 'selects', 'native']),
   defaultValue: z.discriminatedUnion('kind', [z.strictObject({ kind: z.literal('today') }), z.strictObject({ kind: z.literal('fixed'), date: IsoDateSchema })]).exactOptional(),
   limits: DateLimitsSchema.exactOptional(),

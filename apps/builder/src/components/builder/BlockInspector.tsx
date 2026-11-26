@@ -12,7 +12,7 @@ import { useDraft } from '@/lib/useDraft';
 import { INSPECTOR, type InspectorProps } from '@/fields/inspector';
 import { labelString } from '@/fields/style';
 import { tileOf } from '@/fields/tiles';
-import { KEY_PATTERN, blockText, isField, placementOf, plainText, richDoc, takenKeys } from '@/lib/definition';
+import { KEY_PATTERN, isField, placementOf, plainText, richDoc, takenKeys } from '@/lib/definition';
 import { patchBlockConfig } from '@/fields/configSink';
 import { isCustomFieldType, parseConfig } from '@/fields/custom/model';
 import { saveLibraryField } from '@/fields/custom/repository';

@@ -129,6 +129,9 @@ export function configTexts(block: { id: string; config: object }, fields: reado
   return fields.filter((f) => typeof config[f] === 'string' && (config[f] as string).trim() !== '').map((f) => blockKey(block, f));
 }
 
+/** The texts of a field whose only config string is its placeholder. */
+export const placeholderTexts = (block: { id: string; config: object }): TextKey[] => configTexts(block, ['placeholder']);
+
 function fieldTexts(block: FieldBase<ValueFieldType>): TextKey[] {
   const keys: TextKey[] = [blockKey(block, 'label')];
   if (block.description) keys.push(blockKey(block, 'description'));

@@ -10,6 +10,7 @@ import { moveBlock, updateBlock } from '@/state/actions';
 import { currentDoc, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { fieldTypePatch } from '@/lib/fieldType';
+import { useProfile } from '@/embed/useProfile';
 import { FieldTile } from '@/components/builder/FieldIcon';
 import { Tooltip } from '@/components/Tooltip';
 import { filterSummary, summaryCounts, summaryItems, type SummaryBlock, type SummaryCounts } from '@/components/builder/sidebar/summaryItems';
@@ -129,6 +130,8 @@ function SortableRow({ row, active }: { row: SummaryBlock; active: boolean }) {
 }
 
 function RowContent({ row, active, handle, dragging = false }: { row: SummaryBlock; active: boolean; handle: ReactNode; dragging?: boolean }) {
+  /* A master (profile dms-v1) cannot hide a field: DMS has no hidden fields, and the schema guard refuses `concealed` there. */
+  const canHide = useProfile() === 'full';
   return (
     <div
       className={cn(
@@ -152,7 +155,7 @@ function RowContent({ row, active, handle, dragging = false }: { row: SummaryBlo
         </span>
       </button>
       <StatusMarks row={row} />
-      {row.field ? <HideToggle row={row} /> : null}
+      {row.field && canHide ? <HideToggle row={row} /> : null}
     </div>
   );
 }
@@ -189,22 +192,21 @@ function Mark({ label, children }: { label: string; children: ReactNode }) {
 /**
  * Hides or shows a field for respondents (the same as Hidden in its settings). Hiding makes it hidden only: it is no
  * longer required or read-only, since a respondent cannot answer a field they cannot see (lib/fieldType). A hidden-type
- * field stays hidden, and a primary key stays visible because it is always required.
+ * field stays hidden.
  */
 function HideToggle({ row }: { row: SummaryBlock }) {
   const block = useDoc((d) => d.blocks[row.id]);
   const hiddenType = block?.type === 'hidden';
-  const primaryKey = !!block && 'primaryKey' in block && block.primaryKey === true;
   const label = `${row.hidden ? 'Show' : 'Hide'} ${row.label}`;
-  const tip = hiddenType ? 'Hidden field: always hidden' : primaryKey ? 'Primary key: always shown' : row.hidden ? 'Show on the form' : 'Hide from the form';
+  const tip = hiddenType ? 'Hidden field: always hidden' : row.hidden ? 'Show on the form' : 'Hide from the form';
   return (
     <Tooltip content={tip}>
       <button
         type="button"
         aria-label={label}
         aria-pressed={row.hidden}
-        disabled={hiddenType || primaryKey}
-        onClick={() => updateBlock(row.id, row.hidden ? { concealed: undefined } : fieldTypePatch({}, 'concealed'))}
+        disabled={hiddenType}
+        onClick={() => updateBlock(row.id, row.hidden ? { concealed: undefined } : fieldTypePatch('concealed'))}
         className={cn(
           'flex size-6 shrink-0 items-center justify-center rounded-[4px] outline-none hover:bg-state-hover focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
           row.hidden ? 'text-primary-text' : 'text-text-subtle hover:text-foreground',

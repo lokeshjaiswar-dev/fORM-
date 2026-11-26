@@ -30,7 +30,7 @@ describe('FormDesignPanel', () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Themes', 'Colors', 'Layout', 'Submit', 'Rules', 'Sections', 'API autofill']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Themes', 'Colors', 'Layout', 'Submit', 'Rules', 'Sections', 'Review', 'API autofill']);
     expect(screen.getByRole('tab', { name: 'Themes' })).toHaveAttribute('aria-selected', 'true');
     await user.type(screen.getByRole('searchbox', { name: 'Search themes' }), 'zzzz');
     expect(screen.getByText('No themes match “zzzz”.')).toBeInTheDocument();
@@ -85,11 +85,11 @@ describe('FormDesignPanel', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Form settings' })).not.toBeInTheDocument());
   });
 
-  it('has a Review tab before Submit where review units are made from the pages, even while nobody is signed in', async () => {
+  it('has a Review tab before API autofill where review units are made from the pages, even while nobody is signed in', async () => {
     const user = userEvent.setup();
     render(<FormDesignPanel />);
     await user.click(screen.getByRole('button', { name: 'Form settings' }));
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Colors', 'Styles', 'Themes', 'Rules', 'Sections', 'Review', 'API autofill', 'Submit']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Themes', 'Colors', 'Layout', 'Submit', 'Rules', 'Sections', 'Review', 'API autofill']);
     await user.click(screen.getByRole('tab', { name: 'Review' }));
     expect(screen.getByRole('region', { name: 'Review' })).toBeInTheDocument();
     // The assignments are the server's; without a session they are off and the reason is given, but the units are the draft's.

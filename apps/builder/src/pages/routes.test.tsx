@@ -167,6 +167,7 @@ describe('routes', () => {
     renderApp(repo, '/forms');
     await screen.findByText(/No forms yet/);
     fireEvent.click(screen.getByRole('button', { name: 'New form' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start from a template' }));
     fireEvent.click(await screen.findByRole('button', { name: /^Contact us/ }, OPENS));
     fireEvent.click(screen.getByRole('button', { name: 'Use template' }));
     expect(await screen.findByDisplayValue('Contact us', {}, OPENS)).toBeInTheDocument();

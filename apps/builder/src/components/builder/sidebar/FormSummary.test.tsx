@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { BlockId } from '@form/schema';
 import { FormSummary } from '@/components/builder/sidebar/FormSummary';
 import { filterSummary, summaryCounts, summaryItems } from '@/components/builder/sidebar/summaryItems';
+import { ProfileProvider } from '@/embed/profile';
 import { useUiStore } from '@/state/uiStore';
 import { block, doc, formWith, resetStore } from '@/test/fixtures';
 
@@ -61,10 +62,13 @@ describe('FormSummary', () => {
     expect(doc().blocks['name' as BlockId]).not.toHaveProperty('concealed', true);
   });
 
-  it('keeps a primary key visible: its eye is off', () => {
-    resetStore([block('short_text', 'code', { label: 'Code', primaryKey: true, required: true })]);
-    render(<FormSummary query="" onAddFields={() => {}} />);
-    expect(screen.getByRole('button', { name: 'Hide Code' })).toBeDisabled();
+  it('has no eye in the Masters builder: DMS has no hidden fields', () => {
+    render(
+      <ProfileProvider profile="dms-v1">
+        <FormSummary query="" onAddFields={() => {}} />
+      </ProfileProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /^(Hide|Show) / })).not.toBeInTheDocument();
   });
 
   it('selects a block and opens its settings when its row is clicked', () => {

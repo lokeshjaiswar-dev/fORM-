@@ -366,11 +366,7 @@ export function FormCanvas() {
                 type="button"
                 aria-label={t(M['canvas.submit_settings'])}
                 className={cn(submitPresent.className, 'inline-flex items-center gap-2 font-medium', submitAlign === 'full' && 'justify-center')}
-                style={{
-                  ...submitPresent.style,
-                  background: submitPresent.style.background ?? 'var(--fr-accent)',
-                  color: submitPresent.style.color ?? 'var(--fr-accentText)',
-                }}
+                style={submitPresent.style}
                 data-submit-size={submitPresent['data-submit-size']}
                 data-submit-shape={submitPresent['data-submit-shape']}
               >
