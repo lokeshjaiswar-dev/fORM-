@@ -2,6 +2,7 @@ import { jsonPointer, type FieldBlock, type FormDefinition } from '@form/schema'
 import { labelText } from '../../util/text.ts';
 import { DMS_DATE_PATTERN, INT32_MAX, INT32_MIN, PHONE_MAX_LENGTH, PHONE_PATTERN, PRIMARY_TYPES, charsOf, dmsTypeOf, isFieldBlock, nameOf, orderedBlocks, xDms } from './shared.ts';
 import { legacyOfBlock } from './legacy.ts';
+import { visibilityOfBlock } from './visibility.ts';
 import { DMS_LOOKUP_LIMITS } from './lookup.ts';
 import type { DmsV1Type, ProfileIssue } from './types.ts';
 
@@ -128,6 +129,9 @@ function checkPrimary(block: FieldBlock, id: string, type: DmsV1Type, add: Add, 
   if (!block.unique) return;
   count();
   if (!PRIMARY_TYPES.has(type) && !legacyOfBlock(block)) add('error', 'primary_not_allowed', jsonPointer('blocks', id, 'unique'), 'Only a text, number, email or phone field can be the primary key.', id);
+  /* The primary key names a record in lists and links everywhere: dms-api refuses it hidden or secret (PRIMARY_CANNOT_BE_HIDDEN). */
+  const { hidden, secret } = visibilityOfBlock(block);
+  if (hidden || secret) add('error', 'primary_cannot_be_hidden', jsonPointer('blocks', id, 'unique'), `"${nameOf(block)}" is the primary key, so it cannot be hidden or secret.`, id);
 }
 
 function checkOptions(block: FieldBlock, id: string, add: Add): void {

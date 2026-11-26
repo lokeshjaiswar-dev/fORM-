@@ -2,6 +2,7 @@ import type { BlockConfigMap, BlockId, ChoiceOption, FieldBlock, FieldKey, FormD
 import { DEFAULT_COMPLIANCE } from '../../compliance.ts';
 import { labelText } from '../../util/text.ts';
 import { blankDmsDefinition } from './blank.ts';
+import { VISIBILITY_KEYS, flagsOfElement } from './visibility.ts';
 import { FP_LOOKUP_KEY, lookupOfPicker, readLookups } from './lookup.ts';
 import { optionIdOf } from './fnv.ts';
 import {
@@ -83,7 +84,9 @@ function toBlock(el: DmsElement, purposeId: PurposeId, taken: Set<string>): Stor
   const built = configFor(type, el);
   const defaults = DEFAULT_COMPLIANCE[built.type];
   const rest: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(el)) if (!MODELLED_KEYS.has(k)) rest[k] = v;
+  for (const [k, v] of Object.entries(el)) if (!MODELLED_KEYS.has(k) && !VISIBILITY_KEYS.includes(k)) rest[k] = v;
+  /* is_hidden / is_secret are first-class x-dms keys: read as booleans, written back as read (visibility.ts). */
+  Object.assign(rest, flagsOfElement(el));
   return {
     id,
     type: built.type,

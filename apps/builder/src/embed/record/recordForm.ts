@@ -59,13 +59,37 @@ export function localDate(now: IsoInstant, timeZone: string): IsoDate {
 
 export type RecordFormResult = { ok: true; form: RecordForm } | { ok: false; message: string };
 
+/**
+ * The secret fields of an edit (SEC-DESIGN 5.3). A secret that holds a stored value is write-only: the form does not show it (the page lists
+ * it as "Stored (hidden)" with "Replace"), so it has no prefilled value to leave in place or send back. `replacing` names the ones the
+ * person chose to replace: those render as an empty field.
+ */
+export interface RecordSecrets {
+  /** Field names of the secrets that hold a stored value (the record's masked cells). */
+  stored: ReadonlySet<string>;
+  /** Field names of the stored secrets being replaced. */
+  replacing: ReadonlySet<string>;
+}
+
+const NO_SECRETS: RecordSecrets = { stored: new Set(), replacing: new Set() };
+
 /** Auto-increment fields are read-only text whatever the counter's format (a prefix makes it text). */
 const forRender = (el: DmsElement): DmsElement =>
   isIncrementElement(el) ? { ...el, type: 'textinput', numeric: true, specialChars: true, required: false, primary: false } : el;
 
-export function planRecordForm(elements: readonly DmsElement[], values: DmsRecordValues, title: string, clock: RecordClock, recordId: string | null = null): RecordFormResult {
+export function planRecordForm(
+  allElements: readonly DmsElement[],
+  values: DmsRecordValues,
+  title: string,
+  clock: RecordClock,
+  recordId: string | null = null,
+  secrets: RecordSecrets = NO_SECRETS,
+): RecordFormResult {
   const editing = recordId !== null;
   const today = localDate(clock.now, clock.timeZone);
+  /* A stored secret the person has not chosen to replace is not in the form at all: nothing to prefill, nothing to send. */
+  const omitted = (el: DmsElement) => editing && secrets.stored.has(fieldNameOf(el)) && !secrets.replacing.has(fieldNameOf(el));
+  const elements = allElements.filter((el) => !omitted(el));
   const translated = elements.map(forRender);
   let def: FormDefinition = elementsToDefinition(translated, { formId: FORM_ID, title, locale: LOCALE, base: blankDmsDefinition(FORM_ID, title, LOCALE) });
   const blocks: Partial<Record<BlockId, StoredBlock>> = { ...def.blocks };
@@ -94,7 +118,7 @@ export function planRecordForm(elements: readonly DmsElement[], values: DmsRecor
     }
   }
   /* A lookup fills only fields a person can edit: never a locked (legacy, auto-increment) field, nor the search field itself. */
-  const locked = new Set(elements.filter((el) => isLegacyElement(el) || isIncrementElement(el)).map((el) => String(el.id)));
+  const locked = new Set(allElements.filter((el) => isLegacyElement(el) || isIncrementElement(el) || omitted(el)).map((el) => String(el.id)));
   const lookups = def.lookups?.flatMap((l) =>
     l.source !== 'dms_master' || locked.has(l.pickerFieldId) ? [] : [{ ...l, mappings: l.mappings.filter((m) => !locked.has(m.fieldId) && m.fieldId !== l.pickerFieldId) }],
   );
