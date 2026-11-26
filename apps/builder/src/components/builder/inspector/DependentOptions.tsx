@@ -113,7 +113,7 @@ export function LinkSetting({ block }: { block: DependentBlock }) {
     <>
       <ToggleRow
         label={t(M['linked.toggle'])}
-        hint={on ? undefined : t(M['linked.toggle_hint'])}
+        hint={t(M['linked.toggle_hint'])}
         checked={on}
         onChange={(next) => {
           setOpened(next);

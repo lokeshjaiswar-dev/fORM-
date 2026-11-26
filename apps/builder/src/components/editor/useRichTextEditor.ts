@@ -13,6 +13,8 @@ export interface RichTextEditorProps<D extends InlineDoc | RichDoc> {
   onEnter?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
+  /** The editor's accessible name when a visible label names it; otherwise the placeholder names it. */
+  'aria-label'?: string;
   className?: string;
   style?: CSSProperties;
 }
@@ -39,7 +41,7 @@ function relay() {
   };
 }
 
-export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, autoFocus, placeholder }: RichTextEditorProps<InlineDoc | RichDoc>, editorClass: string): Editor | null {
+export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, autoFocus, placeholder, 'aria-label': ariaLabel }: RichTextEditorProps<InlineDoc | RichDoc>, editorClass: string): Editor | null {
   const stored = useRef(value);
   const [events] = useState(relay);
   useEffect(() => {
@@ -56,10 +58,10 @@ export function useRichTextEditor(kind: EditorKind, { value, onChange, onEnter, 
     attributes: {
       class: editorClass,
       role: 'textbox',
-      'aria-label': placeholder ?? '',
+      'aria-label': ariaLabel ?? placeholder ?? '',
       ...(kind === 'rich' ? { 'aria-multiline': 'true' } : {}),
     },
-  }), [editorClass, kind, placeholder]);
+  }), [editorClass, kind, placeholder, ariaLabel]);
 
   const editor = useEditor({
     ...initial,

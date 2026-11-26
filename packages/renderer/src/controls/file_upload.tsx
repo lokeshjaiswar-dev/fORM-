@@ -71,6 +71,8 @@ export function FileUpload({ block, field }: ControlProps<'file_upload'>) {
         disabled={locked || files.length >= c.maxFiles}
         aria-invalid={attrs['aria-invalid']}
         aria-describedby={attrs['aria-describedby']}
+        /* The question names the zone, as it names every other control; the zone's own text stays its description. */
+        aria-labelledby={field.ids.label}
         onFilesAdded={(accepted) => take(accepted)}
         size="compact"
       />

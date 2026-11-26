@@ -71,19 +71,65 @@ export function cspReportCollector(): Plugin {
 const SONNER_INSERT_CSS = /\n__insertCSS\("(?:[^"\\\n]|\\.)*"\);?/g;
 
 /**
- * Production builds only. sonner injects its stylesheet as a `<style>` element when it loads, which `style-src 'self'`
- * refuses; the build drops that call and main.tsx imports `sonner/dist/styles.css` into the bundled CSS. A sonner
- * release that changes the call fails the build here instead of shipping a violation.
+ * Radix's `<style dangerouslySetInnerHTML>` element (Select and ScrollArea viewports: it only hides their scrollbar).
+ * React writes it through innerHTML, which `require-trusted-types-for 'script'` with `trusted-types 'none'` refuses, so
+ * the page that renders a Select crashes. The build renders nothing there; src/index.css carries the same rules.
+ */
+const RADIX_VIEWPORT_STYLE = /jsx\(\s*"style",\s*\{\s*dangerouslySetInnerHTML:\s*\{\s*__html:\s*`\[data-radix-[a-z-]+-viewport\][^`]*`\s*\},\s*nonce\s*\}\s*\)/g;
+
+interface InjectedStyle {
+  name: string;
+  /** Every dist entry the bundler might load for the module (ESM or CJS, any target). */
+  file: RegExp;
+  /** The call each loaded entry must contain exactly once. */
+  pattern: RegExp;
+  replacement: string;
+  /** The app always bundles it: a build that never loads it resolved another entry, which would skip the strip. */
+  required: boolean;
+}
+
+/** The modules whose injected stylesheet the build removes. */
+const INJECTED_STYLES: readonly InjectedStyle[] = [
+  { name: 'sonner __insertCSS("…")', file: /[\\/]node_modules[\\/]sonner[\\/]dist[\\/]index\.m?js$/, pattern: SONNER_INSERT_CSS, replacement: '\n', required: true },
+  { name: '@radix-ui/react-select viewport <style>', file: /[\\/]node_modules[\\/]@radix-ui[\\/]react-select[\\/]dist[\\/]index\.m?js$/, pattern: RADIX_VIEWPORT_STYLE, replacement: 'null', required: true },
+  /* Not used by the app today; stripped if a component starts using it. */
+  { name: '@radix-ui/react-scroll-area viewport <style>', file: /[\\/]node_modules[\\/]@radix-ui[\\/]react-scroll-area[\\/]dist[\\/]index\.m?js$/, pattern: RADIX_VIEWPORT_STYLE, replacement: 'null', required: false },
+  /*
+   * react-style-singleton (react-remove-scroll, under every Radix Dialog, Select and Popover) appends a <style> to
+   * <head> while one is open; `style-src 'self'` already refuses it, so the page gains nothing and logs a violation.
+   * The tag is never made; react-remove-scroll still blocks wheel and touch scrolling behind the overlay in script.
+   */
+  { name: 'react-style-singleton <style> tag', file: /[\\/]node_modules[\\/]react-style-singleton[\\/]dist[\\/]es(?:5|2015|2019)[\\/]singleton\.js$/, pattern: /if \(\(stylesheet = makeStyleTag\(\)\)\) \{/g, replacement: 'if ((stylesheet = null)) {', required: true },
+];
+
+/**
+ * Production builds only. sonner and Radix inject stylesheets at run time, which the production policy refuses
+ * (`style-src 'self'`, and Trusted Types for Radix's innerHTML). The build drops those injections; main.tsx imports
+ * `sonner/dist/styles.css` and src/index.css holds Radix's viewport rules. A release that changes one of the calls
+ * fails the build here instead of shipping a violation.
  */
 export function noInjectedStyles(): Plugin {
+  const stripped = new Set<string>();
   return {
     name: 'fr-no-injected-styles',
     apply: 'build',
+    buildStart() {
+      stripped.clear();
+    },
     transform(code, id) {
-      if (!/[\\/]node_modules[\\/]sonner[\\/]dist[\\/]index\.mjs$/.test(id.split('?')[0] ?? '')) return null;
-      const calls = code.match(SONNER_INSERT_CSS)?.length ?? 0;
-      if (calls !== 1) this.error(`sonner: expected one __insertCSS("…") call to remove, found ${calls}; review security/vite.ts`);
-      return { code: code.replace(SONNER_INSERT_CSS, '\n'), map: null };
+      const file = id.split('?')[0] ?? '';
+      const target = INJECTED_STYLES.find((entry) => entry.file.test(file));
+      if (!target) return null;
+      const calls = code.match(target.pattern)?.length ?? 0;
+      if (calls !== 1) this.error(`${target.name}: expected one injected stylesheet to remove, found ${calls}; review security/vite.ts`);
+      stripped.add(target.name);
+      return { code: code.replace(target.pattern, target.replacement), map: null };
+    },
+    /* A required module that never passed through here was loaded from an entry the file patterns miss. */
+    buildEnd(error) {
+      if (error) return;
+      const missed = INJECTED_STYLES.filter((entry) => entry.required && !stripped.has(entry.name)).map((entry) => entry.name);
+      if (missed.length) this.error(`never saw ${missed.join(', ')}: the bundle loads another entry; review security/vite.ts`);
     },
   };
 }

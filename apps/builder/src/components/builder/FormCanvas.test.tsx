@@ -144,7 +144,11 @@ describe('FormCanvas', () => {
     expect(canvas).toHaveStyle({ '--fr-accent': '#7c3aed', '--fr-page': '#fef3c7', '--fr-text': '#111827', color: 'var(--fr-text)', backgroundColor: 'var(--fr-page)' });
     act(() => setTitleStyle({ textColor: '#dc2626' as HexColor, sizePx: 36 }));
     expect(title).toHaveStyle({ color: 'rgb(220, 38, 38)', fontSize: '36px' });
-    expect(screen.getByRole('button', { name: 'Open submit button settings' })).toHaveStyle({ background: 'var(--fr-accent)', color: 'var(--fr-accentText)' });
+    /* A theme accent colours Submit through --fr-submit-* (styles.css); no inline colour gets in its way. */
+    expect(canvas).toHaveStyle({ '--fr-submit-bg': '#7c3aed', '--fr-submit-text': '#ffffff' });
+    const submit = screen.getByRole('button', { name: 'Open submit button settings' });
+    expect(submit.style.background).toBe('');
+    expect(submit.style.color).toBe('');
   });
 
   it('keeps the slash menu unclipped and on builder chrome after a cover theme', async () => {

@@ -4,6 +4,7 @@ import { BuilderPage } from '@/pages/BuilderPage';
 import { PublicFillPage } from '@/pages/PublicFillPage';
 import { FormsPage } from '@/pages/FormsPage';
 import { ResponsesPage } from '@/pages/ResponsesPage';
+import { SharedPreviewPage } from '@/pages/SharedPreviewPage';
 import { RepositoryProvider } from '@/persistence/RepositoryContext';
 import { SubmissionsProvider } from '@/persistence/SubmissionsContext';
 
@@ -11,6 +12,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/f/:slug" element={<PublicFillPage />} />
+      <Route path="/share" element={<SharedPreviewPage />} />
       <Route path="/forms" element={<FormsPage />} />
       <Route path="/forms/:id/responses" element={<ResponsesPage />} />
       <Route path="/fields/*" element={<Navigate to="/forms" replace />} />

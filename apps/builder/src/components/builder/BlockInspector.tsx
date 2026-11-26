@@ -19,15 +19,18 @@ import { isOptionValueField } from '@/state/commands/rules';
 import { currentDoc, useBlock, useDoc } from '@/state/documentStore';
 import { useUiStore } from '@/state/uiStore';
 import { Tooltip } from '@/components/Tooltip';
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
 import { InlineEditor } from '@/components/editor/InlineEditor';
-import { Field, InspectorSection, SectionTitle, SelectField, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { Field, InspectorSection, SectionTitle, SelectField, TextField, ToggleRow, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
 import { ApiValidationSection } from '@/components/builder/inspector/ApiValidationSection';
 import { LogicTab } from '@/components/builder/inspector/LogicTab';
 import { PrivacySection } from '@/components/builder/inspector/PrivacySection';
 import { SUBMIT_INSPECTOR_ID, SubmitInspector } from '@/components/builder/SubmitInspector';
 import { TITLE_INSPECTOR_ID, TitleInspector } from '@/components/builder/TitleInspector';
+import '@/components/builder/inspector/inspectorFields.css';
+import { SettingsPanelContext } from '@/components/builder/inspector/settingsPanelScope';
+import { FIELD_TYPE_FLAGS, fieldTypeFlags, fieldTypePatch, nextFieldType, type FieldTypeFlag } from '@/lib/fieldType';
 
 const M = defineMessages('builder', {
   'inspector.title': 'Block settings',
@@ -76,6 +79,7 @@ const M = defineMessages('builder', {
   'inspector.concealed_value_hint': 'Respondents do not see this. It is submitted, and rules can read it anywhere.',
   'inspector.required_read_only': 'A read-only field needs a default value to be required.',
   'inspector.concealed': 'Hidden',
+  'inspector.field_type_primary_key': 'A primary key is always required, so it cannot be read-only or hidden.',
   'inspector.required_concealed': 'Respondents cannot fill a hidden field, so it needs a default value or prefill to be required.',
   'inspector.required_message': 'Message when empty',
   'inspector.required_message_placeholder': 'This field is required.',
@@ -83,8 +87,8 @@ const M = defineMessages('builder', {
   'inspector.unique': 'Must be unique on this form',
   'inspector.primary_key': 'Primary key',
   'inspector.primary_key_hint': 'Identifies each submission. Turning it on also makes the field required and unique. Only one field per form can be the primary key.',
-  'inspector.primary_key_moved': 'Turning this on moves the primary key from {field}.',
-  'inspector.primary_key_locked': 'Kept on while this field is the primary key.',
+  'inspector.primary_key_moved': 'Moves the primary key from {field}.',
+  'inspector.primary_key_locked': 'On while this field is the primary key.',
   'inspector.unique_hint': 'The same value cannot be submitted twice. Checked when the form is submitted.',
   'inspector.unique_normalize': 'Compare as',
   'inspector.unique_exact': 'Exactly as typed',
@@ -219,7 +223,8 @@ export function BlockInspector() {
   if (!chromeSelected && (!block || block.type === 'unsupported')) {
     return (
       <aside
-        className="relative flex shrink-0 flex-col overflow-hidden border-l border-transparent bg-background transition-[width,border-color] duration-300 ease-out"
+        data-settings-panel
+        className="relative flex shrink-0 flex-col overflow-hidden border-l border-transparent bg-card transition-[width,border-color] duration-300 ease-out"
         style={{ width: 0 }}
       />
     );
@@ -227,21 +232,24 @@ export function BlockInspector() {
   if (chromeSelected) {
     return (
       <aside
+        data-settings-panel
         aria-label={t(M['inspector.title'])}
         className={cn(
-          'relative flex shrink-0 flex-col overflow-hidden border-l bg-background',
+          'relative flex shrink-0 flex-col overflow-hidden border-l bg-card',
           open ? 'border-border' : 'border-transparent',
           !resizing && 'transition-[width,border-color] duration-300 ease-out',
         )}
         style={{ width: open ? panelWidth : 0 }}
       >
         <ResizeHandle onResizing={setResizing} />
+        <SettingsPanelContext.Provider value>
         <div className="flex min-h-0 flex-1 flex-col" style={{ width: panelWidth }}>
           <PanelHeader name={t(submitSelected ? M['inspector.submit_type'] : M['inspector.form_title_type'])} onClose={closeInspector} />
-          <div className="flex-1 overflow-y-auto border-t border-border px-4 py-4">
+          <div className="flex-1 overflow-y-auto">
             <InspectorSection>{submitSelected ? <SubmitInspector /> : <TitleInspector />}</InspectorSection>
           </div>
         </div>
+        </SettingsPanelContext.Provider>
       </aside>
     );
   }
@@ -254,27 +262,32 @@ export function BlockInspector() {
 
   return (
     <aside
+      data-settings-panel
       aria-label={t(M['inspector.title'])}
       className={cn(
-        'relative flex shrink-0 flex-col overflow-hidden border-l bg-background',
+        'relative flex shrink-0 flex-col overflow-hidden border-l bg-card',
         open ? 'border-border' : 'border-transparent',
         !resizing && 'transition-[width,border-color] duration-300 ease-out',
       )}
       style={{ width: open ? panelWidth : 0 }}
     >
       <ResizeHandle onResizing={setResizing} />
+      <SettingsPanelContext.Provider value>
       <div className="flex min-h-0 flex-1 flex-col" style={{ width: panelWidth }}>
-        <PanelHeader name={blockText(block) || typeName} type={typeName} onClose={closeInspector} />
+        <PanelHeader name={typeName} onClose={closeInspector} />
 
         <Tabs value={shown} onValueChange={(id) => setTab(id as Tab)} variant="pill" size="sm" className="flex min-h-0 flex-1 flex-col gap-0">
-          <TabsList className="mx-4 mb-1 flex w-auto shrink-0">
-            {tabs.map((id) => (
-              <TabsTrigger key={id} value={id} className="data-[state=active]:text-primary-text">
-                {t(TAB_LABELS[id])}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent key={block.id} value={shown} className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+          {/* Figma 5356:184211: a 32px grey track 16px in from the edges; the selected tab is white with primary text. */}
+          <div className="shrink-0 px-4 pt-1">
+            <TabsList className="flex h-8 w-full rounded-[8px] bg-(--bluedark-100) p-[3px]">
+              {tabs.map((id) => (
+                <TabsTrigger key={id} value={id} className="h-[25px] rounded-[6px] text-[12px] leading-4 data-[state=active]:text-primary-text data-[state=inactive]:text-(--bluedark-800)">
+                  {t(TAB_LABELS[id])}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <TabsContent key={block.id} value={shown} className="mt-0 flex-1 overflow-y-auto pb-6">
             {shown === 'general' ? <GeneralTab block={block} /> : null}
             {shown === 'design' ? <DesignTab block={block} /> : null}
             {shown === 'logic' ? (
@@ -285,23 +298,22 @@ export function BlockInspector() {
           </TabsContent>
         </Tabs>
       </div>
+      </SettingsPanelContext.Provider>
     </aside>
   );
 }
 
 /**
- * The panel's title row: the block's own name (its label, or its type when it has none) and, underneath, its type.
- * The type line is left out when it would only repeat the name.
+ * The panel's 48px title row: what is being set up, such as "Short answer" or "Form title", in the same 14px semibold
+ * as the Toolbox title across the canvas. The
+ * block's own wording is edited in Field name just below, so the title names its type and stays put while typing.
  */
-function PanelHeader({ name, type, onClose }: { name: string; type?: string; onClose: () => void }) {
+function PanelHeader({ name, onClose }: { name: string; onClose: () => void }) {
   return (
-    <div className="flex items-start justify-between gap-3 px-4 py-3">
-      <div className="min-w-0">
-        <h2 className="truncate text-[15px] font-semibold leading-6" title={name}>
-          {name}
-        </h2>
-        {type && type !== name ? <p className="truncate text-[12px] text-muted-foreground">{type}</p> : null}
-      </div>
+    <div className="flex h-12 shrink-0 items-center justify-between gap-3 px-4">
+      <h2 className="min-w-0 truncate text-[14px] font-semibold leading-5 text-foreground" title={name}>
+        {name}
+      </h2>
       <Tooltip content={t(M['inspector.close'])}>
         <Button type="button" variant="ghost" size="icon-sm" className="shrink-0" aria-label={t(M['inspector.close'])} onClick={onClose}>
           <X className="size-4" />
@@ -395,18 +407,15 @@ function Colours({ block }: { block: ShownBlock }) {
 function WidthField({ block }: { block: ShownBlock }) {
   return (
     <Field label={t(M['inspector.width'])} hint={t(M['inspector.width_hint'])}>
-      <ToggleGroup
+      <SegmentedGroup
         type="single"
-        size="sm"
-        appearance="tinted"
-        className="w-full"
         aria-label={t(M['inspector.width'])}
         value={block.layout?.width ?? 'full'}
         onValueChange={(w) => w && setBlockWidth(block.id, w as 'full' | 'half')}
       >
-        <ToggleGroupItem value="full" className="flex-1">{t(M['inspector.width_full'])}</ToggleGroupItem>
-        <ToggleGroupItem value="half" className="flex-1">{t(M['inspector.width_half'])}</ToggleGroupItem>
-      </ToggleGroup>
+        <Segment value="full">{t(M['inspector.width_full'])}</Segment>
+        <Segment value="half">{t(M['inspector.width_half'])}</Segment>
+      </SegmentedGroup>
     </Field>
   );
 }
@@ -414,18 +423,15 @@ function WidthField({ block }: { block: ShownBlock }) {
 function AlignField({ block }: { block: ShownBlock }) {
   return (
     <Field label={t(M['inspector.align'])}>
-      <ToggleGroup
+      <SegmentedGroup
         type="single"
-        size="sm"
-        appearance="tinted"
-        className="w-full"
         aria-label={t(M['inspector.align'])}
         value={block.style?.align ?? 'left'}
         onValueChange={(a) => a && setStyle(block, { align: a === 'left' ? undefined : (a as 'center') })}
       >
-        <ToggleGroupItem value="left" className="flex-1">{t(M['inspector.align_left'])}</ToggleGroupItem>
-        <ToggleGroupItem value="center" className="flex-1">{t(M['inspector.align_center'])}</ToggleGroupItem>
-      </ToggleGroup>
+        <Segment value="left">{t(M['inspector.align_left'])}</Segment>
+        <Segment value="center">{t(M['inspector.align_center'])}</Segment>
+      </SegmentedGroup>
     </Field>
   );
 }
@@ -434,69 +440,74 @@ function AlignField({ block }: { block: ShownBlock }) {
 function FieldNameField({ block }: { block: FieldBlock }) {
   return (
     <Field label={t(M['inspector.field_name'])}>
-      <div className="rounded-md border border-border px-2 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
+      <div className={EDITOR_BOX}>
         <InlineEditor
           value={block.label}
           onChange={(label) => updateBlock(block.id, { label })}
           placeholder={t(M['inspector.field_name_placeholder'])}
           aria-label={t(M['inspector.field_name'])}
-          className="text-[13px] leading-6"
+          className="text-[13px] leading-[18px]"
         />
       </div>
     </Field>
   );
 }
 
-const FIELD_TYPE_ICON = { required: Asterisk, readOnly: Lock, concealed: EyeOff } as const;
-type FieldTypeFlag = keyof typeof FIELD_TYPE_ICON;
-const FIELD_TYPE_FLAGS = Object.keys(FIELD_TYPE_ICON) as FieldTypeFlag[];
+/** Field name and Description edit rich text: the `ds-field` class gives them the panel's text-input look in every state (inspectorFields.css). */
+const EDITOR_BOX = 'ds-field block px-2 [&>div]:min-h-[30px]';
+
+const FIELD_TYPE_ICON: Record<FieldTypeFlag, typeof Asterisk> = { required: Asterisk, readOnly: Lock, concealed: EyeOff };
 
 /**
- * Required, read-only and hidden as one row of toggle tiles: the answers to "what kind of field is this?", visible at
- * a glance. Hidden is PROP-07 `concealed`: the author still sees and edits the field (filled by an admin, a prefill or
- * a default), respondents never see it, and its value is still stored. Unlike a Logic hide, the answer is kept.
+ * Required, read-only and hidden as one row of toggle tiles: the answer to "what kind of field is this?", visible at a
+ * glance. Only one can be on (lib/fieldType): a respondent cannot answer a field they cannot change or see. Hidden is
+ * PROP-07 `concealed`: the author still sees and edits the field (filled by an admin, a prefill or a default),
+ * respondents never see it, and its value is still stored. Unlike a Logic hide, the answer is kept. A primary key is
+ * always required, so its read-only and hidden tiles are off.
  */
 function FieldTypeToggles({ block }: { block: FieldBlock }) {
-  const on = FIELD_TYPE_FLAGS.filter((flag) => block[flag] === true);
+  const on = fieldTypeFlags(block);
+  const primaryKey = block.primaryKey === true;
   const label: Record<FieldTypeFlag, string> = {
     required: t(M['inspector.required']),
     readOnly: t(M['inspector.read_only']),
     concealed: t(M['inspector.concealed']),
   };
   return (
-    <Field label={t(M['inspector.field_type'])}>
-      <ToggleGroup
-        type="multiple"
-        size="sm"
-        appearance="tinted"
-        className="w-full"
-        aria-label={t(M['inspector.field_type'])}
-        value={on}
-        onValueChange={(next: string[]) =>
-          updateBlock(block.id, {
-            required: next.includes('required') || block.primaryKey === true,
-            readOnly: next.includes('readOnly') || undefined,
-            concealed: next.includes('concealed') || undefined,
-          })
-        }
-      >
-        {FIELD_TYPE_FLAGS.map((flag) => {
-          const Icon = FIELD_TYPE_ICON[flag];
-          return (
-            <ToggleGroupItem key={flag} value={flag} aria-label={label[flag]} className="h-auto flex-1 flex-col gap-1 py-2">
-              <Icon aria-hidden className={cn('size-3.5', flag === 'required' && 'text-destructive')} />
-              {label[flag]}
-            </ToggleGroupItem>
-          );
-        })}
-      </ToggleGroup>
+    <>
+      <Field label={t(M['inspector.field_type'])} note={primaryKey ? t(M['inspector.field_type_primary_key']) : undefined}>
+        <SegmentedGroup
+          type="multiple"
+          aria-label={t(M['inspector.field_type'])}
+          value={on}
+          onValueChange={(next: string[]) => updateBlock(block.id, fieldTypePatch(block, nextFieldType(on, next)))}
+        >
+          {FIELD_TYPE_FLAGS.map((flag) => {
+            const Icon = FIELD_TYPE_ICON[flag];
+            return (
+              <Segment
+                key={flag}
+                value={flag}
+                aria-label={label[flag]}
+                disabled={primaryKey && flag !== 'required'}
+                className="h-auto flex-col gap-1 p-2"
+              >
+                <Icon aria-hidden className={cn('size-3.5', flag === 'required' && 'text-destructive')} />
+                {label[flag]}
+              </Segment>
+            );
+          })}
+        </SegmentedGroup>
+      </Field>
+      {/* Siblings of the field, not inside it, so they sit the section's 16px apart like every other setting. */}
       {block.readOnly || block.concealed ? <ReadOnlyValue block={block} /> : null}
+      {/* Only a form saved before the one-type rule can still have two on; picking a tile clears it. */}
       {block.required && (block.concealed || block.readOnly) ? (
         <p role="alert" className="text-[12px] text-amber-700">
           {t(M[block.concealed ? 'inspector.required_concealed' : 'inspector.required_read_only'])}
         </p>
       ) : null}
-    </Field>
+    </>
   );
 }
 
@@ -516,12 +527,12 @@ function GeneralTab({ block }: { block: ShownBlock }) {
           {visible ? (
             <>
               <Field label={t(M['inspector.description'])}>
-                <div className="rounded-md border border-border px-2">
+                <div className={EDITOR_BOX}>
                   <RichEditor
                     value={block.description ?? richDoc('')}
                     onChange={(description) => updateBlock(block.id, { description: description.content.some((n) => n.type !== 'paragraph' || n.content?.length) ? description : undefined })}
                     placeholder={t(M['inspector.description_placeholder'])}
-                    className="text-[13px] leading-6"
+                    className="text-[13px] leading-[18px]"
                   />
                 </div>
               </Field>
@@ -768,7 +779,8 @@ function PrimaryKeySetting({ block }: { block: FieldBlock }) {
   return (
     <ToggleRow
       label={t(M['inspector.primary_key'])}
-      hint={!on && holder ? `${t(M['inspector.primary_key_hint'])} ${t(M['inspector.primary_key_moved'], { field: blockText(holder) || holder.key })}` : t(M['inspector.primary_key_hint'])}
+      hint={t(M['inspector.primary_key_hint'])}
+      note={!on && holder ? t(M['inspector.primary_key_moved'], { field: blockText(holder) || holder.key }) : undefined}
       checked={on}
       onChange={(next) => {
         if (!next) {
@@ -776,7 +788,7 @@ function PrimaryKeySetting({ block }: { block: FieldBlock }) {
           return;
         }
         if (holder) updateBlock(holder.id, { primaryKey: undefined });
-        updateBlock(block.id, { primaryKey: true, required: true, unique: block.unique ?? { normalize: defaultNormalize(block.type) } });
+        updateBlock(block.id, { primaryKey: true, ...fieldTypePatch({ primaryKey: true }, 'required'), unique: block.unique ?? { normalize: defaultNormalize(block.type) } });
       }}
     />
   );
@@ -789,7 +801,8 @@ function UniqueSetting({ block }: { block: FieldBlock }) {
     <>
       <ToggleRow
         label={t(M['inspector.unique'])}
-        hint={locked ? t(M['inspector.primary_key_locked']) : t(M['inspector.unique_hint'])}
+        hint={t(M['inspector.unique_hint'])}
+        note={locked ? t(M['inspector.primary_key_locked']) : undefined}
         disabled={locked}
         checked={block.unique !== undefined}
         onChange={(on) => updateBlock(block.id, { unique: on ? { normalize: defaultNormalize(block.type) } : undefined })}

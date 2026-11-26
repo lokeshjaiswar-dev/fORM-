@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 type Side = 'top' | 'bottom' | 'right';
 
-/** dMACQ Tooltip with `content` / `shortcut` props used across the builder chrome. */
+/** dMACQ Tooltip with `content` / `shortcut` props used across the builder chrome; looks as the Figma Tooltip (index.css). */
 export function Tooltip({
   content,
   shortcut,
@@ -26,7 +26,9 @@ export function Tooltip({
         <TooltipTrigger asChild>
           <span className={cn('inline-flex max-w-full', className)}>{children}</span>
         </TooltipTrigger>
-        <TooltipContent side={side} title={content} shortcut={shortcut} />
+        <TooltipContent side={side} shortcut={shortcut}>
+          {content}
+        </TooltipContent>
       </DsTooltip>
     </TooltipProvider>
   );

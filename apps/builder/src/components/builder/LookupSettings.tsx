@@ -246,7 +246,7 @@ function LookupAccordion({
   ];
 
   return (
-    <AccordionItem value={draft.id ?? draft.url} className="rounded-lg border border-sidebar-border bg-sidebar-accent/20 px-3">
+    <AccordionItem value={draft.id ?? draft.url} className="rounded-lg border border-border-default bg-(--bluedark-050) px-3">
       <div className="flex items-center gap-2">
         <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline">
           <span className="truncate text-left text-[14px] font-medium">{draft.name || draft.url}</span>

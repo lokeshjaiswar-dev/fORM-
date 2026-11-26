@@ -219,11 +219,81 @@ button {
   animation: design-switch-draw 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/*
+ * Opening a form from the forms list. The page crossfades into the builder (a same-document view transition, see
+ * lib/viewTransition.ts); the builder's frame is already in place, and its contents then ease in:
+ * the header's controls, the toolbox from the left, the canvas rising slightly. `backwards` fill leaves no transform
+ * behind once the animation ends, so fixed and dragged elements inside keep their normal positioning.
+ */
+::view-transition-old(root) {
+  animation: builder-page-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: builder-page-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes builder-page-out {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes builder-page-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes builder-land-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes builder-land-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@keyframes builder-land-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.builder-land > header > * {
+  animation: builder-land-fade 320ms ease-out 60ms backwards;
+}
+
+.builder-land-body > aside:first-child > * {
+  animation: builder-land-left 420ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+}
+
+.builder-land-canvas {
+  animation: builder-land-up 520ms cubic-bezier(0.22, 1, 0.36, 1) 140ms backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .design-view-in,
   .design-view-back,
   .design-tab-in,
-  .design-switch-rule path {
+  .design-switch-rule path,
+  .builder-land > header > *,
+  .builder-land-body > aside:first-child > *,
+  .builder-land-canvas {
+    animation: none;
+  }
+}
+
+/* Its own rule: a browser without view transitions drops a selector list that names their pseudo-elements. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
     animation: none;
   }
 }
@@ -371,4 +441,84 @@ img.ProseMirror-separator {
   border-radius: 0;
   background-color: transparent !important;
   box-shadow: none;
+}
+
+/*
+ * Tooltips, as the Figma "Tooltip" (4624:2074), size small: a dark slate box with 6px corners, 8 x 4px padding,
+ * 12/16 regular white text wrapping at 240px, the low raised shadow, a 12 x 4.5px arrow, and a shortcut chip outlined
+ * in faint white. A rich tooltip keeps its semibold title line.
+ */
+[data-slot='tooltip-content'][data-variant='dark'] {
+  max-width: 240px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-wrap: wrap; /* fill each line to 240px, as Figma does, instead of balancing them shorter */
+  box-shadow: 0 2px 8px 0 rgb(25 40 57 / 0.09);
+}
+[data-slot='tooltip-content'][data-variant='dark'] kbd {
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / 0.4);
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  color: rgb(255 255 255 / 0.8);
+}
+/*
+ * The arrow: Figma's tip (12 x 4.5px, flared base, rounded point) drawn as a mask over the Radix arrow, pointing at
+ * the trigger on every side (Radix turns the arrow's wrapper). The element is 1px taller and lifted 1px into the box,
+ * with that 1px band filled, so the tip and the box join with no hairline between them at any zoom.
+ */
+[data-slot='tooltip-content'][data-variant='dark'] svg:last-child {
+  width: 12px;
+  height: 5.5px;
+  rotate: none;
+  transform: none;
+  translate: 0 -1px;
+  border-radius: 0;
+  background-color: var(--ds-tooltip-bg);
+  fill: transparent;
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 4.5'%3E%3Cpath d='M4.7878 3.8681L2.9265 1.5256C2.1503 0.5488 1.0976 0 0 0H12C10.9024 0 9.8497 0.5488 9.0735 1.5256L7.2122 3.8681C6.5427 4.7106 5.4573 4.7106 4.7878 3.8681Z'/%3E%3C/svg%3E") center bottom / 12px 4.5px no-repeat,
+    linear-gradient(#000 0 0) center top / 100% 1.5px no-repeat;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 4.5'%3E%3Cpath d='M4.7878 3.8681L2.9265 1.5256C2.1503 0.5488 1.0976 0 0 0H12C10.9024 0 9.8497 0.5488 9.0735 1.5256L7.2122 3.8681C6.5427 4.7106 5.4573 4.7106 4.7878 3.8681Z'/%3E%3C/svg%3E") center bottom / 12px 4.5px no-repeat,
+    linear-gradient(#000 0 0) center top / 100% 1.5px no-repeat;
+}
+[data-slot='tooltip-content'][data-variant='dark'] svg:last-child * {
+  fill: transparent;
+}
+
+/*
+ * Radix Select and ScrollArea viewports scroll without a visible scrollbar. Radix ships these rules as a <style> it
+ * writes through innerHTML, which the production Trusted Types policy refuses, so the build removes that element
+ * (security/vite.ts, noInjectedStyles) and the rules live here.
+ */
+[data-radix-select-viewport],
+[data-radix-scroll-area-viewport] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+[data-radix-select-viewport]::-webkit-scrollbar,
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * react-remove-scroll marks <body> while a modal Dialog, Select or Popover is open, and blocks wheel and touch scrolling
+ * behind it in script. Its runtime <style> (which the production policy refuses; security/vite.ts) also hid the page
+ * scrollbar and padded the body by its width; without that padding, hiding it would shift the page sideways, so only
+ * the scroll chaining is stopped here.
+ */
+body[data-scroll-locked] {
+  overscroll-behavior: contain;
 }

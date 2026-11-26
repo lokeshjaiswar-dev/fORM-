@@ -187,25 +187,31 @@ describe('BlockInspector validation', () => {
   it('explains that RE2 does not support lookahead', async () => {
     resetStore([block('short_text', 'name', { label: 'Name' })]);
     const user = open('name');
-    expect(screen.getByText(/RE2, not JavaScript or Python/)).toBeInTheDocument();
+    /* The RE2 explanation sits behind the field's (i) icon instead of under it. */
+    expect(screen.queryByText(/RE2, not JavaScript or Python/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More information about Pattern (regular expression)' })).toBeInTheDocument();
     const pattern = screen.getByRole('textbox', { name: 'Pattern (regular expression)' });
     await user.type(pattern, '(?=a)a');
     expect(get('name').config['pattern']).toEqual({ source: '(?=a)a' });
     expect(screen.getByText(/Lookahead and lookbehind are not supported in RE2/)).toBeInTheDocument();
   });
 
-  it('required and read-only are field type toggles on General; both together warn (B27)', async () => {
+  it('required, read-only and hidden are field type toggles on General, and only one can be on (B27)', async () => {
     resetStore([block('short_text', 'name')]);
     const user = open('name');
     await user.click(screen.getByRole('button', { name: 'Required' }));
     expect(get('name')['required']).toBe(true);
     expect(screen.getByRole('button', { name: 'Required' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(screen.getByRole('button', { name: 'Read-only' }));
-    expect(get('name')['readOnly']).toBe(true);
-    expect(screen.getByRole('alert')).toHaveTextContent('read-only field needs a default value');
+    expect(get('name')).toMatchObject({ required: false, readOnly: true });
+    expect(screen.getByRole('button', { name: 'Required' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Read-only' }));
+    expect(get('name')).not.toHaveProperty('readOnly');
+    expect(get('name')['required']).toBe(false);
   });
 
-  it('Hidden is a third field type toggle: it conceals the field from respondents (PROP-07) and warns when required', async () => {
+  it('Hidden conceals the field from respondents (PROP-07) and replaces required or read-only', async () => {
     resetStore([block('short_text', 'ref')]);
     const user = open('ref');
     const hidden = screen.getByRole('button', { name: 'Hidden' });
@@ -215,12 +221,21 @@ describe('BlockInspector validation', () => {
     const stored = screen.getByRole('textbox', { name: 'Value stored for this field' });
     await user.type(stored, 'REF-1');
     expect(get('ref').config['defaultValue']).toEqual({ kind: 'static', value: 'REF-1' });
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Required' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('cannot fill a hidden field');
-    await user.click(hidden);
     expect(get('ref')).not.toHaveProperty('concealed');
     expect(get('ref')['required']).toBe(true);
+    await user.click(hidden);
+    expect(get('ref')).toMatchObject({ concealed: true, required: false });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('still flags a form saved with two field types on, until one is picked', async () => {
+    resetStore([block('short_text', 'old', { required: true, readOnly: true })]);
+    const user = open('old');
+    expect(screen.getByRole('alert')).toHaveTextContent('read-only field needs a default value');
+    await user.click(screen.getByRole('button', { name: 'Required' }));
+    expect(get('old')).toMatchObject({ required: false, readOnly: true });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('writes a unique constraint', async () => {
@@ -655,13 +670,27 @@ describe('BlockInspector DMS master settings', () => {
   it('a primary key is required and unique, moves from any other field, and keeps unique on while set', async () => {
     resetStore([block('email', 'mail', { label: 'Email', primaryKey: true, required: true, unique: { normalize: 'trim_lower' } }), block('short_text', 'code', { label: 'Code' })]);
     const user = open('code');
-    expect(screen.getByText(/moves the primary key from Email/)).toBeInTheDocument();
+    expect(screen.getByText('Moves the primary key from Email.')).toBeInTheDocument();
+    expect(screen.queryByText(/Identifies each submission/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More information about Primary key' })).toBeInTheDocument();
     await user.click(screen.getByRole('switch', { name: 'Primary key' }));
     expect(get('code')).toMatchObject({ primaryKey: true, required: true, unique: { normalize: 'trim_lower' } });
     expect(get('mail')).not.toHaveProperty('primaryKey');
     expect(screen.getByRole('switch', { name: 'Must be unique on this form' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Required' }));
     expect(get('code')['required']).toBe(true);
+    expect(screen.getByRole('button', { name: 'Read-only' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Hidden' })).toBeDisabled();
+    expect(screen.getByText('A primary key is always required, so it cannot be read-only or hidden.')).toBeInTheDocument();
+  });
+
+  it('turning a hidden or read-only field into the primary key makes it required and visible', async () => {
+    resetStore([block('short_text', 'code', { label: 'Code', concealed: true })]);
+    const user = open('code');
+    await user.click(screen.getByRole('switch', { name: 'Primary key' }));
+    expect(get('code')).toMatchObject({ primaryKey: true, required: true });
+    expect(get('code')).not.toHaveProperty('concealed');
+    expect(get('code')).not.toHaveProperty('readOnly');
   });
 
   it('offers the primary key only on text, number, email and phone', () => {

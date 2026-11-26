@@ -1,210 +1,150 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, Download, Redo2, Undo2, LayoutTemplate, PanelLeft, Paintbrush } from 'lucide-react';
+import { Download, LayoutTemplate, MoreHorizontal, PanelLeft, Redo2, Share2, Undo2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { runtimeEdition } from '@form/config';
-import type { IsoInstant } from '@form/schema';
-import { useDoc, currentDoc } from '@/state/documentStore';
 import { redo, undo, useCanRedo, useCanUndo } from '@/state/history';
 import { useUiStore, type SaveState } from '@/state/uiStore';
-import { useBuilderMode } from '@/pages/useBuilderMode';
 import { TemplateDialog } from '@/components/templates/TemplateDialog';
-import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input } from '@dmacq/ui';
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@dmacq/ui';
 import { Tooltip, modKey } from '@/components/Tooltip';
-import { useEdition } from '@/edition/edition';
-import { previewVersion } from '@/lib/preview';
-import { ApiProblem, ApiUnreachable } from '@/auth/client';
 import { flushAutosave } from '@/persistence/autosave';
-import { copyText } from '@/lib/copyText';
-import { downloadFormJson } from '@/lib/formJson';
-import { fillUrl, publishLive, rememberedSlug } from '@/persistence/publishApi';
+import { FormName } from '@/components/builder/header/FormName';
+import { ViewTabs } from '@/components/builder/header/ViewTabs';
+import { ShareDialog } from '@/components/builder/header/ShareDialog';
+import { usePublish } from '@/components/builder/header/usePublish';
 import '@/components/workspace/workspace.css';
 
+/** Templates and More (Export, Share) are hidden from the bar for now; set to true to bring them back. */
+const SHOW_EXTRA_ACTIONS = false;
+
+/** Dark top bar across the whole builder (Figma DMacq Design System 5356:183289): name, view tabs, draft and publish. */
 export function BuilderHeader() {
   const { id = '' } = useParams();
-  const title = useDoc((d) => d.title);
-  const [mode, setMode] = useBuilderMode();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  const designOpen = useUiStore((s) => s.designOpen);
-  const setDesignOpen = useUiStore((s) => s.setDesignOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const save = useUiStore((s) => s.save);
-  const canUndo = useCanUndo();
-  const canRedo = useCanRedo();
+  const publishing = usePublish(id);
   const [templates, setTemplates] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [link, setLink] = useState<string | null>(() => {
-    const slug = rememberedSlug(id);
-    return slug ? fillUrl(slug) : null;
-  });
-  const [error, setError] = useState<string | null>(null);
-  const edition = useEdition();
-
-  useEffect(() => {
-    const slug = rememberedSlug(id);
-    setLink(slug ? fillUrl(slug) : null);
-  }, [id]);
-
-  async function onPublish() {
-    setBusy(true);
-    setError(null);
-    try {
-      await flushAutosave();
-      const doc = currentDoc();
-      const built = previewVersion(doc, { state: 'open' }, new Date().toISOString() as IsoInstant, runtimeEdition(edition));
-      if (!built.ok) {
-        const first = built.issues.find((i) => i.severity === 'error') ?? built.issues[0];
-        setError(first?.message ?? 'This form cannot be published yet.');
-        setShareOpen(true);
-        return;
-      }
-      const live = await publishLive(id, doc, doc.title);
-      const url = fillUrl(live.slug);
-      setLink(url);
-      setShareOpen(true);
-    } catch (err) {
-      setShareOpen(true);
-      if (err instanceof ApiUnreachable) setError('The API is not running, so this form cannot be shared yet.');
-      else if (err instanceof ApiProblem) {
-        setError(
-          err.code === 'SERVICE_UNAVAILABLE' || err.code === 'INTERNAL'
-            ? 'The database did not answer in time. Try Publish again.'
-            : err.message || 'This form could not be published.',
-        );
-      }
-      else setError(err instanceof Error ? err.message : 'This form could not be published.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** Saves the open form as a JSON file that the Forms page can import. */
-  async function onExport() {
-    setError(null);
-    try {
-      await flushAutosave();
-      downloadFormJson(currentDoc());
-      toast.success('Form exported');
-    } catch {
-      toast.error('The form could not be exported.');
-    }
-  }
-
-  async function copyLink() {
-    if (!link) return;
-    try {
-      await copyText(link);
-      setError(null);
-      toast('Link copied');
-    } catch {
-      setError('The link could not be copied. Select it and press Ctrl+C.');
-    }
-  }
 
   return (
     <>
-      <header className="flex h-[45px] shrink-0 items-center gap-0.5 border-b border-border bg-background px-3">
-        {!sidebarOpen && (
-          <Ghost onClick={() => setSidebarOpen(true)} label="Open sidebar">
-            <PanelLeft className="size-4" />
-          </Ghost>
-        )}
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 text-[14px] text-muted-foreground">
-          <Link to="/forms" className="truncate rounded-[4px] px-1.5 py-0.5 hover:bg-state-hover">
-            Forms
-          </Link>
-          <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
-          <span className="flex min-w-0 items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-foreground hover:bg-state-hover">
-            <span className="truncate">{title || 'Form title'}</span>
-          </span>
-          <span
-            role="status"
-            title={save.state === 'error' ? save.message : undefined}
-            className="ml-1 flex shrink-0 items-center gap-1.5 text-[13px] text-text-subtle"
-          >
-            <SaveDot state={save.state} />
-            {saveLabel(save)}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-0.5">
-          {(['edit', 'preview'] as const).map((m) => (
-            <Button key={m} type="button" variant="ghost" size="sm" pressed={mode === m} onClick={() => setMode(m)}>
-              {m === 'edit' ? 'Edit' : 'Preview'}
+      <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground">
+        <div className="flex min-w-0 items-center gap-2">
+          {!sidebarOpen && (
+            <IconAction onClick={() => setSidebarOpen(true)} label="Open sidebar">
+              <PanelLeft className="size-4" />
+            </IconAction>
+          )}
+          <Tooltip content="Back to forms">
+            <Button asChild variant="ghost" color="whiteOnPrimary" size="icon" className="shrink-0 text-sidebar-muted">
+              <Link to="/forms" aria-label="Back to forms">
+                <X className="size-5" />
+              </Link>
             </Button>
-          ))}
+          </Tooltip>
+          <FormName />
+          <SaveStatus save={save} />
         </div>
 
-        <Ghost disabled={!canUndo} onClick={undo} label="Undo" shortcut={`${modKey()}+Z`}>
-          <Undo2 className="size-4" />
-        </Ghost>
-        <Ghost disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
-          <Redo2 className="size-4" />
-        </Ghost>
-        <Tooltip content={designOpen ? 'Close form settings' : 'Form settings'}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            pressed={designOpen}
-            aria-label={designOpen ? 'Close form settings' : 'Form settings'}
-            onClick={() => setDesignOpen(!designOpen)}
-            className="mx-1 border-primary/40 bg-primary/10 font-semibold text-primary hover:bg-primary/20"
-          >
-            <Paintbrush className="size-4" />
-            Form settings
+        <ViewTabs />
+
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          <HistoryAndTools onTemplates={() => setTemplates(true)} onExport={publishing.exportJson} onShare={publishing.link ? () => publishing.setShareOpen(true) : null} />
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-sidebar-border" />
+          <SaveDraftButton />
+          <Button type="button" disabled={publishing.busy || !id} onClick={() => void publishing.publish()}>
+            {publishing.busy ? 'Publishing…' : 'Publish'}
           </Button>
-        </Tooltip>
-        <Ghost onClick={() => setTemplates(true)} label="Templates">
-          <LayoutTemplate className="size-4" />
-        </Ghost>
-        <Button type="button" size="sm" className="ml-1" disabled={busy || !id} onClick={() => void onPublish()}>
-          {busy ? 'Publishing…' : 'Publish'}
-        </Button>
-        <Button type="button" variant="outline" size="sm" className="ml-1" onClick={() => void onExport()}>
-          <Download />
-          Export
-        </Button>
-        {link ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
-            Share
-          </Button>
-        ) : null}
+        </div>
       </header>
       <TemplateDialog open={templates} onOpenChange={setTemplates} />
-      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{link ? 'Share form' : 'Publish form'}</DialogTitle>
-            <DialogDescription>
-              {link
-                ? 'Anyone with this link can fill the form on a phone or another computer. They do not need to sign in.'
-                : 'Publish this form to get a link you can open on any device.'}
-            </DialogDescription>
-          </DialogHeader>
-          {error ? (
-            <p role="alert" className="text-[14px] text-destructive">
-              {error}
-            </p>
-          ) : null}
-          {link ? (
-            <div className="flex gap-2">
-              <Input readOnly value={link} aria-label="Share link" />
-              <Button type="button" onClick={() => void copyLink()}>
-                Copy
-              </Button>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <ShareDialog state={publishing} />
     </>
   );
 }
 
-/** Animated status dot: a soft pulse while saving, solid green when saved, red when the save failed. */
+/** Undo and Redo as icons; Templates and More (Export, Share) follow them when SHOW_EXTRA_ACTIONS is on. */
+function HistoryAndTools({ onTemplates, onExport, onShare }: { onTemplates: () => void; onExport: () => Promise<void>; onShare: (() => void) | null }) {
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <IconAction disabled={!canUndo} onClick={undo} label="Undo" shortcut={`${modKey()}+Z`}>
+        <Undo2 className="size-4" />
+      </IconAction>
+      <IconAction disabled={!canRedo} onClick={redo} label="Redo" shortcut={`${modKey()}+Shift+Z`}>
+        <Redo2 className="size-4" />
+      </IconAction>
+      {SHOW_EXTRA_ACTIONS ? (
+        <>
+          <IconAction onClick={onTemplates} label="Templates">
+            <LayoutTemplate className="size-4" />
+          </IconAction>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" color="whiteOnPrimary" size="icon" aria-label="More actions" className="text-sidebar-muted">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => void onExport()}>
+                <Download />
+                Export
+              </DropdownMenuItem>
+              {onShare ? (
+                <DropdownMenuItem onSelect={onShare}>
+                  <Share2 />
+                  Share
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Writes the pending change now instead of waiting for autosave, and says whether it was written. */
+function SaveDraftButton() {
+  const [busy, setBusy] = useState(false);
+  async function saveDraft() {
+    setBusy(true);
+    try {
+      await flushAutosave();
+      const after = useUiStore.getState().save;
+      if (after.state === 'error') toast.error(after.message || 'The draft could not be saved.');
+      else toast.success('Draft saved');
+    } catch {
+      toast.error('The draft could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Button type="button" variant="ghost" color="whiteOnPrimary" disabled={busy} onClick={() => void saveDraft()}>
+      Save As Draft
+    </Button>
+  );
+}
+
+/* Hidden from view for now but still announced to screen readers; drop `sr-only` to show it again. */
+function SaveStatus({ save }: { save: SaveState }) {
+  return (
+    <span
+      role="status"
+      title={save.state === 'error' ? save.message : undefined}
+      className="sr-only flex shrink-0 items-center gap-1.5 text-[12px] text-sidebar-muted"
+    >
+      {save.state === 'idle' ? null : <SaveDot state={save.state} />}
+      {saveLabel(save)}
+    </span>
+  );
+}
+
+/** Animated status dot: a soft pulse while saving, solid when saved, red when the save failed. */
 function SaveDot({ state }: { state: SaveState['state'] }) {
-  const color = state === 'error' ? 'bg-destructive' : state === 'saved' ? 'bg-primary' : 'bg-text-subtle';
+  const color = state === 'error' ? 'bg-destructive' : state === 'saved' ? 'bg-positive' : 'bg-sidebar-muted';
   return (
     <span className="relative flex size-2 shrink-0" aria-hidden>
       {state === 'saving' ? <span className={`ws-live absolute inline-flex size-full rounded-full ${color}`} /> : null}
@@ -226,7 +166,7 @@ function saveLabel(save: SaveState): string {
   }
 }
 
-function Ghost({
+function IconAction({
   children,
   onClick,
   label,
@@ -241,7 +181,7 @@ function Ghost({
 }) {
   return (
     <Tooltip content={label} shortcut={shortcut}>
-      <Button type="button" variant="ghost" size="icon-sm" aria-label={label} disabled={disabled} onClick={onClick}>
+      <Button type="button" variant="ghost" color="whiteOnPrimary" size="icon" aria-label={label} disabled={disabled} onClick={onClick} className="text-sidebar-muted">
         {children}
       </Button>
     </Tooltip>

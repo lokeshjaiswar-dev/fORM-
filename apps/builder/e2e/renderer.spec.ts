@@ -21,7 +21,7 @@ async function recordSubmissions(page: Page) {
 
 test('three pages: logic hides a required field, the form submits, and the hidden answer is absent from onSubmit', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   await insert(page, '/short', /Short answer/);
   await label(page, 'Attending');
   await insert(page, '/page', /Page break/);
@@ -36,7 +36,8 @@ test('three pages: logic hides a required field, the form submits, and the hidde
   await page.getByRole('button', { name: 'Required' }).click();
   await page.getByRole('tab', { name: 'Logic' }).click();
   await page.getByRole('button', { name: 'Add a rule' }).click();
-  await expect(page.getByRole('button', { name: 'Attending' })).toBeVisible();
+  /* A new rule starts on the nearest earlier question. */
+  await expect(page.getByRole('combobox', { name: 'When' })).toHaveText('Attending');
   await page.getByRole('textbox', { name: 'Value' }).fill('yes');
   await expect(page.getByText('Hidden until a rule shows it').first()).toBeVisible();
   await openSettings(page, 2);
@@ -72,7 +73,7 @@ test('the preview has no serious or critical axe violations, before and after va
   /* About 13 s alone and close to the default 30 s under six workers (BL-146). */
   test.slow();
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   const fields: Array<[string, RegExp, string]> = [
     ['/short', /Short answer/, 'Full name'],
     ['/email', /Email/, 'Email address'],

@@ -3,7 +3,7 @@ import { openNewForm } from './helpers.ts';
 
 test('selecting blocks adds no undo history', async ({ page }) => {
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   for (const text of ['First', 'Second']) {
     await insert.fill(text);

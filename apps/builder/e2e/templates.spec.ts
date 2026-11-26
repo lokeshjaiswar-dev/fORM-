@@ -1,7 +1,8 @@
 import { expect, test, type Page } from './test.ts';
-import { openNewForm, openSettings } from './helpers.ts';
+import { hoverBlock, openNewForm, openSettings } from './helpers.ts';
 
-test('New-form gallery: the pack templates, instantiated with the network cut off', async ({ page }) => {
+/* The builder header's Templates button is hidden for now (SHOW_EXTRA_ACTIONS in BuilderHeader.tsx). */
+test.skip('New-form gallery: the pack templates, instantiated with the network cut off', async ({ page }) => {
   await openNewForm(page);
   await page.context().setOffline(true);
   await page.getByRole('button', { name: 'Templates' }).click();
@@ -25,7 +26,8 @@ test('New-form gallery: the pack templates, instantiated with the network cut of
 
 /** A page break right after the `n`-th block, from that block's insert menu. */
 async function pageBreakAfter(page: Page, n: number) {
-  await page.getByRole('button', { name: 'Insert block' }).nth(n).click();
+  const block = await hoverBlock(page, n);
+  await block.getByRole('button', { name: 'Insert block' }).click();
   await page.keyboard.type('page');
   await page.getByRole('option', { name: 'Page break' }).click();
 }
@@ -43,6 +45,7 @@ async function recordSubmissions(page: Page) {
 test('create from a template → three pages with a show rule → preview → submit', async ({ page }) => {
   await page.goto('/forms');
   await page.getByRole('button', { name: 'New form' }).click();
+  await page.getByRole('button', { name: 'Start from a template' }).click();
   await expect(page.getByRole('button', { name: /^Event registration/ })).toBeVisible();
   await page.context().setOffline(true);
   await page.getByRole('button', { name: /^Event registration/ }).click();
@@ -59,7 +62,7 @@ test('create from a template → three pages with a show rule → preview → su
   await openSettings(page, 4);
   await page.getByRole('tab', { name: 'Logic' }).click();
   await page.getByRole('button', { name: 'Add a rule' }).click();
-  await expect(page.getByRole('button', { name: 'Ticket type' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'When' })).toHaveText('Ticket type');
   await page.getByRole('radio', { name: 'VIP' }).check();
   await expect(page.getByText('Hidden until a rule shows it').first()).toBeVisible();
   await expect(page.getByText('Saved', { exact: true })).toBeVisible();
@@ -70,14 +73,22 @@ test('create from a template → three pages with a show rule → preview → su
   await page.getByRole('textbox', { name: /Email/ }).fill('asha@example.com');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
-  /* The template's ticket question is a dropdown. */
+  /* The template's ticket question is a dropdown (a listbox popup, not a native <select>). */
   const ticket = page.getByRole('combobox', { name: /Ticket type/ });
-  const guests = page.getByRole('spinbutton', { name: /Number of guests/ }).or(page.getByRole('textbox', { name: /Number of guests/ }));
-  await ticket.selectOption('General admission');
+  const choose = async (option: string) => {
+    await ticket.click();
+    await page.getByRole('option', { name: option, exact: true }).click();
+  };
+  /* Number of guests is a stepper with a range (0 to 10), which the renderer draws as a slider. */
+  const guests = page.getByRole('slider', { name: /Number of guests/ });
+  await choose('General admission');
   await expect(guests).toBeHidden();
-  await ticket.selectOption('VIP');
+  await choose('VIP');
   await expect(guests).toBeVisible();
-  await guests.fill('2');
+  await guests.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(guests).toHaveAttribute('aria-valuenow', '2');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
 
   await expect(page.getByText('Preferred date')).toBeVisible();

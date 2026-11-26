@@ -2,8 +2,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { isSafeUrl, type ApiAuth, type ApiPair, type ApiRequestConfig, type SafeUrl } from '@form/schema';
 import { t } from '@/i18n';
-import { Button, Input, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
-import { Field, SelectField, TextField } from '@/components/builder/inspector/parts';
+import { Button, Input } from '@dmacq/ui';
+import { Field, SelectField, TextField, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
   'inspector.api_url': 'API URL',
@@ -110,18 +110,15 @@ export function ApiRequestFields({
   return (
     <>
       <Field label={t(M['inspector.api_method'])}>
-        <ToggleGroup
+        <SegmentedGroup
           type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
           aria-label={t(M['inspector.api_method'])}
           value={api.method ?? 'POST'}
           onValueChange={(method) => method && onPatch({ method: method as 'GET' | 'POST' })}
         >
-          <ToggleGroupItem value="GET" className="flex-1">{t(M['inspector.api_get'])}</ToggleGroupItem>
-          <ToggleGroupItem value="POST" className="flex-1">{t(M['inspector.api_post'])}</ToggleGroupItem>
-        </ToggleGroup>
+          <Segment value="GET">{t(M['inspector.api_get'])}</Segment>
+          <Segment value="POST">{t(M['inspector.api_post'])}</Segment>
+        </SegmentedGroup>
       </Field>
       <TextField
         label={t(M['inspector.api_url'])}
@@ -201,18 +198,15 @@ export function ApiRequestFields({
         </>
       ) : null}
       <Field label={t(M['inspector.api_parser'])}>
-        <ToggleGroup
+        <SegmentedGroup
           type="single"
-          size="sm"
-          appearance="tinted"
-          className="w-full"
           aria-label={t(M['inspector.api_parser'])}
           value={api.parser ?? 'json'}
           onValueChange={(parser) => parser && onPatch({ parser: parser as 'json' | 'xml' })}
         >
-          <ToggleGroupItem value="json" className="flex-1">{t(M['inspector.api_json'])}</ToggleGroupItem>
-          <ToggleGroupItem value="xml" className="flex-1">{t(M['inspector.api_xml'])}</ToggleGroupItem>
-        </ToggleGroup>
+          <Segment value="json">{t(M['inspector.api_json'])}</Segment>
+          <Segment value="xml">{t(M['inspector.api_xml'])}</Segment>
+        </SegmentedGroup>
       </Field>
     </>
   );

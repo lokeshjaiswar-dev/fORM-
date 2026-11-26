@@ -13,10 +13,10 @@ import { t } from '@/i18n';
 import { applyPatch } from '@/lib/applyPatch';
 import { useDraft } from '@/lib/useDraft';
 import { updateBlock } from '@/state/actions';
-import { Alert, AlertDescription, Badge, Button, Input, Label, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
+import { Alert, AlertDescription, Badge, Button, Input, Label } from '@dmacq/ui';
 import { ApiRequestFields } from '@/components/builder/inspector/apiRequest';
 import { ApiResponseTree } from '@/components/builder/inspector/ApiResponseTree';
-import { SectionTitle, TextField, ToggleRow } from '@/components/builder/inspector/parts';
+import { SectionTitle, TextField, ToggleRow, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
 
 const M = defineMessages('builder', {
   'inspector.api_validation': 'Validate with an API',
@@ -62,10 +62,10 @@ function patch(block: FieldBlock, next: { [K in keyof ApiValidation]?: ApiValida
 function SuccessEditor({ rule, onChange }: { rule: ApiSuccessRule; onChange: (next: ApiSuccessRule) => void }) {
   if (rule.type === 'boolean') {
     return (
-      <ToggleGroup type="single" size="sm" appearance="tinted" className="w-full" value={rule.equals ? 'true' : 'false'} onValueChange={(v) => v && onChange({ type: 'boolean', equals: v === 'true' })}>
-        <ToggleGroupItem value="true" className="flex-1">{t(M['inspector.api_true'])}</ToggleGroupItem>
-        <ToggleGroupItem value="false" className="flex-1">{t(M['inspector.api_false'])}</ToggleGroupItem>
-      </ToggleGroup>
+      <SegmentedGroup type="single" value={rule.equals ? 'true' : 'false'} onValueChange={(v) => v && onChange({ type: 'boolean', equals: v === 'true' })}>
+        <Segment value="true">{t(M['inspector.api_true'])}</Segment>
+        <Segment value="false">{t(M['inspector.api_false'])}</Segment>
+      </SegmentedGroup>
     );
   }
   if (rule.type === 'number') {

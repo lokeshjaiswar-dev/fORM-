@@ -1,0 +1,271 @@
+/*
+ * Text fields in the settings panels (the block settings on the right and Form settings), as the Figma DMacq Design
+ * System "Text Input" (4519:1014), size small (32px), in every state: normal, hover, focus, filled, disabled,
+ * read-only, error, warning, success and loading. Figma draws it on white; the dark Form settings panel keeps the same
+ * shapes and states with the colours of its dark theme (the block at the end).
+ *
+ * The design-system rules live in `@layer components`; these are unlayered, so they win without !important. They
+ * apply to every `.ds-field` box in the panel (inputs, textareas, select and date triggers) and to the rich-text boxes
+ * of Field name and Description, which carry the same class.
+ */
+[data-settings-panel] {
+  --ifx-border: rgb(108 132 157 / 0.32); /* interactive/border/custom/default */
+  --ifx-border-hover: #90a5bb; /* interactive/border/custom/highlighted */
+  --ifx-border-subtle: rgb(108 132 157 / 0.18); /* interactive/border/custom/subtle */
+  --ifx-primary: #2950da; /* interactive/border/primary/default */
+  --ifx-halo: rgb(48 94 255 / 0.18); /* interactive/border/primary/faded */
+  --ifx-negative: #d44a4a;
+  --ifx-alert: #e9690c;
+  --ifx-positive: #1f936c;
+  --ifx-positive-text: #167b59;
+  --ifx-text: #0c1927;
+  --ifx-placeholder: #6c849d; /* interactive/text/neutral/muted */
+  --ifx-helper: #58728d; /* interactive/text/neutral/secondary */
+  --ifx-disabled-text: #90a5bb;
+  --ifx-disabled-bg: rgb(108 132 157 / 0.06);
+  --ifx-readonly-bg: #f1f5fa; /* surface/bg/grey/subtle */
+  --ifx-bg: #fff;
+}
+
+/* Label 4px above the box, helper text 4px below it. */
+[data-settings-panel] [data-slot='field'] {
+  gap: 4px;
+}
+[data-settings-panel] [data-slot='field'] > div:first-child {
+  min-height: 16px;
+}
+
+/* normal / filled */
+[data-settings-panel] .ds-field {
+  --field-px: 0.5rem;
+  --field-px-sm: 0.5rem;
+  --field-fs: 0.8125rem;
+  --field-fs-sm: 0.8125rem;
+  --field-gap: 0.5rem;
+  --ifx-accent: var(--ifx-primary);
+  --ifx-ring: var(--ifx-halo);
+  min-height: 2rem;
+  border: 1px solid var(--ifx-border);
+  border-radius: 8px;
+  background-color: var(--ifx-bg);
+  color: var(--ifx-text);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 18px;
+}
+[data-settings-panel] .ds-field::placeholder,
+[data-settings-panel] .ds-field .ds-field-input::placeholder,
+[data-settings-panel] .ds-field [data-placeholder]::before,
+[data-settings-panel] .ds-field .is-editor-empty::before {
+  color: var(--ifx-placeholder);
+  font-weight: 400;
+}
+
+/* hover: a plain box only, never over a status, focus, read-only or disabled look */
+[data-settings-panel] .ds-field:is(:hover, [data-force='hover']):not(:is(:disabled, [data-disabled], [aria-disabled='true'], [readonly], [data-readonly], :has(:is(input, textarea)[readonly]), [data-status], [aria-invalid='true'], :has([aria-invalid='true']), :focus-visible, :focus-within, [data-state='open'], [data-active='true'])) {
+  border-color: var(--ifx-border-hover);
+  background-color: var(--ifx-bg);
+}
+
+/* status: the border takes the colour; a focused field keeps it, with a halo in the same colour */
+[data-settings-panel] .ds-field:is([data-status='error'], [aria-invalid='true'], :has(:is(input, textarea)[aria-invalid='true'])) {
+  --ifx-accent: var(--ifx-negative);
+  --ifx-ring: rgb(212 74 74 / 0.18);
+  border-color: var(--ifx-negative);
+}
+[data-settings-panel] .ds-field[data-status='warning'] {
+  --ifx-accent: var(--ifx-alert);
+  --ifx-ring: rgb(233 105 12 / 0.18);
+  border-color: var(--ifx-alert);
+}
+[data-settings-panel] .ds-field[data-status='success'] {
+  --ifx-accent: var(--ifx-positive);
+  --ifx-ring: rgb(31 147 108 / 0.18);
+  border-color: var(--ifx-positive);
+}
+
+/* focus: a 2px edge (1px border + 1px inset) with the 3px soft halo right against it, no gap */
+[data-settings-panel] .ds-field:is(:focus-visible, :focus-within, [data-state='open'], [data-active='true']) {
+  border-color: var(--ifx-accent);
+  box-shadow: inset 0 0 0 1px var(--ifx-accent), 0 0 0 3px var(--ifx-ring);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+/* read-only: grey fill, soft border, the value still in full colour */
+[data-settings-panel] .ds-field:is([readonly], [data-readonly], :has(:is(input, textarea)[readonly])) {
+  border-color: var(--ifx-border-subtle);
+  background-color: var(--ifx-readonly-bg);
+  box-shadow: none;
+}
+
+/* disabled: faint fill and border, text, placeholder and label all in the disabled grey */
+[data-settings-panel] .ds-field:is(:disabled, [data-disabled], [aria-disabled='true']) {
+  border-color: var(--ifx-border-subtle);
+  background-color: var(--ifx-disabled-bg);
+  color: var(--ifx-disabled-text);
+  box-shadow: none;
+}
+[data-settings-panel] .ds-field:is(:disabled, [data-disabled], [aria-disabled='true'])::placeholder,
+[data-settings-panel] .ds-field:is([data-disabled], [aria-disabled='true']) .ds-field-input::placeholder {
+  color: var(--ifx-disabled-text);
+}
+[data-settings-panel] [data-slot='field'][data-disabled] label,
+[data-settings-panel] [data-slot='field']:has(.ds-field:is(:disabled, [data-disabled])) label {
+  color: var(--ifx-disabled-text);
+}
+
+/* helper text under the box, in the colour of its state */
+[data-settings-panel] [data-slot='field'] p.text-text-muted {
+  color: var(--ifx-helper);
+}
+[data-settings-panel] [data-slot='field'] p.text-negative {
+  color: var(--ifx-negative);
+}
+[data-settings-panel] [data-slot='field'] p.text-notice-text {
+  color: var(--ifx-alert);
+}
+[data-settings-panel] [data-slot='field'] p.text-positive {
+  color: var(--ifx-positive-text);
+}
+[data-settings-panel] [data-slot='field'] p.text-text-disabled {
+  color: var(--ifx-disabled-text);
+}
+
+/* The dark Form settings panel: Figma's shapes and states, in the colours of the panel's dark theme. */
+.ov-theme-dark[data-settings-panel],
+.ov-theme-dark [data-settings-panel] {
+  --ifx-border: rgb(108 132 157 / 0.4);
+  --ifx-border-hover: #90a5bb;
+  --ifx-border-subtle: rgb(108 132 157 / 0.25);
+  --ifx-primary: #75a3ff;
+  --ifx-halo: rgb(117 163 255 / 0.25);
+  --ifx-negative: #ff7070;
+  --ifx-alert: #ff9040;
+  --ifx-positive: #2cc08e;
+  --ifx-positive-text: #2cc08e;
+  --ifx-text: var(--sidebar-foreground);
+  --ifx-placeholder: #90a5bb;
+  --ifx-helper: #90a5bb;
+  --ifx-disabled-text: #6c849d;
+  --ifx-disabled-bg: rgb(108 132 157 / 0.1);
+  --ifx-readonly-bg: var(--sidebar-accent);
+  --ifx-bg: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
+}
+
+/*
+ * Switches in the settings panels, as the Figma "Switch Base" (4633:1466), size small: a 28 x 16 track with 2px
+ * padding and a 12px thumb, off / on in the normal, hover, focus and disabled states. The design-system Switch already
+ * has that geometry; these set Figma's colours and focus ring.
+ */
+[data-settings-panel] {
+  --isw-off: rgb(108 132 157 / 0.32); /* interactive/bg/neutral/faded-highlighted */
+  --isw-off-hover: rgb(108 132 157 / 0.38); /* the same with interactive/bg/neutral/subtle (0.09) over it */
+  --isw-off-disabled: rgb(108 132 157 / 0.18); /* interactive/bg/neutral/disabled */
+  --isw-on: #2950da; /* interactive/bg/primary/default */
+  --isw-on-hover: #2243b6; /* interactive/bg/primary/highlighted */
+  --isw-on-disabled: rgb(48 94 255 / 0.24); /* interactive/bg/primary/faded-highlighted */
+  --isw-thumb-disabled: rgb(255 255 255 / 0.8);
+  --isw-focus: #305eff; /* interactive/border/focus/default */
+}
+[data-settings-panel] [data-slot='switch'][data-state='unchecked'] {
+  background-color: var(--isw-off);
+}
+[data-settings-panel] [data-slot='switch'][data-state='unchecked']:is(:hover, [data-force='hover']):not([data-disabled]) {
+  background-color: var(--isw-off-hover);
+}
+[data-settings-panel] [data-slot='switch'][data-state='checked'] {
+  background-color: var(--isw-on);
+}
+[data-settings-panel] [data-slot='switch'][data-state='checked']:is(:hover, [data-force='hover']):not([data-disabled]) {
+  background-color: var(--isw-on-hover);
+}
+[data-settings-panel] [data-slot='switch'][data-disabled][data-state='unchecked'] {
+  background-color: var(--isw-off-disabled);
+}
+[data-settings-panel] [data-slot='switch'][data-disabled][data-state='checked'] {
+  background-color: var(--isw-on-disabled);
+}
+/* white thumb with the low raised shadow; a disabled off switch has a softer thumb and no shadow */
+[data-settings-panel] [data-slot='switch-thumb'] {
+  background-color: #fff;
+  box-shadow: 0 2px 16px 0 rgb(25 40 57 / 0.09);
+}
+[data-settings-panel] [data-slot='switch'][data-disabled][data-state='unchecked'] [data-slot='switch-thumb'] {
+  background-color: var(--isw-thumb-disabled);
+  box-shadow: none;
+}
+/* focus: a 2px ring hugging the track */
+[data-settings-panel] [data-slot='switch']:is(:focus-visible, [data-force='focus']) {
+  outline: 2px solid var(--isw-focus);
+  outline-offset: 0;
+}
+
+.ov-theme-dark[data-settings-panel],
+.ov-theme-dark [data-settings-panel] {
+  --isw-off: rgb(108 132 157 / 0.45);
+  --isw-off-hover: rgb(108 132 157 / 0.55);
+  --isw-off-disabled: rgb(108 132 157 / 0.2);
+  --isw-on: #2950da;
+  --isw-on-hover: #305eff;
+  --isw-on-disabled: rgb(117 163 255 / 0.25);
+  --isw-focus: #75a3ff;
+}
+
+/*
+ * Dropdowns in the settings panels, as the Figma "Select Input" (4528:3869) and "Dropdown Menu" / "Dropdown Option"
+ * (4492:951, 4490:427), size small. The closed box is a `.ds-field` and already follows the Text Input rules above
+ * (open = the focus look; the chevron flips up); only its placeholder colour is added here. The menu opens in a portal
+ * outside the panel, so NiceSelect marks it with data-settings-menu when it sits in a settings panel.
+ */
+[data-settings-panel] .ds-field[data-placeholder] {
+  color: var(--ifx-placeholder);
+}
+
+/* the open list: grey-white surface, subtle border, mid raised shadow, 4px inside and between rows */
+.ds-menu[data-settings-menu] {
+  --option-h: 32px;
+  --option-py: 6px;
+  --option-px: 8px;
+  --option-fs: 13px;
+  --option-lh: 18px;
+  --option-gap: 4px;
+  background-color: #f8fafc; /* surface/bg/grey/moderate */
+  border: 1px solid #cbd5e2; /* surface/border/grey/subtle */
+  border-radius: 8px;
+  box-shadow: 0 8px 24px 0 rgb(25 40 57 / 0.12); /* elevation/MidRaised */
+  padding: 4px;
+}
+
+/* a row: 32px, 13px regular text */
+.ds-menu[data-settings-menu] .ds-option {
+  border-radius: 4px;
+  color: #0c1927;
+  font-weight: 400;
+}
+/* hover (and the keyboard highlight) */
+.ds-menu[data-settings-menu] .ds-option:is([data-highlighted], [data-force='hover']):not([data-disabled='true'], [data-disabled=''], [aria-disabled='true']) {
+  background-color: #e3eaf3; /* surface/bg/grey/highlighted */
+}
+/* keyboard focus: a 2px focus border inside the row (not shown while the mouse is driving the menu) */
+.ds-menu[data-settings-menu]:not([data-modality='pointer']) .ds-option:is(:focus-visible, [data-force='focus']) {
+  box-shadow: inset 0 0 0 2px #305eff; /* interactive/border/focus/default */
+}
+/* the chosen option: light blue fill, medium text, blue check at the end */
+.ds-menu[data-settings-menu] .ds-option:not([hidden])[data-state='checked'] {
+  background-color: rgb(48 94 255 / 0.09); /* interactive/bg/primary/faded */
+  background-image: none;
+  color: #0c1927;
+  font-weight: 500;
+}
+.ds-menu[data-settings-menu] .ds-option:not([hidden])[data-state='checked'][data-highlighted] {
+  background-color: rgb(48 94 255 / 0.14);
+}
+.ds-menu[data-settings-menu] .ds-option-check,
+.ds-menu[data-settings-menu] .ds-option-check svg {
+  color: #2950da;
+}
+/* disabled */
+.ds-menu[data-settings-menu] .ds-option:is([data-disabled='true'], [data-disabled=''], [aria-disabled='true']) {
+  color: #90a5bb; /* interactive/text/neutral/disabled */
+}

@@ -186,8 +186,9 @@
   letter-spacing: -0.02em;
 }
 
+/* Lighter than a real title, yet at least 3:1 against the surface (WCAG large text); 40% fell to about 2.3:1. */
 :where(.fr-root) .fr-title-placeholder {
-  color: color-mix(in srgb, var(--fr-text) 40%, transparent);
+  color: color-mix(in srgb, var(--fr-text) 65%, transparent);
 }
 
 :where(.fr-root) .fr-header .fr-description {
@@ -1789,60 +1790,70 @@
 }
 
 :where(.fr-root) .fr-primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  color: #ffffff;
-  min-width: 140px;
+  /*
+   * DMacq Design System <Button> primary, size xlarge (Figma 2619:1133): solid interactive/bg/primary, 8px corners,
+   * 48px tall, 12px × 16px padding, 16px/24px medium label, no gradient or shadow. The form's font carries the label.
+   * Colours: the design system's blue (#2950da, hover #2243b6) by default; a theme with its own accent sets
+   * --fr-submit-* on the root (theme/cssVars.ts); a colour picked in the Submit settings arrives inline and wins.
+   */
+  min-height: 48px;
+  padding: 12px 16px;
+  gap: 6px;
   border: 0;
-  border-radius: 9999px;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  box-shadow: 0 4px 12px -2px rgba(29, 78, 216, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  border-radius: 8px;
+  background: var(--fr-submit-bg, #2950da);
+  color: var(--fr-submit-text, #ffffff);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+  transition: background-color 150ms ease, filter 150ms ease;
 }
 
 :where(.fr-root) .fr-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-  box-shadow: 0 6px 16px -4px color-mix(in srgb, var(--fr-accent) 55%, transparent), 0 2px 4px rgba(16, 24, 40, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  transform: translateY(-1px);
+  background: var(--fr-submit-bg-hover, #2243b6);
+}
+
+/* A custom colour is inline, so hover and press darken it instead of replacing it. */
+:where(.fr-root) .fr-primary[style*='background']:hover:not(:disabled) {
+  filter: brightness(0.9);
 }
 
 :where(.fr-root) .fr-primary:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.18);
+  filter: brightness(0.92);
 }
 
 :where(.fr-root) .fr-primary:disabled,
 :where(.fr-root) .fr-primary[aria-disabled='true'] {
-  box-shadow: none;
-  opacity: 0.75;
+  opacity: 0.6;
 }
 
+/* Figma: focus ring interactive/border/focus, 2px, 2px offset. */
 :where(.fr-root) .fr-primary:focus-visible {
-  outline: 2px solid var(--fr-accent);
+  outline: 2px solid var(--fr-submit-bg, #2950da);
   outline-offset: 2px;
 }
 
 :where(.fr-root) .fr-primary[data-submit-shape='rounded'] {
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
+/*
+ * Submit settings sizes. Medium (the default) is the design system's xlarge above; Small is its large (Figma
+ * 2619:1143); Large goes one step past the design system with the same proportions.
+ */
 :where(.fr-root) .fr-primary[data-submit-size='sm'] {
-  min-height: 34px;
-  padding: 6px 14px;
-  font-size: 0.875rem;
-}
-
-:where(.fr-root) .fr-primary[data-submit-size='md'] {
   min-height: 40px;
-  padding: 8px 18px;
-  font-size: 1rem;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  line-height: 20px;
 }
 
 :where(.fr-root) .fr-primary[data-submit-size='lg'] {
-  min-height: 48px;
-  padding: 10px 24px;
-  font-size: 1.0625rem;
+  min-height: 56px;
+  padding: 16px 24px;
+  font-size: 1.125rem;
+  line-height: 24px;
 }
 
 :where(.fr-root) .fr-secondary {
@@ -1924,4 +1935,122 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+/*
+ * The search box at the top of a searchable dropdown (Figma Dropdown Menu, inline Search Bar): it is focused as soon
+ * as the list opens, so it shows no blue focus box, only the divider under it. The caret and the highlighted option
+ * show where typing goes. The list opens in a portal, outside .fr-root.
+ */
+.ds-menu [data-slot='command-input-wrapper']:has(:focus-visible) {
+  outline: none;
+}
+
+/*
+ * Checkboxes and radios, as the Figma "Checkbox Base" (4479:925) and "Radio Base" (4498:737): off, on (and
+ * indeterminate) in the normal, hover, focus and disabled states, with and without an error. The design-system
+ * controls already have the sizes (sm = Figma 16px, md = Figma 20px) and paint from --box-bg / --box-border /
+ * --box-icon; these set Figma's colours. Every rule names the checked state, so a state never paints over another.
+ */
+.ds-check,
+.ds-radio {
+  --ck-off: #6c849d; /* interactive/border/neutral/default */
+  --ck-hover-fill: rgb(108 132 157 / 0.32); /* interactive/bg/neutral/faded-highlighted */
+  --ck-on: #2950da; /* interactive/bg/primary/default */
+  --ck-on-hover: #2243b6; /* interactive/bg/primary/highlighted */
+  --ck-error: #d44a4a; /* interactive/border/negative/default */
+  --ck-error-hover: #be3a3a; /* interactive/border/negative/highlighted */
+  --ck-disabled: #90a5bb; /* interactive/icon/neutral/disabled */
+  --ck-disabled-fill: rgb(108 132 157 / 0.06);
+  --ck-focus: #305eff; /* interactive/border/focus/default */
+}
+
+/* off */
+.ds-check[data-state='unchecked'],
+.ds-radio[data-state='unchecked'] {
+  --box-bg: transparent;
+  --box-border: var(--ck-off);
+}
+.ds-check[data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-hover-fill);
+  --box-border: var(--ck-off);
+}
+.ds-check[data-state='unchecked']:disabled,
+.ds-radio[data-state='unchecked']:disabled {
+  --box-bg: transparent;
+  --box-border: var(--ck-disabled);
+}
+
+/* on (and the checkbox's indeterminate dash) */
+.ds-check:is([data-state='checked'], [data-state='indeterminate']),
+.ds-radio[data-state='checked'] {
+  --box-bg: var(--ck-on);
+  --box-border: var(--ck-on);
+  --box-icon: #fff;
+}
+.ds-check:is([data-state='checked'], [data-state='indeterminate']):is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[data-state='checked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-on-hover);
+  --box-border: var(--ck-on-hover);
+}
+/* on, disabled: a faint box with a grey border and a grey tick or dot */
+.ds-check:is([data-state='checked'], [data-state='indeterminate']):disabled,
+.ds-radio[data-state='checked']:disabled {
+  --box-bg: var(--ck-disabled-fill);
+  --box-border: var(--ck-disabled);
+  --box-icon: var(--ck-disabled);
+}
+.ds-radio[data-state='checked']:disabled .ds-radio-dot {
+  background-color: var(--ck-disabled);
+}
+
+/* error */
+.ds-check[aria-invalid='true'][data-state='unchecked'],
+.ds-radio[aria-invalid='true'][data-state='unchecked'] {
+  --box-bg: transparent;
+  --box-border: var(--ck-error);
+}
+.ds-check[aria-invalid='true'][data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[aria-invalid='true'][data-state='unchecked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-hover-fill);
+  --box-border: var(--ck-error-hover);
+}
+.ds-check[aria-invalid='true']:is([data-state='checked'], [data-state='indeterminate']),
+.ds-radio[aria-invalid='true'][data-state='checked'] {
+  --box-bg: var(--ck-error);
+  --box-border: var(--ck-error);
+}
+.ds-check[aria-invalid='true']:is([data-state='checked'], [data-state='indeterminate']):is(:hover, [data-force='hover']):not(:disabled),
+.ds-radio[aria-invalid='true'][data-state='checked']:is(:hover, [data-force='hover']):not(:disabled) {
+  --box-bg: var(--ck-error-hover);
+  --box-border: var(--ck-error-hover);
+}
+/* disabled ignores the error */
+.ds-check[aria-invalid='true'][data-state='unchecked']:disabled,
+.ds-radio[aria-invalid='true'][data-state='unchecked']:disabled {
+  --box-bg: transparent;
+  --box-border: var(--ck-disabled);
+}
+.ds-check[aria-invalid='true']:is([data-state='checked'], [data-state='indeterminate']):disabled,
+.ds-radio[aria-invalid='true'][data-state='checked']:disabled {
+  --box-bg: var(--ck-disabled-fill);
+  --box-border: var(--ck-disabled);
+  --box-icon: var(--ck-disabled);
+}
+
+/* focus: the box keeps its look; a 2px focus ring with a 2px gap goes around it */
+.ds-check:is(:focus-visible, [data-force='focus']) .ds-check-box,
+.ds-radio:is(:focus-visible, [data-force='focus']) .ds-radio-box {
+  outline: 2px solid var(--ck-focus);
+  outline-offset: 2px;
+}
+
+/* Figma corners and border widths: 4px corners; the 20px size has a 2px border */
+.ds-check .ds-check-box {
+  border-radius: 4px;
+}
+.ds-check[data-size='md'] .ds-check-box,
+.ds-radio[data-size='md'] .ds-radio-box {
+  border-width: 2px;
 }

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Combine, Copy, FileText, Globe, Inbox, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
@@ -23,8 +23,8 @@ import {
 import { EmptyState, PageHeader, StatCard } from '@dmacq/ui/patterns';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { SortableHead, TablePagination, useTableView } from '@/components/workspace/tableView';
-import { GalleryFallback } from '@/components/templates/TemplateDialog';
-import { TemplateGallery, preloadGallery } from '@/components/templates/gallery';
+import { preloadGallery } from '@/components/templates/gallery';
+import { CreateFormDialog, type CreateStep } from '@/components/forms/CreateFormDialog';
 import { mergeFromRepository } from '@/lib/mergeSelected';
 import { uid } from '@/lib/utils';
 import { DOCUMENT_FORMAT, type FormSummary, type StoredForm } from '@/persistence/DocumentRepository';
@@ -37,6 +37,7 @@ import { deleteSubmissionFiles, fileIdsFromAnswers } from '@/persistence/blobSto
 import { useOptionalSubmissions } from '@/persistence/SubmissionsContext';
 import { useRepository } from '@/persistence/repository';
 import { builderPath } from '@/pages/useBuilderMode';
+import { navigateWithTransition } from '@/lib/viewTransition';
 import { rememberedSlug } from '@/persistence/publishApi';
 
 const M = defineMessages('builder', {
@@ -49,11 +50,6 @@ const M = defineMessages('builder', {
   'forms.blocks': '{n, plural, one {# block} other {# blocks}}',
   'forms.unreadable': 'Saved forms could not be read.',
   'forms.not_saved': 'The form could not be saved in this browser.',
-  'new.title': 'New form',
-  'new.description': 'Start from a blank form or from a template. Templates work offline.',
-  'new.blank': 'Blank form',
-  'new.blank_hint': 'An empty page to build on',
-  'new.templates': 'From a template',
   'forms.merge': 'Merge selected',
   'forms.merge_need_two': 'Select at least two forms to merge.',
   'forms.merge_failed': 'Those forms could not be merged.',
@@ -82,7 +78,10 @@ export function FormsPage() {
   const navigate = useNavigate();
   const [forms, setForms] = useState<FormSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  /* Which step of the Create a form overlay is open: the choice (New form) or the templates (Browse templates). */
+  const [creating, setCreating] = useState<CreateStep | null>(null);
+  /** A new form is being saved and opened: a second click on a start option does nothing. */
+  const startingRef = useRef(false);
   const [removing, setRemoving] = useState<FormSummary | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -151,14 +150,16 @@ export function FormsPage() {
     { key: 'savedAt', dir: 'desc' },
   );
 
-  async function saveThenOpen(form: StoredForm): Promise<void> {
+  async function saveThenOpen(form: StoredForm): Promise<boolean> {
     try {
       await repo.save(form);
     } catch {
       setError(t(M['forms.not_saved']));
-      return;
+      return false;
     }
-    navigate(builderPath(form.id));
+    /* Crossfades the page into the builder where the browser supports view transitions (see index.css). */
+    navigateWithTransition(() => navigate(builderPath(form.id)));
+    return true;
   }
 
   /** Reads a form JSON file (an export, a bare definition or a v1 export) into a new form, then opens it. */
@@ -185,12 +186,19 @@ export function FormsPage() {
     }
   }
 
+  /*
+   * The create window stays open while the new form is saved, so the page crossfades from it straight into the builder
+   * instead of closing first and showing the list for a moment. It closes here only if the save fails.
+   */
   async function create(doc?: FormDefinition) {
+    if (startingRef.current) return;
+    startingRef.current = true;
     setError(null);
-    setCreating(false);
     const id = uid();
     const now = new Date().toISOString();
-    await saveThenOpen(doc ? newStoredForm(id, now, doc) : newStoredForm(id, now));
+    const opened = await saveThenOpen(doc ? newStoredForm(id, now, doc) : newStoredForm(id, now));
+    startingRef.current = false;
+    if (!opened) setCreating(null);
   }
 
   /** Copies a saved form under a new id, titled "Copy of …", and adds it to the list without leaving the dashboard. */
@@ -294,6 +302,7 @@ export function FormsPage() {
   return (
     <WorkspaceShell
       crumb="All forms"
+      forms={forms}
       actions={
         <>
           {forms && forms.length >= 2 ? (
@@ -314,7 +323,7 @@ export function FormsPage() {
             aria-label="Import form file"
             onChange={(event) => void importFile(event)}
           />
-          <Button size="sm" onClick={() => void create()}>
+          <Button size="sm" onClick={() => setCreating('choose')}>
             <Plus />
             {t(M['forms.new'])}
           </Button>
@@ -378,11 +387,11 @@ export function FormsPage() {
                 description={t(M['forms.empty'])}
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
-                    <Button size="sm" onClick={() => void create()}>
+                    <Button size="sm" onClick={() => setCreating('choose')}>
                       <Plus />
                       Create your first form
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                    <Button size="sm" variant="outline" onClick={() => setCreating('templates')}>
                       Browse templates
                     </Button>
                   </div>
@@ -506,30 +515,13 @@ export function FormsPage() {
         </section>
       </div>
 
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t(M['new.title'])}</DialogTitle>
-            <DialogDescription>{t(M['new.description'])}</DialogDescription>
-          </DialogHeader>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void create()}
-            className="mb-4 h-auto w-full items-start justify-start gap-3 whitespace-normal p-4 text-left"
-          >
-            <Plus className="size-4 shrink-0" />
-            <span>
-              <span className="block font-medium">{t(M['new.blank'])}</span>
-              <span className="block text-sm font-normal text-muted-foreground">{t(M['new.blank_hint'])}</span>
-            </span>
-          </Button>
-          <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{t(M['new.templates'])}</p>
-          <Suspense fallback={<GalleryFallback />}>
-            <TemplateGallery onCancel={() => setCreating(false)} onUse={(definition) => void create(definition)} />
-          </Suspense>
-        </DialogContent>
-      </Dialog>
+      <CreateFormDialog
+        open={creating !== null}
+        onOpenChange={(next) => !next && setCreating(null)}
+        initialStep={creating ?? 'choose'}
+        onBlank={() => void create()}
+        onTemplate={(definition) => void create(definition)}
+      />
 
       <Dialog open={conflicts !== null} onOpenChange={(next) => !next && setConflicts(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">

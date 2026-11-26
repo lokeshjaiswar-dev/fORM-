@@ -1,37 +1,47 @@
-import { useId, useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { useId, useState, type ComponentProps, type ReactNode } from 'react';
+import { ChevronDown, CircleHelp } from 'lucide-react';
 import { defineMessages } from '@form/i18n';
 import { t } from '@/i18n';
 import { useDraft } from '@/lib/useDraft';
 import { cn } from '@/lib/utils';
-import { Field as DsField, Input, Label, Switch } from '@dmacq/ui';
+import { Field as DsField, Input, Label, Switch, ToggleGroup, ToggleGroupItem } from '@dmacq/ui';
 import { NiceSelect, type SelectOption } from '@/components/NiceSelect';
+import { Tooltip } from '@/components/Tooltip';
 
 /* Inspector controls: each writes through a builder action as the author types, so every edit is one command. */
 
 const M = defineMessages('builder', {
   'inspector.invalid_value': '‘{text}’ is not a valid value here',
+  'inspector.more_info': 'More information about {label}',
 });
 
-export function Field({ label, error, hint, htmlFor, children }: { label: string; error?: string | null | undefined; hint?: string | undefined; htmlFor?: string; children: ReactNode }) {
+/*
+ * Help text lives behind an (i) icon in the label row, so the panel stays easy to scan: authors who need the
+ * explanation hover or focus the icon. Only `note` stays on screen, for short live messages (what will change now).
+ */
+
+export function Field({ label, error, hint, note, htmlFor, children }: { label: string; error?: string | null | undefined; hint?: string | undefined; note?: string | undefined; htmlFor?: string; children: ReactNode }) {
   return (
-    <DsField label={label} error={error ?? undefined} hint={hint} {...(htmlFor ? { htmlFor } : {})}>
+    <DsField label={label} error={error ?? undefined} info={hint} hint={note} {...(htmlFor ? { htmlFor } : {})}>
       {children}
     </DsField>
   );
 }
 
-const HEADING = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+/* Section headings (OPTIONS, CUSTOMIZATION, ADVANCED, PRIVACY) read like the Toolbox categories (COMMON, CHOICES):
+   11/16 semibold capitals, 0.06em apart, in the muted text colour. */
+const HEADING = 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground';
 
 /**
- * One group of settings in a panel tab. Groups stack with a divider between them (none above the first), so authors
- * can see which settings belong together. A group whose content renders nothing is hidden, divider and all.
+ * One group of settings in a panel tab (Figma 5356:184219): a full-width band with a divider under it, 16px in from
+ * the edges and 20px above and below (16px above the first, untitled group). A group whose content renders nothing is
+ * hidden, divider and all.
  */
 export function InspectorSection({ title, collapsible, children }: { title?: string; collapsible?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(!collapsible);
   const bodyId = useId();
   return (
-    <section className="border-t border-border py-5 first:border-t-0 first:pt-1 last:pb-1 has-[>[data-section-body]:empty]:hidden">
+    <section className="border-b border-border-default px-4 py-5 first:pt-4 has-[>[data-section-body]:empty]:hidden">
       {title && collapsible ? (
         /* Folded by default: settings an author rarely needs stay one click away instead of filling the panel. */
         <h3 className={open ? 'mb-4' : undefined}>
@@ -43,7 +53,7 @@ export function InspectorSection({ title, collapsible, children }: { title?: str
             className={cn(HEADING, 'flex w-full items-center justify-between rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring')}
           >
             {title}
-            <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-150', open && 'rotate-180')} />
+            <ChevronDown aria-hidden className={cn('size-4 transition-transform duration-150', open && 'rotate-180')} />
           </button>
         </h3>
       ) : title ? (
@@ -74,7 +84,7 @@ export function Disclosure({ title, inUse = false, children }: { title: string; 
         className={cn(HEADING, 'flex w-full items-center justify-between rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring')}
       >
         {title}
-        <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-150', open && 'rotate-180')} />
+        <ChevronDown aria-hidden className={cn('size-4 transition-transform duration-150', open && 'rotate-180')} />
       </button>
       {open ? (
         <div id={bodyId} className="mt-4 space-y-4">
@@ -140,15 +150,40 @@ export function NumberField<T>({ label, value, onChange, parse, format = String,
   );
 }
 
-export function ToggleRow({ label, checked, onChange, hint, disabled }: { label: string; checked: boolean; onChange: (checked: boolean) => void; hint?: string | undefined; disabled?: boolean }) {
+/** The (i) next to a setting: its explanation, on hover or keyboard focus. */
+export function InfoTip({ label, text }: { label: string; text: string }) {
+  return (
+    <Tooltip content={text} side="top" delay={150}>
+      <button
+        type="button"
+        aria-label={t(M['inspector.more_info'], { label })}
+        className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <CircleHelp aria-hidden className="size-3.5" />
+      </button>
+    </Tooltip>
+  );
+}
+
+export function ToggleRow({ label, checked, onChange, hint, note, disabled }: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  /** The explanation, shown from the (i) icon. */
+  hint?: string | undefined;
+  /** A short live message that stays on screen (one line). */
+  note?: string | undefined;
+  disabled?: boolean;
+}) {
   const id = useId();
   return (
     <div className="space-y-0.5">
-      <div className="flex items-center justify-between gap-3">
-        <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Label htmlFor={id} className="min-w-0 flex-1">{label}</Label>
+        {hint ? <InfoTip label={label} text={hint} /> : null}
         <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
       </div>
-      {hint ? <p className="text-[12px] text-muted-foreground">{hint}</p> : null}
+      {note ? <p className="text-[12px] text-muted-foreground">{note}</p> : null}
     </div>
   );
 }
@@ -159,4 +194,22 @@ export function SelectField({ label, value, options, onChange, placeholder }: { 
       <NiceSelect size="sm" value={value} onChange={onChange} options={options} aria-label={label} {...(placeholder !== undefined ? { placeholder } : {})} />
     </Field>
   );
+}
+
+/*
+ * The settings panels' segmented bar (Figma toolbar in the panel frame, 5356:184230): a 6px-corner frame with the
+ * stronger border, no inner padding, a divider between segments and 12px medium text, 32px tall. A pressed segment is
+ * the light blue fill alone, without the design system's inner ring, which read as a second border inside the frame.
+ * Every segmented choice in the panels (block width, alignment, field type, API method and format, true / false)
+ * uses this pair, so they look the same everywhere.
+ */
+const SEGMENTED = 'w-full overflow-hidden border-border-default p-0 shadow-none divide-x divide-border-default';
+const SEGMENT = 'flex-1 rounded-none text-[12px] font-medium leading-4 data-[state=on]:inset-ring-0';
+
+export function SegmentedGroup({ className, ...props }: ComponentProps<typeof ToggleGroup>) {
+  return <ToggleGroup size="md" appearance="tinted" {...props} className={cn(SEGMENTED, className)} />;
+}
+
+export function Segment({ className, ...props }: ComponentProps<typeof ToggleGroupItem>) {
+  return <ToggleGroupItem {...props} className={cn(SEGMENT, className)} />;
 }

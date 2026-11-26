@@ -71,6 +71,8 @@ describe('ThemeSettings', () => {
 
   it('typing a dotted path shows the nested body', async () => {
     const user = open();
+    /* The API details appear once sending is switched on. */
+    await user.click(screen.getByRole('switch', { name: 'Send answers to an API' }));
     await user.click(screen.getByRole('button', { name: 'Add key' }));
     await user.type(screen.getByRole('textbox', { name: 'API path' }), 'customer.name');
     expect(screen.getByText('Body this typing creates').parentElement?.querySelector('pre')?.textContent).toContain('"customer"');

@@ -11,8 +11,8 @@ import { useDoc } from '@/state/documentStore';
 import { updateOps, useOpsStore, type SubmissionApi, type SubmissionApiKey } from '@/state/opsStore';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Label, Switch } from '@dmacq/ui';
 import { RichEditor } from '@/components/editor/RichEditor';
-import { cn } from '@/lib/utils';
 import { NiceSelect } from '@/components/NiceSelect';
+import { InspectorSection, Segment, SegmentedGroup } from '@/components/builder/inspector/parts';
 
 const CONFETTI_STYLES: ConfettiStyle[] = ['classic', 'pastel', 'ocean', 'sunset'];
 const CONFETTI_LABEL: Record<ConfettiStyle, 'settings.confetti_classic' | 'settings.confetti_pastel' | 'settings.confetti_ocean' | 'settings.confetti_sunset'> = {
@@ -27,6 +27,10 @@ const M = defineMessages('builder', {
   'settings.description': 'Theme and form settings.',
   'settings.form': 'Form settings',
   'settings.submit': 'Submit button',
+  'settings.section_button': 'Button',
+  'settings.section_after': 'After submitting',
+  'settings.section_access': 'Access',
+  'settings.section_api': 'Integrations',
   'settings.thanks': 'Thank-you message',
   'settings.redirect': 'Redirect after submit',
   'settings.redirect_hint': 'An https address; leave empty to show the thank-you message',
@@ -108,7 +112,7 @@ export function ThemeSettings({ open, onOpenChange }: { open: boolean; onOpenCha
 }
 
 /** Submit, ending, close and optional password. Empty password means none. */
-export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
+export function SubmissionSettings() {
   const def = useDoc((d) => d);
   const ops = useOpsStore();
   const message = messageEnding(def);
@@ -125,12 +129,13 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
   const setConfetti = (on: boolean) =>
     setEndings(def.endings.map((e) => (e.id === message?.id ? { ...message, confetti: on } : e)), def.defaultEndingId, { ...def.behavior, successAnimation: on });
 
-  const field = dark ? 'border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground' : undefined;
-  const labelCls = dark ? 'text-sidebar-foreground/80' : undefined;
+  const field = undefined;
+  const labelCls = undefined;
   const hintCls = redirectValid ? 'text-[12px] text-muted-foreground' : 'text-[12px] text-destructive';
 
   return (
-    <div className="space-y-4">
+    <>
+      <InspectorSection title={t(M['settings.section_button'])}>
       <div className="space-y-1.5">
         <Label htmlFor="submit-label" className={labelCls}>{t(M['settings.submit'])}</Label>
         <Input
@@ -150,10 +155,12 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
           }}
         />
       </div>
+      </InspectorSection>
+      <InspectorSection title={t(M['settings.section_after'])}>
       {message ? (
         <div className="space-y-1.5">
           <Label className={labelCls}>{t(M['settings.thanks'])}</Label>
-          <div className={cn('rounded-md border px-2', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border')}>
+          <div className="ds-field block px-2 py-1">
             <RichEditor value={message.content} onChange={setThanks} className="text-sm leading-6" placeholder={t(M['settings.thanks'])} />
           </div>
         </div>
@@ -176,7 +183,7 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
         />
         <p className={hintCls}>{t(redirectValid ? M['settings.redirect_hint'] : M['settings.redirect_invalid'])}</p>
       </div>
-      <Toggle dark={dark} id="successAnimation" label={t(M['settings.confetti'])} checked={def.behavior.successAnimation} onChange={setConfetti} />
+      <Toggle id="successAnimation" label={t(M['settings.confetti'])} checked={def.behavior.successAnimation} onChange={setConfetti} />
       {def.behavior.successAnimation && message ? (
         <div className="space-y-1.5">
           <Label htmlFor="confetti-style" className={labelCls}>{t(M['settings.confetti_style'])}</Label>
@@ -188,11 +195,13 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
           />
         </div>
       ) : null}
-      <Toggle dark={dark} id="closed" label={t(M['settings.closed'])} checked={!ops.open} onChange={(closed) => updateOps({ open: !closed })} />
+      </InspectorSection>
+      <InspectorSection title={t(M['settings.section_access'])}>
+      <Toggle id="closed" label={t(M['settings.closed'])} checked={!ops.open} onChange={(closed) => updateOps({ open: !closed })} />
       {!ops.open ? (
         <div className="space-y-1.5">
           <Label className={labelCls}>{t(M['settings.closed_message'])}</Label>
-          <div className={cn('rounded-md border px-2', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border')}>
+          <div className="ds-field block px-2 py-1">
             <RichEditor value={ops.closedMessage.content.length ? ops.closedMessage : richDoc('')} onChange={(closedMessage) => updateOps({ closedMessage })} className="text-sm leading-6" />
           </div>
         </div>
@@ -202,13 +211,14 @@ export function SubmissionSettings({ dark = false }: { dark?: boolean }) {
         <Input id="password" type="password" autoComplete="new-password" className={field} value={ops.password} placeholder="" onChange={(e) => updateOps({ password: e.target.value.slice(0, 200) })} />
         <p className="text-[12px] text-muted-foreground">{t(M['settings.password_hint'])}</p>
       </div>
-      <SubmissionApiSettings dark={dark} field={field} labelCls={labelCls} />
-    </div>
+      </InspectorSection>
+      <SubmissionApiSettings field={field} labelCls={labelCls} />
+    </>
   );
 }
 
 /** URL, JSON or XML, and a live body built from the paths as they are typed. */
-function SubmissionApiSettings({ dark, field, labelCls }: { dark: boolean; field: string | undefined; labelCls: string | undefined }) {
+function SubmissionApiSettings({ field, labelCls }: { field: string | undefined; labelCls: string | undefined }) {
   const def = useDoc((d) => d);
   const api = useOpsStore((s) => s.submissionApi);
   const setApi = (patch: Partial<SubmissionApi>) => updateOps({ submissionApi: { ...api, ...patch } });
@@ -246,23 +256,20 @@ function SubmissionApiSettings({ dark, field, labelCls }: { dark: boolean; field
   };
 
   return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <Toggle dark={dark} id="submission-api" label={t(M['settings.api'])} checked={api.enabled} onChange={(enabled) => setApi({ enabled })} />
+    <InspectorSection title={t(M['settings.section_api'])}>
+      <Toggle id="submission-api" label={t(M['settings.api'])} checked={api.enabled} onChange={(enabled) => setApi({ enabled })} />
+      {api.enabled ? (
+      <>
       <div className="space-y-1.5">
         <Label htmlFor="api-url" className={labelCls}>{t(M['settings.api_url'])}</Label>
         <Input id="api-url" className={field} value={api.url} placeholder="https://…" onChange={(e) => setApi({ url: e.target.value })} />
       </div>
       <div className="space-y-1.5">
         <Label className={labelCls}>{t(M['settings.api_format'])}</Label>
-        <NiceSelect
-          value={api.format}
-          onChange={(format) => setApi({ format: format === 'xml' ? 'xml' : 'json' })}
-          options={[
-            { value: 'json', label: t(M['settings.api_format_json']) },
-            { value: 'xml', label: t(M['settings.api_format_xml']) },
-          ]}
-          aria-label={t(M['settings.api_format'])}
-        />
+        <SegmentedGroup type="single" aria-label={t(M['settings.api_format'])} value={api.format} onValueChange={(format) => format && setApi({ format: format === 'xml' ? 'xml' : 'json' })}>
+          <Segment value="json">{t(M['settings.api_format_json'])}</Segment>
+          <Segment value="xml">{t(M['settings.api_format_xml'])}</Segment>
+        </SegmentedGroup>
       </div>
       <p className="text-[12px] text-muted-foreground">{t(M['settings.api_hint'])}</p>
       {api.keys.map((key, index) => (
@@ -298,10 +305,12 @@ function SubmissionApiSettings({ dark, field, labelCls }: { dark: boolean; field
       </Button>
       <div className="space-y-1.5">
         <Label className={labelCls}>{t(M['settings.api_preview'])}</Label>
-        <pre className={cn('overflow-x-auto rounded-md border p-2 text-[12px] leading-5', dark ? 'border-sidebar-border bg-sidebar-accent/40' : 'border-border bg-muted/40')}>{preview.text}</pre>
+        <pre className={'overflow-x-auto rounded-md border border-border bg-muted/40 p-2 text-[12px] leading-5'}>{preview.text}</pre>
         {preview.invalid.length ? <p className="text-[12px] text-destructive">{t(M['settings.api_invalid'], { paths: preview.invalid.join(', ') })}</p> : null}
       </div>
-    </div>
+      </>
+      ) : null}
+    </InspectorSection>
   );
 }
 
@@ -324,10 +333,10 @@ function previewSample(field: { label: string; type: string; parts: Array<{ valu
   return field.label || '…';
 }
 
-function Toggle({ id, label, checked, onChange, dark }: { id: string; label: string; checked: boolean; onChange: (on: boolean) => void; dark?: boolean }) {
+function Toggle({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (on: boolean) => void }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <Label htmlFor={id} className={dark ? 'text-sidebar-foreground/80' : undefined}>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
     </div>
   );

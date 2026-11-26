@@ -1,0 +1,356 @@
+/*
+ * Blank-canvas illustration: Figma DMacq Design System 5356:183726, "Drag & Drop · Minimal loop (8s)".
+ * Generated from the Figma motion tracks; each keyframe's timing function eases the segment that starts there.
+ * Under reduced motion the loop holds still on its finished frame (every row placed).
+ */
+@keyframes es-canvas-border-color {
+  0% { border-color: #eaeef1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  17.5% { border-color: #eaeef1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  20% { border-color: #99b5dd; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { border-color: #99b5dd; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  26.88% { border-color: #eaeef1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  39.38% { border-color: #eaeef1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  41.88% { border-color: #99b5dd; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { border-color: #99b5dd; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  48.75% { border-color: #eaeef1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  61.25% { border-color: #eaeef1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  63.75% { border-color: #99b5dd; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { border-color: #99b5dd; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  70.63% { border-color: #eaeef1; animation-timing-function: linear; }
+  100% { border-color: #eaeef1; }
+}
+@keyframes es-block-1-opacity {
+  0% { opacity: 1; animation-timing-function: linear; }
+  12.5% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  14.38% { opacity: 0.45; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { opacity: 0.45; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  26.88% { opacity: 1; animation-timing-function: linear; }
+  100% { opacity: 1; }
+}
+@keyframes es-block-1-background-color {
+  0% { background-color: #fff; animation-timing-function: linear; }
+  10% { background-color: #fff; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  11.88% { background-color: #ebf0f8; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { background-color: #ebf0f8; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  26.88% { background-color: #fff; animation-timing-function: linear; }
+  100% { background-color: #fff; }
+}
+@keyframes es-block-1-border-color {
+  0% { border-color: #dfe4e9; animation-timing-function: linear; }
+  10% { border-color: #dfe4e9; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  11.88% { border-color: #6691cd; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { border-color: #6691cd; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  26.88% { border-color: #dfe4e9; animation-timing-function: linear; }
+  100% { border-color: #dfe4e9; }
+}
+@keyframes es-block-2-opacity {
+  0% { opacity: 1; animation-timing-function: linear; }
+  34.38% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  36.25% { opacity: 0.45; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { opacity: 0.45; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  48.75% { opacity: 1; animation-timing-function: linear; }
+  100% { opacity: 1; }
+}
+@keyframes es-block-2-background-color {
+  0% { background-color: #fff; animation-timing-function: linear; }
+  31.88% { background-color: #fff; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  33.75% { background-color: #ebf0f8; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { background-color: #ebf0f8; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  48.75% { background-color: #fff; animation-timing-function: linear; }
+  100% { background-color: #fff; }
+}
+@keyframes es-block-2-border-color {
+  0% { border-color: #dfe4e9; animation-timing-function: linear; }
+  31.88% { border-color: #dfe4e9; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  33.75% { border-color: #6691cd; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { border-color: #6691cd; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  48.75% { border-color: #dfe4e9; animation-timing-function: linear; }
+  100% { border-color: #dfe4e9; }
+}
+@keyframes es-block-3-opacity {
+  0% { opacity: 1; animation-timing-function: linear; }
+  56.25% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  58.13% { opacity: 0.45; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { opacity: 0.45; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  70.63% { opacity: 1; animation-timing-function: linear; }
+  100% { opacity: 1; }
+}
+@keyframes es-block-3-background-color {
+  0% { background-color: #fff; animation-timing-function: linear; }
+  53.75% { background-color: #fff; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  55.63% { background-color: #ebf0f8; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { background-color: #ebf0f8; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  70.63% { background-color: #fff; animation-timing-function: linear; }
+  100% { background-color: #fff; }
+}
+@keyframes es-block-3-border-color {
+  0% { border-color: #dfe4e9; animation-timing-function: linear; }
+  53.75% { border-color: #dfe4e9; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  55.63% { border-color: #6691cd; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { border-color: #6691cd; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  70.63% { border-color: #dfe4e9; animation-timing-function: linear; }
+  100% { border-color: #dfe4e9; }
+}
+@keyframes es-slot-1-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  17.5% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  20% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  25.63% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-slot-2-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  39.38% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  41.88% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  47.5% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-slot-3-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  61.25% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  63.75% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  69.38% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-row-1-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  23.13% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  26.25% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  91.25% { opacity: 1; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  96.25% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-row-1-scale {
+  0% { scale: 0.98; animation-timing-function: linear; }
+  23.13% { scale: 0.98; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  27.5% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-row-1-translate {
+  0% { translate: 0 -3.385px; animation-timing-function: linear; }
+  23.13% { translate: 0 -3.385px; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  27.5% { translate: 0 0; animation-timing-function: linear; }
+  100% { translate: 0 0; }
+}
+@keyframes es-row-2-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  45% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  48.13% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  91.25% { opacity: 1; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  96.25% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-row-2-scale {
+  0% { scale: 0.98; animation-timing-function: linear; }
+  45% { scale: 0.98; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  49.38% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-row-2-translate {
+  0% { translate: 0 -3.385px; animation-timing-function: linear; }
+  45% { translate: 0 -3.385px; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  49.38% { translate: 0 0; animation-timing-function: linear; }
+  100% { translate: 0 0; }
+}
+@keyframes es-row-3-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  66.88% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  70% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  91.25% { opacity: 1; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  96.25% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-row-3-scale {
+  0% { scale: 0.98; animation-timing-function: linear; }
+  66.88% { scale: 0.98; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  71.25% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-row-3-translate {
+  0% { translate: 0 -3.385px; animation-timing-function: linear; }
+  66.88% { translate: 0 -3.385px; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  71.25% { translate: 0 0; animation-timing-function: linear; }
+  100% { translate: 0 0; }
+}
+@keyframes es-submit-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  72.5% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  76.25% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  91.25% { opacity: 1; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  96.25% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-submit-scale {
+  0% { scale: 0.92; animation-timing-function: linear; }
+  72.5% { scale: 0.92; animation-timing-function: cubic-bezier(0.45, 1.45, 0.8, 1); }
+  76.88% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-ghost-1-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  12.5% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  14% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  25.63% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-ghost-1-scale {
+  0% { scale: 1; animation-timing-function: linear; }
+  12.5% { scale: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  14.38% { scale: 1.05; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { scale: 1.05; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  25% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-ghost-1-translate {
+  0% { translate: 0 0; animation-timing-function: linear; }
+  14.38% { translate: 0 0; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  23.13% { translate: 226.769px 8.462px; animation-timing-function: linear; }
+  100% { translate: 226.769px 8.462px; }
+}
+@keyframes es-ghost-2-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  34.38% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  35.88% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  47.5% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-ghost-2-scale {
+  0% { scale: 1; animation-timing-function: linear; }
+  34.38% { scale: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  36.25% { scale: 1.05; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { scale: 1.05; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  46.88% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-ghost-2-translate {
+  0% { translate: 0 0; animation-timing-function: linear; }
+  36.25% { translate: 0 0; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  45% { translate: 226.769px 22px; animation-timing-function: linear; }
+  100% { translate: 226.769px 22px; }
+}
+@keyframes es-ghost-3-opacity {
+  0% { opacity: 0; animation-timing-function: linear; }
+  56.25% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  57.75% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  69.38% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-ghost-3-scale {
+  0% { scale: 1; animation-timing-function: linear; }
+  56.25% { scale: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  58.13% { scale: 1.05; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { scale: 1.05; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  68.75% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-ghost-3-translate {
+  0% { translate: 0 0; animation-timing-function: linear; }
+  58.13% { translate: 0 0; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  66.88% { translate: 226.769px 48.231px; animation-timing-function: linear; }
+  100% { translate: 226.769px 48.231px; }
+}
+@keyframes es-cursor-opacity {
+  0% { opacity: 0; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  3.75% { opacity: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  72.5% { opacity: 1; animation-timing-function: cubic-bezier(0.42, 0, 1, 1); }
+  76.25% { opacity: 0; animation-timing-function: linear; }
+  100% { opacity: 0; }
+}
+@keyframes es-cursor-scale {
+  0% { scale: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  12.5% { scale: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  13.5% { scale: 0.85; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  23.13% { scale: 0.85; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  24.38% { scale: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  34.38% { scale: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  35.38% { scale: 0.85; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  45% { scale: 0.85; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  46.25% { scale: 1; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  56.25% { scale: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  57.25% { scale: 0.85; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  66.88% { scale: 0.85; animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  68.13% { scale: 1; animation-timing-function: linear; }
+  100% { scale: 1; }
+}
+@keyframes es-cursor-translate {
+  0% { translate: 0px 0px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  5% { translate: 0px 0px; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  11.25% { translate: -121.846px -174.308px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  14.38% { translate: -121.846px -174.308px; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  23.13% { translate: 104.923px -165.846px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  26.88% { translate: 104.923px -165.846px; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  33.13% { translate: -121.846px -137.077px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  36.25% { translate: -121.846px -137.077px; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  45% { translate: 104.923px -115.077px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  48.75% { translate: 104.923px -115.077px; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  55% { translate: -121.846px -99.846px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  58.13% { translate: -121.846px -99.846px; animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  66.88% { translate: 104.923px -51.615px; animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); }
+  97.62% { translate: 104.923px -51.615px; animation-timing-function: linear; }
+  97.63% { translate: 0px 0px; animation-timing-function: linear; }
+  100% { translate: 0px 0px; }
+}
+
+.es-anim {
+  animation-duration: 8s;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+.es-canvas {
+  animation-name: es-canvas-border-color;
+}
+.es-block-1 {
+  animation-name: es-block-1-opacity, es-block-1-background-color, es-block-1-border-color;
+}
+.es-block-2 {
+  animation-name: es-block-2-opacity, es-block-2-background-color, es-block-2-border-color;
+}
+.es-block-3 {
+  animation-name: es-block-3-opacity, es-block-3-background-color, es-block-3-border-color;
+}
+.es-slot-1 {
+  animation-name: es-slot-1-opacity;
+}
+.es-slot-2 {
+  animation-name: es-slot-2-opacity;
+}
+.es-slot-3 {
+  animation-name: es-slot-3-opacity;
+}
+.es-row-1 {
+  animation-name: es-row-1-opacity, es-row-1-scale, es-row-1-translate;
+}
+.es-row-2 {
+  animation-name: es-row-2-opacity, es-row-2-scale, es-row-2-translate;
+}
+.es-row-3 {
+  animation-name: es-row-3-opacity, es-row-3-scale, es-row-3-translate;
+}
+.es-submit {
+  animation-name: es-submit-opacity, es-submit-scale;
+}
+.es-ghost-1 {
+  animation-name: es-ghost-1-opacity, es-ghost-1-scale, es-ghost-1-translate;
+}
+.es-ghost-2 {
+  animation-name: es-ghost-2-opacity, es-ghost-2-scale, es-ghost-2-translate;
+}
+.es-ghost-3 {
+  animation-name: es-ghost-3-opacity, es-ghost-3-scale, es-ghost-3-translate;
+}
+.es-cursor {
+  animation-name: es-cursor-opacity, es-cursor-scale, es-cursor-translate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .es-anim {
+    animation-delay: -6.4s;
+    animation-play-state: paused;
+  }
+}

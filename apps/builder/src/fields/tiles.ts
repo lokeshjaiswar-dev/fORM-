@@ -51,19 +51,20 @@ export const categoryLabel = (category: Category): string => {
   return id ? t(id) : category;
 };
 
-/** Tile colours per category (icon tile background and glyph). */
+/** Tile colours per category (icon tile background and glyph), from the Figma Initials palette (5333:115881). */
+const TILE_GLYPH = 'text-[#0c1927]';
 export const TILE_STYLE: Readonly<Record<Category, string>> = {
-  basic: 'bg-[#d3e5ef] text-[#337ea9]',
-  contact: 'bg-[#fadec9] text-[#d9730d]',
-  choice: 'bg-[#dbeddb] text-[#448361]',
-  date_time: 'bg-[#f5e0e9] text-[#c14c8a]',
-  rating: 'bg-[#fdecc8] text-[#dfab01]',
-  media: 'bg-[#ffe2dd] text-[#d44c47]',
-  layout: 'bg-[#e3e2e0] text-[#787774]',
-  advanced: 'bg-[#e8deee] text-[#9065b0]',
-  payments: 'bg-[#dbeddb] text-[#448361]',
-  compliance: 'bg-[#e8deee] text-[#9065b0]',
-  snippets: 'bg-[#eee9da] text-[#9f6b53]',
+  basic: `bg-[#a4f1ff] ${TILE_GLYPH}`,
+  contact: `bg-[#a4f1ff] ${TILE_GLYPH}`,
+  choice: `bg-[#d6e6aa] ${TILE_GLYPH}`,
+  date_time: `bg-[#ffc8e2] ${TILE_GLYPH}`,
+  rating: `bg-[#ffde8c] ${TILE_GLYPH}`,
+  media: `bg-[#ffc2c2] ${TILE_GLYPH}`,
+  layout: `bg-[#e3eaf3] ${TILE_GLYPH}`,
+  advanced: `bg-[#c7d9ff] ${TILE_GLYPH}`,
+  payments: `bg-[#d6e6aa] ${TILE_GLYPH}`,
+  compliance: `bg-[#c7d9ff] ${TILE_GLYPH}`,
+  snippets: `bg-[#ffdcb9] ${TILE_GLYPH}`,
 };
 
 function blockTiles(type: AvailableType): Tile[] {

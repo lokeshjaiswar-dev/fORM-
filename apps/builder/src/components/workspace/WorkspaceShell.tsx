@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FileText, History, ShieldCheck } from 'lucide-react';
 import { AppShell, AppShellHeader, AppShellMain, AppShellSidebar } from '@dmacq/ui/patterns';
@@ -34,31 +34,48 @@ function BrandMark() {
   );
 }
 
+const RECENT_COUNT = 6;
+
+const mostRecent = (list: readonly FormSummary[]) => [...list].sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1)).slice(0, RECENT_COUNT);
+
+interface WorkspaceShellProps {
+  crumb: string;
+  actions?: ReactNode;
+  /**
+   * The forms the page already holds (null while it loads them). Recent then follows that list, so a form the page
+   * deletes, duplicates or drops as an empty draft changes the sidebar at once. Without it the shell loads its own.
+   */
+  forms?: readonly FormSummary[] | null;
+  children: ReactNode;
+}
+
 /**
  * The frame for the forms workspace (`/forms`, `/forms/:id/responses`): a sidebar with sectioned navigation (workspace,
  * recent forms), a top bar with the breadcrumb and page actions, and a scrolling main area. Built on the dMACQ app shell.
  */
-export function WorkspaceShell({ crumb, actions, children }: { crumb: string; actions?: ReactNode; children: ReactNode }) {
+export function WorkspaceShell({ crumb, actions, forms, children }: WorkspaceShellProps) {
   const { pathname } = useLocation();
   const repo = useRepository();
-  const [recent, setRecent] = useState<FormSummary[]>([]);
+  const [loaded, setLoaded] = useState<FormSummary[]>([]);
+  const fromPage = forms !== undefined;
+  const recent = useMemo(() => (fromPage ? mostRecent(forms ?? []) : loaded), [fromPage, forms, loaded]);
   const onForms = pathname === '/forms' || pathname.startsWith('/forms/');
   const activeId = /^\/builder\/([^/]+)/.exec(pathname)?.[1] ?? /^\/forms\/([^/]+)/.exec(pathname)?.[1];
 
-  // Reload on every navigation so the recent list follows edits, creations and deletions.
+  // A page that does not pass its forms: reload on every navigation so Recent follows edits, creations and deletions.
   useEffect(() => {
+    if (fromPage) return;
     let live = true;
     whenSaved()
       .then(() => repo.list())
       .then((list) => {
-        if (!live) return;
-        setRecent([...list].sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1)).slice(0, 6));
+        if (live) setLoaded(mostRecent(list));
       })
-      .catch(() => live && setRecent([]));
+      .catch(() => live && setLoaded([]));
     return () => {
       live = false;
     };
-  }, [repo, pathname]);
+  }, [repo, pathname, fromPage]);
 
   return (
     <AppShell className="h-svh">

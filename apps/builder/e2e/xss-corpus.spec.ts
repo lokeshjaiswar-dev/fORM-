@@ -27,17 +27,18 @@ test('the XSS corpus pasted into the editors never runs, in the builder or the p
   });
 
   await openNewForm(page);
-  await page.getByRole('button', { name: 'Press Enter to start from scratch' }).click();
+  await page.getByRole('button', { name: /^Drag & drop your first element/ }).click();
   const insert = page.getByPlaceholder('Type ‘/’ to insert blocks');
   await insert.fill('Paragraph');
   await insert.press('Enter');
   await insert.fill('/short');
   await page.getByRole('option', { name: /Short answer/ }).click();
-  const editors = page.locator('.ProseMirror');
+  /* The canvas editors: the settings panel that opens on the new field has its own editors too. */
+  const editors = page.locator('[data-block-id] .ProseMirror');
   await expect(editors).toHaveCount(2);
 
   await page.evaluate((payloads) => {
-    const targets = [...document.querySelectorAll<HTMLElement>('.ProseMirror')];
+    const targets = [...document.querySelectorAll<HTMLElement>('[data-block-id] .ProseMirror')];
     payloads.forEach((html, i) => {
       const target = targets[i % targets.length];
       if (!target) return;

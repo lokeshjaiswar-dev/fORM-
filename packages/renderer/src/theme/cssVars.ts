@@ -9,7 +9,7 @@ import { tokenVar, type ColorValue, type FontId, type ThemeColorToken, type Them
 const HEX = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 export const DEFAULT_COLORS: Readonly<Record<ThemeColorToken, string>> = {
-  page: '#e8eefc',
+  page: '#e3eaf3', // Figma DMacq Design System 5356:183717 (surface-bg-grey-highlighted)
   surface: '#ffffff',
   text: '#37352f',
   muted: '#6b6a66',
@@ -59,11 +59,29 @@ function luminance(hex: string): number {
   return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
 }
 
+/** A #rrggbb or #rrggbbaa colour. */
+export const isHexColor = (value: unknown): value is string => typeof value === 'string' && HEX.test(value);
+
 /** Black or white, whichever reads better on `background` (WCAG contrast); the default for `accentText`. */
 export function readableOn(background: string): string {
   const l = luminance(background);
   return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? '#000000' : '#ffffff';
 }
+
+/** `hex` (#rrggbb, or #rrggbbaa with the alpha dropped) mixed toward black by `amount` (0 to 1). */
+export function darken(hex: string, amount: number): string {
+  const part = (i: number) =>
+    Math.round(Number.parseInt(hex.slice(i, i + 2), 16) * (1 - amount))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${part(1)}${part(3)}${part(5)}`;
+}
+
+/** How much darker the submit button turns on hover when a theme colours it. */
+const SUBMIT_HOVER_DARKEN = 0.15;
+
+/** Accents that keep the submit button's own design-system blue (#2950da, hover #2243b6, in styles.css). */
+const DESIGN_SYSTEM_ACCENTS: ReadonlySet<string> = new Set([DEFAULT_COLORS.accent, '#2950da']);
 
 /** The custom properties for a theme, every token filled in. */
 export function themeCssVars(tokens: ThemeTokens): CSSProperties {
@@ -76,6 +94,18 @@ export function themeCssVars(tokens: ThemeTokens): CSSProperties {
   vars['--fr-required'] = typeof error === 'string' && HEX.test(error) ? error : REQUIRED_MARK;
   const accentText = tokens.colors.accentText;
   if (!(typeof accentText === 'string' && HEX.test(accentText))) vars[tokenVar('accentText')] = readableOn(vars[tokenVar('accent')] as string);
+  /*
+   * The submit button (styles.css `.fr-primary`) is the design system's blue while the theme keeps the default accent
+   * or that blue itself (the Default theme).
+   * A theme with its own accent colours it: that accent, a darker shade on hover, and the accent's text colour.
+   */
+  const accent = vars[tokenVar('accent')] as string;
+  if (!DESIGN_SYSTEM_ACCENTS.has(accent.toLowerCase())) {
+    /* Opaque: an accent with alpha would leave the button see-through, and its hover shade opaque. */
+    vars['--fr-submit-bg'] = accent.slice(0, 7);
+    vars['--fr-submit-bg-hover'] = darken(accent, SUBMIT_HOVER_DARKEN);
+    vars['--fr-submit-text'] = vars[tokenVar('accentText')] as string;
+  }
   vars['--fr-font'] = fontStack(tokens.typography.body) ?? (FONTS['inter'] as string);
   vars['--fr-heading-font'] = fontStack(tokens.typography.heading) ?? 'var(--fr-font)';
   vars['--fr-size'] = `${Math.min(24, Math.max(12, tokens.typography.baseSizePx || 16))}px`;

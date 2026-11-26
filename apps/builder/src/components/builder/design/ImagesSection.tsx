@@ -32,7 +32,7 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
     if (dropCover) delete next.cover;
     onChange({ ...theme, tokens: next });
   };
-  const pageColor = (typeof tokens.colors.page === 'string' ? tokens.colors.page : '#e8eefc') as HexColor;
+  const pageColor = (typeof tokens.colors.page === 'string' ? tokens.colors.page : '#e3eaf3') as HexColor;
 
   const upload = async (file: File | undefined, kind: 'background' | 'cover') => {
     if (!file) return;
@@ -73,7 +73,7 @@ export function ImagesSection({ theme, onChange }: { theme: Theme; onChange: (th
       />
       {tokens.cover ? (
         <div className="space-y-1.5">
-          <Label className="text-sidebar-foreground/80">{t(M['design.cover_height'])}</Label>
+          <Label>{t(M['design.cover_height'])}</Label>
           <input
             type="range"
             min={80}
@@ -94,7 +94,7 @@ function SceneRow({ label, selected, onSelect, onUpload }: { label: string; sele
   const input = useRef<HTMLInputElement>(null);
   return (
     <section>
-      <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-sidebar-muted">{label}</p>
+      <p className="mb-2 text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{label}</p>
       <div className="grid grid-cols-[repeat(auto-fill,7.5rem)] gap-2">
         <Button type="button" variant="outline" size="default" aria-pressed={!selected} pressed={!selected} onClick={() => onSelect(null)} className="h-16 w-[7.5rem] flex-col">
           {t(M['design.none'])}

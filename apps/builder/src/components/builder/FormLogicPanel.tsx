@@ -556,8 +556,8 @@ export function FormLogicChecks() {
   };
   return (
     <div className="space-y-4">
-      <p className="text-[13px] leading-relaxed text-sidebar-muted">{t(M['rules.intro'])}</p>
-      {fields.length === 0 ? <p className="text-[13px] text-sidebar-muted">{t(M['rules.no_fields'])}</p> : null}
+      <p className="text-[13px] leading-relaxed text-muted-foreground">{t(M['rules.intro'])}</p>
+      {fields.length === 0 ? <p className="text-[13px] text-muted-foreground">{t(M['rules.no_fields'])}</p> : null}
       {rules.length === 0 && !drafting ? <p className="text-[13px] text-muted-foreground">{t(M['rules.empty'])}</p> : null}
       <Accordion type="multiple" value={open} onValueChange={setOpen} className="space-y-2">
         {rules.map((rule) => <RuleCard key={rule.id} rule={rule} fields={fields} />)}
