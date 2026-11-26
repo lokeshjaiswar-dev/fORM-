@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublicLookup } from '@form/schema';
 import { createDmsClient } from '@/embed/dmsClient';
+import { installTestSession, resetTestSession, TEST_CREDENTIAL } from '@/embed/session/testing';
 import { fixtures } from '../bridge/fixtures.ts';
 import { dmsDirectRemoteSource, masterRecordsPath } from './dmsDirectRemoteSource.ts';
 
@@ -16,8 +17,9 @@ const lookup: PublicLookup = {
   minChars: 2,
   maxRows: 20,
 };
-const TOKEN = 'tok-sentinel-7a1c';
 const BASE = 'https://dms.example.test';
+/** The session client maps `/dms/masters/{id}` and `/dms/master-records` to the session group (DESIGN 3.3). */
+const SESSION = `${BASE}/dms/v1/formplus/s`;
 /** B's elements as GET masters/{id} returns them: both flags on every field. */
 const flagged = fx.sourceMasterElements.map((e) => ({ ...e, is_hidden: Boolean(e.is_hidden), is_secret: Boolean(e.is_secret) }));
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -27,32 +29,38 @@ function setup(o: { elements?: unknown[]; records?: unknown; lookups?: PublicLoo
   const doFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, init: init ?? {} });
-    return url.includes('/dms/masters/') ? ok({ data: { id: fp.master_id, form_builders: o.elements ?? flagged } }) : ok(o.records ?? fx.masterRecordsResponse);
+    return url.includes('/s/masters/') ? ok({ data: { id: fp.master_id, form_builders: o.elements ?? flagged } }) : ok(o.records ?? fx.masterRecordsResponse);
   });
-  const client = createDmsClient({ apiBase: BASE, tenantId: 't1', workspaceId: 'w1', fetch: doFetch as never, token: () => TOKEN });
+  installTestSession({ apiBase: BASE });
+  const client = createDmsClient({ apiBase: BASE, tenantId: 't1', workspaceId: 'w1', fetch: doFetch as never });
   return { calls, source: dmsDirectRemoteSource(client, o.lookups ?? [lookup]) };
 }
 const signal = () => new AbortController().signal;
+
+afterEach(() => resetTestSession());
 
 describe('dmsDirectRemoteSource (/embed/dms-record)', () => {
   it('asks master-records as the user: one search per call, page 1, 21 rows, the term encoded and capped', async () => {
     const { calls, source } = setup();
     const out = await source.lookup(lookup.id, 'acm & co', signal());
-    const search = calls.find((c) => c.url.includes('/dms/master-records'))!;
-    expect(search.url).toBe(`${BASE}/dms/master-records?id=${fp.master_id}&q=acm%20%26%20co&page=1&per_page=21`);
+    const search = calls.find((c) => c.url.includes('/s/master-records'))!;
+    expect(search.url).toBe(`${SESSION}/master-records?id=${fp.master_id}&q=acm%20%26%20co&page=1&per_page=21`);
     expect(out.rows.map((r) => r.label)).toEqual(['Acme Traders', 'Acme Foods']);
     expect(masterRecordsPath('m1', 'x'.repeat(300))).toContain(`q=${'x'.repeat(100)}&`);
   });
 
-  it('the token goes only to apiBase, as a header, with no cookie', async () => {
+  it('the session credential goes only to the session routes of apiBase, as a header, with no cookie and no tenant or workspace header', async () => {
     const { calls, source } = setup();
     await source.lookup(lookup.id, 'acm', signal());
     expect(calls.length).toBeGreaterThan(0);
     for (const c of calls) {
-      expect(c.url.startsWith(`${BASE}/`)).toBe(true);
+      expect(c.url.startsWith(`${SESSION}/`)).toBe(true);
       expect(c.init.credentials).toBe('omit');
-      expect((c.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
-      expect(c.url).not.toContain(TOKEN);
+      const headers = c.init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe(`Bearer ${TEST_CREDENTIAL}`);
+      expect(Object.keys(headers).map((h) => h.toLowerCase())).not.toContain('x-tenant-id');
+      expect(Object.keys(headers).map((h) => h.toLowerCase())).not.toContain('x-workspace-id');
+      expect(c.url).not.toContain(TEST_CREDENTIAL);
     }
   });
 
@@ -68,7 +76,7 @@ describe('dmsDirectRemoteSource (/embed/dms-record)', () => {
     const { calls, source } = setup();
     await source.lookup(lookup.id, 'a', signal());
     await source.lookup(lookup.id, 'ac', signal());
-    expect(calls.filter((c) => c.url.includes('/dms/masters/'))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.includes('/s/masters/'))).toHaveLength(1);
     expect(calls.some((c) => c.url.includes('/master/form/'))).toBe(false);
   });
 
@@ -79,7 +87,7 @@ describe('dmsDirectRemoteSource (/embed/dms-record)', () => {
     const records = { data: { records: [{ id: 'r1', json_data: { 'Vendor Name': 'Acme Traders', 'Internal Note': 'do not share' } }] } };
     const { calls, source } = setup({ records, lookups: [hiddenFill] });
     const out = await source.lookup(hiddenFill.id, 'acme', signal());
-    expect(calls.some((c) => c.url === `${BASE}/dms/masters/${fp.master_id}`)).toBe(true);
+    expect(calls.some((c) => c.url === `${SESSION}/masters/${fp.master_id}`)).toBe(true);
     expect(out.rows.map((r) => r.label)).toEqual(['Acme Traders']);
     expect(JSON.stringify(out)).not.toContain('do not share');
   });

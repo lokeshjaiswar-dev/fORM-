@@ -1,29 +1,24 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  currentLaunch, decodeDescriptor, encodeDescriptor, fragmentValue, parseLaunch, profileOverride, resetLaunchMemo, returnTarget, validateDescriptor,
-  type LaunchDescriptor, type LaunchEnv,
-} from '@/embed/launch';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import ticketFx from '@/embed/contract/__fixtures__/launch-ticket.fixtures.json' with { type: 'json' };
+import returnFx from '@/embed/contract/__fixtures__/formplus-return.fixtures.json' with { type: 'json' };
+import { parseReturnParams } from '@/embed/contract';
+import { currentLaunch, decodeDescriptor, encodeDescriptor, profileOverride, rememberMasterId, resetLaunchMemo, returnTarget, type LaunchDescriptor, type LaunchEnv } from '@/embed/launch';
+import { readResume } from '@/embed/session/handoff';
+import { installTestSession, resetTestSession, TEST_API_BASE, testEnv } from '@/embed/session/testing';
 
 const ORIGIN = 'https://dms.example.test';
 const env: LaunchEnv = { origin: ORIGIN, returnOrigins: [], apiBases: [`${ORIGIN}/api`], devOverrides: false };
+const MASTER = 'a1000000-0000-4000-8000-000000000001';
 
-const descriptor = (over: Partial<LaunchDescriptor> = {}): LaunchDescriptor => ({
-  v: 1,
-  mode: 'dms-master',
-  profile: 'dms-v1',
-  tenantId: 'acme',
-  workspaceId: 'ws_1',
-  master: { name: 'Vendor', doctypeIds: [], folderIds: [] },
-  returnUrl: `${ORIGIN}/dms-v2/acme/metadata`,
-  apiBase: `${ORIGIN}/api/`,
-  ...over,
+beforeEach(() => resetLaunchMemo());
+afterEach(() => {
+  resetTestSession();
+  vi.unstubAllEnvs();
 });
 
-const hash = (d: unknown) => `#fp=${encodeDescriptor(d as LaunchDescriptor)}`;
-
-describe('descriptor codec', () => {
+describe('descriptor codec (the legacy link format, kept for DMS-side tests)', () => {
+  const d: LaunchDescriptor = { v: 1, mode: 'dms-master', profile: 'dms-v1', tenantId: 'acme', workspaceId: 'ws_1', master: { name: 'Zürich Büro 京都', doctypeIds: [], folderIds: [] }, returnUrl: `${ORIGIN}/x`, apiBase: `${ORIGIN}/api` };
   it('round-trips base64url JSON, including non-ASCII names', () => {
-    const d = descriptor({ master: { name: 'Zürich Büro 京都', doctypeIds: [], folderIds: [] } });
     const encoded = encodeDescriptor(d);
     expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(decodeDescriptor(encoded)).toEqual(d);
@@ -33,145 +28,101 @@ describe('descriptor codec', () => {
     expect(() => decodeDescriptor('a'.repeat(20_000))).toThrow();
     expect(() => decodeDescriptor('e30=extra')).toThrow();
   });
-  it('reads the fp value of a fragment', () => {
-    expect(fragmentValue('#fp=abc&x=1')).toBe('abc');
-    expect(fragmentValue('#x=1')).toBeNull();
-    expect(fragmentValue('')).toBeNull();
-  });
 });
 
-describe('validateDescriptor', () => {
-  it('accepts a good descriptor and normalises the API base (no trailing slash) and the return URL', () => {
-    const r = parseLaunch(hash(descriptor()), 'dms-master', env);
-    expect(r).toMatchObject({ ok: true, launch: { apiBase: `${ORIGIN}/api`, returnUrl: `${ORIGIN}/dms-v2/acme/metadata`, tenantId: 'acme', profile: 'dms-v1' } });
-  });
-
-  it('accepts a root-relative API base (the dev rewrite on the DMS host)', () => {
-    const r = validateDescriptor(descriptor({ apiBase: '/api' }), 'dms-master', env);
-    expect(r).toMatchObject({ ok: true, launch: { apiBase: `${ORIGIN}/api` } });
-  });
-
-  it('refuses a descriptor for another mode, another profile, another version, or with extra keys', () => {
-    expect(validateDescriptor(descriptor({ mode: 'dms-record' }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'wrong_mode' });
-    expect(validateDescriptor({ ...descriptor(), profile: 'full' }, 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
-    expect(validateDescriptor({ ...descriptor(), v: 2 }, 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
-    expect(validateDescriptor({ ...descriptor(), token: 'x' }, 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
-    expect(validateDescriptor('nope', 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
-  });
-
-  it('refuses ids that could smuggle characters into a header, and a masterId that is not a uuid', () => {
-    expect(validateDescriptor(descriptor({ tenantId: 'a\r\nX-Evil: 1' }), 'dms-master', env).ok).toBe(false);
-    expect(validateDescriptor(descriptor({ workspaceId: '' }), 'dms-master', env).ok).toBe(false);
-    expect(validateDescriptor(descriptor({ masterId: '1; drop' }), 'dms-master', env).ok).toBe(false);
-    expect(validateDescriptor(descriptor({ masterId: 'b1000000-0000-4000-8000-000000000001' }), 'dms-master', env).ok).toBe(true);
-  });
-
-  describe('apiBase allowlist (the token goes only here)', () => {
-    it('refuses an origin that is not this page or on the list', () => {
-      const r = validateDescriptor(descriptor({ apiBase: 'https://evil.example.test/api' }), 'dms-master', env);
-      expect(r).toMatchObject({ ok: false, reason: 'api_origin_rejected', detail: 'https://evil.example.test/api' });
-    });
-    it('accepts a configured base, matched exactly (trailing slash in the descriptor is fine)', () => {
-      const listed: LaunchEnv = { ...env, apiBases: ['https://api.dms.example.test/v1'] };
-      expect(validateDescriptor(descriptor({ apiBase: 'https://api.dms.example.test/v1/' }), 'dms-master', listed)).toMatchObject({ ok: true, launch: { apiBase: 'https://api.dms.example.test/v1' } });
-    });
-    it('refuses a different path on an allowed origin (the token must not go to /files/public/...)', () => {
-      expect(validateDescriptor(descriptor({ apiBase: `${ORIGIN}/files/public/attacker-bucket` }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-      expect(validateDescriptor(descriptor({ apiBase: `${ORIGIN}/api/sub` }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-      expect(validateDescriptor(descriptor({ apiBase: `${ORIGIN}/api?x=1` }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-      const listed: LaunchEnv = { ...env, apiBases: ['https://gw.example/dms'] };
-      expect(validateDescriptor(descriptor({ apiBase: 'https://gw.example/some-other-service' }), 'dms-master', listed)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-    });
-    it('refuses everything when no base is configured', () => {
-      expect(validateDescriptor(descriptor(), 'dms-master', { ...env, apiBases: [] })).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-    });
-    it('a descriptor carrying a classification is invalid (the link does not choose it)', () => {
-      const d = { ...descriptor(), master: { name: 'V', doctypeIds: [], folderIds: [], classification: 'attacker-chosen' } };
-      expect(validateDescriptor(d, 'dms-master', env)).toMatchObject({ ok: false, reason: 'invalid' });
-    });
-    it('a dms-ui shaped create descriptor with classification: null is accepted', () => {
-      const d = { ...descriptor(), master: { name: 'Vendor', doctypeIds: [], folderIds: [], classification: null } };
-      expect(validateDescriptor(d, 'dms-master', env)).toMatchObject({ ok: true });
-    });
-    it.each(['javascript:alert(1)', 'ftp://dms.example.test/api', 'https://user:pw@dms.example.test/api', 'data:text/html,x', '//evil.example.test/api', 'https://dms.example.test.evil.test/api'])('refuses %s', (apiBase) => {
-      expect(validateDescriptor(descriptor({ apiBase }), 'dms-master', env)).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-    });
-  });
-
-  describe('returnUrl allowlist (no open redirect)', () => {
-    it.each(['https://evil.example.test/', 'javascript:alert(1)', 'data:text/html,x', 'https://user:pw@dms.example.test/x', '//evil.example.test/x', 'not a url'])('drops %s to null and still opens', (returnUrl) => {
-      const r = validateDescriptor(descriptor({ returnUrl }), 'dms-master', env);
-      expect(r).toMatchObject({ ok: true, launch: { returnUrl: null } });
-    });
-    it('keeps a listed origin', () => {
-      const listed: LaunchEnv = { ...env, returnOrigins: ['https://app.example.test'] };
-      expect(validateDescriptor(descriptor({ returnUrl: 'https://app.example.test/back?x=1' }), 'dms-master', listed)).toMatchObject({ ok: true, launch: { returnUrl: 'https://app.example.test/back?x=1' } });
-    });
-  });
-
-  it('reports a missing or malformed fragment', () => {
-    expect(parseLaunch('', 'dms-master', env)).toEqual({ ok: false, reason: 'missing' });
-    expect(parseLaunch('#fp=@@@', 'dms-master', env)).toEqual({ ok: false, reason: 'malformed' });
-    expect(parseLaunch(`#fp=${btoa('not json').replace(/=+$/, '')}`, 'dms-master', env)).toEqual({ ok: false, reason: 'malformed' });
-  });
-});
-
-describe('returnTarget', () => {
+describe('returnTarget (contract formplus-return)', () => {
   it('appends the outcome and keeps the existing query', () => {
     expect(returnTarget('https://dms.example.test/m?tab=2', 'saved', 'abc')).toBe('https://dms.example.test/m?tab=2&fp_status=saved&fp_master_id=abc');
     expect(returnTarget('https://dms.example.test/m', 'cancelled')).toBe('https://dms.example.test/m?fp_status=cancelled');
   });
-});
 
-describe('currentLaunch', () => {
-  beforeEach(() => {
-    resetLaunchMemo();
-    window.history.replaceState(null, '', '/embed/dms-master');
-  });
-  const here = (h: string) => ({ hash: h, pathname: '/embed/dms-master', search: '?a=1' });
-
-  it('parses the fragment once, clears it from the address bar, and remembers the result for a remount or reload', () => {
-    const envHere: LaunchEnv = { ...env, origin: window.location.origin, apiBases: [`${window.location.origin}/api`] };
-    const d = descriptor({ returnUrl: `${window.location.origin}/back`, apiBase: `${window.location.origin}/api` });
-    window.history.replaceState(null, '', `/embed/dms-master${hash(d)}`);
-    const first = currentLaunch('dms-master', envHere, { hash: window.location.hash, pathname: '/embed/dms-master', search: '' });
-    expect(first.ok).toBe(true);
-    expect(window.location.hash).toBe('');
-    // StrictMode remount: no fragment any more.
-    expect(currentLaunch('dms-master', envHere, here(''))).toEqual(first);
-    // Reload: the module memo is gone, the tab's storage is not.
-    resetLaunchMemoOnly();
-    expect(currentLaunch('dms-master', envHere, here(''))).toEqual(first);
+  it('error carries fp_code (and the master when there is one); fp_code is only ever sent with error', () => {
+    expect(returnTarget('https://dms.example.test/m', 'error', undefined, 'FORBIDDEN_RIGHT')).toBe('https://dms.example.test/m?fp_status=error&fp_code=FORBIDDEN_RIGHT');
+    expect(returnTarget('https://dms.example.test/m', 'error', MASTER, 'NOT_FOUND')).toBe(`https://dms.example.test/m?fp_status=error&fp_master_id=${MASTER}&fp_code=NOT_FOUND`);
+    expect(returnTarget('https://dms.example.test/m', 'saved', MASTER, 'NOT_FOUND')).toBe(`https://dms.example.test/m?fp_status=saved&fp_master_id=${MASTER}`);
   });
 
-  it('does not remember a descriptor that failed validation', () => {
-    const bad = hash(descriptor({ apiBase: 'https://evil.example.test' }));
-    expect(currentLaunch('dms-master', env, here(bad))).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-    expect(currentLaunch('dms-master', env, here(''))).toEqual({ ok: false, reason: 'missing' });
+  it('leaves out an id or code that does not match its pattern, instead of sending it', () => {
+    expect(returnTarget('https://dms.example.test/m', 'error', 'a b&c', 'not a code')).toBe('https://dms.example.test/m?fp_status=error');
   });
 
-  it('re-validates what it kept (storage is untrusted too)', () => {
-    sessionStorage.setItem('fp.launch.dms-master', encodeDescriptor(descriptor({ apiBase: 'https://evil.example.test' })));
-    expect(currentLaunch('dms-master', env, here(''))).toMatchObject({ ok: false, reason: 'api_origin_rejected' });
-  });
-
-  it('works without storage', () => {
-    const spy = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
-    Object.defineProperty(globalThis, 'sessionStorage', { get: () => { throw new Error('blocked'); }, configurable: true });
-    try {
-      expect(currentLaunch('dms-master', env, here(hash(descriptor()))).ok).toBe(true);
-      expect(currentLaunch('dms-master', env, here(''))).toMatchObject({ ok: true });
-    } finally {
-      Object.defineProperty(globalThis, 'sessionStorage', spy);
+  it('what it builds parses with the contract rule DMS applies', () => {
+    for (const [status, id, code] of [['saved', MASTER, undefined], ['cancelled', undefined, undefined], ['error', MASTER, 'FP_SCOPE_DENIED']] as const) {
+      const url = new URL(returnTarget('https://dms.example.test/m', status, id, code));
+      expect(parseReturnParams(url.search)).toMatchObject({ fp_status: status });
     }
+    expect(returnFx.cases.length).toBeGreaterThan(0);
   });
 });
 
-function resetLaunchMemoOnly() {
-  const saved = Object.entries(sessionStorage);
-  resetLaunchMemo();
-  for (const [k, v] of saved) sessionStorage.setItem(k, v);
-}
+describe('currentLaunch (built from the exchange context)', () => {
+  it('is missing until the session is launched, and a #fp= link never makes one', () => {
+    window.history.replaceState(null, '', '/embed/dms-master#fp=eyJ2IjoxfQ');
+    expect(currentLaunch('dms-master', env)).toEqual({ ok: false, reason: 'missing' });
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('a master create: the seed becomes `master` incl. the classification, tenant and workspace are display values, apiBase is the session\'s', () => {
+    const ctx = installTestSession();
+    const r = currentLaunch('dms-master');
+    expect(r).toMatchObject({
+      ok: true,
+      launch: {
+        v: 1,
+        mode: 'dms-master',
+        profile: 'dms-v1',
+        tenantId: ctx.tenant_id,
+        workspaceId: ctx.workspace_id,
+        master: { name: 'Vendor', doctypeIds: ['e1000000-0000-4000-8000-000000000001'], folderIds: ['f1000000-0000-4000-8000-000000000001'], classification: 'confidential' },
+        apiBase: TEST_API_BASE,
+        returnUrl: ctx.return_url,
+      },
+    });
+    expect(r.ok && r.launch.masterId).toBeUndefined();
+  });
+
+  it('a master edit has masterId and no seed; a record has masterId and recordId', () => {
+    installTestSession({ context: { master_id: MASTER, master_seed: null } });
+    expect(currentLaunch('dms-master')).toMatchObject({ ok: true, launch: { masterId: MASTER } });
+    expect((currentLaunch('dms-master') as { launch: { master?: unknown } }).launch.master).toBeUndefined();
+    resetTestSession();
+    installTestSession({ context: { mode: 'dms-record', master_id: MASTER, record_id: 'rec-1', master_seed: null } });
+    expect(currentLaunch('dms-record')).toMatchObject({ ok: true, launch: { mode: 'dms-record', masterId: MASTER, recordId: 'rec-1' } });
+  });
+
+  it('another mode than the session\'s is missing', () => {
+    installTestSession();
+    expect(currentLaunch('dms-record')).toEqual({ ok: false, reason: 'missing' });
+  });
+
+  it('returnUrl is null when it is not on this build\'s allowlist (the page then shows no Back to DMS)', () => {
+    installTestSession();
+    vi.stubEnv('VITE_FP_RETURN_ORIGINS', 'https://other.example.test');
+    expect(currentLaunch('dms-master')).toMatchObject({ ok: true, launch: { returnUrl: null } });
+  });
+
+  it('is the same object while nothing changed (callers memoise on it)', () => {
+    installTestSession();
+    const a = currentLaunch('dms-master') as { launch: unknown };
+    expect((currentLaunch('dms-master') as { launch: unknown }).launch).toBe(a.launch);
+  });
+});
+
+describe('rememberMasterId', () => {
+  it('after a create the launch becomes "edit that master", in the context, and in the resume hint a reload uses', () => {
+    installTestSession();
+    expect(currentLaunch('dms-master')).toMatchObject({ ok: true, launch: {} });
+    rememberMasterId('dms-master', MASTER);
+    expect(currentLaunch('dms-master')).toMatchObject({ ok: true, launch: { masterId: MASTER } });
+    expect(readResume(testEnv())).toMatchObject({ mode: 'dms-master', master_id: MASTER });
+  });
+
+  it('does nothing for another mode', () => {
+    installTestSession();
+    rememberMasterId('dms-record', MASTER);
+    expect((currentLaunch('dms-master') as { launch: { masterId?: string } }).launch.masterId).toBeUndefined();
+  });
+});
 
 describe('profileOverride (dev only)', () => {
   it('is ignored unless the build allows overrides', () => {
@@ -184,5 +135,11 @@ describe('profileOverride (dev only)', () => {
     expect(profileOverride('?fp_profile=full', dev)).toBe('full');
     expect(profileOverride('?fp_profile=other', dev)).toBeNull();
     expect(profileOverride('', dev)).toBeNull();
+  });
+});
+
+describe('the contract samples used here are the fixtures', () => {
+  it('the master seed of the create sample', () => {
+    expect((ticketFx.exchangeResponse[0]!.input as { context: { master_seed: unknown } }).context.master_seed).toMatchObject({ name: 'Vendor', classification: 'confidential' });
   });
 });
