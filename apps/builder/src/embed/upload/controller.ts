@@ -1,14 +1,18 @@
 import { answerToDms } from '@form/registry/profiles/dms-v1';
 import type { RemoteLookupResult } from '@form/renderer';
 import type { Answers, BlockId, FieldBlock } from '@form/schema';
-import type { InboundMessage, OutboundType, PayloadOf } from '../bridge/protocol.ts';
+import { prefillHash, type ChildBody, type InitMessage, type ParentMessage } from '../bridge/protocolV2.ts';
 import { SECRET_MASK } from '../lookup/dmsRows.ts';
 import { buildModel, editableFields, fieldOf, initialValues, validateValues, type Option, type UploadField, type UploadModel } from './model.ts';
 import { planRender, type RenderPlan } from './plan.ts';
 
 /*
- * The child's behaviour behind the wire, with no React and no `window`: messages in, messages out, and one thing to
- * show (`onRender`). The page (DmsUploadPage.tsx) connects it to the transport and to the renderer.
+ * The child's behaviour behind the wire (fp-bridge/2, SEC-DESIGN 3.4), with no React and no `window`: messages in, messages
+ * out, and one thing to show (`onRender`). The page (UploadApp.tsx) connects it to the port and to the renderer.
+ *
+ * What differs from /1: answers never leave while the person types. The child tells the parent `state` ({valid, dirty,
+ * touched ids}, no values) and puts the values in exactly one message, `collected`, once per `collect` request. A secret field is
+ * never prefilled and an untouched one is absent from `collected.values`, so DMS keeps what it stores (SEC-DESIGN 5.3, T-60).
  *
  * State per `init` is a pure function of that init plus what the person types and the options the parent sends, and an
  * `init` replaces all of it (idempotent: a re-sent init with the same content gives the same form and values).
@@ -22,35 +26,44 @@ export interface RenderView {
 }
 
 export interface ControllerDeps {
-  send<T extends OutboundType>(type: T, payload: PayloadOf<T>, replyTo?: string): string;
+  /** Sends one child message on the port (the transport stamps `protocol` and checks the schema). */
+  send(body: ChildBody): void;
   /** The form to show, or `null` when there is none (before init, after a re-init the child cannot show). */
   onRender(view: RenderView | null): void;
+  /** The parent's channel id for this mount (the `port` message). `init` and `collect` for another dialog are dropped. */
+  dialogId: string;
   /** Shows the renderer's own inline errors on the fields; best effort, never decides `valid`. */
   showInlineErrors?(): Promise<unknown>;
   setTimer?(fn: () => void, ms: number): () => void;
-  /**
-   * The parent announced `fp_caps=lookup`. Without it `lookup()` answers with no rows and sends nothing: an old parent never
-   * sees a `lookup.request`, and a lookup declared on a field stays a plain input (the page passes no source either).
-   */
-  lookupEnabled?: boolean;
+  /** A reason for logs (never sent): why an `error` was raised. */
+  onProblem?(code: string, why: string): void;
 }
 
-export const CHANGE_DEBOUNCE_MS = 150;
+export const STATE_DEBOUNCE_MS = 150;
 /** Demo cap on options per dropdown (DESIGN section 4). */
 export const MAX_OPTIONS = 500;
 const INLINE_ERRORS_TIMEOUT_MS = 1500;
 /** A lookup the parent does not answer in this time gives no rows (the person can type on). */
 export const LOOKUP_TIMEOUT_MS = 8000;
+/** `collect` requests remembered so a repeated `req` is answered once at most. */
+const REMEMBERED_REQS = 64;
 const NO_ROWS: RemoteLookupResult = { rows: [], truncated: false };
 
 interface State {
   model: UploadModel;
-  /** `init.values` as sent, for an auto-increment field's display in edit mode. */
-  given: Record<string, string>;
+  /** `init.values` as sent (a masked value is `null`), for an auto-increment field's display in edit mode. */
+  given: Record<string, string | null>;
   values: Record<string, string>;
+  /** The values the form started with, to tell `dirty`. */
+  start: Record<string, string>;
+  /** Fields the person changed at least once; a secret or masked field is sent back only when it is in here. */
+  touched: Set<string>;
   loaded: Record<string, Option[]>;
   plan: RenderPlan;
   revision: number;
+  /** Ids of the lookups this init declared: the only ones the child may ask the parent for. */
+  lookups: ReadonlySet<string>;
+  prefill: string;
 }
 
 interface PendingOptions {
@@ -75,11 +88,13 @@ const defaultTimer = (fn: () => void, ms: number): (() => void) => {
 export class UploadController {
   private state: State | null = null;
   private revision = 0;
-  private cancelChange: (() => void) | null = null;
+  private sequence = 0;
+  private cancelState: (() => void) | null = null;
   private readonly pending = new Map<string, PendingOptions>();
   private readonly generation = new Map<string, number>();
   /** `lookup.request` id -> what waits for its answer. One per lookup id: the newest request supersedes the older. */
   private readonly lookups = new Map<string, PendingLookup>();
+  private readonly answered: string[] = [];
 
   private readonly deps: ControllerDeps;
 
@@ -87,22 +102,25 @@ export class UploadController {
     this.deps = deps;
   }
 
-  receive(message: InboundMessage): void {
+  receive(message: ParentMessage): void {
     switch (message.type) {
       case 'init':
-        return this.onInit(message.id, message.payload);
+        if (message.dialogId !== this.deps.dialogId) return this.deps.onProblem?.('dialog', 'init for another dialog');
+        return this.onInit(message);
       case 'options.result':
-        return this.onOptions(message.replyTo, message.payload);
+        return this.onOptions(message);
       case 'lookup.result':
-        return this.onLookupResult(message.replyTo, message.payload);
-      case 'validate':
-        void this.onValidate(message.id);
+        return this.onLookupResult(message);
+      case 'collect':
+        if (message.dialogId !== this.deps.dialogId) return this.deps.onProblem?.('dialog', 'collect for another dialog');
+        void this.onCollect(message.req);
     }
   }
 
-  /** A failure the page found while rendering. */
-  fail(code: PayloadOf<'error'>['code'], message: string, fatal = true): void {
-    this.deps.send('error', { code, message: message.slice(0, 500), fatal });
+  /** A failure the page found while rendering. `why` is for the log only: the wire carries the code and `fatal`. */
+  fail(code: Extract<ChildBody, { type: 'error' }>['code'], why: string, fatal = true): void {
+    this.deps.onProblem?.(code, why.slice(0, 500));
+    this.deps.send({ type: 'error', code, fatal });
   }
 
   dispose(): void {
@@ -110,13 +128,18 @@ export class UploadController {
     this.state = null;
   }
 
+  private nextId(prefix: string): string {
+    this.sequence += 1;
+    return `${prefix}-${this.sequence.toString(36)}`;
+  }
+
   private timer(fn: () => void, ms: number): () => void {
     return (this.deps.setTimer ?? defaultTimer)(fn, ms);
   }
 
   private reset(): void {
-    this.cancelChange?.();
-    this.cancelChange = null;
+    this.cancelState?.();
+    this.cancelState = null;
     this.pending.clear();
     this.generation.clear();
     this.settleLookups();
@@ -133,16 +156,18 @@ export class UploadController {
   }
 
   /**
-   * Rows for what the person typed in a lookup's search field, asked of the parent as `lookup.request`. Nothing is sent when
-   * the parent did not announce the capability, when the lookup is not one this init declared, or before an init. One request
-   * is open per lookup (a newer one supersedes the older, which gets no rows); no answer in 8 s gives no rows.
+   * Rows for what the person typed in a lookup's search field, asked of the parent as `lookup.request`. Nothing is sent
+   * for a lookup this init did not declare (`init.lookups`) or before an init. One request is open per lookup (a newer one
+   * supersedes the older, which gets no rows); no answer in 8 s gives no rows.
    */
   lookup(lookupId: string, search: string): Promise<RemoteLookupResult> {
-    const declared = this.state?.plan.version.definition.lookups?.find((l) => l.id === lookupId && l.source === 'dms_master');
-    if (this.deps.lookupEnabled !== true || !declared) return Promise.resolve(NO_ROWS);
+    const state = this.state;
+    const declared = state?.plan.version.definition.lookups?.find((l) => l.id === lookupId && l.source === 'dms_master');
+    if (!state || !declared || !state.lookups.has(lookupId)) return Promise.resolve(NO_ROWS);
     this.settleLookups(lookupId);
     return new Promise<RemoteLookupResult>((resolve) => {
-      const id = this.deps.send('lookup.request', { lookupId, search: search.slice(0, 100) });
+      const id = this.nextId('c-l');
+      this.deps.send({ type: 'lookup.request', id, lookupId, search: search.slice(0, 100) });
       const cancelTimeout = this.timer(() => {
         this.lookups.delete(id);
         resolve(NO_ROWS);
@@ -156,10 +181,10 @@ export class UploadController {
    * lookup it was asked for. Cells are cut to the ids the lookup declares: the label column and the filled columns; a value
    * that is the DMS secret mask is dropped (the parent's projection does the same).
    */
-  private onLookupResult(replyTo: string, result: PayloadOf<'lookup.result'>): void {
-    const open = this.lookups.get(replyTo);
+  private onLookupResult(result: Extract<ParentMessage, { type: 'lookup.result' }>): void {
+    const open = this.lookups.get(result.replyTo);
     if (!open || result.lookupId !== open.lookupId) return;
-    this.lookups.delete(replyTo);
+    this.lookups.delete(result.replyTo);
     open.cancelTimeout();
     const declared = this.state?.plan.version.definition.lookups?.find((l) => l.id === open.lookupId);
     if (result.status !== 'ok' || !declared) return open.settle(NO_ROWS);
@@ -178,21 +203,21 @@ export class UploadController {
     open.settle({ rows, truncated: result.truncated });
   }
 
-  private onInit(replyTo: string, init: PayloadOf<'init'>): void {
+  private onInit(init: InitMessage): void {
     this.reset();
     const built = buildModel(init);
     if (!built.ok) {
       this.state = null;
       this.deps.onRender(null);
-      this.deps.send('error', { code: 'invalid_init', message: built.message.slice(0, 500), fatal: true });
+      this.fail('invalid_init', built.message);
       return;
     }
     const { model } = built;
     if (model.unsupported.length > 0) {
-      // The parent falls back to its own renderer; there is nothing to show here.
+      // The parent falls back to its own (empty) renderer; there is nothing to show here.
       this.state = null;
       this.deps.onRender(null);
-      this.deps.send('initialized', { fieldCount: model.fields.length, unsupported: model.unsupported }, replyTo);
+      this.deps.send({ type: 'initialized', dialogId: init.dialogId, fieldCount: model.fields.length, unsupported: model.unsupported });
       return;
     }
     const values = initialValues(model, init.values);
@@ -201,13 +226,24 @@ export class UploadController {
     if (!planned.ok) {
       this.state = null;
       this.deps.onRender(null);
-      this.deps.send('error', { code: 'render_failed', message: planned.message.slice(0, 500), fatal: true });
+      this.fail('render_failed', planned.message);
       return;
     }
     this.revision += 1;
-    this.state = { model, given: { ...init.values }, values, loaded, plan: planned.plan, revision: this.revision };
+    this.state = {
+      model,
+      given: { ...init.values },
+      values,
+      start: { ...values },
+      touched: new Set(),
+      loaded,
+      plan: planned.plan,
+      revision: this.revision,
+      lookups: new Set(init.lookups),
+      prefill: prefillHash(init.values, init.masked),
+    };
     this.deps.onRender({ revision: this.revision, locale: model.locale, plan: planned.plan });
-    this.deps.send('initialized', { fieldCount: model.fields.length, unsupported: [] }, replyTo);
+    this.deps.send({ type: 'initialized', dialogId: init.dialogId, fieldCount: model.fields.length, unsupported: [] });
     for (const field of model.fields) if (field.remoteOptions) this.fetchOptions(field);
   }
 
@@ -223,6 +259,7 @@ export class UploadController {
       state.plan.baseline[field.id] = json;
       const block = state.plan.version.definition.blocks[field.id as BlockId] as FieldBlock;
       state.values[field.id] = answerToDms(block, answer?.value as never);
+      state.touched.add(field.id);
       changed.push(field);
     }
     if (changed.length === 0) return;
@@ -231,39 +268,61 @@ export class UploadController {
         if (dependent.parentId !== null && fieldOf(state.model, dependent.parentId)?.id === field.id) this.fetchOptions(dependent);
       }
     }
-    this.scheduleChange();
+    this.scheduleState();
   }
 
   private errors() {
     const state = this.state!;
-    return validateValues(state.model, state.values, state.loaded);
+    return validateValues(state.model, state.values, state.loaded, state.touched);
   }
 
-  private emitChange(): void {
-    this.cancelChange?.();
-    this.cancelChange = null;
+  private isDirty(state: State): boolean {
+    return editableFields(state.model).some((f) => (state.values[f.id] ?? '') !== (state.start[f.id] ?? '')) || state.touched.size > 0;
+  }
+
+  /** `state`: valid, dirty and which fields were touched. Never a value (SEC-DESIGN E2). */
+  private emitState(): void {
+    this.cancelState?.();
+    this.cancelState = null;
     const state = this.state;
     if (!state) return;
-    this.deps.send('change', { values: { ...state.values }, valid: this.errors().length === 0 });
+    this.deps.send({ type: 'state', dialogId: this.deps.dialogId, valid: this.errors().length === 0, dirty: this.isDirty(state), touched: [...state.touched].slice(0, 200) });
   }
 
-  private scheduleChange(): void {
-    this.cancelChange?.();
-    this.cancelChange = this.timer(() => this.emitChange(), CHANGE_DEBOUNCE_MS);
+  private scheduleState(): void {
+    this.cancelState?.();
+    this.cancelState = this.timer(() => this.emitState(), STATE_DEBOUNCE_MS);
   }
 
-  private async onValidate(replyTo: string): Promise<void> {
+  /**
+   * `collect` -> exactly one `collected` for this `req`: the verdict and the values. A `req` seen before is ignored (a replay
+   * gets nothing), as is one that arrives with no usable init (an `error` instead). The values leave here and nowhere else:
+   * untouched secret and masked fields are left out, so the parent never sends a mask or a stale secret back.
+   */
+  private async onCollect(req: string): Promise<void> {
+    if (this.answered.includes(req)) return;
     const state = this.state;
     if (!state) {
-      this.deps.send('error', { code: 'internal', message: 'validate before a usable init', fatal: false });
+      this.fail('internal', 'collect before a usable init', false);
       return;
     }
-    // The parent caches `change.values` for its fallback: make sure it holds the latest before the verdict.
-    if (this.cancelChange) this.emitChange();
+    this.answered.push(req);
+    if (this.answered.length > REMEMBERED_REQS) this.answered.shift();
+    this.cancelState?.();
+    this.cancelState = null;
     await this.showInline();
-    if (this.state !== state) return; // re-initialised meanwhile; the parent's validate timeout covers it
+    if (this.state !== state) return; // re-initialised meanwhile; the parent's collect timeout covers it
     const errors = this.errors();
-    this.deps.send('validated', { valid: errors.length === 0, errors, values: { ...state.values } }, replyTo);
+    const values: Record<string, string> = {};
+    for (const field of editableFields(state.model)) {
+      const hidden = field.secret || field.masked;
+      if (hidden && !state.touched.has(field.id)) continue;
+      const value = state.values[field.id] ?? '';
+      // The mask is what DMS shows in place of a stored secret: typing it back is not a new value, and it is never sent (dms-api would refuse it).
+      if (hidden && value === SECRET_MASK) continue;
+      values[field.id] = value;
+    }
+    this.deps.send({ type: 'collected', dialogId: this.deps.dialogId, req, valid: errors.length === 0, errors, values, prefillHash: state.prefill });
   }
 
   private async showInline(): Promise<void> {
@@ -298,15 +357,16 @@ export class UploadController {
   }
 
   private request(next: PendingOptions): void {
-    const id = this.deps.send('options.request', { fieldId: next.fieldId, parentValue: next.parentValue, page: next.page, search: '' });
+    const id = this.nextId('c-o');
     this.pending.set(id, next);
+    this.deps.send({ type: 'options.request', id, fieldId: next.fieldId, parentValue: next.parentValue === null ? null : next.parentValue.slice(0, 200), page: next.page, search: '' });
   }
 
-  private onOptions(replyTo: string, result: PayloadOf<'options.result'>): void {
+  private onOptions(result: Extract<ParentMessage, { type: 'options.result' }>): void {
     const state = this.state;
-    const open = this.pending.get(replyTo);
+    const open = this.pending.get(result.replyTo);
     if (!state || !open) return;
-    this.pending.delete(replyTo);
+    this.pending.delete(result.replyTo);
     const field = fieldOf(state.model, open.fieldId);
     if (!field || result.fieldId.toLowerCase() !== open.fieldId.toLowerCase() || this.generation.get(open.fieldId) !== open.gen) return;
     const seen = new Set(open.collected.map((o) => o.value));
@@ -343,6 +403,6 @@ export class UploadController {
     state.plan = planned.plan;
     state.revision = this.revision;
     this.deps.onRender({ revision: this.revision, locale: state.model.locale, plan: planned.plan });
-    if (stale) this.scheduleChange();
+    if (stale) this.scheduleState();
   }
 }

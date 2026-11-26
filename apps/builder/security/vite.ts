@@ -93,12 +93,20 @@ export function noInjectedStyles(): Plugin {
  * route, `/embed/dms-master` included, stays `frame-ancestors 'none'`.
  * Vite's `server.headers` and `preview.headers` are one set for all paths, so this replaces the framing headers on the
  * response of a framable path just before its head is written, whichever middleware set them first. `headers` is the
- * full set of `embedHeaders(...)`; headers it does not carry (`X-Frame-Options`) are removed.
+ * full set the route gets (`sandboxedEmbedHeaders(...)` or `embedHeaders(...)`); headers it does not carry (`X-Frame-Options`,
+ * the plain set's COOP and report endpoints) are removed.
+ *
+ * `rewriteTo` (a file under the base, `embed-upload.html`): the framable path is served from that entry instead of the SPA, as
+ * nginx does (`deploy/nginx.conf.template`): the upload page is its own entry that runs in an opaque origin.
  */
-export function embedFraming(headers: Record<string, string>, base = '/'): Plugin {
-  const replaced = ['Content-Security-Policy', 'X-Frame-Options'];
+export function embedFraming(headers: Record<string, string>, base = '/', options: { rewriteTo?: string } = {}): Plugin {
+  const replaced = ['Content-Security-Policy', 'X-Frame-Options', 'Cross-Origin-Opener-Policy', 'Reporting-Endpoints', 'Content-Security-Policy-Report-Only'];
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     if (isFramablePath(req.url, base)) {
+      if (options.rewriteTo !== undefined) {
+        const query = (req.url ?? '').match(/[?#].*$/)?.[0] ?? '';
+        req.url = `${base.replace(/\/+$/, '')}/${options.rewriteTo}${query}`;
+      }
       const writeHead = res.writeHead.bind(res) as (...args: unknown[]) => ServerResponse;
       res.writeHead = ((...args: unknown[]) => {
         for (const name of replaced) if (!(name in headers)) res.removeHeader(name);

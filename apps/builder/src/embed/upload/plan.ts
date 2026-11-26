@@ -4,7 +4,7 @@ import { blankDmsDefinition, dmsToAnswer, elementsToDefinition, type DmsElement 
 import type {
   AnswerValue, Answers, BlockId, FieldBlock, FormDefinition, FormVersion, FormVersionId, InlineDoc, IsoInstant, OrgId, RuntimeFormVersion, StoredBlock, UserId,
 } from '@form/schema';
-import { editableFields, givenValue, incrementDisplay, optionsFor, type Option, type UploadField, type UploadModel } from './model.ts';
+import { STORED_HIDDEN, editableFields, givenValue, incrementDisplay, optionsFor, type Option, type UploadField, type UploadModel } from './model.ts';
 
 /*
  * The form the renderer shows for an `init`: the translator's blocks (profile dms-v1) in two titled sections, with
@@ -42,8 +42,10 @@ function toElement(field: UploadField, options: readonly Option[]): DmsElement {
   }
   // A legacy field is never required or primary here: it is shown as stored and nothing is written back.
   if (field.legacy) return { ...base, required: false, primary: false };
-  if (field.type === 'dropdown') return { ...base, options: options.map((o) => ({ name: o.name, value: o.value })) };
-  return base;
+  // A field whose stored value DMS keeps from this page starts empty and says so; `required` is the child's call (validateValues), as the stored value counts.
+  const shown = field.masked ? { ...base, required: false, placeholder: STORED_HIDDEN } : base;
+  if (field.type === 'dropdown') return { ...shown, options: options.map((o) => ({ name: o.name, value: o.value })) };
+  return shown;
 }
 
 export function wrapAnswer(block: FieldBlock, value: unknown): AnswerValue {
@@ -74,7 +76,7 @@ export function planRender(
   model: UploadModel,
   values: Readonly<Record<string, string>>,
   loaded: Readonly<Record<string, readonly Option[]>>,
-  given: Readonly<Record<string, string>>,
+  given: Readonly<Record<string, string | null>>,
 ): PlanResult {
   const elements = model.fields.map((f) => toElement(f, optionsFor(f, loaded)));
   let def: FormDefinition = elementsToDefinition(elements, { formId: FORM_ID, title: '', locale: model.locale, base: blankDmsDefinition(FORM_ID, '', model.locale) });
