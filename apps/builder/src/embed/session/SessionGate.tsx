@@ -6,7 +6,7 @@ import { readHandoffEnv } from './env';
 import { allowedUrl, type HandoffEnv } from './handoff';
 import { startLaunch, type LaunchDeps, type LaunchFailureReason, type LaunchOutcome } from './launchFlow';
 import type { ReconnectDeps } from './reconnect';
-import { ReconnectBanner, ReconnectButton } from './Reconnect';
+import { ReconnectBanner, ReconnectButton } from './ReconnectBanner';
 import { usePreparedReconnect } from './usePreparedReconnect';
 
 /*
